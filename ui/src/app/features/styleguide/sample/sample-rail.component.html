@@ -1,0 +1,63 @@
+<nav class="rail" [attr.aria-label]="'styleguide.sample.rail.label' | transloco">
+  <div class="rail__groups">
+    @for (group of groups(); track group.id) {
+      <div class="rail__group" role="group" [attr.aria-labelledby]="group.id === 'home' ? null : 'sample-rail-' + group.id">
+        @if (group.id !== 'home') {
+          <span class="rail__heading" [id]="'sample-rail-' + group.id">{{ 'styleguide.sample.rail.' + group.id | transloco }}</span>
+        }
+        <ul class="rail__list">
+          @for (item of group.items; track item.id) {
+            @let name = 'styleguide.sample.rail.' + item.id | transloco;
+            @let fullName = item.badge ? ('styleguide.sample.rail.withCount' | transloco: { name, count: item.badge }) : name;
+            <li>
+              <button
+                type="button"
+                class="rail__item"
+                [class.is-active]="isActive(item.id)"
+                [attr.aria-current]="isActive(item.id) ? 'page' : null"
+                [attr.aria-label]="collapsed() ? fullName : null"
+                [sfTooltip]="collapsed() ? fullName : ''"
+                [sfTooltipDescribes]="false"
+                sfTooltipSide="end"
+                (click)="select(item.id)"
+              >
+                <sf-icon class="rail__icon" [name]="item.icon" />
+                <span class="rail__label">{{ name }}</span>
+                @if (item.badge) {
+                  <sf-badge class="rail__badge" tone="accent">{{ item.badge }}</sf-badge>
+                }
+              </button>
+            </li>
+          }
+        </ul>
+      </div>
+    }
+  </div>
+
+  <div class="rail__footer">
+    @let settings = 'styleguide.sample.rail.settings' | transloco;
+    <button
+      type="button"
+      class="rail__item"
+      [class.is-active]="isActive('settings')"
+      [attr.aria-current]="isActive('settings') ? 'page' : null"
+      [attr.aria-label]="collapsed() ? settings : null"
+      [sfTooltip]="collapsed() ? settings : ''"
+      [sfTooltipDescribes]="false"
+      sfTooltipSide="end"
+      (click)="select('settings')"
+    >
+      <sf-icon class="rail__icon" name="settings" />
+      <span class="rail__label">{{ settings }}</span>
+    </button>
+    <sf-button
+      class="rail__collapse"
+      variant="ghost"
+      size="sm"
+      [icon]="collapsed() ? 'left_panel_open' : 'left_panel_close'"
+      [label]="(collapsed() ? 'styleguide.sample.rail.expand' : 'styleguide.sample.rail.collapse') | transloco"
+      [aria-expanded]="!collapsed()"
+      (click)="toggle()"
+    />
+  </div>
+</nav>

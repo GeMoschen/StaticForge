@@ -1,0 +1,64 @@
+<sf-page-header
+  class="view__header"
+  [title]="set().name"
+  [subtitle]="'styleguide.sample.recordSet.count' | transloco: { count: all().length }"
+  [secondaryActions]="moreActions()"
+  (secondaryAction)="secondary($event)"
+>
+  <sf-sample-breadcrumb
+    sfPageHeaderBreadcrumb
+    [crumbs]="state.breadcrumb()"
+    [label]="'styleguide.sample.breadcrumb' | transloco"
+    (navigate)="state.navigate($event)"
+  />
+  <span sfPageHeaderStatus>
+    <sf-badge icon="dataset" [label]="'styleguide.sample.recordSet.dataset' | transloco: { name: dataset().name }" />
+  </span>
+  <ng-container sfPageHeaderActions>
+    <sf-button variant="secondary" icon="publish" (click)="releaseSet()">{{ 'styleguide.sample.editor.release' | transloco }}</sf-button>
+    <sf-button icon="add" (click)="newRecord()">{{ 'styleguide.sample.recordSet.newRecord' | transloco }}</sf-button>
+  </ng-container>
+</sf-page-header>
+
+<sf-sample-query-panel [dataset]="dataset()" [matching]="rows().length" [total]="all().length" [(query)]="query" [(expanded)]="expanded" />
+
+<sf-data-table
+  class="view__table"
+  selectable
+  searchable
+  [columns]="columns()"
+  [rows]="rows()"
+  [rowKey]="rowKey"
+  [rowLabel]="rowLabel"
+  [label]="'styleguide.sample.recordSet.table' | transloco: { name: set().name }"
+  [searchPlaceholder]="'styleguide.sample.recordSet.search' | transloco"
+  [bulkActions]="bulkActions()"
+  [emptyTitle]="'styleguide.sample.recordSet.empty' | transloco"
+  (rowOpen)="state.openRecord($event.id)"
+>
+  <ng-template sfDataTableCell="name" [sfDataTableCellRows]="rows()" let-row let-value="value">
+    <span class="cell-name">{{ value }}</span>
+  </ng-template>
+  <ng-template sfDataTableCell="status" [sfDataTableCellRows]="rows()" let-row>
+    <span class="cell-status">
+      @for (lang of langs; track lang) {
+        <sf-status
+          size="sm"
+          [tone]="tones[row.status[lang]]"
+          [icon]="icons[row.status[lang]]"
+          [label]="lang.toUpperCase()"
+          [detail]="state.statusLabel(row.status[lang])"
+        />
+      }
+    </span>
+  </ng-template>
+  <ng-template sfDataTableCell="modified" [sfDataTableCellRows]="rows()" let-row>
+    <span class="cell-modified">
+      <sf-avatar size="sm" [name]="row.modifiedBy.name" [sfTooltip]="row.modifiedBy.name" [sfTooltipDescribes]="false" />
+      <sf-relative-time [value]="minutesAgo(row.modifiedMinutes)" />
+    </span>
+  </ng-template>
+  <ng-template sfDataTableCell="uid" [sfDataTableCellRows]="rows()" let-row>
+    <code class="cell-code">{{ row.uid }}</code>
+  </ng-template>
+</sf-data-table>

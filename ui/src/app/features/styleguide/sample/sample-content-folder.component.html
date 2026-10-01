@@ -1,0 +1,53 @@
+<sf-page-header class="view__header" [title]="title()" [secondaryActions]="moreActions()" (secondaryAction)="secondary($event)">
+  <sf-sample-breadcrumb
+    sfPageHeaderBreadcrumb
+    [crumbs]="state.breadcrumb()"
+    [label]="'styleguide.sample.breadcrumb' | transloco"
+    (navigate)="state.navigate($event)"
+  />
+  <ng-container sfPageHeaderActions>
+    <sf-button variant="secondary" icon="create_new_folder" (click)="state.notice('folder.newFolderNotice')">{{
+      'styleguide.sample.content.newFolder' | transloco
+    }}</sf-button>
+    <sf-button icon="playlist_add" (click)="state.notice('content.newRecordSetNotice')">{{
+      'styleguide.sample.content.newRecordSet' | transloco
+    }}</sf-button>
+  </ng-container>
+</sf-page-header>
+
+<sf-data-table
+  class="view__table"
+  selectable
+  searchable
+  [columns]="columns()"
+  [rows]="rows()"
+  [rowKey]="rowKey"
+  [rowLabel]="rowLabel"
+  [filters]="filters()"
+  [label]="'styleguide.sample.folder.table' | transloco: { name: title() }"
+  [searchPlaceholder]="'styleguide.sample.folder.search' | transloco"
+  [bulkActions]="bulkActions()"
+  [emptyTitle]="'styleguide.sample.folder.empty' | transloco"
+  (rowOpen)="open($event)"
+>
+  <ng-template sfDataTableCell="name" [sfDataTableCellRows]="rows()" let-row>
+    <span class="cell-name">
+      <sf-icon class="cell-name__icon" [class.is-folder]="row.kind === 'folder'" [name]="row.kind === 'folder' ? 'folder' : 'table_rows'" />
+      <span class="cell-name__text">{{ row.name }}</span>
+    </span>
+  </ng-template>
+  <ng-template sfDataTableCell="dataset" [sfDataTableCellRows]="rows()" let-row>
+    <span class="cell-muted">{{ row.kind === 'folder' ? ('styleguide.sample.folder.folderType' | transloco) : datasetName(row) }}</span>
+  </ng-template>
+  <ng-template sfDataTableCell="records" [sfDataTableCellRows]="rows()" let-row>
+    @if (row.kind === 'recordset') {
+      {{ count(row) }}
+    }
+  </ng-template>
+  <ng-template sfDataTableCell="modified" [sfDataTableCellRows]="rows()" let-row>
+    <span class="cell-modified">
+      <sf-avatar size="sm" [name]="row.modifiedBy.name" [sfTooltip]="row.modifiedBy.name" [sfTooltipDescribes]="false" />
+      <sf-relative-time [value]="minutesAgo(row.modifiedMinutes)" />
+    </span>
+  </ng-template>
+</sf-data-table>

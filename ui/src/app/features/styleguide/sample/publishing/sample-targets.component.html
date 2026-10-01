@@ -1,0 +1,66 @@
+<div class="section__bar">
+  <h2 class="section__title">{{ t('sections.targets') }}</h2>
+  <sf-button icon="add" (click)="newTarget()">{{ t('targets.new') }}</sf-button>
+</div>
+
+<sf-data-table
+  class="section__table"
+  [columns]="columns()"
+  [rows]="rows()"
+  [rowKey]="rowKey"
+  [rowLabel]="rowLabel"
+  [label]="t('sections.targets')"
+  [emptyTitle]="t('targets.empty')"
+  [columnChooser]="false"
+  (rowOpen)="edit($event)"
+>
+  <ng-template sfDataTableCell="name" [sfDataTableCellRows]="rows()" let-row>
+    <span class="cell-name">
+      <sf-icon class="cell-name__icon" [name]="kindIcons[row.kind]" />
+      <span class="cell-name__text">{{ row.name }}</span>
+      @if (row.isDefault) {
+        <sf-badge tone="accent" [label]="t('targets.default')" />
+      }
+    </span>
+  </ng-template>
+  <ng-template sfDataTableCell="location" [sfDataTableCellRows]="rows()" let-row>
+    <code class="cell-code">{{ row.location }}</code>
+  </ng-template>
+  <ng-template sfDataTableCell="baseUrl" [sfDataTableCellRows]="rows()" let-row>
+    <span class="cell-muted">{{ row.baseUrl }}</span>
+  </ng-template>
+  <ng-template sfDataTableCell="actions" [sfDataTableCellRows]="rows()" let-row>
+    <sf-menu size="sm" [items]="rowActions(row)" [label]="t('targets.actions', { name: row.name })" />
+  </ng-template>
+</sf-data-table>
+
+@if (draft(); as d) {
+  <sf-drawer [title]="drawerTitle()" (closed)="draft.set(null)">
+    <div class="form">
+      <sf-field [label]="t('targets.form.name')" required>
+        <sf-input [value]="d.name" (valueChange)="patch({ name: $event })" />
+      </sf-field>
+      <sf-field [label]="t('targets.form.kind')">
+        <sf-segmented [options]="kindOptions()" [value]="d.kind" (valueChange)="patch({ kind: $event ?? 'folder' })" />
+      </sf-field>
+      <sf-field [label]="t('targets.form.location.' + d.kind)" required>
+        <sf-input monospace [value]="d.location" (valueChange)="patch({ location: $event })" />
+      </sf-field>
+      <sf-field [label]="t('targets.form.baseUrl')" [hint]="t('targets.form.baseUrlHint')">
+        <sf-input type="url" [value]="d.baseUrl" (valueChange)="patch({ baseUrl: $event })" />
+      </sf-field>
+      <sf-checkbox [value]="d.isDefault" (valueChange)="patch({ isDefault: $event })">{{ t('targets.form.isDefault') }}</sf-checkbox>
+      <fieldset class="form__group">
+        <legend class="form__legend">{{ t('targets.form.redirects') }}</legend>
+        <p class="form__hint">{{ t('targets.form.redirectsHint') }}</p>
+        @for (key of redirectOutputs; track key) {
+          <sf-checkbox [value]="d.redirects[key]" (valueChange)="patchRedirect(key, $event)">{{ t('targets.form.redirect.' + key) }}</sf-checkbox>
+        }
+      </fieldset>
+    </div>
+    <ng-container sfDrawerFooter>
+      <sf-button variant="secondary" (click)="draft.set(null)">{{ t('targets.cancel') }}</sf-button>
+      <sf-button [disabled]="!d.name || !d.location" (click)="save()">{{ d.id ? t('targets.save') : t('targets.create') }}</sf-button>
+    </ng-container>
+  </sf-drawer>
+}

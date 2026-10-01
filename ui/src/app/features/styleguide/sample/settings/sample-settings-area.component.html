@@ -1,0 +1,36 @@
+<div class="area__body" [class.is-narrow]="nav.narrow()">
+  <sf-side-nav
+    #nav="sfSideNav"
+    class="area__nav"
+    [items]="navItems()"
+    [label]="t('nav.label')"
+    [current]="state.visibleSection()"
+    (select)="selectSection($event)"
+  />
+  <div class="area__content">
+    @if (unbuilt()) {
+      <sf-page-header [title]="t('sections.' + state.visibleSection())" />
+      <sf-empty-state
+        class="area__unbuilt"
+        icon="construction"
+        [title]="t('unbuilt.title')"
+        [description]="t('unbuilt.description', { name: t('sections.' + state.visibleSection()) })"
+      />
+    } @else {
+      @switch (state.visibleSection()) {
+        @case ('general') {
+          <sf-sample-settings-general />
+        }
+        @case ('languages') {
+          <sf-sample-settings-languages />
+        }
+        @case ('channels') {
+          <sf-sample-settings-channels />
+        }
+        @case ('importexport') {
+          <sf-sample-settings-transfer />
+        }
+      }
+    }
+  </div>
+</div>

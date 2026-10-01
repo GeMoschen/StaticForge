@@ -1,0 +1,52 @@
+<div class="section__bar">
+  <h2 class="section__title">{{ t('policy.title') }}</h2>
+  <div class="section__actions">
+    <span class="save-status" [class.is-dirty]="dirty()" role="status">
+      <sf-icon [name]="dirty() ? 'edit' : 'cloud_done'" />
+      {{ dirty() ? t('policy.unsaved') : t('policy.saved') }}
+    </span>
+    <sf-button variant="secondary" [disabled]="!dirty()" (click)="discard()">{{ t('policy.discard') }}</sf-button>
+    <sf-button [disabled]="!dirty()" (click)="save()">{{ t('policy.save') }}</sf-button>
+  </div>
+</div>
+
+<div class="section__scroll">
+  <p class="policy__intro">{{ t('policy.intro') }}</p>
+  <table class="policy">
+    <caption class="sf-sr-only">{{ t('policy.caption') }}</caption>
+    <thead>
+      <tr>
+        <th scope="col" class="policy__action-head">{{ t('policy.action') }}</th>
+        @for (role of roles; track role) {
+          <th scope="col" class="policy__role">{{ t('policy.roles.' + role) }}</th>
+        }
+      </tr>
+    </thead>
+    <tbody>
+      @for (action of actions; track action) {
+        <tr>
+          <th scope="row" class="policy__action">
+            <span class="policy__label">{{ t('policy.actions.' + action) }}</span>
+            <span class="policy__hint">{{ t('policy.hints.' + action) }}</span>
+          </th>
+          @for (role of roles; track role) {
+            <td class="policy__cell">
+              <sf-checkbox
+                [value]="checked(action, role)"
+                [disabled]="role === 'admin' || !!blocked(action, role)"
+                [aria-label]="t('policy.cellLabel', { role: t('policy.roles.' + role), action: t('policy.actions.' + action) })"
+                (valueChange)="set(action, role, $event)"
+              />
+              @if (role === 'admin') {
+                <span class="policy__note">{{ t('policy.always') }}</span>
+              } @else if (blocked(action, role)) {
+                <span class="policy__note">{{ t('policy.needs', { name: t('policy.actions.' + blocked(action, role)) }) }}</span>
+              }
+            </td>
+          }
+        </tr>
+      }
+    </tbody>
+  </table>
+  <p class="policy__footnote">{{ t('policy.footnote') }}</p>
+</div>

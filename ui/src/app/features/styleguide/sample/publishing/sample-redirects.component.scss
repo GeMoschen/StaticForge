@@ -1,0 +1,13 @@
+@use 'publishing-section';
+
+.cell-target {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--sf-space-2);
+  min-width: 0;
+}
+
+.cell-state {
+  display: inline-flex;
+  border-radius: var(--sf-radius-sm);
+}

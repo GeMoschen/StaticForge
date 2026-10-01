@@ -35,17 +35,21 @@ export type { CodeFormat } from './code-format';
   selector: 'sf-code-editor',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
+  host: { '[class.sf-code-editor-host--fill]': 'fill()' },
   template: `<div
     #host
     class="sf-code-editor"
     [class.sf-code-editor--compact]="compact()"
+    [class.sf-code-editor--fill]="fill()"
     [attr.data-language]="language()"
     [attr.data-format]="language() === 'octl' ? format() : null"
     (click)="keepInsideEditor($event)"
   ></div>`,
   styles: `
     :host { display: block; }
+    :host(.sf-code-editor-host--fill) { display: flex; flex-direction: column; min-height: 0; }
     .sf-code-editor--compact { --sf-code-min-height: 0; --sf-code-max-height: 8rem; }
+    .sf-code-editor--fill { flex: 1 1 auto; min-height: 0; --sf-code-height: 100%; --sf-code-max-height: none; }
   `,
 })
 export class SfCodeEditorComponent implements AfterViewInit {
@@ -68,8 +72,12 @@ export class SfCodeEditorComponent implements AfterViewInit {
   readonly format = input<CodeFormat>('PLAIN');
   /** For `octl` with format `XML`: an SVG file — completion offers SVG elements and attributes. */
   readonly svg = input(false);
+  /** Takes the height its host is given (a flex column parent, e.g. `sf-code-panel`) instead of growing with the text. */
+  readonly fill = input(false);
 
   readonly valueChange = output<string>();
+  /** Where the caret is (1-based), whenever it moves. */
+  readonly cursorChange = output<{ line: number; column: number }>();
 
   private readonly host = viewChild.required<ElementRef<HTMLElement>>('host');
   private editor: CodeEditorController | null = null;
@@ -147,6 +155,11 @@ export class SfCodeEditorComponent implements AfterViewInit {
     }
   }
 
+  /** Opens the search panel (find and replace), as Ctrl+F in the editor does. */
+  openSearch(): void {
+    this.editor?.openSearch();
+  }
+
   /** Replaces the selection with `snippet`, leaving the caret `caret` characters into it (default: after it). */
   insert(snippet: string, caret: number = snippet.length): void {
     if (!this.readOnly()) {
@@ -173,6 +186,7 @@ export class SfCodeEditorComponent implements AfterViewInit {
       svg: this.svg(),
       names: () => this.names(),
       onChange: (value) => this.valueChange.emit(value),
+      onCursor: (line, column) => this.cursorChange.emit({ line, column }),
     });
   }
 }

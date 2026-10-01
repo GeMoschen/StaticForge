@@ -1,0 +1,105 @@
+@let record = current();
+<div class="record__head">
+  <sf-page-header [title]="name()" [secondaryActions]="moreActions()" (secondaryAction)="secondary($event)">
+    <sf-sample-breadcrumb
+      sfPageHeaderBreadcrumb
+      [crumbs]="state.breadcrumb()"
+      [label]="'styleguide.sample.breadcrumb' | transloco"
+      (navigate)="state.navigate($event)"
+    />
+    @if (record) {
+      <span sfPageHeaderStatus class="record__status">
+        @for (lang of langs; track lang) {
+          <sf-status
+            size="sm"
+            [tone]="tones[record.status[lang]]"
+            [icon]="icons[record.status[lang]]"
+            [label]="'styleguide.sample.status.pill' | transloco: { lang: lang.toUpperCase(), status: state.statusLabel(record.status[lang]) }"
+          />
+        }
+      </span>
+    }
+    <ng-container sfPageHeaderActions>
+      <span class="record__save" role="status">
+        <sf-icon [name]="saving() ? 'sync' : 'cloud_done'" />
+        {{ (saving() ? 'styleguide.sample.editor.saving' : 'styleguide.sample.editor.saved') | transloco }}
+      </span>
+      <sf-button variant="ghost" icon="history" [label]="'styleguide.sample.editor.history' | transloco" (click)="state.history.set('record')" />
+      <sf-button icon="publish" (click)="release()">{{ 'styleguide.sample.editor.release' | transloco }}</sf-button>
+    </ng-container>
+  </sf-page-header>
+
+  @if (state.devMode() && record) {
+    <dl class="record__meta">
+      <div class="record__meta-item">
+        <dt>{{ 'styleguide.sample.record.dataset' | transloco }}</dt>
+        <dd>{{ dataset().name }}</dd>
+      </div>
+      <div class="record__meta-item">
+        <dt>{{ 'styleguide.sample.editor.uid' | transloco }}</dt>
+        <dd><sf-copyable [value]="record.uid" [label]="'styleguide.sample.editor.uid' | transloco" /></dd>
+      </div>
+      <div class="record__meta-item">
+        <dt>{{ 'styleguide.sample.record.uuid' | transloco }}</dt>
+        <dd><sf-copyable [value]="record.uuid" [label]="'styleguide.sample.record.uuid' | transloco" /></dd>
+      </div>
+    </dl>
+  }
+</div>
+
+<div class="record__body">
+  <div class="record__form">
+    <sf-section [heading]="'styleguide.sample.record.fields' | transloco">
+      <div class="record__grid">
+        @for (f of plainFields(); track f.field.id) {
+          <sf-field
+            [class.record__wide]="f.field.type === 'longtext' || f.field.type === 'media'"
+            [label]="f.field.label"
+            [required]="!!f.field.required"
+            [hint]="f.field.localized ? ('styleguide.sample.record.localized' | transloco: { lang: state.lang().toUpperCase() }) : undefined"
+          >
+            @switch (f.field.type) {
+              @case ('longtext') {
+                <sf-textarea [rows]="3" [value]="text(f.value)" (valueChange)="setValue(f.field.id, $event)" />
+              }
+              @case ('select') {
+                <sf-select [options]="f.options" [value]="text(f.value) || null" (valueChange)="setValue(f.field.id, $event)" />
+              }
+              @case ('number') {
+                <sf-number-input [min]="0" [value]="number(f.value)" (valueChange)="setValue(f.field.id, $event)" />
+              }
+              @case ('money') {
+                <sf-number-input unit="€" [min]="0" [step]="0.1" [value]="number(f.value)" (valueChange)="setValue(f.field.id, $event)" />
+              }
+              @case ('media') {
+                <div class="media">
+                  <span class="media__thumb" aria-hidden="true"><sf-icon name="image" /></span>
+                  <span class="media__name">{{ text(f.value) }}</span>
+                  <sf-button variant="secondary" size="sm" icon="swap_horiz" (click)="state.notice()">{{
+                    'styleguide.sample.editor.replace' | transloco
+                  }}</sf-button>
+                  <sf-button variant="ghost" size="sm" icon="delete" [label]="'styleguide.sample.editor.remove' | transloco" (click)="state.notice()" />
+                </div>
+              }
+              @default {
+                <sf-input [required]="!!f.field.required" [value]="text(f.value)" (valueChange)="setValue(f.field.id, $event)" />
+              }
+            }
+          </sf-field>
+        }
+      </div>
+    </sf-section>
+
+    @if (record) {
+      @for (f of catalogFields(); track f.field.id) {
+        <sf-sample-catalog-field
+          [catalogId]="'sample-record-' + record.id + '-' + f.field.id"
+          [label]="f.field.label"
+          [types]="f.field.cardTypes ?? []"
+          [cards]="cards(f.value)"
+          (cardsChange)="setValue(f.field.id, $event)"
+        />
+      }
+    }
+  </div>
+</div>

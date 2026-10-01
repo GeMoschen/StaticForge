@@ -49,3 +49,7 @@ come from M33.
 ## Notes / hazards
 
 - Keep the `data-sf-editor` / `data-sf-section*` / `data-sf-page-fields` hooks.
+
+## Notes (M35.9)
+
+- Editor forms span the full available width of their pane, with no centred max-width column (M35.9 decision 33).

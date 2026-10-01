@@ -64,7 +64,9 @@
             role="none"
             [class.is-selected]="state.isSelected(row.id)"
             [class.is-cut]="cutIds().has(row.id)"
-            [class.is-drop-target]="dropTarget()?.id === row.id && dropTarget()?.valid"
+            [class.is-drop-target]="dropTarget()?.id === row.id && dropTarget()?.valid && dropTarget()?.position === 'inside'"
+            [class.is-drop-before]="dropTarget()?.id === row.id && dropTarget()?.valid && dropTarget()?.position === 'before'"
+            [class.is-drop-after]="dropTarget()?.id === row.id && dropTarget()?.valid && dropTarget()?.position === 'after'"
             [class.is-drop-invalid]="dropTarget()?.id === row.id && !dropTarget()?.valid"
             [style.--tree-level]="row.level"
             (mouseenter)="hovered.set(row.id)"
@@ -83,6 +85,7 @@
               [attr.aria-selected]="state.isSelected(row.id)"
               [attr.aria-busy]="row.loading || null"
               [attr.draggable]="isDraggable(row) ? 'true' : null"
+              [attr.aria-keyshortcuts]="canReorder() && isDraggable(row) ? 'Alt+ArrowUp Alt+ArrowDown' : null"
               [sfTooltip]="truncated().has(row.id) ? row.node.label : ''"
               [sfTooltipDescribes]="false"
               (click)="onRowClick($event, row)"
@@ -142,7 +145,7 @@
                     @if (badge.kind === 'badge') {
                       <sf-badge [tone]="badge.tone ?? 'neutral'" [label]="badge.label" [icon]="badge.icon ?? null" />
                     } @else {
-                      <sf-status size="sm" [tone]="badge.tone ?? 'neutral'" [label]="badge.label" [icon]="badge.icon ?? null" />
+                      <sf-status size="sm" [tone]="badge.tone ?? 'neutral'" [label]="badge.label" [icon]="badge.icon ?? null" [iconOnly]="badgeStyle() === 'icon'" />
                     }
                   }
                 </span>

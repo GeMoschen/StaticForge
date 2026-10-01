@@ -1,0 +1,243 @@
+<sf-splitter
+  class="area__split"
+  collapsible
+  [defaultSize]="treeWidth"
+  [min]="200"
+  [max]="440"
+  [label]="'styleguide.sample.globals.resize' | transloco"
+>
+  <section sfSplitterStart class="pane" aria-labelledby="sample-globals-title">
+    <div class="pane__head">
+      <span class="pane__title" id="sample-globals-title">{{ 'styleguide.sample.globals.title' | transloco }}</span>
+      <sf-menu
+        variant="secondary"
+        size="sm"
+        [text]="'styleguide.sample.globals.new' | transloco"
+        [label]="'styleguide.sample.globals.newLabel' | transloco"
+        [items]="newItems()"
+      />
+    </div>
+    <sf-tree
+      class="pane__tree"
+      sort="none"
+      [label]="'styleguide.sample.globals.title' | transloco"
+      [loadChildren]="loader()"
+      [selection]="treeSelection()"
+      [multiselect]="false"
+      [expandActions]="false"
+      (open)="onOpen($event)"
+    />
+  </section>
+
+  <div sfSplitterEnd class="detail">
+    @if (set(); as current) {
+      <div class="detail__head">
+        <sf-page-header [title]="current.name" [secondaryActions]="moreActions()" (secondaryAction)="onAction($event)">
+          <ng-container sfPageHeaderActions>
+            <span class="detail__save" role="status">
+              @if (dirty()) {
+                <sf-status size="sm" tone="warning" icon="edit" [label]="'styleguide.sample.globals.unsaved' | transloco" />
+              } @else {
+                <sf-status size="sm" tone="success" icon="cloud_done" [label]="'styleguide.sample.globals.saved' | transloco" />
+              }
+            </span>
+            <sf-button icon="save" [disabled]="!dirty()" (click)="save()">{{ 'styleguide.sample.globals.save' | transloco }}</sf-button>
+          </ng-container>
+        </sf-page-header>
+        @if (devMode()) {
+          <dl class="detail__meta">
+            <div class="detail__meta-item">
+              <dt>{{ 'styleguide.sample.globals.uid' | transloco }}</dt>
+              <dd><sf-copyable [value]="current.uid" [label]="'styleguide.sample.globals.uid' | transloco" /></dd>
+            </div>
+          </dl>
+        }
+        <sf-tabs
+          #tabStrip
+          class="detail__tabs"
+          [tabs]="tabs()"
+          [selected]="tab()"
+          [label]="'styleguide.sample.globals.tabs.label' | transloco"
+          (selectTab)="selectTab($event)"
+        />
+      </div>
+
+      @if (tab() === 'schema') {
+        <div class="detail__code" role="tabpanel" [id]="tabStrip.panelId('schema')" [attr.aria-labelledby]="tabStrip.tabId('schema')">
+          <sf-code-panel
+            class="detail__code-panel"
+            languageLabel="CDL"
+            language="cdl"
+            [fileName]="current.fileName"
+            [label]="'styleguide.sample.globals.schemaLabel' | transloco: { name: current.name }"
+            [value]="cdl()"
+            [formattable]="true"
+            (valueChange)="setCdl($event)"
+          />
+        </div>
+      } @else {
+        <div class="detail__scroll" role="tabpanel" [id]="tabStrip.panelId('values')" [attr.aria-labelledby]="tabStrip.tabId('values')">
+          <div class="form">
+            <sf-section [heading]="current.name">
+              @if (current.id === 'site') {
+                @let v = siteValues();
+                <div class="form__grid">
+                  <div class="gfield">
+                    <sf-field required [label]="site.name.label" [hint]="site.name.hint">
+                      <sf-input required [value]="v.name" (valueChange)="setSite('name', $event)" />
+                    </sf-field>
+                    <ng-container *ngTemplateOutlet="usageChip; context: { $implicit: site.name }" />
+                  </div>
+                  <div class="gfield">
+                    <sf-field required [label]="site.email.label" [hint]="site.email.hint">
+                      <sf-input required type="email" icon="mail" [value]="v.email" (valueChange)="setSite('email', $event)" />
+                    </sf-field>
+                    <ng-container *ngTemplateOutlet="usageChip; context: { $implicit: site.email }" />
+                  </div>
+
+                  <!-- Opening hours: a list of rows, reorderable with Alt+↑/↓. -->
+                  <div class="gfield form__wide">
+                    <sf-field [label]="site.openingHours.label">
+                      <div class="hours">
+                        @for (row of v.openingHours; track row.id; let i = $index; let first = $first; let last = $last) {
+                          <div class="hours__row" [id]="rowId(row)" (keydown)="onRowKeydown($event, i)">
+                            <span
+                              class="hours__handle"
+                              tabindex="0"
+                              aria-keyshortcuts="Alt+ArrowUp Alt+ArrowDown"
+                              [attr.aria-label]="'styleguide.sample.globals.list.row' | transloco: { position: i + 1, count: v.openingHours.length }"
+                            >
+                              <sf-icon name="drag_indicator" />
+                            </span>
+                            <sf-field class="hours__day" [label]="hoursFields.day">
+                              <sf-input [value]="row.day" (valueChange)="updateRow(i, { day: $event })" />
+                            </sf-field>
+                            <sf-field class="hours__hours" [label]="hoursFields.hours">
+                              <sf-input [value]="row.hours" (valueChange)="updateRow(i, { hours: $event })" />
+                            </sf-field>
+                            <span class="hours__actions">
+                              <sf-button
+                                class="hours__move-up"
+                                variant="ghost"
+                                size="sm"
+                                icon="arrow_upward"
+                                [disabled]="first"
+                                [label]="'styleguide.sample.globals.list.moveUp' | transloco: { position: i + 1 }"
+                                (click)="moveRow(i, -1)"
+                              />
+                              <sf-button
+                                class="hours__move-down"
+                                variant="ghost"
+                                size="sm"
+                                icon="arrow_downward"
+                                [disabled]="last"
+                                [label]="'styleguide.sample.globals.list.moveDown' | transloco: { position: i + 1 }"
+                                (click)="moveRow(i, 1)"
+                              />
+                              <sf-button
+                                variant="ghost"
+                                size="sm"
+                                icon="delete"
+                                [label]="'styleguide.sample.globals.list.remove' | transloco: { position: i + 1 }"
+                                (click)="removeRow(i)"
+                              />
+                            </span>
+                          </div>
+                        } @empty {
+                          <p class="hours__empty">{{ 'styleguide.sample.globals.list.empty' | transloco }}</p>
+                        }
+                        <div class="hours__foot">
+                          <sf-button variant="secondary" size="sm" icon="add" (click)="addRow()">{{
+                            'styleguide.sample.globals.list.add' | transloco
+                          }}</sf-button>
+                          <span class="hours__hint">{{ 'styleguide.sample.globals.list.hint' | transloco }}</span>
+                        </div>
+                        <span class="sf-sr-only" aria-live="polite">{{ announcement() }}</span>
+                      </div>
+                    </sf-field>
+                    <ng-container *ngTemplateOutlet="usageChip; context: { $implicit: site.openingHours }" />
+                  </div>
+
+                  <!-- Social links: a catalog of cards. -->
+                  <div class="gfield form__wide">
+                    <sf-catalog
+                      catalogId="sample-globals-social"
+                      [label]="site.socialLinks.label"
+                      [items]="v.socialLinks"
+                      [types]="socialTypes"
+                      [summaryOf]="socialSummary"
+                      (add)="addLink($event)"
+                      (move)="moveLink($event)"
+                      (remove)="removeLink($event)"
+                      (duplicate)="duplicateLink($event)"
+                    >
+                      <ng-template sfCatalogCard [sfCatalogCardItems]="v.socialLinks" let-link>
+                        <div class="card-fields">
+                          <sf-field [label]="socialFields.handle">
+                            <sf-input [value]="link.handle" (valueChange)="updateLink(link.id, { handle: $event })" />
+                          </sf-field>
+                          <sf-field [label]="socialFields.url">
+                            <sf-input type="url" icon="link" [value]="link.url" (valueChange)="updateLink(link.id, { url: $event })" />
+                          </sf-field>
+                        </div>
+                      </ng-template>
+                    </sf-catalog>
+                    <ng-container *ngTemplateOutlet="usageChip; context: { $implicit: site.socialLinks }" />
+                  </div>
+
+                  <!-- Footer text: localized, with the language chip on the label line. -->
+                  <div class="gfield gfield--localized form__wide">
+                    <sf-tag class="gfield__lang" icon="translate" [label]="langName()" />
+                    <sf-field [label]="site.footerText.label" [hint]="site.footerText.hint">
+                      <sf-textarea [rows]="3" [maxlength]="240" [value]="footer()" (valueChange)="setFooter($event)" />
+                    </sf-field>
+                    <ng-container *ngTemplateOutlet="usageChip; context: { $implicit: site.footerText }" />
+                  </div>
+                </div>
+              } @else {
+                @let s = shopValues();
+                <div class="form__grid">
+                  <div class="gfield">
+                    <sf-field [label]="shop.currency.label">
+                      <sf-select [options]="currencies" [value]="s.currency" (valueChange)="setShop('currency', $event)" />
+                    </sf-field>
+                    <ng-container *ngTemplateOutlet="usageChip; context: { $implicit: shop.currency }" />
+                  </div>
+                  <div class="gfield">
+                    <sf-field [label]="shop.freeShippingFrom.label" [hint]="shop.freeShippingFrom.hint">
+                      <sf-number-input
+                        [min]="0"
+                        [step]="1"
+                        [unit]="s.currency"
+                        [value]="s.freeShippingFrom"
+                        (valueChange)="setShop('freeShippingFrom', $event)"
+                      />
+                    </sf-field>
+                    <ng-container *ngTemplateOutlet="usageChip; context: { $implicit: shop.freeShippingFrom }" />
+                  </div>
+                </div>
+              }
+            </sf-section>
+          </div>
+        </div>
+      }
+    } @else {
+      <div class="detail__head">
+        <sf-page-header [title]="'styleguide.sample.globals.title' | transloco" />
+      </div>
+      <sf-empty-state
+        class="detail__empty"
+        icon="tune"
+        [title]="'styleguide.sample.globals.emptyTitle' | transloco"
+        [description]="'styleguide.sample.globals.emptyText' | transloco"
+      />
+    }
+  </div>
+</sf-splitter>
+
+<!-- Developer mode: how a template reads the field. -->
+<ng-template #usageChip let-field>
+  @if (devMode()) {
+    <sf-copyable class="gfield__usage" [value]="usage(field)" [label]="'styleguide.sample.globals.usage' | transloco" />
+  }
+</ng-template>

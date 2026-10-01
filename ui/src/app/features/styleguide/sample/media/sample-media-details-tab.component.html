@@ -1,0 +1,114 @@
+<div class="preview" [class.preview--checker]="checker()" [class.preview--page]="file().kind === 'pdf'">
+  @switch (file().kind) {
+    @case ('pdf') {
+      <figure class="page">
+        <img class="page__img" [src]="file().art" alt="" />
+        <figcaption class="page__caption">{{ 'styleguide.sample.media.details.page' | transloco: { count: file().pages ?? 1 } }}</figcaption>
+      </figure>
+    }
+    @default {
+      @if (file().art) {
+        @if (hasFocal()) {
+          <div
+            class="frame frame--focal"
+            role="group"
+            tabindex="0"
+            [style.width]="frameWidth()"
+            [style.aspect-ratio]="frameAspect()"
+            [attr.aria-label]="focalLabel()"
+            aria-describedby="sample-media-focal-hint"
+            (click)="onPreviewClick($event)"
+            (keydown)="onPreviewKeydown($event)"
+          >
+            <img class="frame__img" [src]="file().art" [alt]="details().alt" />
+            <span class="focal" aria-hidden="true" [style.left.%]="focal()!.x" [style.top.%]="focal()!.y"></span>
+          </div>
+        } @else {
+          <div class="frame" [style.width]="frameWidth()" [style.aspect-ratio]="frameAspect()">
+            <img class="frame__img frame__img--contain" [src]="file().art" [alt]="details().alt" />
+          </div>
+        }
+      } @else {
+        <pre class="code" [attr.aria-label]="'styleguide.sample.media.details.textPreview' | transloco: { name: file().name }">{{ file().source }}</pre>
+      }
+    }
+  }
+</div>
+@if (hasFocal()) {
+  <p class="focal-hint" id="sample-media-focal-hint">
+    {{ 'styleguide.sample.media.details.focalHint' | transloco }}
+    <span class="focal-hint__value" aria-live="polite">{{
+      'styleguide.sample.media.details.focalValue' | transloco: { x: focal()!.x, y: focal()!.y }
+    }}</span>
+  </p>
+  @if (state.devMode()) {
+    <div class="focal-numbers">
+      <sf-field [label]="'styleguide.sample.media.details.focalX' | transloco">
+        <sf-number-input [value]="focal()!.x" [min]="0" [max]="100" [step]="1" unit="%" (valueChange)="setFocalX($event)" />
+      </sf-field>
+      <sf-field [label]="'styleguide.sample.media.details.focalY' | transloco">
+        <sf-number-input [value]="focal()!.y" [min]="0" [max]="100" [step]="1" unit="%" (valueChange)="setFocalY($event)" />
+      </sf-field>
+    </div>
+  }
+}
+
+<div class="fields">
+  @if (hasAlt()) {
+    <sf-field
+      [label]="'styleguide.sample.media.details.alt' | transloco"
+      [hint]="'styleguide.sample.media.details.altHint' | transloco"
+    >
+      <sf-input [value]="details().alt" (valueChange)="state.edit({ alt: $event })" />
+    </sf-field>
+  }
+  @if (hasCaption()) {
+    <sf-field [label]="'styleguide.sample.media.details.caption' | transloco" optional>
+      <sf-textarea [rows]="2" [value]="details().caption" (valueChange)="state.edit({ caption: $event })" />
+    </sf-field>
+  }
+</div>
+
+<h3 class="subhead">{{ 'styleguide.sample.media.details.info' | transloco }}</h3>
+<dl class="info">
+  <div class="info__row">
+    <dt>{{ 'styleguide.sample.media.details.type' | transloco }}</dt>
+    <dd>{{ kindLabel(file()) }}</dd>
+  </div>
+  @if (file().width && file().height) {
+    <div class="info__row">
+      <dt>{{ 'styleguide.sample.media.details.dimensions' | transloco }}</dt>
+      <dd class="num">{{ 'styleguide.sample.media.details.pixels' | transloco: { width: file().width, height: file().height } }}</dd>
+    </div>
+  }
+  <div class="info__row">
+    <dt>{{ 'styleguide.sample.media.details.size' | transloco }}</dt>
+    <dd class="num">{{ file().sizeBytes | sfFileSize }}</dd>
+  </div>
+  <div class="info__row">
+    <dt>{{ 'styleguide.sample.media.details.uploaded' | transloco }}</dt>
+    <dd>{{ file().uploadedBy.name }} · <sf-relative-time [value]="minutesAgo(file().uploadedMinutes)" /></dd>
+  </div>
+  <div class="info__row">
+    <dt>{{ 'styleguide.sample.media.details.modified' | transloco }}</dt>
+    <dd><sf-relative-time [value]="minutesAgo(file().modifiedMinutes)" /></dd>
+  </div>
+  @if (state.devMode()) {
+    <div class="info__row">
+      <dt>{{ 'styleguide.sample.media.details.uid' | transloco }}</dt>
+      <dd><sf-copyable [value]="file().uid" [label]="'styleguide.sample.media.details.copyUid' | transloco" /></dd>
+    </div>
+    <div class="info__row">
+      <dt>{{ 'styleguide.sample.media.details.path' | transloco }}</dt>
+      <dd><sf-copyable [value]="path()" [label]="'styleguide.sample.media.details.copyPath' | transloco" /></dd>
+    </div>
+  }
+</dl>
+
+<sf-field
+  class="replace"
+  [label]="'styleguide.sample.media.details.replace' | transloco"
+  [hint]="'styleguide.sample.media.details.replaceHint' | transloco"
+>
+  <sf-file-drop [accept]="accept()" (valueChange)="onReplace($event)" />
+</sf-field>

@@ -1,0 +1,75 @@
+<sf-page-header [title]="t('sections.languages')">
+  <ng-container sfPageHeaderActions>
+    <sf-button variant="secondary" icon="add" (click)="add()">{{ t('languages.add') }}</sf-button>
+    <sf-sample-settings-save [dirty]="state.languagesDirty()" (save)="save()" />
+  </ng-container>
+</sf-page-header>
+
+<p class="page__intro">{{ t('languages.intro') }}</p>
+
+<sf-data-table
+  class="page__table"
+  [columns]="columns()"
+  [rows]="state.languages()"
+  [rowKey]="rowKey"
+  [rowLabel]="rowLabel"
+  [label]="t('languages.tableLabel')"
+  [emptyTitle]="t('languages.empty')"
+  [columnChooser]="false"
+  (rowOpen)="edit($event)"
+>
+  <ng-template sfDataTableCell="label" [sfDataTableCellRows]="state.languages()" let-row>
+    <span class="cell-name">
+      <span class="cell-name__text">{{ row.label }}</span>
+      @if (row.isDefault) {
+        <sf-badge tone="accent" [label]="t('languages.default')" />
+      }
+    </span>
+  </ng-template>
+  <ng-template sfDataTableCell="code" [sfDataTableCellRows]="state.languages()" let-row>
+    <code class="cell-code">{{ row.code }}</code>
+  </ng-template>
+  <ng-template sfDataTableCell="fallbacks" [sfDataTableCellRows]="state.languages()" let-row>
+    <span class="cell-muted">{{ row.fallbacks.length ? fallbackText(row) : t('languages.noFallback') }}</span>
+  </ng-template>
+  <ng-template sfDataTableCell="pages" [sfDataTableCellRows]="state.languages()" let-row>
+    <span class="cell-muted">{{ t('languages.pageCount', { n: row.pages }) }}</span>
+  </ng-template>
+</sf-data-table>
+
+@if (draft(); as d) {
+  <sf-drawer [title]="drawerTitle()" (closed)="close()">
+    <div class="form">
+      <sf-field [label]="t('languages.form.code')" [hint]="t('languages.form.codeHint')" required>
+        <sf-combobox [options]="codeOptions()" [value]="d.code" (valueChange)="pickCode($event)" />
+      </sf-field>
+      <sf-field [label]="t('languages.form.label')" [hint]="t('languages.form.labelHint')" required>
+        <sf-input [value]="d.label" (valueChange)="patch({ label: $event })" />
+      </sf-field>
+      <sf-field [label]="t('languages.form.fallbacks')" [hint]="t('languages.form.fallbacksHint')">
+        <sf-combobox multiple [options]="fallbackOptions()" [value]="d.fallbacks" (valueChange)="pickFallbacks($event)" />
+      </sf-field>
+      <sf-field [hint]="t('languages.form.defaultHint')">
+        <sf-switch [value]="d.isDefault" (valueChange)="patch({ isDefault: $event })">{{ t('languages.form.default') }}</sf-switch>
+      </sf-field>
+      <sf-field [hint]="t('languages.form.prefixHint', { code: d.code || 'en' })">
+        <sf-switch [value]="d.withoutPrefix" (valueChange)="patch({ withoutPrefix: $event })">{{ t('languages.form.withoutPrefix') }}</sf-switch>
+      </sf-field>
+    </div>
+    <ng-container sfDrawerFooter>
+      @if (d.original) {
+        <sf-button
+          class="drawer__remove"
+          variant="danger-ghost"
+          icon="delete"
+          [disabled]="d.isDefault"
+          [disabledReason]="d.isDefault ? t('languages.removeDefault') : null"
+          (click)="remove()"
+          >{{ t('languages.remove') }}</sf-button
+        >
+      }
+      <sf-button variant="secondary" (click)="close()">{{ t('cancel') }}</sf-button>
+      <sf-button [disabled]="!d.code || !d.label" (click)="apply()">{{ d.original ? t('apply') : t('languages.add') }}</sf-button>
+    </ng-container>
+  </sf-drawer>
+}

@@ -1,0 +1,10 @@
+<span class="save__status" role="status">
+  @if (dirty()) {
+    <sf-status size="sm" tone="warning" icon="edit" [label]="t('save.unsaved')" />
+  } @else {
+    <sf-status size="sm" tone="success" icon="cloud_done" [label]="t('save.saved')" />
+  }
+</span>
+<sf-button icon="save" [disabled]="!dirty()" [disabledReason]="dirty() ? null : t('save.nothing')" (click)="save.emit()">{{
+  t('save.save')
+}}</sf-button>

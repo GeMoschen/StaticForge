@@ -1,0 +1,115 @@
+<sf-dialog size="md" [title]="t('title', { name: subject() })" (closed)="closed.emit()">
+  <p class="rd__intro">{{ 'styleguide.sample.changes.release.intro' | transloco }}</p>
+
+  <section class="rd__part" aria-labelledby="rd-langs">
+    <h3 class="rd__heading" id="rd-langs">{{ 'styleguide.sample.changes.release.languages' | transloco }}</h3>
+    <sf-checkbox class="rd__all" [value]="allTicked()" [indeterminate]="someTicked()" (valueChange)="tickAll($event)">{{
+      'styleguide.sample.changes.release.allChanged' | transloco
+    }}</sf-checkbox>
+    <ul class="rd__list rd__list--indent">
+      @for (l of languages(); track l.lang) {
+        <li>
+          <sf-checkbox [value]="isTicked(l.lang)" [disabled]="!l.changed" (valueChange)="tick(l.lang, $event)">
+            {{ langName(l.lang) }} — {{ l.status }}
+            @if (l.lang === defaultLang) {
+              <sf-badge class="rd__badge" [label]="'styleguide.sample.changes.release.default' | transloco" />
+            }
+          </sf-checkbox>
+        </li>
+      }
+    </ul>
+  </section>
+
+  <section class="rd__part" aria-labelledby="rd-deps">
+    <h3 class="rd__heading" id="rd-deps">{{ 'styleguide.sample.changes.release.dependencies' | transloco: { count: dependencies.length } }}</h3>
+    <p class="rd__note">{{ 'styleguide.sample.changes.release.dependenciesNote' | transloco }}</p>
+    <ul class="rd__list">
+      @for (dep of dependencies; track dep.name) {
+        <li>
+          <sf-checkbox [value]="true">
+            <span class="rd__dep"
+              ><sf-icon class="rd__dep-icon" [name]="dep.icon" />{{ dep.name }}
+              <span class="rd__muted">{{ 'styleguide.sample.changes.release.via' | transloco: { name: dep.via } }}</span></span
+            >
+          </sf-checkbox>
+        </li>
+      }
+    </ul>
+  </section>
+
+  @if (errors().length) {
+    <section class="rd__part rd__part--error" aria-labelledby="rd-errors">
+      <h3 class="rd__heading" id="rd-errors">
+        <sf-icon class="rd__tone-icon rd__tone-icon--danger" name="error" />
+        {{ 'styleguide.sample.changes.release.errors' | transloco: { count: errors().length } }}
+      </h3>
+      <p class="rd__note">{{ 'styleguide.sample.changes.release.errorsNote' | transloco }}</p>
+      <ul class="rd__checks">
+        @for (check of errors(); track check.id) {
+          <li class="rd__check">
+            <div class="rd__check-text">
+              <span class="rd__check-item"
+                >{{ check.item }}
+                @if (check.lang) {
+                  <span class="rd__lang">{{ check.lang.toUpperCase() }}</span>
+                }
+              </span>
+              <span class="rd__check-message">
+                @if (dev()) {
+                  <code class="rd__path">{{ check.field }}</code>
+                }
+                {{ check.message }}
+              </span>
+            </div>
+            <sf-button variant="secondary" size="sm" icon="open_in_new" (click)="open(check)">{{
+              'styleguide.sample.changes.release.open' | transloco
+            }}</sf-button>
+          </li>
+        }
+      </ul>
+    </section>
+  }
+
+  @if (warnings().length) {
+    <section class="rd__part" aria-labelledby="rd-warnings">
+      <h3 class="rd__heading" id="rd-warnings">
+        <sf-icon class="rd__tone-icon rd__tone-icon--warning" name="warning" />
+        {{ 'styleguide.sample.changes.release.warnings' | transloco: { count: warnings().length } }}
+      </h3>
+      <ul class="rd__checks">
+        @for (check of warnings(); track check.id) {
+          <li class="rd__check">
+            <div class="rd__check-text">
+              <span class="rd__check-item"
+                >{{ check.item }}
+                @if (check.lang) {
+                  <span class="rd__lang">{{ check.lang.toUpperCase() }}</span>
+                }
+              </span>
+              <span class="rd__check-message">
+                @if (dev()) {
+                  <code class="rd__path">{{ check.field }}</code>
+                }
+                {{ check.message }}
+              </span>
+            </div>
+          </li>
+        }
+      </ul>
+      <sf-checkbox class="rd__ack" [value]="acknowledged()" (valueChange)="acknowledged.set($event)">{{
+        'styleguide.sample.changes.release.acknowledge' | transloco
+      }}</sf-checkbox>
+    </section>
+  }
+
+  <sf-field [label]="'styleguide.sample.changes.release.comment' | transloco" optional>
+    <sf-textarea [rows]="2" [placeholder]="'styleguide.sample.changes.release.commentPlaceholder' | transloco" [value]="comment()" (valueChange)="comment.set($event)" />
+  </sf-field>
+
+  <ng-container sfDialogFooter>
+    <sf-button variant="secondary" (click)="closed.emit()">{{ 'styleguide.sample.changes.cancel' | transloco }}</sf-button>
+    <sf-button icon="publish" [disabled]="!!blocked()" [disabledReason]="blocked()" (click)="release()">{{
+      'styleguide.sample.changes.release.submit' | transloco
+    }}</sf-button>
+  </ng-container>
+</sf-dialog>

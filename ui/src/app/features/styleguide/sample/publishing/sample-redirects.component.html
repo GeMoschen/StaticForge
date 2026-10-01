@@ -1,0 +1,45 @@
+<div class="section__bar">
+  <h2 class="section__title">{{ t('sections.redirects') }}</h2>
+  <sf-button icon="add" (click)="state.notice()">{{ t('redirects.add') }}</sf-button>
+</div>
+
+<sf-data-table
+  class="section__table"
+  searchable
+  [columns]="columns()"
+  [rows]="rows()"
+  [rowKey]="rowKey"
+  [rowLabel]="rowLabel"
+  [filters]="filters()"
+  [label]="t('sections.redirects')"
+  [searchPlaceholder]="t('redirects.search')"
+  [emptyTitle]="t('redirects.empty')"
+  [emptyDescription]="t('redirects.emptyHint')"
+  (rowOpen)="state.notice()"
+>
+  @if (manualCount() > 0) {
+    <sf-menu sfDataTableToolbar variant="ghost" size="sm" [items]="moreActions()" [label]="t('redirects.more')" />
+  }
+  <ng-template sfDataTableCell="from" [sfDataTableCellRows]="rows()" let-row>
+    <code class="cell-code">{{ row.from }}</code>
+  </ng-template>
+  <ng-template sfDataTableCell="to" [sfDataTableCellRows]="rows()" let-row>
+    <span class="cell-target">
+      @if (row.toPage) {
+        <span class="cell-name__text">{{ row.toPage }}</span>
+      }
+      <code class="cell-code">{{ row.to }}</code>
+    </span>
+  </ng-template>
+  <ng-template sfDataTableCell="kind" [sfDataTableCellRows]="rows()" let-row>
+    <span class="cell-muted">{{ t('redirects.kind.' + row.kind) }}</span>
+  </ng-template>
+  <ng-template sfDataTableCell="state" [sfDataTableCellRows]="rows()" let-row>
+    <span tabindex="0" class="cell-state" [sfTooltip]="t('redirects.stateHint.' + row.state)">
+      <sf-status size="sm" [tone]="tones[row.state]" [icon]="icons[row.state]" [label]="t('redirects.state.' + row.state)" />
+    </span>
+  </ng-template>
+  <ng-template sfDataTableCell="created" [sfDataTableCellRows]="rows()" let-row>
+    <span class="cell-muted"><sf-relative-time [value]="created(row)" />{{ ' · ' + row.createdBy }}</span>
+  </ng-template>
+</sf-data-table>

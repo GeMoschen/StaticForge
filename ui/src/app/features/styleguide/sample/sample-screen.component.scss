@@ -1,0 +1,107 @@
+// The frame fills the viewport: top bar across, rail and main below. Only the panes scroll.
+:host {
+  display: grid;
+  grid-template-rows: var(--sf-topbar-height) minmax(0, 1fr);
+  grid-template-columns: auto minmax(0, 1fr);
+  height: 100%;
+  overflow: hidden;
+  background: var(--sf-bg);
+  color: var(--sf-text);
+  font-family: var(--sf-font-ui);
+}
+
+.sample__topbar {
+  grid-column: 1 / -1;
+}
+
+.sample__rail {
+  min-height: 0;
+}
+
+.sample__main {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+}
+
+.sample__split {
+  flex: 1 1 auto;
+}
+
+.sample__content {
+  height: 100%;
+  min-width: 0;
+}
+
+// ── History drawer and shortcut sheet ────────────────────────────────────────
+.history {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.history__item {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sf-space-3);
+  padding: var(--sf-space-3) 0;
+  border-bottom: 1px solid var(--sf-border);
+}
+
+.history__text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sf-space-1);
+  min-width: 0;
+}
+
+.history__summary {
+  color: var(--sf-text);
+  font-size: var(--sf-fs-13);
+  line-height: var(--sf-lh-13);
+}
+
+.history__meta {
+  color: var(--sf-text-muted);
+  font-size: var(--sf-fs-12);
+  line-height: var(--sf-lh-12);
+}
+
+.shortcuts {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+}
+
+.shortcuts__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sf-space-4);
+  padding: var(--sf-space-2) 0;
+  border-bottom: 1px solid var(--sf-border);
+  font-size: var(--sf-fs-13);
+  line-height: var(--sf-lh-13);
+
+  dt {
+    color: var(--sf-text);
+  }
+
+  dd {
+    margin: 0;
+  }
+}
+
+.sample__tree {
+  height: 100%;
+  min-height: 0;
+}
+
+// A self-contained area (Media, Navigation, Publishing, …) fills the main region.
+.sample__area {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+}

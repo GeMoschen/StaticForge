@@ -1,0 +1,55 @@
+<div
+  class="grid"
+  role="grid"
+  aria-multiselectable="true"
+  [attr.aria-label]="'styleguide.sample.media.grid.label' | transloco: { folder: state.folderName() }"
+  (keydown)="onKeydown($event)"
+>
+  <div class="grid__row" role="row">
+    @for (file of state.visible(); track file.id) {
+      <div
+        class="card"
+        role="gridcell"
+        [class.is-selected]="state.isSelected(file.id)"
+        [class.is-open]="state.assetId() === file.id"
+        [attr.tabindex]="tabStop() === file.id ? 0 : -1"
+        [attr.aria-selected]="state.isSelected(file.id)"
+        [attr.aria-label]="cardLabel(file)"
+        [attr.data-file]="file.id"
+        (focus)="onFocus(file)"
+        (click)="onClick(file, $event)"
+      >
+        <div class="card__thumb" [class.card__thumb--checker]="file.format === 'SVG' || file.format === 'PNG'" [class.card__thumb--page]="file.kind === 'pdf'">
+          @if (file.art) {
+            <img class="card__img" [class.card__img--contain]="file.kind !== 'image' || file.format === 'PNG'" [src]="file.art" alt="" loading="lazy" />
+          } @else {
+            <pre class="card__code" aria-hidden="true">{{ snippet(file) }}</pre>
+          }
+        </div>
+        <sf-checkbox
+          class="card__check"
+          [value]="state.isSelected(file.id)"
+          [controlTabindex]="-1"
+          [aria-label]="'styleguide.sample.media.grid.select' | transloco: { name: file.name }"
+          (valueChange)="onCheck(file)"
+        />
+        @if (file.status !== 'released') {
+          <sf-status
+            class="card__status"
+            size="sm"
+            iconOnly
+            [tone]="tones[file.status]"
+            [icon]="icons[file.status]"
+            [label]="state.sample.statusLabel(file.status)"
+          />
+        }
+        <div class="card__text">
+          <span class="card__name">{{ file.name }}</span>
+          <span class="card__meta">{{
+            'styleguide.sample.media.grid.meta' | transloco: { type: file.format, size: (file.sizeBytes | sfFileSize) }
+          }}</span>
+        </div>
+      </div>
+    }
+  </div>
+</div>

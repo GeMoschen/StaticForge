@@ -91,6 +91,10 @@ export class SfMenuComponent implements OnDestroy {
   }
 
   protected onTriggerKeydown(event: KeyboardEvent): void {
+    // With a modifier the arrow belongs to the host (a card moves on Alt+↑/↓ from its ⋮ trigger).
+    if (event.altKey || event.ctrlKey || event.metaKey) {
+      return;
+    }
     if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
       event.preventDefault();
       this.openMenu(event.key === 'ArrowDown' ? 'first' : 'last');

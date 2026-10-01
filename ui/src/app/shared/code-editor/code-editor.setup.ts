@@ -13,7 +13,7 @@ import {
   syntaxHighlighting,
 } from '@codemirror/language';
 import { Diagnostic as CmDiagnostic, lintGutter, setDiagnostics } from '@codemirror/lint';
-import { highlightSelectionMatches, search, searchKeymap } from '@codemirror/search';
+import { highlightSelectionMatches, openSearchPanel, search, searchKeymap } from '@codemirror/search';
 import { Annotation, Compartment, EditorState, Extension } from '@codemirror/state';
 import {
   EditorView,
@@ -49,7 +49,7 @@ const highlightStyle = HighlightStyle.define([
   { tag: [tags.bool, tags.null], color: 'var(--sf-code-atom)' },
   { tag: tags.string, color: 'var(--sf-code-string)' },
   { tag: tags.number, color: 'var(--sf-code-number)' },
-  { tag: tags.comment, color: 'var(--sf-code-comment)', fontStyle: 'italic' },
+  { tag: tags.comment, color: 'var(--sf-code-comment)', fontStyle: 'var(--sf-code-comment-style, italic)' },
   { tag: [tags.operator, tags.operatorKeyword, tags.punctuation], color: 'var(--sf-code-operator)' },
   { tag: tags.function(tags.variableName), color: 'var(--sf-code-function)' },
   { tag: [tags.special(tags.variableName), tags.namespace], color: 'var(--sf-code-special)' },
@@ -69,7 +69,7 @@ const formatStyle = HighlightStyle.define([
     color: 'var(--sf-code-fmt-keyword)',
   },
   { tag: [tags.number, tags.bool, tags.null, tags.atom, tags.unit, tags.color], color: 'var(--sf-code-fmt-number)' },
-  { tag: tags.comment, color: 'var(--sf-code-fmt-comment)', fontStyle: 'italic' },
+  { tag: tags.comment, color: 'var(--sf-code-fmt-comment)', fontStyle: 'var(--sf-code-comment-style, italic)' },
   {
     tag: [tags.processingInstruction, tags.documentMeta, tags.meta, tags.contentSeparator],
     color: 'var(--sf-code-fmt-comment)',
@@ -104,8 +104,9 @@ const theme = EditorView.theme({
     fontSize: 'var(--sf-fs-13)',
     color: 'var(--sf-code-fg)',
     backgroundColor: 'var(--sf-code-bg)',
-    border: '1px solid var(--sf-border-strong)',
-    borderRadius: 'var(--sf-radius-sm)',
+    // A host that frames the editor itself (sf-code-panel) sets these to none.
+    border: 'var(--sf-code-border, 1px solid var(--sf-border-strong))',
+    borderRadius: 'var(--sf-code-radius, var(--sf-radius-sm))',
     // Set by the host (a template editor asks for more); the compact field lowers them. Not in the component's own
     // styles: its encapsulation would need the attribute Angular never puts on CodeMirror's elements.
     minHeight: 'var(--sf-code-min-height, 12rem)',
@@ -149,6 +150,18 @@ export function createCodeEditor(parent: HTMLElement, config: CodeEditorConfig):
   const attributes = new Compartment();
   let destroyed = false;
   let wanted = `${config.format}:${config.svg}`;
+  let cursor = '1:1';
+  /** Tells the host where the caret is when that changed (selection changes are frequent: nothing else is done). */
+  const reportCursor = (state: EditorState) => {
+    const head = state.selection.main.head;
+    const line = state.doc.lineAt(head);
+    const column = head - line.from + 1;
+    const next = `${line.number}:${column}`;
+    if (next !== cursor) {
+      cursor = next;
+      config.onCursor?.(line.number, column);
+    }
+  };
   const readOnlyExtension = (readOnly: boolean) => [EditorState.readOnly.of(readOnly), EditorView.editable.of(!readOnly)];
   const view = new EditorView({
     parent,
@@ -164,6 +177,9 @@ export function createCodeEditor(parent: HTMLElement, config: CodeEditorConfig):
           // Only edits are reported: text the host put in (`value`) is its own already.
           if (update.docChanged && !update.transactions.some((tr) => tr.annotation(fromHost))) {
             config.onChange(update.state.doc.toString());
+          }
+          if (config.onCursor && (update.selectionSet || update.docChanged)) {
+            reportCursor(update.state);
           }
         }),
       ],
@@ -208,6 +224,9 @@ export function createCodeEditor(parent: HTMLElement, config: CodeEditorConfig):
     goTo(line, column) {
       view.dispatch({ selection: { anchor: positionOf(view.state, line, column) }, scrollIntoView: true });
       view.focus();
+    },
+    openSearch() {
+      openSearchPanel(view);
     },
     insert(snippet, caret) {
       const { from, to } = view.state.selection.main;

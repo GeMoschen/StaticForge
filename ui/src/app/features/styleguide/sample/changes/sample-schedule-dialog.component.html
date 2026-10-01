@@ -1,0 +1,74 @@
+<sf-dialog size="md" [title]="title()" (closed)="closed.emit()">
+  <sf-field class="sd__kind" [label]="'styleguide.sample.changes.schedule.kind' | transloco">
+    <sf-segmented [options]="kindOptions()" [value]="kind()" (valueChange)="setKind($event)" />
+  </sf-field>
+
+  @if (isGeneration()) {
+    <div class="rd__row">
+      <sf-field [label]="'styleguide.sample.changes.schedule.target' | transloco">
+        <sf-select [options]="targetOptions" [value]="target()" (valueChange)="target.set($event ?? target())" required />
+      </sf-field>
+      <sf-field [label]="'styleguide.sample.changes.schedule.mode' | transloco">
+        <sf-segmented size="sm" [options]="modeOptions()" [value]="mode()" (valueChange)="mode.set($event ?? 'incremental')" />
+      </sf-field>
+    </div>
+  } @else if (subject()) {
+    <sf-field [label]="'styleguide.sample.changes.schedule.what' | transloco">
+      <p class="sd__subject">{{ subject() }}</p>
+    </sf-field>
+  } @else {
+    <sf-field [label]="'styleguide.sample.changes.schedule.what' | transloco" required>
+      <sf-combobox
+        multiple
+        [options]="itemOptions"
+        [value]="items()"
+        [placeholder]="'styleguide.sample.changes.schedule.whatPlaceholder' | transloco"
+        (valueChange)="setItems($event)"
+      />
+    </sf-field>
+  }
+
+  <div class="rd__row">
+    <sf-field [label]="'styleguide.sample.changes.schedule.when' | transloco" required>
+      <sf-date-input mode="datetime" [value]="when()" (valueChange)="when.set($event)" />
+    </sf-field>
+    <sf-field [label]="'styleguide.sample.changes.schedule.zone' | transloco">
+      <sf-combobox [options]="zoneOptions" [value]="zone()" (valueChange)="zone.set($any($event))" />
+    </sf-field>
+  </div>
+
+  @if (isGeneration()) {
+    <div class="rd__row">
+      <sf-field [label]="'styleguide.sample.changes.schedule.repeat' | transloco">
+        <sf-select [options]="repeatOptions()" [value]="repeat()" (valueChange)="repeat.set($event ?? 'once')" required />
+      </sf-field>
+      @if (showCron()) {
+        <sf-field [label]="'styleguide.sample.changes.schedule.cron' | transloco" [hint]="'styleguide.sample.changes.schedule.cronHint' | transloco">
+          <sf-input monospace [readonly]="repeat() !== 'custom'" [value]="cronValue()" (valueChange)="cron.set($event)" />
+        </sf-field>
+      }
+    </div>
+  } @else {
+    <sf-switch class="sd__then" [value]="thenGenerate()" (valueChange)="thenGenerate.set($event)">{{
+      'styleguide.sample.changes.schedule.thenGenerate' | transloco
+    }}</sf-switch>
+  }
+
+  <section class="rd__part sd__preview" aria-labelledby="sd-preview">
+    <h3 class="rd__heading" id="sd-preview">{{ 'styleguide.sample.changes.schedule.preview' | transloco: { zone: zone() ?? '' } }}</h3>
+    @if (preview().length) {
+      <ol class="sd__runs">
+        @for (run of preview(); track $index) {
+          <li>{{ run }}</li>
+        }
+      </ol>
+    } @else {
+      <p class="rd__note">{{ 'styleguide.sample.changes.schedule.previewEmpty' | transloco }}</p>
+    }
+  </section>
+
+  <ng-container sfDialogFooter>
+    <sf-button variant="secondary" (click)="closed.emit()">{{ 'styleguide.sample.changes.cancel' | transloco }}</sf-button>
+    <sf-button icon="schedule" [disabled]="!!blocked()" [disabledReason]="blocked()" (click)="schedule()">{{ title() }}</sf-button>
+  </ng-container>
+</sf-dialog>

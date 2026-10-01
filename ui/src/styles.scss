@@ -80,9 +80,14 @@ body {
   }
 }
 
-/* Visually hidden, still announced by assistive tech. */
+/* Visually hidden, still announced by assistive tech. Pinned to the containing block's corner: left at its place in the
+   flow, a hidden label deep in a long list escapes any unpositioned scroll container on the way and stretches the
+   ancestors' scroll area (a second scrollbar, scrollIntoView shifting the frame). Never put this class on a focusable
+   element — focusing it would scroll to that corner. */
 .sf-sr-only {
   position: absolute;
+  top: 0;
+  left: 0;
   width: 1px;
   height: 1px;
   margin: -1px;

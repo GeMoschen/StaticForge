@@ -1,0 +1,131 @@
+<sf-sample-topbar class="sample__topbar" />
+<sf-sample-rail class="sample__rail" />
+
+<main class="sample__main">
+  @switch (selfContained()) {
+    @case ('media') {
+      <sf-sample-media-area class="sample__area" />
+    }
+    @case ('navigation') {
+      <sf-sample-navigation-area class="sample__area" />
+    }
+    @case ('globals') {
+      <sf-sample-globals-area class="sample__area" />
+    }
+    @case ('publishing') {
+      <sf-sample-publishing-area class="sample__area" />
+    }
+    @case ('settings') {
+      <sf-sample-settings-area class="sample__area" />
+    }
+    @case ('changes') {
+      <sf-sample-changes-area class="sample__area" />
+    }
+    @case ('schedules') {
+      <sf-sample-schedules-area class="sample__area" />
+    }
+    @default {
+      <sf-splitter
+        class="sample__split"
+        collapsible
+        [defaultSize]="treeWidth"
+        [min]="200"
+        [max]="440"
+        [label]="'styleguide.sample.tree.resize' | transloco"
+      >
+        <div sfSplitterStart class="sample__tree">
+          @switch (state.area()) {
+            @case ('content') {
+              <sf-sample-content-tree />
+            }
+            @case ('templates') {
+              <sf-sample-templates-tree />
+            }
+            @default {
+              <section class="pane" aria-labelledby="sample-pages-title">
+                <div class="pane__head">
+                  <span class="pane__title" id="sample-pages-title">{{ 'styleguide.sample.tree.title' | transloco }}</span>
+                  <sf-menu
+                    variant="secondary"
+                    size="sm"
+                    [text]="'styleguide.sample.tree.new' | transloco"
+                    [label]="'styleguide.sample.tree.newLabel' | transloco"
+                    [items]="newItems()"
+                  />
+                </div>
+                <sf-tree
+                  class="pane__tree"
+                  [label]="'styleguide.sample.tree.title' | transloco"
+                  [loadChildren]="loader()"
+                  [selection]="treeSelection()"
+                  [multiselect]="false"
+                  [actions]="treeActions"
+                  [expandActions]="false"
+                  (open)="onOpen($event)"
+                  (rename)="state.notice()"
+                  (create)="state.notice()"
+                  (delete)="onDelete($event)"
+                />
+              </section>
+            }
+          }
+        </div>
+
+        <div sfSplitterEnd class="sample__content">
+          @switch (state.view()) {
+            @case ('editor') {
+              <sf-sample-page-editor />
+            }
+            @case ('contentfolder') {
+              <sf-sample-content-folder />
+            }
+            @case ('recordset') {
+              <sf-sample-record-set />
+            }
+            @case ('record') {
+              <sf-sample-record-editor />
+            }
+            @case ('dataset') {
+              <sf-sample-dataset-view />
+            }
+            @case ('template') {
+              <sf-sample-template-view />
+            }
+            @default {
+              <sf-sample-folder-view />
+            }
+          }
+        </div>
+      </sf-splitter>
+    }
+  }
+</main>
+
+@if (state.history()) {
+  <sf-drawer [title]="historyTitle()" (closed)="state.history.set(null)">
+    <ol class="history">
+      @for (rev of revisions; track rev.id) {
+        <li class="history__item">
+          <sf-avatar size="sm" [name]="rev.by.name" />
+          <div class="history__text">
+            <span class="history__summary">{{ rev.summary }}</span>
+            <span class="history__meta">{{ rev.by.name }} · <sf-relative-time [value]="minutesAgo(rev.minutes)" /></span>
+          </div>
+        </li>
+      }
+    </ol>
+  </sf-drawer>
+}
+
+@if (state.shortcutsOpen()) {
+  <sf-dialog size="sm" [title]="'styleguide.sample.topbar.shortcuts' | transloco" (closed)="state.shortcutsOpen.set(false)">
+    <dl class="shortcuts">
+      @for (s of shortcuts; track s.key) {
+        <div class="shortcuts__row">
+          <dt>{{ 'styleguide.sample.shortcuts.' + s.key | transloco }}</dt>
+          <dd><sf-kbd [keys]="s.keys" /></dd>
+        </div>
+      }
+    </dl>
+  </sf-dialog>
+}

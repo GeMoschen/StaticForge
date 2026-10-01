@@ -1,0 +1,64 @@
+<section class="sg-section" [id]="s.id" [attr.aria-labelledby]="s.id + '-title'">
+  <h2 class="sg-section__title" [id]="s.id + '-title'" tabindex="-1">{{ s.key | transloco }}</h2>
+
+  <div class="sg-sub">
+    <h3 class="sg-sub__title">{{ 'styleguide.page.data.tree' | transloco }}</h3>
+    <p class="sg-note">{{ 'styleguide.page.data.treeNote' | transloco: { count: nodeCount } }}</p>
+    <div class="sg-panel sg-tree">
+      <sf-tree
+        [label]="d.treeLabel"
+        [loadChildren]="loadChildren"
+        [actions]="treeActions"
+        (open)="opened($event.label)"
+        (rename)="rename($event)"
+        (create)="create($event)"
+        (delete)="delete($event)"
+        (move)="move($event)"
+      />
+    </div>
+  </div>
+
+  <div class="sg-sub">
+    <h3 class="sg-sub__title">{{ 'styleguide.page.data.table' | transloco }}</h3>
+    <p class="sg-note">{{ 'styleguide.page.data.tableNote' | transloco: { count: rows.length } }}</p>
+    <div class="sg-table-box">
+      <sf-data-table
+        [label]="d.tableLabel"
+        [columns]="columns"
+        [rows]="rows"
+        [rowKey]="rowKey"
+        [rowLabel]="rowLabel"
+        [filters]="filters"
+        [initialSort]="initialSort"
+        [bulkActions]="bulkActions"
+        [searchPlaceholder]="d.search"
+        selectable
+        searchable
+        (rowOpen)="opened($event.title)"
+      >
+        <ng-template sfDataTableCell="status" [sfDataTableCellRows]="rows" let-row>
+          <sf-status size="sm" [tone]="statusOf(row).tone" [label]="statusOf(row).label" />
+        </ng-template>
+        <ng-template sfDataTableCell="modified" [sfDataTableCellRows]="rows" let-row>
+          <sf-relative-time [value]="row.modified" />
+        </ng-template>
+      </sf-data-table>
+    </div>
+  </div>
+
+  <div class="sg-sub">
+    <h3 class="sg-sub__title">{{ 'styleguide.page.data.splitter' | transloco }}</h3>
+    <div class="sg-panel sg-splitter">
+      <sf-splitter [label]="d.splitterLabel" [defaultSize]="240" [min]="160" [minOther]="240" collapsible>
+        <div sfSplitterStart class="sg-pane">
+          <p class="sg-caption">{{ d.splitterStart }}</p>
+          <p class="sg-note">{{ d.splitterStartBody }}</p>
+        </div>
+        <div sfSplitterEnd class="sg-pane">
+          <p class="sg-caption">{{ d.splitterEnd }}</p>
+          <p class="sg-note">{{ d.splitterEndBody }}</p>
+        </div>
+      </sf-splitter>
+    </div>
+  </div>
+</section>

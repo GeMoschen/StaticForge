@@ -50,8 +50,12 @@ function mixinBody(source: string, name: string): string {
 const primitives = parseDeclarations(read('_primitives.scss'));
 const semantic = read('_semantic.scss');
 
-function resolveTheme(mixin: string): TokenMap {
-  const all: TokenMap = { ...primitives, ...parseDeclarations(mixinBody(semantic, mixin)) };
+/** A theme's tokens, resolved to their values; later mixins override earlier ones (a code palette over a theme). */
+function resolveTheme(...mixins: string[]): TokenMap {
+  const all: TokenMap = { ...primitives };
+  for (const mixin of mixins) {
+    Object.assign(all, parseDeclarations(mixinBody(semantic, mixin)));
+  }
   const resolveValue = (value: string, seen: string[] = []): string => {
     const ref = /^var\((--[\w-]+)\)$/.exec(value);
     if (!ref) {
@@ -131,6 +135,8 @@ const SYNTAX = [
 add(SYNTAX, ['code-bg'], 4.5);
 add(['code-fg'], ['code-bg', 'code-active-line', 'code-selection'], 4.5);
 add(['code-gutter-fg'], ['code-gutter-bg'], 4.5);
+// The dark top bar: its text and muted text, and the accent as active-item text.
+add(['chrome-text', 'chrome-text-muted', 'chrome-accent'], ['chrome-bg', 'chrome-hover'], 4.5);
 
 const boundaries: Array<[string, string, number]> = [];
 const addBoundary = (fgs: string[], bgs: string[]): void => {
@@ -138,6 +144,8 @@ const addBoundary = (fgs: string[], bgs: string[]): void => {
 };
 addBoundary(['border-strong'], ['bg', 'surface', 'surface-raised', 'surface-sunken']);
 addBoundary(['focus-ring'], ['bg', 'surface', 'surface-raised', 'surface-sunken']);
+// Focus on the dark top bar uses the chrome accent as its ring.
+addBoundary(['chrome-accent'], ['chrome-bg']);
 addBoundary(['accent', 'success', 'warning', 'danger', 'info'], ['bg', 'surface', 'surface-raised']);
 
 describe('design-token contrast matrix', () => {
@@ -164,6 +172,21 @@ describe('design-token contrast matrix', () => {
         expect(tokens[`--sf-${name}`], name).toBeDefined();
       }
     }
+  });
+
+  // The "refined" code palette (M35.9 decision 18): its syntax colours over each theme's editor background.
+  const refined: Array<[name: string, mixin: string, tokens: TokenMap]> = [
+    ['light', 'sf-light-code-refined', resolveTheme('sf-light-colors', 'sf-light-code-refined')],
+    ['dark', 'sf-dark-code-refined', resolveTheme('sf-dark-colors', 'sf-dark-code-refined')],
+  ];
+  describe.each(refined)('refined code palette, %s theme', (_name, mixin, tokens) => {
+    it('defines every syntax colour', () => {
+      const own = parseDeclarations(mixinBody(semantic, mixin));
+      for (const name of SYNTAX) {
+        expect(own[`--sf-${name}`], name).toBeDefined();
+      }
+    });
+    it.each(SYNTAX)('%s on code-bg >= 4.5:1', (fg) => check(tokens, fg, 'code-bg', 4.5));
   });
 
   describe.each(themes)('%s theme', (_name, tokens) => {

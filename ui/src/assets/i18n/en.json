@@ -234,6 +234,27 @@
     }
   },
   "shared": {
+    "card": {
+      "untitled": "Untitled",
+      "collapse": "Collapse {type}",
+      "expand": "Expand {type}",
+      "actions": "Actions for {type}"
+    },
+    "catalog": {
+      "count": "{count, plural, =0 {No cards} one {# card} other {# cards}}",
+      "collapseAll": "Collapse all",
+      "expandAll": "Expand all",
+      "empty": "No cards yet",
+      "add": "Add card",
+      "insertAt": "Insert a card at position {position}",
+      "moveUp": "Move up",
+      "moveDown": "Move down",
+      "duplicate": "Duplicate",
+      "remove": "Remove",
+      "atStart": "Already the first card",
+      "atEnd": "Already the last card",
+      "moved": "{type} moved to position {position} of {count}"
+    },
     "assetPicker": {
       "titleAsset": "Choose an asset",
       "titleSource": "Choose a source",
@@ -317,6 +338,21 @@
     "codeEditor": {
       "goToPosition": "Go to line {line}, column {column}",
       "cdlLabel": "Content definition (CDL)"
+    },
+    "codePanel": {
+      "format": "Format",
+      "formatFailed": "Can’t format: the text doesn’t parse",
+      "find": "Find",
+      "readOnly": "Read-only",
+      "problems": "Problems",
+      "position": "Ln {line}, Col {column}",
+      "errors": "{count, plural, one {# error} other {# errors}}",
+      "warnings": "{count, plural, one {# warning} other {# warnings}}",
+      "severity": {
+        "error": "Error",
+        "warning": "Warning",
+        "info": "Info"
+      }
     },
     "revisionSummary": {
       "moreAssets": "{base} · {count} assets"
@@ -469,6 +505,11 @@
       "paste": "Paste",
       "cannotDrop": "Can’t move here",
       "dropInto": "Move into {name}",
+      "dropBefore": "Move before {name}",
+      "dropAfter": "Move after {name}",
+      "reordered": "Moved “{name}” to position {position} of {count}",
+      "reorderAtStart": "“{name}” is already first",
+      "reorderAtEnd": "“{name}” is already last",
       "loading": "Loading…",
       "loadFailed": "Couldn’t load this tree",
       "loadChildrenFailed": "Couldn’t load the contents of “{name}”",
@@ -531,6 +572,1692 @@
       "searchPage": "search page",
       "close": "close",
       "resultCount": "({count, plural, one {# result} other {# results}})"
+    }
+  },
+  "styleguide": {
+    "page": {
+      "title": "Style guide",
+      "status": "Design gate",
+      "intro": "Every design token and every component in all its states. The switches preview a theme and a density on this page only; your own preferences stay as they are.",
+      "openSample": "Sample screen",
+      "themeSwitch": {
+        "label": "Theme",
+        "light": "Light",
+        "dark": "Dark"
+      },
+      "densitySwitch": {
+        "label": "Density",
+        "compact": "Compact",
+        "comfortable": "Comfortable"
+      },
+      "actions": {
+        "resetPreview": "Back to my theme and density",
+        "reset": "Show again"
+      },
+      "index": {
+        "label": "Style guide sections",
+        "tokens": "Tokens",
+        "components": "Components"
+      },
+      "sections": {
+        "colors": "Colours",
+        "type": "Type",
+        "spacing": "Spacing and layout",
+        "radius": "Radius",
+        "elevation": "Elevation",
+        "zIndex": "Stacking",
+        "motion": "Motion",
+        "density": "Density",
+        "buttons": "Buttons",
+        "forms": "Form controls",
+        "display": "Display",
+        "layout": "Layout",
+        "overlays": "Overlays",
+        "data": "Data",
+        "cards": "Cards and catalogs",
+        "code": "Code editor"
+      },
+      "code": {
+        "intro": "The code panel: a header with the file, the language, Format and Find; the editor with line numbers, fold markers, the active line, bracket matching and the diagnostics underlined; the diagnostics listed below (a row jumps to its position); a status line with the caret position and the counts. It fills the height it is given and follows the theme and density.",
+        "palette": {
+          "label": "Highlighting",
+          "current": "Current",
+          "refined": "Refined",
+          "note": "Preview only: both palettes are on show until one is chosen at sign-off. ?palette=refined opens the page with it."
+        },
+        "cdl": "CDL template with an error",
+        "octl": "OCTL HTML channel with a warning",
+        "json": "JSON — Format pretty-prints it",
+        "readOnly": "Read-only",
+        "compact": "Compact expression field",
+        "compactNote": "A record set's where expression: one or two lines, no gutter and no chrome.",
+        "swatches": "Syntax colours of the palette shown",
+        "swatchesNote": "Read from the computed styles; each colour needs 4.5:1 on the editor background.",
+        "columns": {
+          "token": "Token",
+          "sample": "Sample",
+          "value": "Value",
+          "contrast": "Contrast on the editor"
+        }
+      },
+      "tokens": {
+        "token": "Token",
+        "value": "Value",
+        "sample": "Sample"
+      },
+      "colors": {
+        "intro": "Values and contrast ratios are read from the computed styles of the theme shown. Text needs 4.5:1, control borders, focus rings and status colours 3:1.",
+        "groups": {
+          "surfaces": "Surfaces",
+          "text": "Text",
+          "borders": "Borders",
+          "accent": "Accent",
+          "status": "Status",
+          "states": "States",
+          "chrome": "App chrome (top bar)",
+          "code": "Code editor"
+        },
+        "on": "on {name}",
+        "under": "{name} on it",
+        "ratio": "{ratio}:1",
+        "pass": "Meets {min}:1",
+        "fail": "Below {min}:1",
+        "decorative": "Decorative",
+        "unmeasured": "Not measured",
+        "noPairs": "Translucent; not used as a text background"
+      },
+      "type": {
+        "intro": "Inter for the interface, JetBrains Mono for code, UIDs and paths.",
+        "sizes": "Sizes and line heights",
+        "size": "Size",
+        "lineHeight": "Line height",
+        "weights": "Weights",
+        "families": "Families"
+      },
+      "spacing": {
+        "intro": "A 4 px grid: --sf-space-N is N × 4 px.",
+        "layout": "Layout and breakpoints"
+      },
+      "elevation": {
+        "intro": "Dark surfaces swallow soft shadows, so the dark theme uses deeper shadows and a light hairline."
+      },
+      "zIndex": {
+        "intro": "Components take their stacking order from these tokens, never from a raw number.",
+        "use": "Used for",
+        "layers": {
+          "base": "Page content",
+          "sticky": "Sticky headers and columns",
+          "dropdown": "Menus, selects and comboboxes",
+          "drawer": "Drawers",
+          "modal": "Dialogs",
+          "popover": "Popovers over dialogs",
+          "toast": "Toasts",
+          "tooltip": "Tooltips, above everything"
+        }
+      },
+      "motion": {
+        "intro": "Short and functional; with reduced motion every duration collapses to nothing.",
+        "play": "Play",
+        "durations": "Durations (standard easing)",
+        "easings": "Easings (slow duration)"
+      },
+      "density": {
+        "intro": "Control and row heights and paddings in the {density} density. Switch the density above to see them change."
+      },
+      "states": {
+        "normal": "Normal",
+        "readonly": "Read-only",
+        "disabled": "Disabled",
+        "invalid": "Invalid"
+      },
+      "buttons": {
+        "variants": "Variants and sizes",
+        "size": "Size {size}",
+        "icons": "Icons",
+        "iconOnlyNote": "An icon-only button takes its accessible name from its label, which is also its tooltip.",
+        "states": "States",
+        "loading": "Loading",
+        "disabledReason": "Disabled with a reason",
+        "tooltip": "With a tooltip",
+        "toggle": "Toggle (pressed)",
+        "links": "Links"
+      },
+      "forms": {
+        "intro": "Every control inside sf-field. The four states of a control share one value: change the normal one to see the others follow.",
+        "field": "Field layout",
+        "controls": {
+          "input": "Text input",
+          "textarea": "Text area",
+          "select": "Select",
+          "number": "Number",
+          "date": "Date",
+          "time": "Time",
+          "datetime": "Date and time",
+          "search": "Search",
+          "color": "Colour",
+          "file": "File drop",
+          "checkbox": "Checkbox",
+          "radio": "Radio group",
+          "switch": "Switch",
+          "segmented": "Segmented control",
+          "combobox": "Combobox",
+          "multi": "Combobox, multiple",
+          "slider": "Slider"
+        }
+      },
+      "display": {
+        "badges": "Badges",
+        "statuses": "Statuses",
+        "tags": "Tags",
+        "kbd": "Keyboard keys",
+        "avatars": "Avatars",
+        "copyable": "Copyable value",
+        "relativeTime": "Relative time",
+        "logo": "Logo"
+      },
+      "layout": {
+        "pageHeader": "Page header",
+        "pageHeaderNote": "The header of this page is an sf-page-header: breadcrumb slot (the logo), title, status, actions and the More actions menu.",
+        "toolbar": "Toolbar",
+        "section": "Section",
+        "emptyState": "Empty state",
+        "skeleton": "Skeletons",
+        "shapes": {
+          "text": "Text",
+          "row": "Row",
+          "tree": "Tree",
+          "table": "Table",
+          "form": "Form"
+        },
+        "banner": "Banners",
+        "spinner": "Spinners",
+        "tabs": "Tabs",
+        "tabsMode": "Tabs, with overflow into More",
+        "navMode": "Navigation",
+        "sideNav": "Side navigation",
+        "sideNavNote": "sf-side-nav: an area's secondary menu (Publishing, Settings) instead of page tabs. Router links with aria-current, or buttons with current and select; optional group headings and counts. Below 1024 px of container width it collapses into a select.",
+        "sideNavList": "List, beside the content",
+        "sideNavNarrow": "Narrow: a select above the content"
+      },
+      "overlays": {
+        "intro": "Nothing here is saved; choices are echoed as toasts.",
+        "dialogs": "Dialogs",
+        "openDialog": "Dialog {size}",
+        "confirms": "Confirmations",
+        "confirm": {
+          "default": "Confirm",
+          "danger": "Confirm a delete",
+          "typed": "Confirm by typing"
+        },
+        "drawers": "Drawers",
+        "drawerPlain": "Drawer",
+        "drawerModal": "Modal drawer",
+        "popovers": "Popovers",
+        "menus": "Menus",
+        "contextMenu": "Context menu",
+        "contextHint": "Right-click here, or focus it and press Shift+F10.",
+        "tooltips": "Tooltips",
+        "tooltipText": "A short hint, shown on hover and keyboard focus",
+        "tooltipTarget": "Hover or focus me",
+        "tooltipBelow": "Tooltip below",
+        "toasts": "Toasts",
+        "toast": {
+          "info": "Info",
+          "success": "Success",
+          "warning": "Warning",
+          "error": "Error",
+          "undo": "With Undo"
+        }
+      },
+      "data": {
+        "tree": "Tree",
+        "treeNote": "{count} fake pages, loaded lazily. Rename (F2), create, delete (with Undo), cut, copy, paste and drag work in memory.",
+        "table": "Data table",
+        "tableNote": "{count} fake rows with search, filters, sorting, selection and bulk actions.",
+        "splitter": "Splitter"
+      },
+      "cards": {
+        "intro": "A card is one instance of a section template; a catalog is an ordered list of cards. The summary after the type is the card's first text field.",
+        "card": "Card",
+        "states": {
+          "expanded": "Expanded, draggable, with a menu",
+          "collapsed": "Collapsed",
+          "untitled": "Without a summary",
+          "longSummary": "Long summary (truncates, the type does not)"
+        },
+        "catalog": "Catalog",
+        "catalogNote": "Add at the end or with the + between two cards, drag a card header or press Alt+↑ / Alt+↓ in it, duplicate and remove (with Undo) — all in memory. The gallery holds a nested catalog with a single card type, so its add buttons add directly. Collapsed cards are remembered for this browser session.",
+        "emptyCatalog": "Empty catalog",
+        "readonlyCatalog": "Read-only catalog"
+      }
+    },
+    "sample": {
+      "settings": {
+        "notice": "Prototype — nothing is saved.",
+        "cancel": "Cancel",
+        "apply": "Apply",
+        "nav": {
+          "label": "Settings sections",
+          "unsaved": "Unsaved"
+        },
+        "groups": {
+          "project": "Project",
+          "maintenance": "Maintenance",
+          "people": "People"
+        },
+        "sections": {
+          "general": "General",
+          "languages": "Languages",
+          "channels": "Channels",
+          "media": "Media",
+          "highlighting": "Code highlighting",
+          "compaction": "Compaction",
+          "importexport": "Import / export",
+          "members": "Members"
+        },
+        "stores": {
+          "pages": "Pages",
+          "media": "Media",
+          "content": "Content",
+          "templates": "Templates",
+          "globals": "Globals"
+        },
+        "save": {
+          "saved": "All changes saved",
+          "unsaved": "Unsaved changes",
+          "save": "Save",
+          "nothing": "No changes to save"
+        },
+        "unbuilt": {
+          "title": "Not part of the sample",
+          "description": "{name} is listed in the menu but not built in this sample. It is restyled with the other settings pages in M35.25."
+        },
+        "general": {
+          "name": "Project name",
+          "description": "Description",
+          "descriptionHint": "Shown in the project list and on the dashboard.",
+          "key": "Project key",
+          "keyHint": "Used in URLs and the API; it can’t be changed.",
+          "defaultLanguage": "Default editing language",
+          "defaultLanguageHint": "The language new pages and records open in.",
+          "danger": "Danger zone",
+          "archive": "Archive project",
+          "archiveHint": "Hides the project from all members and stops its schedules and builds. An instance admin can restore it.",
+          "archiveTitle": "Archive {name}?",
+          "archiveMessage": "The project disappears for all members, and its scheduled releases and builds stop. An instance admin can restore it.",
+          "archiveConfirm": "Archive project"
+        },
+        "languages": {
+          "add": "Add language",
+          "intro": "The languages the project is edited and published in. A missing text falls back along the language’s fallbacks.",
+          "tableLabel": "Languages",
+          "empty": "No languages yet",
+          "default": "Default",
+          "noFallback": "None",
+          "pageCount": "{n, plural, one {# page} other {# pages}}",
+          "columns": {
+            "label": "Language",
+            "code": "Code",
+            "fallbacks": "Fallbacks",
+            "pages": "Used in"
+          },
+          "editTitle": "Edit {name}",
+          "newTitle": "Add language",
+          "form": {
+            "code": "Code",
+            "codeHint": "The language code (ISO 639, optionally with a region).",
+            "label": "Label",
+            "labelHint": "The name editors see on language chips and in menus.",
+            "fallbacks": "Fallback languages",
+            "fallbacksHint": "Used in this order when a text is missing in this language.",
+            "default": "Default language",
+            "defaultHint": "New content starts in the default language; there is exactly one.",
+            "withoutPrefix": "Without prefix in URLs",
+            "prefixHint": "On: pages are served at /about.html. Off: pages move from /about.html to /{code}/about.html."
+          },
+          "remove": "Remove language",
+          "removeDefault": "Make another language the default first",
+          "removeTitle": "Remove {name}?",
+          "removeMessage": "Its texts stay in the content but are no longer edited or published.",
+          "removeConfirm": "Remove language"
+        },
+        "channels": {
+          "add": "Add channel",
+          "intro": "Output channels render each page in another format as well, such as an RSS feed or JSON for an app.",
+          "tableLabel": "Channels",
+          "empty": "No channels",
+          "enabledLabel": "{name} enabled",
+          "columns": {
+            "key": "Key",
+            "name": "Name",
+            "enabled": "Enabled",
+            "outputFolder": "Output folder",
+            "highlightAs": "Highlight as"
+          },
+          "highlight": {
+            "html": "HTML",
+            "xml": "XML",
+            "json": "JSON",
+            "css": "CSS",
+            "text": "Plain text"
+          },
+          "editTitle": "Edit {name}",
+          "newTitle": "Add channel",
+          "form": {
+            "key": "Key",
+            "keyHint": "Names the channel’s template tabs and its API output. Lowercase letters, digits and dashes.",
+            "name": "Name",
+            "enabled": "Enabled",
+            "enabledHint": "Builds skip disabled channels; their templates stay.",
+            "outputFolder": "Output folder",
+            "outputFolderHint": "Where the channel’s files go in the build output.",
+            "extension": "File extension",
+            "extensionHint": "Pages are written as page-name.{ext}.",
+            "highlightAs": "Highlight as",
+            "highlightAsHint": "The syntax highlighting of the channel’s templates in the code editor."
+          },
+          "remove": "Remove channel",
+          "removeTitle": "Remove {name}?",
+          "removeMessage": "Its templates in every page and section template are deleted as well.",
+          "removeConfirm": "Remove channel"
+        },
+        "transfer": {
+          "subtitle": "Move content between projects and instances as a ZIP archive.",
+          "tabsLabel": "Import or export",
+          "export": "Export",
+          "import": "Import"
+        },
+        "export": {
+          "stepsLabel": "Export steps",
+          "steps": {
+            "select": "Select",
+            "options": "Options",
+            "run": "Run",
+            "result": "Result"
+          },
+          "selectIntro": "Tick the stores and folders to export; a folder is exported with everything in it.",
+          "toggleStore": "Folders of {name}",
+          "items": "{n, plural, one {# item} other {# items}}",
+          "storeCount": "{store} {n}",
+          "summary": "Selected: {parts}",
+          "nothing": "Nothing selected",
+          "toOptions": "Choose options",
+          "export": "Export",
+          "back": "Back",
+          "schedules": "Include schedules",
+          "schedulesHint": "Pending and paused schedules whose items are all in the export.",
+          "releaseState": "Include release state",
+          "releaseStateHint": "Lets an import release again what is released now; without it, everything is imported as draft.",
+          "running": "Exporting {store}…",
+          "progressLabel": "Export progress",
+          "percent": "{n} %",
+          "done": "Export finished",
+          "included": "Included",
+          "notIncluded": "Not included",
+          "size": "{mb} MB",
+          "again": "New export",
+          "download": "Download archive"
+        },
+        "import": {
+          "archive": "Archive",
+          "archiveHint": "A ZIP archive made by Export, in this or another StaticForge instance.",
+          "analysis": "{items} items, {conflicts, plural, one {# conflict} other {# conflicts}} with existing items",
+          "setAll": "Set all to",
+          "tableLabel": "Conflicts",
+          "noConflicts": "No conflicts",
+          "columns": {
+            "name": "Item",
+            "store": "Store",
+            "reason": "Conflict",
+            "choice": "Action"
+          },
+          "reasons": {
+            "newer": "Changed here after the archive was made",
+            "older": "Older here than in the archive",
+            "changed": "Different content under the same name",
+            "type": "A different kind of item has this name"
+          },
+          "choices": {
+            "keep": "Keep existing",
+            "replace": "Replace",
+            "skip": "Skip"
+          },
+          "choiceLabel": "Action for {name}",
+          "choiceCount": {
+            "keep": "{n} kept",
+            "replace": "{n} replaced",
+            "skip": "{n} skipped"
+          },
+          "release": {
+            "label": "Release state",
+            "keep": "Keep the release state from the archive",
+            "keepHint": "What was released when the archive was made is released here too.",
+            "draft": "Import everything as draft",
+            "draftHint": "Nothing goes live until you release it."
+          },
+          "import": "Import"
+        }
+      },
+      "media": {
+        "downloadNotice": "{count, plural, one {Downloading “{name}”} other {Downloading # files}} (prototype — nothing is downloaded).",
+        "folders": {
+          "title": "Folders",
+          "resize": "Resize the folders pane",
+          "new": "New folder"
+        },
+        "toolbar": {
+          "label": "Library tools",
+          "search": "Search this folder",
+          "type": "File type",
+          "types": {
+            "all": "All types",
+            "images": "Images",
+            "documents": "Documents",
+            "text": "Text"
+          },
+          "sort": "Sort files",
+          "sortButton": "Sort: {field} {direction, select, asc {↑} other {↓}}",
+          "sortGroup": "Sort by",
+          "orderGroup": "Order",
+          "sortBy": {
+            "name": "Name",
+            "date": "Date modified",
+            "size": "Size",
+            "type": "Type"
+          },
+          "ascending": "Ascending",
+          "descending": "Descending",
+          "view": "View",
+          "grid": "Grid",
+          "list": "List",
+          "upload": "Upload"
+        },
+        "library": {
+          "count": "{count, plural, =0 {No files} one {# file} other {# files}}",
+          "rename": "Rename folder",
+          "move": "Move folder…",
+          "delete": "Delete folder…",
+          "deleteNotice": "Deleting a folder is not part of the sample."
+        },
+        "grid": {
+          "label": "Files in {folder}",
+          "select": "Select {name}",
+          "meta": "{type} · {size}"
+        },
+        "list": {
+          "label": "Files in {folder}",
+          "columns": {
+            "thumb": "Preview",
+            "name": "Name",
+            "type": "Type",
+            "dimensions": "Dimensions",
+            "size": "Size",
+            "modified": "Modified",
+            "usages": "Used by"
+          }
+        },
+        "empty": {
+          "title": "This folder is empty",
+          "noMatch": "No files match the search or filter",
+          "description": "Drop files here or upload them to {folder}."
+        },
+        "bulk": {
+          "move": "Move",
+          "download": "Download",
+          "delete": "Delete"
+        },
+        "delete": {
+          "title": "{count, plural, one {Delete “{name}”?} other {Delete # files?}}",
+          "message": "Deleted files can be restored from the history.",
+          "messageUsed": "{count, plural, one {It is used in # place; that link will break.} other {They are used in # places; those links will break.}}",
+          "confirm": "{count, plural, one {Delete} other {Delete # files}}",
+          "done": "{count, plural, one {Deleted “{name}”} other {Deleted # files}}",
+          "restored": "{count, plural, one {File restored} other {# files restored}} (prototype — nothing was deleted)."
+        },
+        "drop": "Drop files to upload to {folder}",
+        "uploads": {
+          "title": "Uploads",
+          "running": "{count} of {total} uploading",
+          "finished": "{failed, plural, =0 {All uploads finished} one {# upload failed} other {# uploads failed}}",
+          "collapse": "Hide the upload list",
+          "expand": "Show the upload list",
+          "close": "Close uploads",
+          "progress": "Uploading {name}",
+          "percent": "{value} %",
+          "done": "Uploaded",
+          "error": "Interrupted — the connection was lost",
+          "cancel": "Cancel the upload of {name}",
+          "addAlt": "Add alt text",
+          "retry": "Retry"
+        },
+        "tabs": {
+          "details": "Details",
+          "variants": "Variants",
+          "languages": "Languages",
+          "processing": "Processing",
+          "rendered": "Rendered",
+          "source": "Source",
+          "usedby": "Used by",
+          "versions": "Versions"
+        },
+        "detail": {
+          "tabs": "File details",
+          "previous": "Previous file",
+          "next": "Next file",
+          "more": "File actions",
+          "position": "{index} of {count}",
+          "replace": "Replace…",
+          "download": "Download",
+          "copyLink": "Copy link",
+          "delete": "Delete…",
+          "linkCopied": "Link copied",
+          "unsaved": "Unsaved changes",
+          "revert": "Revert",
+          "save": "Save",
+          "nothingToSave": "No changes to save",
+          "saved": "Saved “{name}” (prototype — kept until you leave the sample)."
+        },
+        "details": {
+          "page": "Page 1 of {count}",
+          "textPreview": "Text of {name}",
+          "focalLabel": "Focal point at {x} % across and {y} % down",
+          "focalHint": "Click the picture to set the focal point, or use the arrow keys (Shift: bigger steps).",
+          "focalValue": "Focal point {x} % × {y} %",
+          "focalX": "Focal point X",
+          "focalY": "Focal point Y",
+          "alt": "Alt text",
+          "altHint": "Describe the picture for people who can’t see it.",
+          "caption": "Caption",
+          "info": "File",
+          "type": "Type",
+          "dimensions": "Dimensions",
+          "pixels": "{width} × {height} px",
+          "size": "Size",
+          "uploaded": "Uploaded",
+          "modified": "Modified",
+          "uid": "UID",
+          "copyUid": "Copy UID",
+          "path": "Path",
+          "copyPath": "Copy path",
+          "replace": "Replace file",
+          "replaceHint": "The new file keeps this file’s links, alt text and usages.",
+          "replaced": "Replacing the file with “{name}” is not part of the sample.",
+          "kinds": {
+            "JPG": "JPEG image",
+            "PNG": "PNG image",
+            "SVG": "SVG image (text media)",
+            "CSS": "CSS stylesheet (text media)",
+            "PDF": "PDF document"
+          }
+        },
+        "variants": {
+          "intro": "Generated sizes and formats. Pages pick the best one for each screen.",
+          "columns": {
+            "variant": "Variant",
+            "format": "Format",
+            "dimensions": "Dimensions",
+            "size": "Size",
+            "actions": "Actions"
+          },
+          "original": "Original",
+          "download": "Download {variant}"
+        },
+        "languages": {
+          "switch": "Different file per language",
+          "intro": "For pictures and documents that contain text: each language gets its own file, others use the default language’s.",
+          "single": "One file for all languages.",
+          "default": "Default",
+          "fallback": "Uses the {language} file",
+          "replace": "Replace…",
+          "remove": "Remove the {language} file",
+          "upload": "Upload",
+          "replaceNotice": "Replacing the {language} file is not part of the sample.",
+          "removeNotice": "Removing the {language} file is not part of the sample.",
+          "uploadNotice": "Uploading a {language} file is not part of the sample."
+        },
+        "processing": {
+          "switch": "Process CMS syntax",
+          "intro": "When on, $CMS_…$ instructions in this file are rendered when the site is generated and in preview, and $$ is served as a single $.",
+          "lastAttempt": "Last attempt",
+          "off": "Not processed: the file is served as it is.",
+          "clean": "No problems.",
+          "summary": "{count, plural, one {# warning} other {# warnings}} · checked",
+          "warning": "Warning",
+          "position": "Line {line}, column {column}"
+        },
+        "rendered": {
+          "intro": "What the site and the preview serve for this file, after its CMS syntax was processed.",
+          "label": "Served output of {name}"
+        },
+        "source": {
+          "label": "Source of {name}"
+        },
+        "usedBy": {
+          "count": "{count, plural, one {Used in # place} other {Used in # places}}",
+          "page": "Page",
+          "record": "Record",
+          "none": "Not used anywhere",
+          "noneHint": "Pages and records that use this file are listed here.",
+          "openNotice": "Opening it is not part of the media sample."
+        },
+        "versions": {
+          "version": "Version {version}",
+          "current": "Current",
+          "restore": "Restore…",
+          "restoreTitle": "Restore version {version}?",
+          "restoreMessage": "“{name}” goes back to this version. The current one stays in the history.",
+          "restoreConfirm": "Restore",
+          "restored": "Restored version {version} (prototype — nothing was changed)."
+        }
+      },
+      "title": "Sample screen",
+      "prototypeNotice": "Prototype — nothing is saved.",
+      "changes": {
+        "title": "Changes",
+        "subtitle": "Everything not published as it is now. Releasing makes it go online with the next build.",
+        "count": "{count, plural, one {# change} other {# changes}}",
+        "table": "Unreleased changes",
+        "filterBar": "Filter changes",
+        "search": "Search by name…",
+        "searchDev": "Search by name or UID…",
+        "activeFilters": "Active filters",
+        "clearFilters": "Clear all",
+        "defaultLang": "default",
+        "cancel": "Cancel",
+        "itemCount": "{count, plural, one {# item} other {# items}}",
+        "empty": "Everything is published",
+        "emptyHint": "Every page, record and file is online as it is saved.",
+        "emptyFiltered": "No changes match",
+        "emptyFilteredHint": "Change or clear the filters.",
+        "columns": {
+          "name": "Name",
+          "lang": "Language",
+          "status": "Status",
+          "changed": "Changed",
+          "folder": "Folder"
+        },
+        "filters": {
+          "type": "Type",
+          "status": "Status",
+          "lang": "Language",
+          "by": "Changed by",
+          "folder": "Folder",
+          "picked": "{filter}: {value}",
+          "any": {
+            "type": "All types",
+            "status": "All statuses",
+            "lang": "All languages",
+            "by": "Anyone",
+            "folder": "Everywhere"
+          }
+        },
+        "sort": {
+          "label": "Sort changes",
+          "pill": "Sort: {sort}",
+          "newest": "Newest first",
+          "oldest": "Oldest first",
+          "az": "Name A–Z",
+          "za": "Name Z–A"
+        },
+        "types": {
+          "page": "Page",
+          "record": "Record",
+          "media": "Media",
+          "global": "Global set",
+          "navigation": "Navigation item"
+        },
+        "statuses": {
+          "new": "New",
+          "changed": "Changed",
+          "unpublished": "Unpublished",
+          "deletion": "Deletion pending",
+          "released": "Released",
+          "scheduled": "Scheduled"
+        },
+        "bulk": {
+          "release": "Release…",
+          "schedule": "Schedule…",
+          "discard": "Discard…"
+        },
+        "discardTitle": "{count, plural, one {Discard the changes of # item?} other {Discard the changes of # items?}}",
+        "discardMessage": "Writes the released version back as the draft. The discarded draft stays in the history.",
+        "discardConfirm": "{count, plural, one {Discard # change} other {Discard # changes}}",
+        "discardNothing": "Nothing to discard: new and unpublished items have no released version to go back to.",
+        "discarded": "{count, plural, one {# change discarded} other {# changes discarded}} — prototype, nothing is saved.",
+        "diff": {
+          "resize": "Resize the diff pane",
+          "close": "Close the diff",
+          "legend": "Left: released · right: draft",
+          "layout": "Diff layout",
+          "split": "Side by side",
+          "inline": "Inline",
+          "open": "Open in editor",
+          "openNotice": "Opens “{name}” in its editor — prototype.",
+          "unchanged": "Unchanged",
+          "released": "Released:",
+          "draft": "Draft:",
+          "wasEmpty": "Empty",
+          "nowEmpty": "Removed",
+          "notes": {
+            "new": "Never released — everything is new.",
+            "unpublished": "Taken offline; releasing puts the draft online again.",
+            "deletion": "Deleted in the draft; the released version stays online until the deletion is released."
+          }
+        },
+        "release": {
+          "title": "Release “{name}”",
+          "intro": "Goes online with the next build.",
+          "languages": "Languages",
+          "allChanged": "All changed languages",
+          "default": "Default",
+          "dependencies": "Also release ({count})",
+          "dependenciesNote": "Unreleased items the selection needs. Anything you untick renders empty until it is released.",
+          "via": "via {name}",
+          "errors": "{count, plural, one {# blocking error} other {# blocking errors}}",
+          "errorsNote": "Fix these before releasing — or untick the language they belong to.",
+          "open": "Open",
+          "openNotice": "Opens “{name}” in its editor — prototype.",
+          "warnings": "{count, plural, one {# warning} other {# warnings}}",
+          "acknowledge": "I've read the warnings",
+          "comment": "Comment",
+          "commentPlaceholder": "Optional note for the revision",
+          "submit": "Release",
+          "reasonNothing": "Tick at least one language.",
+          "reasonErrors": "{count, plural, one {Fix the blocking error first.} other {Fix the # blocking errors first.}}",
+          "reasonWarnings": "Confirm that you've read the warnings.",
+          "released": "“{name}” released — goes online with the next build (prototype, nothing is saved)."
+        },
+        "schedule": {
+          "title": {
+            "release": "Schedule release",
+            "unpublish": "Schedule unpublish",
+            "generation": "Schedule generation"
+          },
+          "kind": "What to schedule",
+          "kinds": {
+            "release": "Release",
+            "unpublish": "Unpublish",
+            "generation": "Generation"
+          },
+          "what": "Items",
+          "whatPlaceholder": "Pick pages, records or files…",
+          "target": "Target",
+          "mode": "Mode",
+          "modes": {
+            "incremental": "Incremental",
+            "full": "Full"
+          },
+          "when": "Date and time",
+          "zone": "Time zone",
+          "repeat": "Repeat",
+          "repeatOptions": {
+            "once": "Once",
+            "hourly": "Every hour",
+            "daily": "Every day",
+            "weekdays": "Every weekday (Mon–Fri)",
+            "weekly": "Every week",
+            "custom": "Custom (cron)"
+          },
+          "cron": "Cron expression",
+          "cronHint": "minute hour day month weekday",
+          "thenGenerate": "Then generate (incremental build of the default target)",
+          "preview": "Next runs ({zone})",
+          "previewEmpty": "Pick a date and time to see the next runs.",
+          "reasonWhen": "Pick a date and time.",
+          "reasonItems": "Pick at least one item.",
+          "scheduled": "{title}: scheduled — prototype, nothing is saved."
+        },
+        "schedules": {
+          "title": "Schedules",
+          "subtitle": "Times in your time zone: Europe/Berlin (CET).",
+          "table": "Schedules",
+          "empty": "No schedules yet",
+          "emptyHint": "Schedule a release from an editor or the Changes view, or a generation here.",
+          "new": {
+            "label": "New schedule",
+            "release": "Release",
+            "releaseHint": "Put pages, records or files online at a set time",
+            "unpublish": "Unpublish",
+            "unpublishHint": "Take content offline at a set time",
+            "generation": "Generation",
+            "generationHint": "Build the site once or on a repeating schedule"
+          },
+          "columns": {
+            "kind": "Kind",
+            "what": "What",
+            "when": "When",
+            "repeat": "Repeat",
+            "owner": "Owner",
+            "status": "Status",
+            "actions": "Actions"
+          },
+          "kinds": {
+            "release": "Release",
+            "unpublish": "Unpublish",
+            "generation": "Generation"
+          },
+          "repeat": {
+            "once": "Once",
+            "hourly": "Every hour",
+            "daily": "Every day",
+            "weekdays": "Every weekday (Mon–Fri)",
+            "weekly": "Every week",
+            "custom": "Custom (cron)"
+          },
+          "statuses": {
+            "pending": "Pending",
+            "running": "Running",
+            "succeeded": "Succeeded",
+            "paused": "Paused",
+            "cancelled": "Cancelled"
+          },
+          "thenGenerate": "then generate",
+          "actions": {
+            "label": "Actions for “{what}”",
+            "edit": "Edit…",
+            "runNow": "Run now",
+            "history": "History",
+            "cancel": "Cancel schedule…"
+          },
+          "ranNow": "“{what}” started now — prototype.",
+          "cancelTitle": "Cancel the schedule “{what}”?",
+          "cancelMessage": {
+            "release": "Nothing is released at that time. The changes stay unreleased.",
+            "unpublish": "The content stays online.",
+            "generation": "No more builds run from this schedule."
+          },
+          "cancelConfirm": "Cancel schedule",
+          "keep": "Keep it",
+          "cancelled": "Schedule “{what}” cancelled — prototype, nothing is saved.",
+          "history": {
+            "title": "History of “{what}”",
+            "executions": "Executions",
+            "none": "Not executed yet.",
+            "outcomes": {
+              "succeeded": "Succeeded",
+              "failed": "Failed",
+              "skipped": "Skipped"
+            }
+          }
+        },
+        "actions": {
+          "statusLabel": "Release status per language",
+          "pill": "{lang}: {status}",
+          "release": "Release…",
+          "schedule": "Schedule…",
+          "more": "More release actions for “{name}”",
+          "nothingToRelease": "Every language is released.",
+          "nothingToDiscard": "No language has changes to discard.",
+          "unpublish": "Unpublish…",
+          "unpublishTitle": "Unpublish “{name}”?",
+          "unpublishMessage": "Goes offline with the next build. The draft stays and can be released again.",
+          "unpublished": "“{name}” unpublished — prototype, nothing is saved.",
+          "discard": "Discard changes…",
+          "discardTitle": "Discard the changes of “{name}”?",
+          "discardMessage": "Writes the released version back as the draft; the discarded draft stays in the history.",
+          "discarded": "Changes of “{name}” discarded — prototype, nothing is saved."
+        }
+      },
+      "breadcrumb": "Location",
+      "publishing": {
+        "title": "Publishing",
+        "notice": "Prototype — nothing is saved.",
+        "buildNow": "Build now",
+        "lastBuild": "Last build #{n}",
+        "nav": {
+          "label": "Publishing sections",
+          "checks": "Checks",
+          "running": "1 running"
+        },
+        "sections": {
+          "runs": "Runs",
+          "targets": "Targets",
+          "policy": "Publish policy",
+          "quality": "Quality",
+          "redirects": "Redirects",
+          "urls": "URL registry"
+        },
+        "status": {
+          "running": "Running",
+          "success": "Succeeded",
+          "partial": "Partial",
+          "failed": "Failed",
+          "cancelled": "Cancelled"
+        },
+        "mode": {
+          "full": "Full build",
+          "incremental": "Incremental"
+        },
+        "trigger": {
+          "manual": "Manual",
+          "schedule": "Scheduled",
+          "release": "After a release"
+        },
+        "severity": {
+          "error": "errors",
+          "warning": "warnings"
+        },
+        "runs": {
+          "table": "Build runs",
+          "empty": "No builds yet",
+          "number": "Run #{n}",
+          "inProgress": "In progress",
+          "progressLabel": "Build progress",
+          "findings": "{errors} errors · {warnings} warnings",
+          "noFindings": "No findings",
+          "columns": {
+            "status": "Status",
+            "mode": "Mode",
+            "target": "Target",
+            "trigger": "Trigger",
+            "started": "Started",
+            "duration": "Duration",
+            "pages": "Pages",
+            "findings": "Findings"
+          }
+        },
+        "detail": {
+          "back": "All runs",
+          "cancel": "Cancel run",
+          "tabs": {
+            "label": "Run details",
+            "summary": "Summary",
+            "rebuilt": "Rebuilt",
+            "findings": "Findings",
+            "log": "Log"
+          },
+          "facts": {
+            "mode": "Mode",
+            "target": "Target",
+            "pages": "Pages",
+            "errors": "Errors",
+            "warnings": "Warnings",
+            "duration": "Duration",
+            "started": "Started",
+            "startedBy": "Started by",
+            "trigger": "Trigger",
+            "files": "Files",
+            "revision": "Revision",
+            "comment": "Comment",
+            "output": "Output"
+          },
+          "filesValue": "{written} written · {skipped} unchanged · {size}",
+          "rebuiltTable": "Rebuilt pages",
+          "rebuiltColumns": {
+            "page": "Page",
+            "lang": "Language",
+            "reason": "Why",
+            "path": "Output path"
+          },
+          "noRebuilt": "Nothing was rebuilt",
+          "findingCount": "{count} {severity}",
+          "howToFix": "How to fix:",
+          "noFindings": "No findings",
+          "noFindingsHint": "Every checked page passed the quality rules.",
+          "openNotice": "Prototype — the page editor opens here."
+        },
+        "log": {
+          "label": "Build log of run #{n}",
+          "lines": "{count} lines",
+          "following": "Following the newest lines",
+          "paused": "Paused — scrolled up",
+          "jump": "Jump to the end"
+        },
+        "build": {
+          "title": "Build now",
+          "target": "Target",
+          "defaultTarget": "{name} (default)",
+          "mode": "Mode",
+          "incrementalHint": "Rebuilds what changed since the last build of this target.",
+          "fullHint": "Rebuilds the whole site; takes a few minutes.",
+          "scope": "Pages",
+          "scopeHint": "Leave empty to build everything the mode includes, or pick pages and folders.",
+          "scopePlaceholder": "Whole site",
+          "pages": "Pages",
+          "folders": "Folders",
+          "plan": "Dry-run plan",
+          "counts": {
+            "pages": "Pages",
+            "media": "Media files",
+            "deleted": "Removed",
+            "redirects": "Redirects"
+          },
+          "more": "… and {count} more",
+          "planNote": "What Start would do now. Nothing is built until you start.",
+          "cancel": "Cancel",
+          "start": "Start build",
+          "notStarted": "Prototype — no build was started."
+        },
+        "targets": {
+          "new": "New target",
+          "empty": "No targets yet",
+          "default": "Default",
+          "actions": "Actions for {name}",
+          "edit": "Edit",
+          "delete": "Delete…",
+          "deleteTitle": "Delete target “{name}”?",
+          "deleteMessage": "Builds can no longer go there. Files already written stay where they are.",
+          "deleteConfirm": "Delete target",
+          "deleted": "Target “{name}” deleted (prototype — nothing was changed).",
+          "newTitle": "New target",
+          "editTitle": "Edit target “{name}”",
+          "cancel": "Cancel",
+          "save": "Save changes",
+          "create": "Create target",
+          "kind": {
+            "folder": "Folder",
+            "zip": "ZIP archive",
+            "s3": "S3 bucket"
+          },
+          "columns": {
+            "name": "Name",
+            "kind": "Type",
+            "location": "Output",
+            "baseUrl": "Base URL",
+            "actions": "Actions"
+          },
+          "form": {
+            "name": "Name",
+            "kind": "Type",
+            "location": {
+              "folder": "Output folder",
+              "zip": "Archive file",
+              "s3": "Bucket URL"
+            },
+            "baseUrl": "Base URL",
+            "baseUrlHint": "Public site URL, used for the sitemap and absolute links.",
+            "isDefault": "Default target",
+            "redirects": "Redirect output",
+            "redirectsHint": "How builds publish redirects from old URLs. None checked: no redirect output.",
+            "redirect": {
+              "html": "HTML redirect pages",
+              "htaccess": "Apache .htaccess",
+              "json": "redirects.json"
+            }
+          }
+        },
+        "policy": {
+          "title": "Who may publish",
+          "intro": "What each role may do to put content online. Project admins can always do all of it.",
+          "caption": "Publish permissions by role",
+          "action": "Action",
+          "roles": {
+            "editor": "Editors",
+            "developer": "Developers",
+            "admin": "Project admins"
+          },
+          "actions": {
+            "release": "Release, discard and unpublish",
+            "schedule": "Schedule releases and unpublishing",
+            "incremental": "Incremental builds to the default target",
+            "full": "Full builds and builds to any target"
+          },
+          "hints": {
+            "release": "Put changes online with the next build, or take content offline.",
+            "schedule": "Plan a release or unpublish for later, optionally with a build right after.",
+            "incremental": "Rebuild what changed — or a folder or single pages — to the default target.",
+            "full": "Rebuild the whole site and choose the target."
+          },
+          "cellLabel": "{role}: {action}",
+          "always": "Always",
+          "needs": "Needs “{name}”",
+          "footnote": "Only project admins can change this.",
+          "saved": "All changes saved",
+          "unsaved": "Unsaved changes",
+          "save": "Save",
+          "discard": "Discard"
+        },
+        "quality": {
+          "title": "Quality checks",
+          "intro": "Every build checks its output for broken links, SEO basics and accessibility. Warning reports a finding; Error also holds the page back.",
+          "summary": "Quality summary",
+          "rulesOn": "Rules on",
+          "rulesOff": "Rules off",
+          "asErrors": "Hold pages back",
+          "lastRun": "Last run #{n}",
+          "lastErrors": "{count} errors",
+          "lastWarnings": "{count} warnings",
+          "openRun": "Open run",
+          "categories": {
+            "links": "Links",
+            "seo": "SEO",
+            "accessibility": "Accessibility"
+          },
+          "onOf": "{on} of {total} on",
+          "levels": {
+            "off": "Off",
+            "warning": "Warning",
+            "error": "Error"
+          },
+          "levelOf": "Level of “{name}”",
+          "about": "About “{name}”",
+          "capped": "At most a warning: its findings never hold a page back.",
+          "findings": "{count} in the last run",
+          "fixIn": {
+            "content": "Fix in content",
+            "template": "Fix in the template",
+            "both": "Content or template"
+          }
+        },
+        "redirects": {
+          "add": "Add redirect",
+          "search": "Part of the old or new path",
+          "empty": "No redirects",
+          "emptyHint": "Moving or renaming a page adds one automatically.",
+          "more": "More redirect actions",
+          "export": "Export as CSV",
+          "deleteManual": "Delete all manual redirects…",
+          "deleteTitle": "Delete {count} manual redirects?",
+          "deleteMessage": "Requests for their old paths will fail with the next build. Type {key} to confirm.",
+          "deleteConfirm": "Delete {count} redirects",
+          "deleted": "{count} redirects deleted (prototype — nothing was changed).",
+          "columns": {
+            "from": "Old path",
+            "to": "Leads to",
+            "lang": "Language",
+            "kind": "Kind",
+            "state": "State",
+            "created": "Created"
+          },
+          "kind": {
+            "auto": "Automatic",
+            "manual": "Manual"
+          },
+          "state": {
+            "active": "Active",
+            "shadowed": "Shadowed",
+            "dangling": "Dangling",
+            "loop": "Loop"
+          },
+          "stateHint": {
+            "active": "Written to every build: requests for the old path are sent to the target.",
+            "shadowed": "A page or file is published at the old path, so the redirect is not written until nothing lives there.",
+            "dangling": "The target has no output in this language; the redirect is kept but not written until it is published again.",
+            "loop": "It leads back to its own path, so builds leave it out. Point it somewhere else or delete it."
+          }
+        },
+        "urls": {
+          "search": "Name or URL",
+          "empty": "No URLs registered",
+          "emptyHint": "The next build or preview assigns every page and file its URL.",
+          "more": "More URL actions",
+          "resetAll": "Reset all URLs…",
+          "resetTitle": "Reset all URLs?",
+          "resetMessage": "Deletes all {count} registered URLs — every channel and area. The next build assigns their computed URLs and moves the outputs there. Type {key} to confirm.",
+          "resetConfirm": "Reset all",
+          "resetDone": "All URLs reset (prototype — nothing was changed).",
+          "manual": "Overridden",
+          "auto": "Automatic",
+          "columns": {
+            "target": "Target",
+            "type": "Type",
+            "channel": "Channel",
+            "lang": "Language",
+            "area": "Area",
+            "url": "URL",
+            "overridden": "Set by",
+            "assigned": "Assigned"
+          },
+          "type": {
+            "page": "Pages",
+            "folder": "Folders",
+            "media": "Media"
+          },
+          "area": {
+            "generated": "Generated",
+            "preview": "Preview"
+          }
+        }
+      },
+      "navigation": {
+        "title": "Navigation",
+        "new": "New",
+        "newLabel": "New menu item or folder",
+        "newItem": "Menu item",
+        "newFolder": "Menu folder",
+        "newItemName": "New menu item",
+        "newFolderName": "New menu folder",
+        "newMenuItem": "New menu item",
+        "resize": "Resize the navigation tree",
+        "reorderHint": "Drag to reorder, or press Alt+↑/↓.",
+        "visible": "In menu",
+        "hidden": "Hidden in menu",
+        "emptyTitle": "Select a menu item",
+        "emptyText": "Choose a menu item or folder in the tree to see where it leads.",
+        "folderUrl": "Opens {url}",
+        "entryPage": "Entry page",
+        "entryPageHint": "Opens when the folder itself is clicked in the menu.",
+        "noEntryPage": "None",
+        "table": "Menu items in {name}",
+        "tableEmpty": "This folder has no menu items yet",
+        "columns": {
+          "label": "Label",
+          "target": "Target page",
+          "url": "Public URL",
+          "visible": "In menu"
+        },
+        "item": {
+          "section": "Menu item",
+          "label": "Label",
+          "showInMenu": "Show in menu",
+          "showInMenuHint": "A hidden item keeps its place but doesn’t appear on the website.",
+          "target": "Target page",
+          "noTarget": "No target page yet",
+          "open": "Open",
+          "openLabel": "Open {name} on the website",
+          "change": "Change target…",
+          "choose": "Choose target…",
+          "publicUrl": "Public URL",
+          "targetUuid": "Target UUID",
+          "uid": "UID"
+        },
+        "actions": {
+          "rename": "Rename",
+          "duplicate": "Duplicate",
+          "delete": "Delete"
+        },
+        "deleted": "Deleted “{name}”",
+        "targetChanged": "Now links to “{name}”",
+        "openNotice": "Would open {url} on the website.",
+        "notice": "Not part of the sample — nothing is changed.",
+        "picker": {
+          "title": "Choose the target page",
+          "tree": "Pages",
+          "preview": "Links to",
+          "none": "Select a page in the tree.",
+          "folder": "A folder can’t be a target — choose a page in it.",
+          "ok": "OK",
+          "cancel": "Cancel"
+        }
+      },
+      "globals": {
+        "title": "Globals",
+        "new": "New",
+        "newLabel": "New global set or folder",
+        "newSet": "Global set",
+        "newFolder": "Folder",
+        "resize": "Resize the globals tree",
+        "emptyTitle": "Select a global set",
+        "emptyText": "Global sets hold site-wide values — the site name, opening hours, social links — that every template can use.",
+        "tabs": {
+          "label": "Global set views",
+          "values": "Values",
+          "schema": "Schema"
+        },
+        "save": "Save",
+        "saved": "Saved",
+        "unsaved": "Unsaved changes",
+        "savedToast": "Saved “{name}”",
+        "discard": "Discard changes",
+        "nothingToDiscard": "There are no unsaved changes",
+        "release": "Release",
+        "history": "History",
+        "delete": "Delete",
+        "discardTitle": "Discard unsaved changes?",
+        "discardMessage": "Your changes to “{name}” haven’t been saved.",
+        "discardConfirm": "Discard",
+        "uid": "UID",
+        "usage": "template usage",
+        "schemaLabel": "Schema of {name}",
+        "lang": {
+          "en": "English",
+          "de": "German"
+        },
+        "list": {
+          "row": "Row {position} of {count}",
+          "add": "Add row",
+          "remove": "Remove row {position}",
+          "moveUp": "Move row {position} up",
+          "moveDown": "Move row {position} down",
+          "moved": "Row moved to position {position} of {count}",
+          "removed": "Row removed",
+          "empty": "No rows yet",
+          "hint": "Alt+↑/↓ moves a row."
+        },
+        "cardRemoved": "Removed “{name}”",
+        "notice": "Not part of the sample — nothing is changed."
+      },
+      "status": {
+        "released": "Released",
+        "changed": "Changed",
+        "draft": "Not released",
+        "scheduled": "Scheduled",
+        "pill": "{lang}: {status}"
+      },
+      "topbar": {
+        "home": "StaticForge home",
+        "projects": "Projects",
+        "projectSearch": "Find a project…",
+        "favorites": "Favorites",
+        "recents": "Recent",
+        "allProjects": "All projects",
+        "switchNotice": "Switching to {name} is not part of the sample.",
+        "allProjectsNotice": "The project list is not part of the sample.",
+        "breadcrumb": "Location",
+        "search": "Search or jump to…",
+        "paletteNotice": "The command palette opens here.",
+        "language": "Editing language",
+        "building": "Building…",
+        "published": "Published",
+        "lastRuns": "Recent builds",
+        "runPublished": "Published",
+        "runWarnings": "Published with warnings",
+        "runPages": "{count, plural, one {# page} other {# pages}}",
+        "buildNow": "Build now",
+        "buildStarted": "Build started (prototype — nothing is generated).",
+        "history": "Project history",
+        "appearance": "Appearance",
+        "theme": "Theme",
+        "themeLight": "Light",
+        "themeDark": "Dark",
+        "themeSystem": "System",
+        "density": "Density",
+        "compact": "Compact",
+        "comfortable": "Comfortable",
+        "developerMode": "Developer mode",
+        "developerModeHint": "Shows templates, UIDs and paths. Off is the editor view.",
+        "shortcuts": "Keyboard shortcuts",
+        "userMenu": "Account menu for {name}",
+        "account": "Account",
+        "administration": "Administration",
+        "signOut": "Sign out",
+        "accountNotice": "The account page is not part of the sample.",
+        "adminNotice": "Administration is not part of the sample.",
+        "signOutNotice": "Signing out is not part of the sample."
+      },
+      "rail": {
+        "label": "Project",
+        "home": "Home",
+        "content": "Content",
+        "pages": "Pages",
+        "media": "Media",
+        "records": "Content",
+        "navigation": "Navigation",
+        "globals": "Globals",
+        "publish": "Publish",
+        "changes": "Changes",
+        "publishing": "Publishing",
+        "schedules": "Schedules",
+        "develop": "Develop",
+        "templates": "Templates",
+        "settings": "Settings",
+        "withCount": "{name} ({count})",
+        "collapse": "Collapse sidebar",
+        "expand": "Expand sidebar",
+        "notInSample": "{name} is not part of the sample."
+      },
+      "tree": {
+        "title": "Pages",
+        "new": "New",
+        "newLabel": "New page or folder",
+        "newPage": "Page",
+        "newFolder": "Folder",
+        "resize": "Resize the page tree"
+      },
+      "folder": {
+        "columns": {
+          "name": "Name",
+          "template": "Template",
+          "status": "Status",
+          "modified": "Modified",
+          "released": "Released",
+          "url": "URL"
+        },
+        "bulk": {
+          "move": "Move",
+          "release": "Release",
+          "duplicate": "Duplicate",
+          "delete": "Delete"
+        },
+        "table": "Contents of {name}",
+        "search": "Filter this folder",
+        "empty": "This folder is empty",
+        "startPage": "Start page",
+        "folderType": "Folder",
+        "neverReleased": "Never",
+        "newPage": "New page",
+        "newFolder": "New folder",
+        "release": "Release folder…",
+        "settings": "Folder settings",
+        "rename": "Rename",
+        "move": "Move…",
+        "copyLink": "Copy link",
+        "delete": "Delete…",
+        "newPageNotice": "Creating a page is not part of the sample.",
+        "newFolderNotice": "Creating a folder is not part of the sample.",
+        "releaseTitle": "Release “{name}”?",
+        "releaseMessage": "{count, plural, one {Its # item is} other {Its # items are}} released in every language that has changes.",
+        "releaseConfirm": "Release",
+        "releaseDone": "Released “{name}” (prototype — nothing was published).",
+        "deleteTitle": "{count, plural, one {Delete “{name}”?} other {Delete # items?}}",
+        "deleteMessage": "Deleted items can be restored from the history.",
+        "deleteConfirm": "{count, plural, one {Delete} other {Delete # items}}",
+        "deleted": "{count, plural, one {Deleted “{name}”} other {Deleted # items}}",
+        "restored": "Restored (prototype — nothing was deleted)."
+      },
+      "editor": {
+        "favorite": "Favorite",
+        "unfavorite": "Remove from favorites",
+        "saving": "Saving…",
+        "saved": "Saved",
+        "history": "History",
+        "preview": "Preview",
+        "release": "Release…",
+        "schedule": "Schedule…",
+        "unpublish": "Unpublish",
+        "duplicate": "Duplicate",
+        "move": "Move…",
+        "rename": "Rename",
+        "copyLink": "Copy link",
+        "delete": "Delete…",
+        "moveUp": "Move up",
+        "moveDown": "Move down",
+        "movedUp": "{name} moved up to position {position}.",
+        "movedDown": "{name} moved down to position {position}.",
+        "template": "Template",
+        "uid": "UID",
+        "path": "Path",
+        "outline": "Outline",
+        "reorderHint": "Alt+↑/↓ moves the selected section.",
+        "pageFields": "Page fields",
+        "teaserHint": "Shown in teasers and search results.",
+        "authorHint": "Set from the person who created the page.",
+        "metaTooLong": "Keep it under {max} characters — it has {count}.",
+        "addSection": "Add section",
+        "sectionActions": "Actions for {name}",
+        "replace": "Replace",
+        "remove": "Remove image",
+        "previewPane": "Preview",
+        "resizePreview": "Resize the preview",
+        "device": "Preview width",
+        "desktop": "Desktop",
+        "tablet": "Tablet",
+        "phone": "Phone",
+        "openPreview": "Open the preview in a new tab",
+        "previewFrame": "Preview of {name}",
+        "releaseTitle": "Release “{name}”?",
+        "releaseMessage": "The changes in these languages go live with the next build.",
+        "releaseConfirm": "Release",
+        "releaseDone": "Released “{name}” (prototype — nothing was published).",
+        "deleteTitle": "Delete “{name}”?",
+        "deleteMessage": "The page can be restored from the history.",
+        "deleteConfirm": "Delete page"
+      },
+      "history": {
+        "projectTitle": "Project history",
+        "pageTitle": "History of “{name}”"
+      },
+      "shortcuts": {
+        "palette": "Search and commands",
+        "goPages": "Go to Pages",
+        "save": "Save",
+        "rename": "Rename the selected item",
+        "moveSection": "Move a section up (Alt+↓ moves it down)",
+        "sheet": "This list of shortcuts"
+      },
+      "catalog": {
+        "removed": "Removed {type} “{summary}”",
+        "untitled": "Untitled"
+      },
+      "content": {
+        "title": "Content",
+        "newLabel": "New folder or record set",
+        "newFolder": "New folder",
+        "newRecordSet": "New record set",
+        "newRecordSetNotice": "Creating a record set is not part of the sample — its dataset can’t be changed later.",
+        "usedBy": "Used by"
+      },
+      "contentFolder": {
+        "columns": {
+          "name": "Name",
+          "dataset": "Dataset",
+          "records": "Records",
+          "modified": "Modified"
+        },
+        "datasetFilter": "Dataset"
+      },
+      "recordSet": {
+        "count": "{count, plural, one {# record} other {# records}}",
+        "dataset": "Dataset: {name}",
+        "newRecord": "New record",
+        "newRecordNotice": "Creating a record is not part of the sample.",
+        "table": "Records of {name}",
+        "search": "Search records",
+        "empty": "No records match the filter",
+        "columns": {
+          "status": "Status",
+          "modified": "Modified",
+          "uid": "UID"
+        },
+        "releaseTitle": "{count, plural, one {Release “{name}”?} other {Release # records?}}",
+        "releaseMessage": "The records are released in every language that has changes.",
+        "releaseDone": "{count, plural, one {Released “{name}”} other {Released # records}} (prototype — nothing was published).",
+        "deleteMessage": "Deleted records can be restored from the history.",
+        "deleteSetNotice": "Deleting a record set is not part of the sample."
+      },
+      "record": {
+        "untitled": "Untitled record",
+        "dataset": "Dataset",
+        "uuid": "UUID",
+        "fields": "Fields",
+        "localized": "Per language — editing {lang}",
+        "deleteMessage": "The record can be restored from the history.",
+        "deleteConfirm": "Delete record"
+      },
+      "query": {
+        "title": "Filter",
+        "matching": "{count} of {total} records",
+        "conditions": "Conditions",
+        "whereLabel": "Where",
+        "andLabel": "and",
+        "fieldLabel": "Field of condition {n}",
+        "opLabel": "Operator of condition {n}",
+        "valueLabel": "Value of condition {n}",
+        "remove": "Remove condition {n} ({field})",
+        "noConditions": "No conditions — the set shows every record.",
+        "add": "Add condition",
+        "sortLabel": "Sort by",
+        "sortField": "Sort field",
+        "sortDirection": "Sort direction",
+        "ascending": "Ascending",
+        "descending": "Descending",
+        "expression": "Expression",
+        "expressionHint": "Written by the filter above.",
+        "expressionEmpty": "No conditions",
+        "condition": "{field} {op} {value}",
+        "and": " and ",
+        "where": "Where {conditions}",
+        "all": "All records",
+        "sortedBy": "sorted by {field}",
+        "sortedDesc": "sorted by {field}, descending",
+        "ops": {
+          "is": "is",
+          "isNot": "is not",
+          "contains": "contains",
+          "gt": "is greater than",
+          "lt": "is less than"
+        }
+      },
+      "dataset": {
+        "tabsLabel": "Dataset sections",
+        "tabs": {
+          "overview": "Overview",
+          "schema": "Schema (CDL)",
+          "rules": "Rules"
+        },
+        "fields": "Fields",
+        "fieldsTable": "Fields of {name}",
+        "columns": {
+          "name": "Field",
+          "type": "Type",
+          "required": "Required",
+          "localized": "Per language",
+          "rules": "Rules"
+        },
+        "types": {
+          "text": "Text",
+          "longtext": "Long text",
+          "select": "Choice",
+          "number": "Number",
+          "money": "Price",
+          "media": "Media",
+          "catalog": "Catalog"
+        },
+        "yes": "Yes",
+        "no": "No",
+        "usedBy": "Used by",
+        "usedByMeta": "{path} · {count, plural, one {# record} other {# records}}",
+        "notUsed": "No record set uses this dataset yet.",
+        "codeLabel": "{file} of {name}",
+        "noRules": "// No rules yet"
+      },
+      "templates": {
+        "newLabel": "New template, dataset or folder",
+        "new": {
+          "page": "Page template",
+          "section": "Section template",
+          "dataset": "Dataset",
+          "folder": "Folder"
+        },
+        "kind": {
+          "folder": "Folder",
+          "page": "Page template",
+          "section": "Section template",
+          "dataset": "Dataset"
+        }
+      },
+      "template": {
+        "inheritance": "Inherits from",
+        "unsaved": "Unsaved changes",
+        "palette": "Highlighting",
+        "paletteCurrent": "Current",
+        "paletteRefined": "Refined",
+        "save": "Save",
+        "saveShortcut": "Save (Ctrl+S)",
+        "savedToast": "Saved “{name}” (prototype — nothing was stored).",
+        "settings": "Settings",
+        "outputPath": "Output path",
+        "outputPathHint": "The placeholders are filled per page and language.",
+        "outputPathLocale": "Add the locale placeholder: this project has two languages.",
+        "paginationPath": "Pagination path",
+        "paginationHint": "Where pages 2 and up of a listing go.",
+        "channelsOn": "Channels",
+        "resize": "Resize the CDL and channel editors",
+        "sides": "Editors",
+        "cdl": "CDL",
+        "channels": "Channels",
+        "cdlTabs": "CDL sections",
+        "channelTabs": "Channel templates",
+        "sections": {
+          "content": "Content",
+          "bodies": "Bodies",
+          "rules": "Rules"
+        },
+        "cdlLabel": "{section} CDL of {name}",
+        "channelLabel": "{channel} template of {name}",
+        "placeholderTitle": "Template editor",
+        "placeholder": "Editing this kind of template is part of M35.21."
+      }
     }
   }
 }

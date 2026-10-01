@@ -77,3 +77,16 @@
     color: var(--sf-danger);
   }
 }
+
+// The inner row carries the tooltip; it lays out like the pill itself.
+.sf-status__body {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sf-space-1);
+  min-width: 0;
+}
+
+// Icon only: a round chip around the icon.
+:host(.sf-status--icon-only) {
+  padding: var(--sf-space-0) var(--sf-space-1);
+}

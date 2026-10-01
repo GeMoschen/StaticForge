@@ -47,6 +47,15 @@ export type SfTreeCreateKind = 'folder' | 'item';
 /** The id of the inline-create row. */
 export const SF_TREE_CREATE_ROW = '\u0000create';
 
+/** Where a dragged node would land relative to the row under the pointer (`before`/`after` need `reorderable`). */
+export type SfTreeDropPosition = 'before' | 'inside' | 'after';
+
+/** A sibling position: the parent (`null` = root) and the node's index among its children after the move. */
+export interface SfTreePlacement {
+  parentId: string | null;
+  index: number;
+}
+
 /** A rendered row of the flattened tree. */
 export type SfTreeRow<T = unknown> =
   | {
@@ -271,6 +280,49 @@ export class SfTreeModel<T = unknown> {
       path.unshift(current);
     }
     return path;
+  }
+
+  // ── Sibling order (reorderable trees) ──────────────────────────────────────
+
+  /**
+   * Where `nodeId` lands when dropped before or after `targetId`: among the target's siblings, at the index it has
+   * after the move (over the loaded, unfiltered order). "After" an expanded folder with loaded children means its first
+   * child: the row below it, where the drop line is drawn, is that child. `null` when nothing would change (next to
+   * itself).
+   */
+  placement(nodeId: string, targetId: string, position: 'before' | 'after'): SfTreePlacement | null {
+    if (nodeId === targetId || !this.node(targetId)) {
+      return null;
+    }
+    if (position === 'after' && this.row(targetId)?.expanded && this.childrenOf(targetId)?.length) {
+      return this.placeAt(nodeId, targetId, 0);
+    }
+    const parentId = this.parentOf(targetId);
+    const target = (this.childrenOf(parentId) ?? []).indexOf(targetId);
+    if (target < 0) {
+      return null;
+    }
+    return this.placeAt(nodeId, parentId, position === 'before' ? target : target + 1);
+  }
+
+  /** `nodeId` inserted among the children of `parentId` at `insertion` (counted with the node still in place). */
+  private placeAt(nodeId: string, parentId: string | null, insertion: number): SfTreePlacement | null {
+    const siblings = this.childrenOf(parentId) ?? [];
+    const from = this.node(nodeId) && this.parentOf(nodeId) === parentId ? siblings.indexOf(nodeId) : -1;
+    if (from < 0) {
+      return { parentId, index: insertion };
+    }
+    const index = insertion > from ? insertion - 1 : insertion;
+    return index === from ? null : { parentId, index };
+  }
+
+  /** `Alt+↑/↓`: the node's position `delta` places along its siblings; `null` at the ends. */
+  siblingStep(nodeId: string, delta: number): SfTreePlacement | null {
+    const parentId = this.parentOf(nodeId);
+    const siblings = this.childrenOf(parentId) ?? [];
+    const from = siblings.indexOf(nodeId);
+    const index = from + delta;
+    return from < 0 || index < 0 || index >= siblings.length ? null : { parentId, index };
   }
 
   /** Replaces the data source: forgets the loaded structure (not the expansion) and loads the root. */

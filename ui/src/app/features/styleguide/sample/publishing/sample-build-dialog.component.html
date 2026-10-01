@@ -1,0 +1,52 @@
+<sf-dialog size="md" [title]="t('build.title')" (closed)="closed.emit()">
+  <div class="build">
+    <sf-field [label]="t('build.target')">
+      <sf-select [options]="targetOptions()" [value]="target()" (valueChange)="target.set($event)" required />
+    </sf-field>
+    <sf-field [label]="t('build.mode')" [hint]="mode() === 'full' ? t('build.fullHint') : t('build.incrementalHint')">
+      <sf-segmented [options]="modeOptions()" [value]="mode()" (valueChange)="mode.set($event)" />
+    </sf-field>
+    <sf-field [label]="t('build.scope')" [hint]="t('build.scopeHint')">
+      <sf-combobox multiple [options]="scopeOptions()" [value]="scope()" [placeholder]="t('build.scopePlaceholder')" (valueChange)="setScope($event)" />
+    </sf-field>
+
+    <section class="plan" aria-labelledby="sample-build-plan">
+      <h3 class="plan__title" id="sample-build-plan">{{ t('build.plan') }}</h3>
+      <dl class="plan__counts">
+        <div class="plan__count">
+          <dt>{{ t('build.counts.pages') }}</dt>
+          <dd>{{ plan().pages }}</dd>
+        </div>
+        <div class="plan__count">
+          <dt>{{ t('build.counts.media') }}</dt>
+          <dd>{{ plan().media }}</dd>
+        </div>
+        <div class="plan__count">
+          <dt>{{ t('build.counts.deleted') }}</dt>
+          <dd>{{ plan().deleted }}</dd>
+        </div>
+        <div class="plan__count">
+          <dt>{{ t('build.counts.redirects') }}</dt>
+          <dd>{{ plan().redirects }}</dd>
+        </div>
+      </dl>
+      <ul class="plan__list">
+        @for (entry of plan().sample; track entry.name) {
+          <li class="plan__entry">
+            <sf-icon name="description" />
+            <span class="plan__name">{{ entry.name }}</span>
+            <span class="plan__reason">{{ entry.reason }}</span>
+          </li>
+        }
+      </ul>
+      @if (plan().pages > plan().sample.length) {
+        <p class="plan__more">{{ t('build.more', { count: plan().pages - plan().sample.length }) }}</p>
+      }
+      <p class="plan__note">{{ t('build.planNote') }}</p>
+    </section>
+  </div>
+  <ng-container sfDialogFooter>
+    <sf-button variant="secondary" (click)="closed.emit()">{{ t('build.cancel') }}</sf-button>
+    <sf-button icon="rocket_launch" [disabled]="!target()" (click)="start()">{{ t('build.start') }}</sf-button>
+  </ng-container>
+</sf-dialog>

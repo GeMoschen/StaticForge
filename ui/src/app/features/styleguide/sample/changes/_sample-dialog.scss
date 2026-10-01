@@ -1,0 +1,42 @@
+// Shared look of the sample's release and schedule dialogs (M35.9): parts under h3 headings, plain lists. `@use`d by
+// each dialog component, so the rules are scoped to it.
+
+.rd__part {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sf-space-2);
+  margin-bottom: var(--sf-space-4);
+}
+
+.rd__heading {
+  display: flex;
+  align-items: center;
+  gap: var(--sf-space-1);
+  margin: 0;
+  color: var(--sf-text);
+  font-size: var(--sf-fs-14);
+  line-height: var(--sf-lh-14);
+  font-weight: var(--sf-weight-semibold);
+}
+
+.rd__note {
+  margin: 0;
+  color: var(--sf-text-muted);
+  font-size: var(--sf-fs-12);
+  line-height: var(--sf-lh-12);
+}
+
+.rd__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sf-space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rd__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--sf-space-3);
+}

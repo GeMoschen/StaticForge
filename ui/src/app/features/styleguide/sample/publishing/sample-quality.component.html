@@ -1,0 +1,72 @@
+<div class="section__bar">
+  <h2 class="section__title">{{ t('quality.title') }}</h2>
+</div>
+
+<div class="section__scroll quality">
+  <p class="quality__intro">{{ t('quality.intro') }}</p>
+
+  <dl class="summary" [attr.aria-label]="t('quality.summary')">
+    <div class="summary__tile">
+      <dt>{{ t('quality.rulesOn') }}</dt>
+      <dd data-sf-summary="on">{{ summary().on }}</dd>
+    </div>
+    <div class="summary__tile">
+      <dt>{{ t('quality.rulesOff') }}</dt>
+      <dd data-sf-summary="off">{{ summary().off }}</dd>
+    </div>
+    <div class="summary__tile">
+      <dt>{{ t('quality.asErrors') }}</dt>
+      <dd data-sf-summary="errors">{{ summary().errors }}</dd>
+    </div>
+    <div class="summary__tile summary__tile--wide">
+      <dt>{{ t('quality.lastRun', { n: last.number }) }}</dt>
+      <dd>
+        <span class="summary__errors">{{ t('quality.lastErrors', { count: lastCounts.errors }) }}</span>
+        <span class="summary__warnings">{{ t('quality.lastWarnings', { count: lastCounts.warnings }) }}</span>
+        <sf-button variant="ghost" size="sm" iconTrailing="arrow_forward" (click)="state.openRun(last.id)">{{ t('quality.openRun') }}</sf-button>
+      </dd>
+    </div>
+  </dl>
+
+  @for (group of groups(); track group.category) {
+    <section class="category" [attr.aria-labelledby]="'sample-quality-' + group.category">
+      <h3 class="category__title" [id]="'sample-quality-' + group.category">
+        {{ t('quality.categories.' + group.category) }}
+        <span class="category__count">{{ t('quality.onOf', { on: group.on, total: group.rules.length }) }}</span>
+      </h3>
+      <ul class="rules">
+        @for (rule of group.rules; track rule.code) {
+          <li class="rule" [class.is-off]="levels()[rule.code] === 'off'">
+            <div class="rule__text">
+              <div class="rule__name-row">
+                <span class="rule__name" [id]="'sample-rule-' + rule.code">{{ rule.name }}</span>
+                @if (state.devMode()) {
+                  <code class="rule__code">{{ rule.code }}</code>
+                }
+                <sf-badge [label]="t('quality.fixIn.' + rule.fixIn)" />
+                @if (rule.lastFindings > 0) {
+                  <sf-badge tone="warning" icon="flag" [label]="t('quality.findings', { count: rule.lastFindings })" />
+                }
+              </div>
+              <span class="rule__hint">
+                <span class="rule__hint-text">{{ rule.explanation }}</span>
+                <sf-button variant="ghost" size="sm" icon="info" [label]="t('quality.about', { name: rule.name })" [tooltip]="rule.explanation" />
+              </span>
+              @if (rule.max === 'warning') {
+                <span class="rule__capped">{{ t('quality.capped') }}</span>
+              }
+            </div>
+            <sf-segmented
+              size="sm"
+              class="rule__level"
+              [options]="options(rule)"
+              [value]="levels()[rule.code]"
+              [aria-label]="t('quality.levelOf', { name: rule.name })"
+              (valueChange)="setLevel(rule.code, $event)"
+            />
+          </li>
+        }
+      </ul>
+    </section>
+  }
+</div>

@@ -1,0 +1,107 @@
+// Shared look of the Publishing sections (M35.9): a section title bar, a table that fills the rest, cells.
+
+:host {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: var(--sf-space-3);
+  min-height: 0;
+}
+
+.section__bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sf-space-2) var(--sf-space-4);
+  min-block-size: var(--sf-control-height);
+}
+
+.section__title {
+  margin: 0;
+  color: var(--sf-text);
+  font-size: var(--sf-fs-16);
+  line-height: var(--sf-lh-16);
+  font-weight: var(--sf-weight-semibold);
+}
+
+.section__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--sf-space-2);
+}
+
+.section__table {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.section__scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.cell-name {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sf-space-2);
+  min-width: 0;
+}
+
+.cell-name__icon {
+  flex-shrink: 0;
+  color: var(--sf-text-subtle);
+  font-size: var(--sf-fs-18);
+}
+
+.cell-name__text {
+  overflow: hidden;
+  color: var(--sf-text);
+  font-weight: var(--sf-weight-medium);
+  text-overflow: ellipsis;
+}
+
+.cell-muted {
+  overflow: hidden;
+  color: var(--sf-text-muted);
+  text-overflow: ellipsis;
+}
+
+.cell-code {
+  overflow: hidden;
+  color: var(--sf-text-muted);
+  font-family: var(--sf-font-mono);
+  font-size: var(--sf-fs-12);
+  text-overflow: ellipsis;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sf-space-4);
+}
+
+.form__group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sf-space-2);
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+
+.form__legend {
+  padding: 0;
+  color: var(--sf-text);
+  font-size: var(--sf-fs-13);
+  line-height: var(--sf-lh-13);
+  font-weight: var(--sf-weight-medium);
+}
+
+.form__hint {
+  margin: 0;
+  color: var(--sf-text-muted);
+  font-size: var(--sf-fs-12);
+  line-height: var(--sf-lh-12);
+}

@@ -1,0 +1,38 @@
+@use 'settings-page';
+
+.general__key {
+  max-inline-size: 24rem;
+}
+
+.general__danger {
+  max-inline-size: 40rem;
+  margin-block-start: auto;
+}
+
+.danger__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sf-space-3) var(--sf-space-6);
+}
+
+.danger__text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sf-space-1);
+  min-width: 0;
+}
+
+.danger__label {
+  color: var(--sf-danger-text);
+  font-size: var(--sf-fs-13);
+  line-height: var(--sf-lh-13);
+  font-weight: var(--sf-weight-medium);
+}
+
+.danger__hint {
+  color: var(--sf-text-muted);
+  font-size: var(--sf-fs-12);
+  line-height: var(--sf-lh-12);
+}

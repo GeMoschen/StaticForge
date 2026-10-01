@@ -1,0 +1,51 @@
+<nav class="sf-side-nav__nav" [attr.aria-label]="label()">
+  @if (narrow()) {
+    <sf-select class="sf-side-nav__select" [options]="options()" [value]="activeId()" [aria-label]="label()" (valueChange)="pick($event)" />
+  } @else {
+    @for (section of sections(); track $index) {
+      <div class="sf-side-nav__section">
+        @if (section.heading) {
+          <span class="sf-side-nav__heading" [id]="section.headingId">{{ section.heading }}</span>
+        }
+        <ul class="sf-side-nav__list" [attr.aria-labelledby]="section.headingId">
+          @for (item of section.items; track item.id) {
+            <li class="sf-side-nav__entry">
+              @if (item.link !== undefined) {
+                <a
+                  class="sf-side-nav__item"
+                  [attr.data-sf-side-nav]="item.id"
+                  [routerLink]="linkOf(item)"
+                  routerLinkActive="is-current"
+                  ariaCurrentWhenActive="page"
+                  [routerLinkActiveOptions]="{ exact: !!item.exact }"
+                  ><ng-container *ngTemplateOutlet="content; context: { $implicit: item }"
+                /></a>
+              } @else {
+                <button
+                  type="button"
+                  class="sf-side-nav__item"
+                  [class.is-current]="item.id === current()"
+                  [attr.data-sf-side-nav]="item.id"
+                  [attr.aria-current]="item.id === current() ? 'page' : null"
+                  (click)="select.emit(item.id)"
+                >
+                  <ng-container *ngTemplateOutlet="content; context: { $implicit: item }" />
+                </button>
+              }
+            </li>
+          }
+        </ul>
+      </div>
+    }
+  }
+</nav>
+
+<ng-template #content let-item>
+  @if (item.icon) {
+    <sf-icon class="sf-side-nav__icon" [name]="item.icon" />
+  }
+  <span class="sf-side-nav__label">{{ item.label }}</span>
+  @if (item.badge !== undefined && item.badge !== null && item.badge !== '') {
+    <sf-badge class="sf-side-nav__badge" [tone]="item.badgeTone ?? 'neutral'" [label]="'' + item.badge" />
+  }
+</ng-template>

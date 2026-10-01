@@ -1,0 +1,112 @@
+<div class="sf-catalog" role="group" [attr.aria-labelledby]="labelId" [attr.aria-describedby]="countId">
+  <div class="sf-catalog__header">
+    <span class="sf-catalog__label" [id]="labelId">{{ label() }}</span>
+    <span class="sf-catalog__count" [id]="countId">{{
+      'shared.catalog.count' | transloco: { count: items().length }
+    }}</span>
+    @if (items().length > 0) {
+      <sf-button
+        class="sf-catalog__toggle-all"
+        variant="ghost"
+        size="sm"
+        [icon]="allCollapsed() ? 'unfold_more' : 'unfold_less'"
+        (click)="toggleAll()"
+        >{{ (allCollapsed() ? 'shared.catalog.expandAll' : 'shared.catalog.collapseAll') | transloco }}</sf-button
+      >
+    }
+  </div>
+
+  @if (items().length > 0) {
+    <ol class="sf-catalog__list">
+      @for (item of items(); track item.id; let index = $index, last = $last) {
+        <li
+          class="sf-catalog__item"
+          (dragover)="onDragOver($event, index)"
+          (dragleave)="onDragLeave($event, index)"
+          (drop)="onDrop($event, index)"
+        >
+          <sf-card
+            [attr.data-sf-catalog-item]="item.id"
+            [type]="typeLabel(item)"
+            [icon]="typeIcon(item)"
+            [summary]="summaryOf()(item)"
+            [expanded]="!collapsed().has(item.id)"
+            [draggable]="!readonly()"
+            [readonly]="readonly()"
+            [level]="level()"
+            [menuItems]="cardMenus()[index]"
+            [class.is-dragging]="dragFrom() === index"
+            [class.is-drop-before]="dropTarget()?.index === index && dropTarget()?.position === 'before'"
+            [class.is-drop-after]="dropTarget()?.index === index && dropTarget()?.position === 'after'"
+            (expandedChange)="setExpanded(item, $event)"
+            (menuAction)="onCardMenu($event, index)"
+            (keyMove)="onKeyMove(index, $event)"
+            (dragStart)="onDragStart($event, index)"
+            (dragEnd)="endDrag()"
+          >
+            @if (cardTemplate(); as card) {
+              <ng-container *ngTemplateOutlet="card.template; context: { $implicit: item, index: index }" />
+            }
+          </sf-card>
+          @if (!readonly() && !last) {
+            <div class="sf-catalog__insert">
+              <span class="sf-catalog__insert-line" aria-hidden="true"></span>
+              @if (singleType(); as type) {
+                <sf-button
+                  variant="secondary"
+                  size="sm"
+                  icon="add"
+                  [label]="'shared.catalog.insertAt' | transloco: { position: index + 2 }"
+                  (click)="addAt(type.id, index + 1)"
+                />
+              } @else {
+                <sf-menu
+                  variant="secondary"
+                  size="sm"
+                  icon="add"
+                  align="start"
+                  [items]="typeMenu()"
+                  [label]="'shared.catalog.insertAt' | transloco: { position: index + 2 }"
+                  (itemSelected)="addAt($event.id, index + 1)"
+                />
+              }
+            </div>
+          }
+        </li>
+      }
+    </ol>
+  } @else {
+    <div class="sf-catalog__empty">
+      <p class="sf-catalog__empty-text">{{ 'shared.catalog.empty' | transloco }}</p>
+      @if (!readonly()) {
+        <ng-container *ngTemplateOutlet="addButton" />
+      }
+    </div>
+  }
+
+  @if (!readonly() && items().length > 0) {
+    <ng-container *ngTemplateOutlet="addButton" />
+  }
+
+  <div class="sf-sr-only" aria-live="polite">{{ announcement() }}</div>
+</div>
+
+<ng-template #addButton>
+  <div #addTrigger class="sf-catalog__add">
+    @if (singleType(); as type) {
+      <sf-button variant="secondary" size="sm" icon="add" (click)="addAt(type.id, items().length)">{{
+        'shared.catalog.add' | transloco
+      }}</sf-button>
+    } @else {
+      <sf-menu
+        variant="secondary"
+        size="sm"
+        align="start"
+        [items]="typeMenu()"
+        [label]="'shared.catalog.add' | transloco"
+        [text]="'shared.catalog.add' | transloco"
+        (itemSelected)="addAt($event.id, items().length)"
+      />
+    }
+  </div>
+</ng-template>

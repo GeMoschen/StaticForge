@@ -46,3 +46,10 @@ one row per language.
 - [ ] Screen definition of done met (README).
 - [ ] No capability of Changes lost (checklist in notes). Vitest specs updated. `npx vitest run` and `npx ng build`
       green.
+
+## Notes (M35.9)
+
+- `sf-release-actions` is a group of its own in the editor header: spacing and a vertical divider separate its ⋮
+  from the item's own ⋮ (M35.9 decision 34).
+- `.sf-sr-only` is pinned to its containing block's corner (`top: 0; left: 0`), so hidden labels can't stretch scroll
+  areas; the local `position: relative` workarounds in the changes list and admin tables are no longer required.

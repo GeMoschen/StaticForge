@@ -1,0 +1,8 @@
+@use 'settings-page';
+
+.transfer__panel {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+}

@@ -1,0 +1,64 @@
+@let c = change();
+<header class="diff__head">
+  <div class="diff__title-row">
+    <sf-icon class="diff__type" [name]="typeIcons[c.type]" />
+    <h2 class="diff__title" id="sample-diff-title">{{ c.name }}</h2>
+    <sf-button variant="ghost" size="sm" icon="close" [label]="'styleguide.sample.changes.diff.close' | transloco" (click)="closed.emit()" />
+  </div>
+  <div class="diff__meta">
+    <span>{{ meta() }}</span>
+    <sf-status size="sm" [tone]="tones[c.status]" [icon]="statusIcons[c.status]" [label]="t('statuses.' + c.status)" />
+  </div>
+  <div class="diff__tools">
+    <span class="diff__legend">{{ 'styleguide.sample.changes.diff.legend' | transloco }}</span>
+    <sf-segmented size="sm" [options]="layoutOptions()" [value]="layout()" [aria-label]="'styleguide.sample.changes.diff.layout' | transloco" (valueChange)="layout.set($event ?? 'split')" />
+    <sf-button variant="secondary" size="sm" icon="open_in_new" (click)="open()">{{ 'styleguide.sample.changes.diff.open' | transloco }}</sf-button>
+  </div>
+</header>
+
+<div class="diff__body">
+  @if (c.status !== 'changed') {
+    <p class="diff__note">{{ t('diff.notes.' + c.status) }}</p>
+  }
+  @for (f of fields(); track f.label) {
+    <section class="diff__field" [attr.aria-label]="f.label">
+      <h3 class="diff__label">
+        {{ f.label }}
+        @if (f.unchanged) {
+          <span class="diff__unchanged">{{ 'styleguide.sample.changes.diff.unchanged' | transloco }}</span>
+        }
+      </h3>
+      <div class="diff__values" [class.diff__values--inline]="layout() === 'inline'">
+        <ng-container *ngTemplateOutlet="side; context: { $implicit: f.before, kind: 'removed', unchanged: f.unchanged }" />
+        <ng-container *ngTemplateOutlet="side; context: { $implicit: f.after, kind: 'added', unchanged: f.unchanged }" />
+      </div>
+    </section>
+  }
+</div>
+
+<ng-template #side let-segments let-kind="kind" let-unchanged="unchanged">
+  @if (segments) {
+    <div class="diff__value" [class.diff__value--removed]="!unchanged && kind === 'removed'" [class.diff__value--added]="!unchanged && kind === 'added'">
+      <span class="diff__marker" aria-hidden="true">{{ unchanged ? '' : kind === 'removed' ? '−' : '+' }}</span>
+      <span class="sf-sr-only">{{ (kind === 'removed' ? 'styleguide.sample.changes.diff.released' : 'styleguide.sample.changes.diff.draft') | transloco }}</span>
+      <span class="diff__text">
+        @for (s of segments; track $index) {
+          @if (s.changed && !unchanged) {
+            @if (kind === 'removed') {
+              <del class="diff__del">{{ s.text }}</del>
+            } @else {
+              <ins class="diff__ins">{{ s.text }}</ins>
+            }
+          } @else {
+            <span>{{ s.text }}</span>
+          }
+        }
+      </span>
+    </div>
+  } @else {
+    <div class="diff__value diff__value--empty">
+      <span class="diff__marker" aria-hidden="true"></span>
+      <span class="diff__text">{{ (kind === 'removed' ? 'styleguide.sample.changes.diff.wasEmpty' : 'styleguide.sample.changes.diff.nowEmpty') | transloco }}</span>
+    </div>
+  }
+</ng-template>

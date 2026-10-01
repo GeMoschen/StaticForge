@@ -1,0 +1,171 @@
+:host {
+  display: block;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+}
+
+// Header, toolbar and bulk bar stay; the grid or list below scrolls. The drop zone and the upload panel sit on top.
+.library {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sf-space-3);
+  height: 100%;
+  min-height: 0;
+  padding: var(--sf-space-4) var(--sf-space-6) 0;
+  background: var(--sf-bg);
+}
+
+.library__toolbar {
+  flex: none;
+}
+
+.library__search {
+  flex: 0 1 16rem;
+  min-width: 10rem;
+}
+
+.library__type {
+  flex: 0 0 9.5rem;
+}
+
+.library__spacer {
+  flex: 1 1 auto;
+}
+
+.library__body {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.library__table {
+  padding-bottom: var(--sf-space-4);
+}
+
+// ── Bulk bar (grid; the list has the table's own) ────────────────────────────
+.bulk {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sf-gap);
+  padding: var(--sf-space-1) var(--sf-pad-panel);
+  border: 1px solid var(--sf-border);
+  border-radius: var(--sf-radius-md);
+  background: var(--sf-accent-subtle);
+  color: var(--sf-text);
+  font-size: var(--sf-fs-13);
+}
+
+.bulk__count {
+  font-weight: var(--sf-weight-semibold);
+}
+
+.bulk__actions {
+  display: flex;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  gap: var(--sf-space-2);
+}
+
+// ── List cells ───────────────────────────────────────────────────────────────
+.list-thumb {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--sf-space-10);
+  height: var(--sf-space-8);
+  overflow: hidden;
+  border-radius: var(--sf-radius-sm);
+  background: var(--sf-surface-sunken);
+  vertical-align: middle;
+}
+
+.list-thumb--checker {
+  background: repeating-conic-gradient(var(--sf-surface-muted) 0 25%, var(--sf-surface) 0 50%) 0 0 / var(--sf-space-2)
+    var(--sf-space-2);
+}
+
+.list-thumb__img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.list-thumb--checker .list-thumb__img {
+  object-fit: contain;
+}
+
+.list-thumb__icon {
+  color: var(--sf-text-subtle);
+  font-size: var(--sf-fs-18);
+}
+
+.list-name {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sf-space-2);
+  min-width: 0;
+}
+
+.list-name__text {
+  overflow: hidden;
+  color: var(--sf-text);
+  font-weight: var(--sf-weight-medium);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.list-num {
+  font-variant-numeric: tabular-nums;
+}
+
+.list-muted {
+  color: var(--sf-text-subtle);
+}
+
+// ── Drop zone over the whole library ─────────────────────────────────────────
+.drop {
+  position: absolute;
+  inset: var(--sf-space-2);
+  z-index: var(--sf-z-sticky);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px dashed var(--sf-accent);
+  border-radius: var(--sf-radius-lg);
+  background: color-mix(in srgb, var(--sf-accent-subtle) 88%, transparent);
+  pointer-events: none;
+}
+
+.drop__inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sf-space-2);
+  padding: var(--sf-space-6) var(--sf-space-8);
+  border-radius: var(--sf-radius-lg);
+  background: var(--sf-surface-raised);
+  box-shadow: var(--sf-elevation-2);
+}
+
+.drop__icon {
+  color: var(--sf-accent);
+  font-size: var(--sf-fs-30);
+}
+
+.drop__text {
+  color: var(--sf-text);
+  font-size: var(--sf-fs-16);
+  line-height: var(--sf-lh-16);
+  font-weight: var(--sf-weight-semibold);
+}
+
+// ── Upload panel, docked bottom right (left of an open drawer) ───────────────
+.library__uploads {
+  position: absolute;
+  inset-block-end: var(--sf-space-4);
+  inset-inline-end: var(--sf-space-4);
+  z-index: var(--sf-z-sticky);
+}

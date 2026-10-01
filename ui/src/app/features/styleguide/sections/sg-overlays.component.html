@@ -1,0 +1,121 @@
+<section class="sg-section" [id]="s.id" [attr.aria-labelledby]="s.id + '-title'">
+  <h2 class="sg-section__title" [id]="s.id + '-title'" tabindex="-1">{{ s.key | transloco }}</h2>
+  <p class="sg-intro">{{ 'styleguide.page.overlays.intro' | transloco }}</p>
+
+  <div class="sg-sub">
+    <h3 class="sg-sub__title">{{ 'styleguide.page.overlays.dialogs' | transloco }}</h3>
+    <div class="sg-row">
+      @for (size of sizes; track size) {
+        <sf-button variant="secondary" (click)="dialogSize.set(size)">{{ 'styleguide.page.overlays.openDialog' | transloco: { size: size } }}</sf-button>
+      }
+    </div>
+  </div>
+
+  <div class="sg-sub">
+    <h3 class="sg-sub__title">{{ 'styleguide.page.overlays.confirms' | transloco }}</h3>
+    <div class="sg-row">
+      @for (kind of confirmKinds; track kind) {
+        <sf-button [variant]="kind === 'default' ? 'secondary' : 'danger'" (click)="confirm(kind)">{{
+          'styleguide.page.overlays.confirm.' + kind | transloco
+        }}</sf-button>
+      }
+    </div>
+  </div>
+
+  <div class="sg-sub">
+    <h3 class="sg-sub__title">{{ 'styleguide.page.overlays.drawers' | transloco }}</h3>
+    <div class="sg-row">
+      <sf-button variant="secondary" icon="history" (click)="drawer.set('plain')">{{ 'styleguide.page.overlays.drawerPlain' | transloco }}</sf-button>
+      <sf-button variant="secondary" icon="history" (click)="drawer.set('modal')">{{ 'styleguide.page.overlays.drawerModal' | transloco }}</sf-button>
+    </div>
+  </div>
+
+  <div class="sg-sub">
+    <h3 class="sg-sub__title">{{ 'styleguide.page.overlays.popovers' | transloco }}</h3>
+    <div class="sg-row">
+      <sf-button variant="secondary" icon="share" [sfPopoverTrigger]="share">{{ o.popover.trigger }}</sf-button>
+      <sf-popover #share [label]="o.popover.label">
+        <div class="sg-popover">
+          <p class="sg-note">{{ o.popover.body }}</p>
+          <sf-button size="sm" icon="content_copy" (click)="share.close(true)">{{ o.popover.copy }}</sf-button>
+        </div>
+      </sf-popover>
+      <sf-button variant="ghost" icon="help" [sfPopoverTrigger]="about" sfPopoverTriggerOn="focus">{{ o.popover.focusTrigger }}</sf-button>
+      <sf-popover #about [label]="o.popover.focusLabel">
+        <p class="sg-note sg-popover">{{ o.popover.focusBody }}</p>
+      </sf-popover>
+    </div>
+  </div>
+
+  <div class="sg-sub">
+    <h3 class="sg-sub__title">{{ 'styleguide.page.overlays.menus' | transloco }}</h3>
+    <div class="sg-row">
+      <sf-menu variant="secondary" icon="expand_more" [items]="menuItems" [label]="o.menu.label" [text]="o.menu.text" align="start" (itemSelected)="chosen($event)" />
+      <sf-menu [items]="menuItems" [label]="o.menu.label" (itemSelected)="chosen($event)" />
+    </div>
+  </div>
+
+  <div class="sg-sub">
+    <h3 class="sg-sub__title">{{ 'styleguide.page.overlays.contextMenu' | transloco }}</h3>
+    <div
+      class="sg-context"
+      tabindex="0"
+      [attr.aria-label]="o.contextTarget"
+      [attr.aria-description]="'styleguide.page.overlays.contextHint' | transloco"
+      (contextmenu)="openContextMenu($event)"
+      (keydown.shift.f10)="openContextMenu($event)"
+    >
+      <span class="sg-mono">{{ o.contextTarget }}</span>
+      <span class="sg-note">{{ 'styleguide.page.overlays.contextHint' | transloco }}</span>
+    </div>
+  </div>
+
+  <div class="sg-sub">
+    <h3 class="sg-sub__title">{{ 'styleguide.page.overlays.tooltips' | transloco }}</h3>
+    <div class="sg-row">
+      <span class="sg-tooltip-target" tabindex="0" [sfTooltip]="'styleguide.page.overlays.tooltipText' | transloco">{{
+        'styleguide.page.overlays.tooltipTarget' | transloco
+      }}</span>
+      <span class="sg-tooltip-target" tabindex="0" sfTooltipSide="bottom" [sfTooltip]="'styleguide.page.overlays.tooltipText' | transloco">{{
+        'styleguide.page.overlays.tooltipBelow' | transloco
+      }}</span>
+    </div>
+  </div>
+
+  <div class="sg-sub">
+    <h3 class="sg-sub__title">{{ 'styleguide.page.overlays.toasts' | transloco }}</h3>
+    <div class="sg-row">
+      @for (t of toastKinds; track t.kind) {
+        <sf-button variant="secondary" (click)="toast(t.kind, t.message)">{{ 'styleguide.page.overlays.toast.' + t.kind | transloco }}</sf-button>
+      }
+      <sf-button variant="secondary" icon="undo" (click)="undoToast()">{{ 'styleguide.page.overlays.toast.undo' | transloco }}</sf-button>
+    </div>
+  </div>
+</section>
+
+@if (dialogSize(); as size) {
+  <sf-dialog [title]="o.dialog.title" [size]="size" (closed)="dialogSize.set(null)">
+    <p class="sg-note">{{ o.dialog.body }}</p>
+    <sf-field [label]="o.dialog.field" required>
+      <sf-input [(value)]="dialogValue" required />
+    </sf-field>
+    <div sfDialogFooter>
+      <sf-button variant="secondary" (click)="dialogSize.set(null)">{{ o.dialog.cancel }}</sf-button>
+      <sf-button (click)="dialogSize.set(null)">{{ o.dialog.confirm }}</sf-button>
+    </div>
+  </sf-dialog>
+}
+
+@if (drawer(); as kind) {
+  <sf-drawer [title]="o.drawer.title" [modal]="kind === 'modal'" (closed)="drawer.set(null)">
+    <p class="sg-note">{{ o.drawer.body }}</p>
+    <ul class="sg-history">
+      @for (entry of o.drawer.entries; track entry) {
+        <li>{{ entry }}</li>
+      }
+    </ul>
+    <div sfDrawerFooter>
+      <sf-button variant="secondary" (click)="drawer.set(null)">{{ o.drawer.close }}</sf-button>
+    </div>
+  </sf-drawer>
+}

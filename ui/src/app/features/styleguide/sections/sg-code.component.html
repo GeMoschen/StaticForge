@@ -1,0 +1,126 @@
+<section class="sg-section" [id]="s.id" [attr.aria-labelledby]="s.id + '-title'">
+  <h2 class="sg-section__title" [id]="s.id + '-title'" tabindex="-1">{{ s.key | transloco }}</h2>
+  <p class="sg-intro">{{ 'styleguide.page.code.intro' | transloco }}</p>
+
+  <div class="sg-code-palette">
+    <span id="sg-code-palette-label" class="sg-code-palette__label">{{ 'styleguide.page.code.palette.label' | transloco }}</span>
+    <sf-segmented
+      size="sm"
+      aria-labelledby="sg-code-palette-label"
+      [options]="paletteOptions()"
+      [value]="palette()"
+      (valueChange)="setPalette($event)"
+    />
+    <span class="sg-note">{{ 'styleguide.page.code.palette.note' | transloco }}</span>
+  </div>
+
+  <div class="sg-sub">
+    <h3 class="sg-sub__title">{{ 'styleguide.page.code.cdl' | transloco }}</h3>
+    <div class="sg-code-box">
+      <sf-code-panel
+        [fileName]="d.cdl.fileName"
+        [languageLabel]="d.cdl.languageLabel"
+        language="cdl"
+        [label]="d.cdl.label"
+        [value]="cdl()"
+        [diagnostics]="d.cdl.diagnostics"
+        [formattable]="true"
+        (valueChange)="cdl.set($event)"
+      />
+    </div>
+  </div>
+
+  <div class="sg-sub">
+    <h3 class="sg-sub__title">{{ 'styleguide.page.code.octl' | transloco }}</h3>
+    <div class="sg-code-box">
+      <sf-code-panel
+        [fileName]="d.octl.fileName"
+        [languageLabel]="d.octl.languageLabel"
+        language="octl"
+        format="HTML"
+        [label]="d.octl.label"
+        [value]="octl()"
+        [diagnostics]="d.octl.diagnostics"
+        (valueChange)="octl.set($event)"
+      />
+    </div>
+  </div>
+
+  <div class="sg-grid sg-code-grid">
+    <div class="sg-cell">
+      <p class="sg-caption">{{ 'styleguide.page.code.json' | transloco }}</p>
+      <div class="sg-code-box sg-code-box--small">
+        <sf-code-panel
+          [fileName]="d.json.fileName"
+          [languageLabel]="d.json.languageLabel"
+          language="json"
+          [label]="d.json.label"
+          [value]="json()"
+          [formattable]="true"
+          (valueChange)="json.set($event)"
+        />
+      </div>
+    </div>
+    <div class="sg-cell">
+      <p class="sg-caption">{{ 'styleguide.page.code.readOnly' | transloco }}</p>
+      <div class="sg-code-box sg-code-box--small">
+        <sf-code-panel
+          [fileName]="d.readOnly.fileName"
+          [languageLabel]="d.readOnly.languageLabel"
+          language="octl"
+          format="XML"
+          [label]="d.readOnly.label"
+          [value]="d.readOnly.source"
+          [readOnly]="true"
+        />
+      </div>
+    </div>
+  </div>
+
+  <div class="sg-sub">
+    <h3 class="sg-sub__title">{{ 'styleguide.page.code.compact' | transloco }}</h3>
+    <p class="sg-note">{{ 'styleguide.page.code.compactNote' | transloco }}</p>
+    <div class="sg-panel">
+      <sf-code-editor language="where" [compact]="true" [label]="d.where.label" [value]="where()" (valueChange)="where.set($event)" />
+    </div>
+  </div>
+
+  <div class="sg-sub">
+    <h3 class="sg-sub__title">{{ 'styleguide.page.code.swatches' | transloco }}</h3>
+    <p class="sg-note">{{ 'styleguide.page.code.swatchesNote' | transloco }}</p>
+    <div class="sg-panel sg-code-swatches">
+      <table class="sg-table">
+        <thead>
+          <tr>
+            <th scope="col">{{ 'styleguide.page.code.columns.token' | transloco }}</th>
+            <th scope="col">{{ 'styleguide.page.code.columns.sample' | transloco }}</th>
+            <th scope="col">{{ 'styleguide.page.code.columns.value' | transloco }}</th>
+            <th scope="col">{{ 'styleguide.page.code.columns.contrast' | transloco }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (swatch of swatches(); track swatch.name) {
+            <tr>
+              <td>
+                <span class="sg-code-chip" [style.background]="cssVar(swatch.name)"></span>
+                <code class="sg-mono">--sf-{{ swatch.name }}</code>
+              </td>
+              <td>
+                <code class="sg-code-sample" [style.color]="cssVar(swatch.name)">{{ d.sample }}</code>
+              </td>
+              <td class="sg-mono">{{ swatch.value ?? dash }}</td>
+              <td>
+                <span class="sg-code-ratio">
+                  @if (swatch.ratio !== null) {
+                    {{ 'styleguide.page.colors.ratio' | transloco: { ratio: swatch.ratio } }}
+                  }
+                </span>
+                <sf-badge [tone]="swatch.tone">{{ swatch.verdict | transloco: { min: 4.5 } }}</sf-badge>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>

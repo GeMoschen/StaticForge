@@ -1,0 +1,58 @@
+<sf-page-header class="area__header" [title]="t('title')">
+  <span sfPageHeaderStatus class="area__status">
+    <sf-status
+      size="sm"
+      [tone]="tones[running.status]"
+      [icon]="icons[running.status]"
+      [label]="t('runs.number', { n: running.number })"
+      [detail]="t('status.running')"
+    />
+    <sf-status
+      size="sm"
+      [tone]="tones[last.status]"
+      [icon]="icons[last.status]"
+      [label]="t('lastBuild', { n: last.number })"
+      [detail]="t('status.' + last.status)"
+    />
+  </span>
+  <ng-container sfPageHeaderActions>
+    <sf-button icon="rocket_launch" (click)="state.buildOpen.set(true)">{{ t('buildNow') }}</sf-button>
+  </ng-container>
+</sf-page-header>
+
+<div class="area__body" [class.is-narrow]="nav.narrow()">
+  <sf-side-nav
+    #nav="sfSideNav"
+    class="area__nav"
+    [items]="navItems()"
+    [label]="t('nav.label')"
+    [current]="state.section()"
+    (select)="selectSection($event)"
+  />
+  <div class="area__content">
+    @switch (state.section()) {
+      @case ('runs') {
+        <sf-sample-runs />
+      }
+      @case ('targets') {
+        <sf-sample-targets />
+      }
+      @case ('policy') {
+        <sf-sample-policy />
+      }
+      @case ('quality') {
+        <sf-sample-quality />
+      }
+      @case ('redirects') {
+        <sf-sample-redirects />
+      }
+      @case ('urls') {
+        <sf-sample-urls />
+      }
+    }
+  </div>
+</div>
+
+@if (state.buildOpen()) {
+  <sf-sample-build-dialog (closed)="state.buildOpen.set(false)" />
+}

@@ -1,0 +1,130 @@
+@let r = run();
+<div class="detail__head">
+  <sf-button variant="ghost" size="sm" icon="arrow_back" (click)="state.openRun(null)">{{ t('detail.back') }}</sf-button>
+  <div class="detail__title-row">
+    <h2 class="detail__title">{{ t('runs.number', { n: r.number }) }}</h2>
+    <sf-status [tone]="tones[r.status]" [icon]="icons[r.status]" [label]="t('status.' + r.status)" />
+    @if (r.status === 'running') {
+      <span class="detail__progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" [attr.aria-valuenow]="r.progress" [attr.aria-label]="t('runs.progressLabel')">
+        <span class="detail__progress-bar" [style.width.%]="r.progress"></span>
+      </span>
+      <sf-button class="detail__cancel" variant="secondary" size="sm" icon="stop_circle" (click)="state.notice()">{{ t('detail.cancel') }}</sf-button>
+    }
+  </div>
+  <dl class="detail__counts">
+    <div class="detail__count">
+      <dt>{{ t('detail.facts.mode') }}</dt>
+      <dd>{{ t('mode.' + r.mode) }}</dd>
+    </div>
+    <div class="detail__count">
+      <dt>{{ t('detail.facts.target') }}</dt>
+      <dd>{{ target()?.name }}</dd>
+    </div>
+    <div class="detail__count">
+      <dt>{{ t('detail.facts.pages') }}</dt>
+      <dd>{{ r.pages }}</dd>
+    </div>
+    <div class="detail__count">
+      <dt>{{ t('detail.facts.errors') }}</dt>
+      <dd [class.detail__danger]="counts().errors > 0">{{ counts().errors }}</dd>
+    </div>
+    <div class="detail__count">
+      <dt>{{ t('detail.facts.warnings') }}</dt>
+      <dd [class.detail__warning]="counts().warnings > 0">{{ counts().warnings }}</dd>
+    </div>
+    <div class="detail__count">
+      <dt>{{ t('detail.facts.duration') }}</dt>
+      <dd>{{ duration() }}</dd>
+    </div>
+  </dl>
+</div>
+
+<sf-tabs #tabStrip class="detail__tabs" [tabs]="tabs()" [selected]="tab()" [label]="t('detail.tabs.label')" (selectTab)="selectTab($event)" />
+
+<div class="detail__panel" role="tabpanel" [id]="tabStrip.panelId(tab())" [attr.aria-labelledby]="tabStrip.tabId(tab())" [class.is-log]="tab() === 'log'">
+  @switch (tab()) {
+    @case ('summary') {
+      <dl class="detail__facts">
+        <div class="detail__fact">
+          <dt>{{ t('detail.facts.started') }}</dt>
+          <dd><sf-relative-time [value]="started()" /></dd>
+        </div>
+        <div class="detail__fact">
+          <dt>{{ t('detail.facts.startedBy') }}</dt>
+          <dd>{{ r.by }}</dd>
+        </div>
+        <div class="detail__fact">
+          <dt>{{ t('detail.facts.trigger') }}</dt>
+          <dd>{{ t('trigger.' + r.trigger) }}</dd>
+        </div>
+        <div class="detail__fact">
+          <dt>{{ t('detail.facts.files') }}</dt>
+          <dd>{{ t('detail.filesValue', { written: r.filesWritten, skipped: r.filesSkipped, size: r.bytes }) }}</dd>
+        </div>
+        <div class="detail__fact">
+          <dt>{{ t('detail.facts.revision') }}</dt>
+          <dd>{{ 'r' + r.revision }}</dd>
+        </div>
+        @if (r.comment) {
+          <div class="detail__fact">
+            <dt>{{ t('detail.facts.comment') }}</dt>
+            <dd>{{ r.comment }}</dd>
+          </div>
+        }
+        @if (state.devMode()) {
+          <div class="detail__fact">
+            <dt>{{ t('detail.facts.output') }}</dt>
+            <dd><code>{{ target()?.location }}</code></dd>
+          </div>
+        }
+      </dl>
+    }
+    @case ('rebuilt') {
+      <sf-data-table
+        class="detail__table"
+        [columns]="rebuiltColumns()"
+        [rows]="rebuiltRows()"
+        [rowKey]="rebuiltKey"
+        [label]="t('detail.rebuiltTable')"
+        [emptyTitle]="t('detail.noRebuilt')"
+        [columnChooser]="false"
+      />
+    }
+    @case ('findings') {
+      @if (findings().length === 0) {
+        <sf-empty-state icon="verified" [level]="3" [title]="t('detail.noFindings')" [description]="t('detail.noFindingsHint')" />
+      } @else {
+        <ul class="findings">
+          @for (f of findings(); track f.code) {
+            <li class="finding">
+              <div class="finding__head">
+                <sf-icon class="finding__icon" [class.is-error]="f.severity === 'error'" [name]="f.severity === 'error' ? 'error' : 'warning'" />
+                <h3 class="finding__title">{{ f.rule }}</h3>
+                <sf-badge [tone]="f.severity === 'error' ? 'danger' : 'warning'" [label]="t('detail.findingCount', { count: f.pages.length, severity: t('severity.' + f.severity) })" />
+                @if (state.devMode()) {
+                  <code class="finding__code">{{ f.code }}</code>
+                }
+              </div>
+              <ul class="finding__pages">
+                @for (p of f.pages; track $index) {
+                  <li class="finding__page">
+                    <button type="button" class="finding__link" (click)="openPage()">{{ p.name }}</button>
+                    <span class="finding__lang">{{ p.lang }}</span>
+                    <span class="finding__message">{{ p.message }}</span>
+                  </li>
+                }
+              </ul>
+              <p class="finding__fix">
+                <sf-icon name="build" />
+                <span><strong>{{ t('detail.howToFix') }}</strong> {{ f.fix }}</span>
+              </p>
+            </li>
+          }
+        </ul>
+      }
+    }
+    @case ('log') {
+      <sf-sample-run-log class="detail__log" [run]="r" />
+    }
+  }
+</div>

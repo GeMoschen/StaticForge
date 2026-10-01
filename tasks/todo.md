@@ -51,7 +51,20 @@ every screen. Screen migration starts only after the style guide (M35.9) is sign
         column, selection + bulk bar, row keyboard, filter bar synced to the URL, paging/infinite, states, virtualized
   - [x] Verification: vitest, ng build, lint, 5,000-node tree and 1,000-row table smooth in Chrome
   - Review: see `35-m35-ui-ux-overhaul/008-table-tree-splitter.md` (1,620 tests green, build + lint green, checked in Chrome)
-- [ ] M35.9 style guide + **design gate (user sign-off)**
+- [x] M35.9 style guide + **design gate (user sign-off)**
+  - [x] Chrome tokens for the dark top bar (both themes), product mark SVG + favicon
+  - [x] `/styleguide` route (instance admins; anyone in dev builds), lazy chunk, sticky index, theme/density switches
+  - [x] Token sections: colours with live contrast values, type scale, spacing, radius, elevation, z-index
+  - [x] Component sections: buttons, forms, display, layout, overlays, tree/table/splitter — all states
+  - [x] Sample screen `/styleguide/sample`: dark top bar + rail, tree → folder table → page editor (outline, form,
+        preview), developer mode toggle, fake data
+  - [x] Specs (route guard, index, contrast maths, sample navigation), vitest + ng build + lint
+  - [x] Screenshots with headless Chrome → Artifact gallery; **user sign-off** recorded in the task file
+  - [x] Review round 1: cards/catalogs, content + datasets, templates + code panel (two palettes), media, navigation
+        (sibling reorder), globals, changes, schedules, publishing + settings (`sf-side-nav`); decisions 7–34
+  - Review: signed off 2026-10-01 (gallery v4, 198 shots / 45 screens); 218 test files / 1,863 tests, build + lint
+    green; design-system review found 12 defects, all fixed with specs. Open: palette pick (before M35.21), drawers
+    over the top bar (before M35.19) — see 009 notes.
 - [ ] M35.10 app frame: top bar, rail, developer mode, titles
 - [ ] M35.11 IA: Publishing area, Settings side menu + split
 - [ ] M35.12 history drawer, full history, time-travel banner (spine removed)

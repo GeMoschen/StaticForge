@@ -1,0 +1,42 @@
+@if (openRun(); as run) {
+  <sf-sample-run-detail [run]="run" />
+} @else {
+  <sf-data-table
+    class="runs__table"
+    [columns]="columns()"
+    [rows]="rows"
+    [rowKey]="rowKey"
+    [rowLabel]="rowLabel"
+    [label]="t('runs.table')"
+    [emptyTitle]="t('runs.empty')"
+    (rowOpen)="state.openRun($event.id)"
+  >
+    <ng-template sfDataTableCell="status" [sfDataTableCellRows]="rows" let-row>
+      <span class="runs__status">
+        <span class="runs__number">{{ '#' + row.number }}</span>
+        @if (row.status === 'running') {
+          <sf-spinner size="sm" inline [label]="t('status.running')" />
+          <span class="runs__progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" [attr.aria-valuenow]="row.progress" [attr.aria-label]="t('runs.progressLabel')">
+            <span class="runs__progress-bar" [style.width.%]="row.progress"></span>
+          </span>
+          <span class="runs__muted">{{ row.progress + '%' }}</span>
+        } @else {
+          <sf-status size="sm" [tone]="tones[row.status]" [icon]="icons[row.status]" [label]="t('status.' + row.status)" />
+        }
+      </span>
+    </ng-template>
+    <ng-template sfDataTableCell="started" [sfDataTableCellRows]="rows" let-row>
+      <sf-relative-time [value]="started(row)" />
+    </ng-template>
+    <ng-template sfDataTableCell="duration" [sfDataTableCellRows]="rows" let-row>
+      @if (row.durationSeconds === null) {
+        <span class="runs__muted">{{ t('runs.inProgress') }}</span>
+      } @else {
+        {{ duration(row) }}
+      }
+    </ng-template>
+    <ng-template sfDataTableCell="findings" [sfDataTableCellRows]="rows" let-row>
+      <span [class.runs__errors]="hasErrors(row)" [class.runs__muted]="!hasErrors(row)">{{ findingsText(row) }}</span>
+    </ng-template>
+  </sf-data-table>
+}

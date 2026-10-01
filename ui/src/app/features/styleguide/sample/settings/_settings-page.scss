@@ -1,0 +1,85 @@
+// Shared frame of a Settings sub-page (M35.9): the page header at the top, the rest fills the height; forms scroll
+// inside `.page__scroll`, tables fill `.page__table`. `@use`d by each sub-page component, so the rules are scoped to it.
+
+:host {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: var(--sf-space-4);
+  min-width: 0;
+  min-height: 0;
+}
+
+.page__scroll {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: var(--sf-space-6);
+  min-height: 0;
+  overflow-y: auto;
+  padding-block-end: var(--sf-space-4);
+}
+
+.page__form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sf-space-4);
+  max-inline-size: 40rem;
+}
+
+.page__table {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.page__bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sf-space-2) var(--sf-space-4);
+}
+
+.page__intro {
+  max-inline-size: 70ch;
+  margin: 0;
+  color: var(--sf-text-muted);
+  font-size: var(--sf-fs-13);
+  line-height: var(--sf-lh-13);
+}
+
+.cell-name {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sf-space-2);
+  min-width: 0;
+}
+
+.cell-name__text {
+  overflow: hidden;
+  color: var(--sf-text);
+  font-weight: var(--sf-weight-medium);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cell-muted {
+  overflow: hidden;
+  color: var(--sf-text-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cell-code {
+  overflow: hidden;
+  color: var(--sf-text-muted);
+  font-family: var(--sf-font-mono);
+  font-size: var(--sf-fs-12);
+  text-overflow: ellipsis;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sf-space-4);
+}

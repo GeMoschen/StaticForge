@@ -289,6 +289,40 @@ describe('SfDataTableComponent', () => {
       expect(pageBox).not.toBeChecked();
     });
 
+    it('selects rows by key from the host (selectKeys)', async () => {
+      const { host, fixture } = await setup({ selectable: true });
+      const table = fixture.debugElement.query((el) => el.name === 'sf-data-table').componentInstance as SfDataTableComponent<unknown>;
+
+      table.selectKeys(['b', 'd']);
+      fixture.detectChanges();
+      expect(host.selections.at(-1)).toMatchObject({ keys: ['b', 'd'], count: 2 });
+      expect(screen.getByRole('group', { name: 'Bulk actions' })).toHaveTextContent('2 selected');
+    });
+
+    it('selectKeys emits nothing when the keys are already the selection', async () => {
+      const { host, fixture } = await setup({ selectable: true });
+      const table = fixture.debugElement.query((el) => el.name === 'sf-data-table').componentInstance as SfDataTableComponent<unknown>;
+
+      table.selectKeys(['b', 'd']);
+      const emitted = host.selections.length;
+      table.selectKeys(['d', 'b', 'd']);
+      expect(host.selections).toHaveLength(emitted);
+      // Keys of rows not on the page (server paging) are kept.
+      table.selectKeys(['b', 'zz']);
+      expect(host.selections).toHaveLength(emitted + 1);
+      expect(host.selections.at(-1)).toMatchObject({ keys: ['b', 'zz'] });
+    });
+
+    it('selectKeys does nothing on a table that is not selectable', async () => {
+      const { host, fixture } = await setup();
+      const table = fixture.debugElement.query((el) => el.name === 'sf-data-table').componentInstance as SfDataTableComponent<unknown>;
+
+      table.selectKeys(['b']);
+      fixture.detectChanges();
+      expect(host.selections).toEqual([]);
+      expect(table.selection().keys).toEqual([]);
+    });
+
     it('offers "select all N matching" after a full page (client: every matching row)', async () => {
       const { host } = await setup({ selectable: true, paging: 'pager', pageSize: 2 });
 

@@ -22,6 +22,9 @@ detail: Values | Schema). Screenshots 40–43 and 60–61. Neither screen has an
   - Items show the **target page's name and public URL** ("Company → /about-us/"), not the internal folder path.
   - The reference detail shows the target via a page picker card, not a UUID.
   - The resolved URL is labelled correctly.
+  - **Sibling reordering** (user, M35.9 decision 23 — widens decision 17): drag before/after and `Alt+↑/↓` among
+    siblings via `sf-tree`'s `reorderable`. Needs a stored sibling order in the backend (navigation order today is
+    not user-editable) — plan the API/model change in this task.
   - Plain wording ("Select a menu item", not "Select a node"; "Entry page", not "STARTNODE").
 - **Globals:**
   - `sf-tree` with a filter.

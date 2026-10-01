@@ -30,7 +30,7 @@ area: frontend
   - Theme menu: light/dark/system, density, and the developer mode switch (only for users with developer rights).
   - `?` shortcut sheet (M35.14).
   - User menu: account, administration (instance admins), sign out.
-- **Left rail**, labelled groups, collapsible (64 px / 220 px, stored in preferences), with a tooltip for each item
+- **Left rail**, labelled groups, collapsible (52 px / 232 px — the `--sf-rail-width-*` tokens, decided in M35.9 — stored in preferences), with a tooltip for each item
   when collapsed:
   - **Home** (project home, M35.28).
   - **Content**: Pages, Media, Content, Navigation, Globals.

@@ -1,0 +1,286 @@
+<sf-drawer
+  [title]="file().name"
+  [width]="state.drawerWidth()"
+  [minWidth]="360"
+  (widthChange)="state.drawerWidth.set($event)"
+  (closed)="state.openAsset(null)"
+  (keydown)="onKeydown($event)"
+>
+  <div sfDrawerActions class="head">
+    @if (file().status !== 'released') {
+      <sf-status size="sm" [tone]="tones[file().status]" [icon]="icons[file().status]" [label]="sample.statusLabel(file().status)" />
+    }
+    <sf-button
+      variant="ghost"
+      size="sm"
+      icon="chevron_left"
+      [label]="'styleguide.sample.media.detail.previous' | transloco"
+      aria-keyshortcuts="ArrowLeft"
+      (click)="state.step(-1)"
+    />
+    <sf-button
+      variant="ghost"
+      size="sm"
+      icon="chevron_right"
+      [label]="'styleguide.sample.media.detail.next' | transloco"
+      aria-keyshortcuts="ArrowRight"
+      (click)="state.step(1)"
+    />
+    <sf-menu size="sm" [items]="fileActions()" [label]="'styleguide.sample.media.detail.more' | transloco" />
+  </div>
+
+  <div class="detail">
+    <p class="detail__meta">
+      <span>{{ meta() }}</span>
+      @if (positionText()) {
+        <span class="detail__position">{{ positionText() }}</span>
+      }
+    </p>
+
+    <sf-tabs
+      class="detail__tabs"
+      [tabs]="tabs()"
+      [selected]="state.currentTab()"
+      [idPrefix]="tabsId"
+      [label]="'styleguide.sample.media.detail.tabs' | transloco"
+      (selectTab)="selectTab($event)"
+    />
+
+    <div
+      class="detail__panel"
+      role="tabpanel"
+      [class.detail__panel--code]="state.currentTab() === 'rendered' || state.currentTab() === 'source'"
+      [id]="tabsId + '-panel-' + state.currentTab()"
+      [attr.aria-labelledby]="tabsId + '-tab-' + state.currentTab()"
+    >
+      @switch (state.currentTab()) {
+        @case ('details') {
+          <sf-sample-media-details-tab />
+        }
+
+        @case ('variants') {
+          <p class="intro">{{ 'styleguide.sample.media.variants.intro' | transloco }}</p>
+          <div class="table-wrap">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th scope="col">{{ 'styleguide.sample.media.variants.columns.variant' | transloco }}</th>
+                  <th scope="col">{{ 'styleguide.sample.media.variants.columns.format' | transloco }}</th>
+                  <th scope="col">{{ 'styleguide.sample.media.variants.columns.dimensions' | transloco }}</th>
+                  <th scope="col" class="num">{{ 'styleguide.sample.media.variants.columns.size' | transloco }}</th>
+                  <th scope="col"><span class="sf-sr-only">{{ 'styleguide.sample.media.variants.columns.actions' | transloco }}</span></th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (variant of variants(); track variant.id) {
+                  <tr>
+                    <td>
+                      @if (variant.original) {
+                        <sf-badge [label]="'styleguide.sample.media.variants.original' | transloco" />
+                      } @else {
+                        <span class="mono">{{ variant.label }}</span>
+                      }
+                    </td>
+                    <td>{{ variant.format }}</td>
+                    <td class="num">{{ variant.width }} × {{ variant.height }}</td>
+                    <td class="num">{{ variant.sizeBytes | sfFileSize }}</td>
+                    <td class="actions">
+                      <sf-button
+                        variant="ghost"
+                        size="sm"
+                        icon="download"
+                        [label]="'styleguide.sample.media.variants.download' | transloco: { variant: variant.original ? file().format : variant.label + ' ' + variant.format }"
+                        (click)="state.download([file()])"
+                      />
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+
+        @case ('languages') {
+          <sf-switch [value]="state.isLocalized(file())" (valueChange)="state.setLocalized(file(), $event)">{{
+            'styleguide.sample.media.languages.switch' | transloco
+          }}</sf-switch>
+          <p class="intro">{{ 'styleguide.sample.media.languages.intro' | transloco }}</p>
+          @if (state.isLocalized(file())) {
+            <ul class="langs">
+              @for (row of languages(); track row.lang) {
+                <li class="lang">
+                  <span class="lang__thumb" [class.lang__thumb--checker]="file().format === 'SVG' || file().format === 'PNG'">
+                    @if (row.art) {
+                      <img [src]="row.art" alt="" />
+                    } @else {
+                      <sf-icon [name]="row.fileName ? 'draft' : 'subdirectory_arrow_right'" />
+                    }
+                  </span>
+                  <span class="lang__text">
+                    <span class="lang__name">
+                      {{ row.name }}
+                      @if (row.isDefault) {
+                        <sf-badge [label]="'styleguide.sample.media.languages.default' | transloco" />
+                      }
+                    </span>
+                    @if (row.fileName) {
+                      <span class="lang__file">{{ row.fileName }} · {{ row.sizeBytes | sfFileSize }}</span>
+                    } @else {
+                      <span class="lang__fallback">{{ 'styleguide.sample.media.languages.fallback' | transloco: { language: 'DE' } }}</span>
+                    }
+                  </span>
+                  <span class="lang__actions">
+                    @if (row.fileName) {
+                      <sf-button variant="secondary" size="sm" (click)="languageAction(row, 'replace')">{{
+                        'styleguide.sample.media.languages.replace' | transloco
+                      }}</sf-button>
+                      @if (!row.isDefault) {
+                        <sf-button
+                          variant="ghost"
+                          size="sm"
+                          icon="delete"
+                          [label]="'styleguide.sample.media.languages.remove' | transloco: { language: row.name }"
+                          (click)="languageAction(row, 'remove')"
+                        />
+                      }
+                    } @else {
+                      <sf-button variant="secondary" size="sm" icon="upload" (click)="languageAction(row, 'upload')">{{
+                        'styleguide.sample.media.languages.upload' | transloco
+                      }}</sf-button>
+                    }
+                  </span>
+                </li>
+              }
+            </ul>
+          } @else {
+            <p class="note">{{ 'styleguide.sample.media.languages.single' | transloco }}</p>
+          }
+        }
+
+        @case ('processing') {
+          <sf-switch [value]="state.assetProcessed()" (valueChange)="state.setProcessed(file(), $event)">{{
+            'styleguide.sample.media.processing.switch' | transloco
+          }}</sf-switch>
+          <p class="intro">{{ 'styleguide.sample.media.processing.intro' | transloco }}</p>
+          <h3 class="subhead">{{ 'styleguide.sample.media.processing.lastAttempt' | transloco }}</h3>
+          @if (!state.assetProcessed()) {
+            <p class="note">{{ 'styleguide.sample.media.processing.off' | transloco }}</p>
+          } @else if (processDiagnostics().length === 0) {
+            <p class="note">{{ 'styleguide.sample.media.processing.clean' | transloco }}</p>
+          } @else {
+            <p class="note">
+              {{ 'styleguide.sample.media.processing.summary' | transloco: { count: processDiagnostics().length } }}
+              <sf-relative-time [value]="minutesAgo(file().modifiedMinutes)" />
+            </p>
+            <ul class="diags">
+              @for (d of processDiagnostics(); track $index) {
+                <li class="diag">
+                  <sf-status size="sm" tone="warning" [label]="'styleguide.sample.media.processing.warning' | transloco" />
+                  <code class="diag__code">{{ d.code }}</code>
+                  <span class="diag__pos">{{ 'styleguide.sample.media.processing.position' | transloco: { line: d.line, column: d.column } }}</span>
+                  <span class="diag__message">{{ d.message }}</span>
+                </li>
+              }
+            </ul>
+          }
+        }
+
+        @case ('rendered') {
+          <p class="intro">{{ 'styleguide.sample.media.rendered.intro' | transloco }}</p>
+          <sf-code-panel
+            class="code"
+            [fileName]="file().name"
+            [languageLabel]="languageLabel()"
+            [value]="rendered()"
+            language="octl"
+            [format]="codeFormat()"
+            [readOnly]="true"
+            [label]="'styleguide.sample.media.rendered.label' | transloco: { name: file().name }"
+          />
+        }
+
+        @case ('source') {
+          <sf-code-panel
+            class="code"
+            [fileName]="file().name"
+            [languageLabel]="languageLabel()"
+            [value]="source()"
+            language="octl"
+            [format]="codeFormat()"
+            [diagnostics]="diagnostics()"
+            [label]="'styleguide.sample.media.source.label' | transloco: { name: file().name }"
+            (valueChange)="state.sourceDraft.set($event)"
+          />
+        }
+
+        @case ('usedby') {
+          @if (file().usages.length > 0) {
+            <h3 class="subhead">{{ 'styleguide.sample.media.usedBy.count' | transloco: { count: file().usages.length } }}</h3>
+            <ul class="usages">
+              @for (usage of file().usages; track usage.id) {
+                <li class="usage">
+                  <sf-icon class="usage__icon" [name]="usage.kind === 'page' ? 'description' : 'table_rows'" />
+                  <span class="usage__text">
+                    <a class="usage__link" [href]="'#' + usage.id" (click)="openUsage($event)">{{ usage.title }}</a>
+                    <span class="usage__meta">
+                      {{ 'styleguide.sample.media.usedBy.' + usage.kind | transloco }} · {{ usage.field }}
+                      @if (state.devMode()) {
+                        · <code class="mono">{{ usage.path }}</code>
+                      }
+                    </span>
+                  </span>
+                </li>
+              }
+            </ul>
+          } @else {
+            <sf-empty-state
+              icon="link_off"
+              [level]="3"
+              [title]="'styleguide.sample.media.usedBy.none' | transloco"
+              [description]="'styleguide.sample.media.usedBy.noneHint' | transloco"
+            />
+          }
+        }
+
+        @case ('versions') {
+          <ol class="versions">
+            @for (version of file().versions; track version.version) {
+              <li class="version">
+                <sf-avatar size="sm" [name]="version.by.name" />
+                <span class="version__text">
+                  <span class="version__title">
+                    {{ 'styleguide.sample.media.versions.version' | transloco: { version: version.version } }}
+                    @if (isCurrent(file(), version)) {
+                      <sf-badge tone="accent" [label]="'styleguide.sample.media.versions.current' | transloco" />
+                    }
+                  </span>
+                  <span class="version__meta">
+                    {{ version.note }} · {{ version.by.name }} · <sf-relative-time [value]="minutesAgo(version.minutes)" /> ·
+                    {{ version.sizeBytes | sfFileSize }}
+                  </span>
+                </span>
+                @if (!isCurrent(file(), version)) {
+                  <sf-button variant="secondary" size="sm" icon="restore" (click)="restore(version)">{{
+                    'styleguide.sample.media.versions.restore' | transloco
+                  }}</sf-button>
+                }
+              </li>
+            }
+          </ol>
+        }
+      }
+    </div>
+  </div>
+
+  @if (state.currentTab() === 'details' || state.currentTab() === 'source') {
+    <div sfDrawerFooter class="footer">
+      @if (dirty()) {
+        <span class="footer__note">{{ 'styleguide.sample.media.detail.unsaved' | transloco }}</span>
+        <sf-button variant="ghost" (click)="revert()">{{ 'styleguide.sample.media.detail.revert' | transloco }}</sf-button>
+      }
+      <sf-button [disabled]="!dirty()" [disabledReason]="dirty() ? null : ('styleguide.sample.media.detail.nothingToSave' | transloco)" (click)="save()">{{
+        'styleguide.sample.media.detail.save' | transloco
+      }}</sf-button>
+    </div>
+  }
+</sf-drawer>

@@ -1,0 +1,38 @@
+<sf-page-header [title]="t('sections.general')">
+  <sf-sample-settings-save sfPageHeaderActions [dirty]="state.generalDirty()" (save)="save()" />
+</sf-page-header>
+
+<div class="page__scroll">
+  <div class="page__form">
+    <sf-field [label]="t('general.name')" required>
+      <sf-input [value]="state.general().name" (valueChange)="patch({ name: $event })" />
+    </sf-field>
+    <sf-field [label]="t('general.description')" [hint]="t('general.descriptionHint')">
+      <sf-textarea [rows]="3" [value]="state.general().description" (valueChange)="patch({ description: $event })" />
+    </sf-field>
+    <sf-field [label]="t('general.key')" [hint]="t('general.keyHint')">
+      @if (state.devMode()) {
+        <sf-copyable class="general__key" [value]="projectKey" [label]="t('general.key')" />
+      } @else {
+        <sf-input readonly [value]="projectKey" />
+      }
+    </sf-field>
+    <sf-field [label]="t('general.defaultLanguage')" [hint]="t('general.defaultLanguageHint')">
+      <sf-select
+        [options]="languageOptions()"
+        [value]="state.general().defaultEditingLanguage"
+        (valueChange)="patch({ defaultEditingLanguage: $event ?? 'en' })"
+      />
+    </sf-field>
+  </div>
+
+  <sf-section class="general__danger" [heading]="t('general.danger')">
+    <div class="danger__row">
+      <div class="danger__text">
+        <span class="danger__label">{{ t('general.archive') }}</span>
+        <span class="danger__hint">{{ t('general.archiveHint') }}</span>
+      </div>
+      <sf-button variant="danger-ghost" icon="archive" (click)="archive()">{{ t('general.archive') }}</sf-button>
+    </div>
+  </sf-section>
+</div>

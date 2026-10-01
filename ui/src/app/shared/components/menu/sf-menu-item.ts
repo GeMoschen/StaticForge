@@ -3,6 +3,8 @@ export interface SfMenuItem {
   id: string;
   label: string;
   icon?: string;
+  /** A second, muted line under the label (a card type's purpose, M35.9); announced as the item's description. */
+  description?: string;
   /** Shown but not choosable (`aria-disabled`); stays reachable with the arrow keys. */
   disabled?: boolean;
   /**

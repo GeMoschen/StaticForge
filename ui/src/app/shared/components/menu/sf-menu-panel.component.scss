@@ -79,6 +79,22 @@
   white-space: nowrap;
 }
 
+// A label with a description line under it.
+.sf-menu__text {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-inline-size: 0;
+  padding-block: var(--sf-space-1);
+
+  .sf-menu__description {
+    color: var(--sf-text-muted);
+    font-size: var(--sf-fs-12);
+    line-height: var(--sf-lh-12);
+    white-space: normal;
+  }
+}
+
 .sf-menu__shortcut {
   flex-shrink: 0;
   margin-inline-start: var(--sf-space-4);

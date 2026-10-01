@@ -1,0 +1,83 @@
+@use 'settings-page';
+
+// The import fills the tab panel: archive and analysis at the top, the conflicts table takes the rest, the options and
+// the Import button stay at the bottom.
+:host {
+  gap: var(--sf-space-3);
+}
+
+.import__drop {
+  max-inline-size: 40rem;
+}
+
+.import__bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sf-space-2) var(--sf-space-4);
+}
+
+.import__analysis {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sf-space-2);
+  color: var(--sf-text);
+  font-size: var(--sf-fs-13);
+  line-height: var(--sf-lh-13);
+  font-weight: var(--sf-weight-medium);
+}
+
+.import__analysis-icon {
+  color: var(--sf-text-subtle);
+  font-size: var(--sf-fs-18);
+}
+
+.import__all {
+  display: flex;
+  align-items: center;
+  gap: var(--sf-space-1);
+}
+
+.import__all-label {
+  color: var(--sf-text-muted);
+  font-size: var(--sf-fs-12);
+  line-height: var(--sf-lh-12);
+}
+
+.import__table {
+  flex: 1 1 auto;
+  min-block-size: 10rem;
+}
+
+.import__choice {
+  inline-size: 100%;
+}
+
+.cell-stack {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.import__footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--sf-space-3) var(--sf-space-6);
+  padding-block-start: var(--sf-space-3);
+  border-top: 1px solid var(--sf-border);
+}
+
+.import__go {
+  display: flex;
+  align-items: center;
+  gap: var(--sf-space-3);
+}
+
+.import__summary {
+  color: var(--sf-text-muted);
+  font-size: var(--sf-fs-13);
+  line-height: var(--sf-lh-13);
+}

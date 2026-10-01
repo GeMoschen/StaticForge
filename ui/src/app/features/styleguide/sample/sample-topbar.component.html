@@ -1,0 +1,154 @@
+<header class="topbar sf-chrome">
+  <sf-button
+    class="topbar__home"
+    variant="ghost"
+    [aria-label]="'styleguide.sample.topbar.home' | transloco"
+    (click)="home()"
+  >
+    <sf-logo class="topbar__logo" />
+  </sf-button>
+
+  <sf-menu
+    class="topbar__project"
+    variant="ghost"
+    align="start"
+    [text]="project.name"
+    [label]="'styleguide.sample.topbar.projects' | transloco"
+    [items]="projectItems()"
+  />
+
+  <sf-sample-breadcrumb
+    class="topbar__crumbs"
+    [crumbs]="state.breadcrumb()"
+    [label]="'styleguide.sample.topbar.breadcrumb' | transloco"
+    (navigate)="state.navigate($event)"
+  />
+
+  <sf-button
+    class="topbar__search"
+    variant="secondary"
+    icon="search"
+    aria-keyshortcuts="Control+K"
+    [aria-label]="'styleguide.sample.topbar.search' | transloco"
+    (click)="palette()"
+  >
+    <span class="topbar__search-text">{{ 'styleguide.sample.topbar.search' | transloco }}</span>
+    <sf-kbd class="topbar__search-kbd" keys="Mod+K" />
+  </sf-button>
+
+  <div class="topbar__group">
+    <sf-select
+      class="topbar__lang"
+      [options]="languages"
+      [value]="state.lang()"
+      [aria-label]="'styleguide.sample.topbar.language' | transloco"
+      (valueChange)="$event && state.lang.set($event)"
+    />
+
+    <sf-button
+      class="topbar__build"
+      variant="ghost"
+      size="sm"
+      aria-haspopup="dialog"
+      [sfPopoverTrigger]="runsPopover"
+    >
+      @if (building()) {
+        <sf-spinner size="sm" inline />
+        <span class="topbar__build-text">{{ 'styleguide.sample.topbar.building' | transloco }}</span>
+      } @else {
+        <sf-icon class="topbar__build-icon" name="check_circle" />
+        <span class="topbar__build-text"
+          >{{ 'styleguide.sample.topbar.published' | transloco }} <sf-relative-time [value]="lastRun()"
+        /></span>
+      }
+    </sf-button>
+    <sf-popover #runsPopover [label]="'styleguide.sample.topbar.lastRuns' | transloco" align="end">
+      <div class="runs">
+        <p class="runs__heading">{{ 'styleguide.sample.topbar.lastRuns' | transloco }}</p>
+        <ul class="runs__list">
+          @for (run of runs; track run.id) {
+            <li class="runs__item">
+              <sf-status size="sm" [tone]="run.outcome === 'published' ? 'success' : 'warning'" [label]="runLabel(run.outcome)" />
+              <span class="runs__meta">
+                {{ 'styleguide.sample.topbar.runPages' | transloco: { count: run.pages } }} ·
+                <sf-relative-time [value]="minutesAgo(run.minutes)" />
+              </span>
+              <sf-avatar size="sm" [name]="run.by.name" />
+            </li>
+          }
+        </ul>
+      </div>
+    </sf-popover>
+    <sf-button
+      variant="secondary"
+      size="sm"
+      icon="rocket_launch"
+      [loading]="building()"
+      (click)="buildNow()"
+      >{{ 'styleguide.sample.topbar.buildNow' | transloco }}</sf-button
+    >
+  </div>
+
+  <div class="topbar__group topbar__group--icons">
+    <sf-button variant="ghost" icon="history" [label]="'styleguide.sample.topbar.history' | transloco" (click)="state.history.set('project')" />
+    <sf-button
+      variant="ghost"
+      icon="contrast"
+      aria-haspopup="dialog"
+      [label]="'styleguide.sample.topbar.appearance' | transloco"
+      [sfPopoverTrigger]="appearance"
+    />
+    <sf-popover #appearance [label]="'styleguide.sample.topbar.appearance' | transloco" align="end">
+      <div class="appearance">
+        <sf-field [label]="'styleguide.sample.topbar.theme' | transloco">
+          <sf-segmented size="sm" [options]="themeOptions()" [value]="state.theme()" (valueChange)="$event && state.theme.set($event)" />
+        </sf-field>
+        <sf-field [label]="'styleguide.sample.topbar.density' | transloco">
+          <sf-segmented size="sm" [options]="densityOptions()" [value]="state.density()" (valueChange)="$event && state.density.set($event)" />
+        </sf-field>
+        <sf-field [hint]="'styleguide.sample.topbar.developerModeHint' | transloco">
+          <sf-switch [value]="state.devMode()" (valueChange)="state.devMode.set($event)">{{
+            'styleguide.sample.topbar.developerMode' | transloco
+          }}</sf-switch>
+        </sf-field>
+      </div>
+    </sf-popover>
+    <sf-button
+      variant="ghost"
+      icon="keyboard"
+      aria-keyshortcuts="Shift+?"
+      [label]="'styleguide.sample.topbar.shortcuts' | transloco"
+      (click)="state.shortcutsOpen.set(true)"
+    />
+    <sf-button
+      class="topbar__user"
+      variant="ghost"
+      aria-haspopup="dialog"
+      [aria-label]="'styleguide.sample.topbar.userMenu' | transloco: { name: user.name }"
+      [tooltip]="user.name"
+      [sfPopoverTrigger]="userMenu"
+    >
+      <sf-avatar size="sm" decorative [name]="user.name" />
+    </sf-button>
+    <sf-popover #userMenu [label]="'styleguide.sample.topbar.userMenu' | transloco: { name: user.name }" align="end">
+      <div class="user">
+        <div class="user__card">
+          <sf-avatar size="lg" decorative [name]="user.name" />
+          <span class="user__name">{{ user.name }}</span>
+          <span class="user__email">{{ user.email }}</span>
+        </div>
+        <div class="user__actions">
+          <sf-button variant="secondary" size="sm" icon="person" (click)="userAction('topbar.accountNotice')">{{
+            'styleguide.sample.topbar.account' | transloco
+          }}</sf-button>
+          <sf-button variant="secondary" size="sm" icon="admin_panel_settings" (click)="userAction('topbar.adminNotice')">{{
+            'styleguide.sample.topbar.administration' | transloco
+          }}</sf-button>
+        </div>
+        <sf-button class="user__signout" variant="ghost" icon="logout" (click)="userAction('topbar.signOutNotice')">{{
+          'styleguide.sample.topbar.signOut' | transloco
+        }}</sf-button>
+      </div>
+    </sf-popover>
+  </div>
+</header>

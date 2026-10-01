@@ -1,0 +1,36 @@
+// The tree pane of every area (Pages, Content, Templates): a title row with the New menu above the tree.
+.pane {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  background: var(--sf-surface);
+}
+
+.pane__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sf-space-2);
+  padding: var(--sf-space-2) var(--sf-space-2) var(--sf-space-2) var(--sf-space-3);
+  border-bottom: 1px solid var(--sf-border);
+}
+
+.pane__title {
+  color: var(--sf-text);
+  font-size: var(--sf-fs-14);
+  line-height: var(--sf-lh-14);
+  font-weight: var(--sf-weight-semibold);
+}
+
+.pane__tree {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+// The Content and Templates tree components fill the splitter pane.
+:host(.sample-tree) {
+  display: block;
+  height: 100%;
+  min-height: 0;
+}

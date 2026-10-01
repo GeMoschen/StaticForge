@@ -1,0 +1,59 @@
+:host {
+  display: block;
+}
+
+.tree,
+.tree__children {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tree {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sf-space-1);
+}
+
+.tree__children {
+  // Under the store's checkbox: past its disclosure button.
+  padding-inline-start: calc(var(--sf-control-height-sm) + var(--sf-space-1));
+}
+
+.tree__row {
+  display: flex;
+  align-items: center;
+  gap: var(--sf-space-1);
+  min-block-size: var(--sf-control-height);
+}
+
+.tree__check {
+  min-width: 0;
+}
+
+.tree__label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sf-space-2);
+  min-width: 0;
+}
+
+.tree__icon {
+  flex-shrink: 0;
+  color: var(--sf-text-subtle);
+  font-size: var(--sf-fs-18);
+}
+
+.tree__name {
+  color: var(--sf-text);
+}
+
+.tree__store > .tree__row .tree__name {
+  font-weight: var(--sf-weight-medium);
+}
+
+.tree__count {
+  color: var(--sf-text-muted);
+  font-size: var(--sf-fs-12);
+  line-height: var(--sf-lh-12);
+}

@@ -1,0 +1,22 @@
+// A catalog field is a panel like the sections around it (sf-section's frame and inner padding).
+:host {
+  display: block;
+  min-width: 0;
+  padding: var(--sf-pad-panel);
+  border: 1px solid var(--sf-border);
+  border-radius: var(--sf-radius-lg);
+  background: var(--sf-surface);
+}
+
+// A card's fields: two columns of short fields, long texts and the nested catalog across.
+.card-fields {
+  display: grid;
+  // At most two equal columns across the full width; one column when two wouldn't fit 12rem each (decision 33).
+  grid-template-columns: repeat(auto-fit, minmax(max(12rem, calc((100% - var(--sf-space-4)) / 2)), 1fr));
+  gap: var(--sf-gap) var(--sf-space-4);
+}
+
+.card-fields__wide,
+.card-fields__nested {
+  grid-column: 1 / -1;
+}

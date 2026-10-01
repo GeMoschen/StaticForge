@@ -1,0 +1,150 @@
+:host {
+  position: relative;
+  display: block;
+  min-inline-size: 0;
+  font-family: var(--sf-font-ui);
+}
+
+.sf-card {
+  border: 1px solid var(--sf-border);
+  border-radius: var(--sf-radius-lg);
+  background: var(--sf-surface);
+  transition:
+    opacity var(--sf-duration-fast) var(--sf-ease-standard),
+    border-color var(--sf-duration-fast) var(--sf-ease-standard);
+
+  // Focus in the header marks the card a move (Alt+↑/↓) or a menu acts on; focus in the body does not.
+  &:has(> .sf-card__header:focus-within) {
+    border-color: var(--sf-focus-ring);
+    box-shadow: 0 0 0 1px var(--sf-focus-ring);
+  }
+}
+
+.sf-card__header {
+  display: flex;
+  align-items: center;
+  gap: var(--sf-space-2);
+  min-block-size: calc(var(--sf-control-height-sm) + 2 * var(--sf-space-1));
+  padding: var(--sf-space-1) var(--sf-space-1) var(--sf-space-1) var(--sf-pad-panel);
+  border-block-end: 1px solid var(--sf-border);
+  border-radius: calc(var(--sf-radius-lg) - 1px) calc(var(--sf-radius-lg) - 1px) 0 0;
+  background: var(--sf-surface-sunken);
+  color: var(--sf-text);
+  outline: none;
+
+  &[draggable='true'] {
+    padding-inline-start: var(--sf-space-1);
+    cursor: grab;
+  }
+
+  .is-collapsed > & {
+    border-block-end-color: transparent;
+    border-radius: calc(var(--sf-radius-lg) - 1px);
+  }
+}
+
+.sf-card__handle,
+.sf-card__icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  font-size: var(--sf-fs-18);
+  line-height: 1;
+}
+
+.sf-card__handle {
+  color: var(--sf-text-subtle);
+}
+
+.sf-card__icon {
+  color: var(--sf-text-muted);
+}
+
+// "Type · Summary": the summary gives way first; the type keeps its full width.
+.sf-card__title {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: baseline;
+  gap: var(--sf-space-1);
+  min-inline-size: 0;
+  margin: 0;
+  font-size: var(--sf-fs-13);
+  line-height: var(--sf-lh-13);
+  font-weight: var(--sf-weight-regular);
+  white-space: nowrap;
+}
+
+.sf-card__type {
+  flex-shrink: 0;
+  font-weight: var(--sf-weight-semibold);
+}
+
+.sf-card__separator {
+  flex-shrink: 0;
+  color: var(--sf-text-subtle);
+}
+
+.sf-card__summary {
+  min-inline-size: 0;
+  overflow: hidden;
+  color: var(--sf-text-muted);
+  text-overflow: ellipsis;
+
+  &.is-untitled {
+    color: var(--sf-text-subtle);
+    font-style: italic;
+  }
+}
+
+.sf-card__actions {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: var(--sf-space-1);
+
+  &:empty {
+    display: none;
+  }
+}
+
+// Nested cards sit inside this padding: indented panels.
+.sf-card__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sf-gap);
+  min-inline-size: 0;
+  padding: var(--sf-pad-panel);
+  color: var(--sf-text);
+  font-size: var(--sf-fs-13);
+  line-height: var(--sf-lh-13);
+
+  // `display` above would beat the [hidden] attribute.
+  &[hidden] {
+    display: none;
+  }
+}
+
+// ── Drag states (set by sf-catalog) ─────────────────────────────────────────
+
+:host(.is-dragging) .sf-card {
+  opacity: 0.5;
+}
+
+:host(.is-drop-before)::before,
+:host(.is-drop-after)::after {
+  content: '';
+  position: absolute;
+  inset-inline: 0;
+  block-size: 2px;
+  border-radius: var(--sf-radius-pill);
+  background: var(--sf-accent);
+  pointer-events: none;
+}
+
+// Centred in the catalog's gap between two cards.
+:host(.is-drop-before)::before {
+  inset-block-start: calc(var(--sf-gap) / -2 - 1px);
+}
+
+:host(.is-drop-after)::after {
+  inset-block-end: calc(var(--sf-gap) / -2 - 1px);
+}

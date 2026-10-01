@@ -1,0 +1,374 @@
+<!-- Buttons -->
+<section class="sg-section" [id]="s.buttons.id" [attr.aria-labelledby]="s.buttons.id + '-title'">
+  <h2 class="sg-section__title" [id]="s.buttons.id + '-title'" tabindex="-1">{{ s.buttons.key | transloco }}</h2>
+
+  <div class="sg-sub">
+    <h3 class="sg-sub__title">{{ 'styleguide.page.buttons.variants' | transloco }}</h3>
+    @for (size of sizes; track size) {
+      <p class="sg-caption">{{ 'styleguide.page.buttons.size' | transloco: { size: size } }}</p>
+      <div class="sg-row">
+        @for (v of variants; track v.variant) {
+          <sf-button [variant]="v.variant" [size]="size">{{ v.label }}</sf-button>
+        }
+      </div>
+    }
+  </div>
+
+  <div class="sg-sub">
+    <h3 class="sg-sub__title">{{ 'styleguide.page.buttons.icons' | transloco }}</h3>
+    <div class="sg-row">
+      <sf-button icon="add">{{ b.add }}</sf-button>
+      <sf-button variant="secondary" iconTrailing="arrow_forward">{{ b.next }}</sf-button>
+      <sf-button variant="secondary" icon="settings" [label]="b.settings" />
+      <sf-button variant="ghost" icon="settings" [label]="b.settings" />
+      <sf-button variant="ghost" size="sm" icon="more_vert" [label]="b.more" />
+      <sf-button variant="danger-ghost" icon="delete" [label]="b.delete" />
+    </div>
+    <p class="sg-note">{{ 'styleguide.page.buttons.iconOnlyNote' | transloco }}</p>
+  </div>
+
+  <div class="sg-sub">
+    <h3 class="sg-sub__title">{{ 'styleguide.page.buttons.states' | transloco }}</h3>
+    <div class="sg-grid">
+      <div class="sg-cell">
+        <p class="sg-caption">{{ 'styleguide.page.buttons.loading' | transloco }}</p>
+        <div class="sg-row">
+          <sf-button loading>{{ b.saving }}</sf-button>
+          <sf-button variant="secondary" loading>{{ b.saving }}</sf-button>
+        </div>
+      </div>
+      <div class="sg-cell">
+        <p class="sg-caption">{{ 'styleguide.page.states.disabled' | transloco }}</p>
+        <div class="sg-row">
+          <sf-button disabled>{{ b.publish }}</sf-button>
+          <sf-button variant="secondary" disabled>{{ b.publish }}</sf-button>
+        </div>
+      </div>
+      <div class="sg-cell">
+        <p class="sg-caption">{{ 'styleguide.page.buttons.disabledReason' | transloco }}</p>
+        <div class="sg-row">
+          <sf-button [disabledReason]="b.disabledReason">{{ b.publish }}</sf-button>
+          <sf-button variant="ghost" icon="publish" [label]="b.publish" [disabledReason]="b.disabledReason" />
+        </div>
+      </div>
+      <div class="sg-cell">
+        <p class="sg-caption">{{ 'styleguide.page.buttons.tooltip' | transloco }}</p>
+        <div class="sg-row">
+          <sf-button variant="secondary" [tooltip]="b.publishTooltip">{{ b.publish }}</sf-button>
+        </div>
+      </div>
+      <div class="sg-cell">
+        <p class="sg-caption">{{ 'styleguide.page.buttons.toggle' | transloco }}</p>
+        <div class="sg-row">
+          <sf-button
+            variant="secondary"
+            icon="code"
+            [aria-pressed]="pressed()"
+            (click)="pressed.set(!pressed())"
+            >{{ b.pressed }}</sf-button
+          >
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="sg-sub">
+    <h3 class="sg-sub__title">{{ 'styleguide.page.buttons.links' | transloco }}</h3>
+    <div class="sg-row">
+      <sf-button variant="secondary" link="/styleguide/sample" icon="dashboard">{{ b.sampleLink }}</sf-button>
+      <sf-button variant="ghost" [href]="b.externalHref" target="_blank" iconTrailing="open_in_new">{{
+        b.externalLink
+      }}</sf-button>
+    </div>
+  </div>
+</section>
+
+<!-- Form controls -->
+<section class="sg-section" [id]="s.forms.id" [attr.aria-labelledby]="s.forms.id + '-title'">
+  <h2 class="sg-section__title" [id]="s.forms.id + '-title'" tabindex="-1">{{ s.forms.key | transloco }}</h2>
+  <p class="sg-intro">{{ 'styleguide.page.forms.intro' | transloco }}</p>
+
+  <div class="sg-sub">
+    <h3 class="sg-sub__title">{{ 'styleguide.page.forms.field' | transloco }}</h3>
+    <div class="sg-grid">
+      <sf-field [label]="f.layout.top" [hint]="f.layout.hint">
+        <sf-input [(value)]="layoutValue" />
+      </sf-field>
+      <sf-field [label]="f.layout.required" required>
+        <sf-input [(value)]="layoutValue" required />
+      </sf-field>
+      <sf-field [label]="f.layout.optional" optional>
+        <sf-input [(value)]="layoutValue" />
+      </sf-field>
+      <sf-field [label]="f.layout.error" [error]="f.layout.errorText">
+        <sf-input [(value)]="layoutValue" />
+      </sf-field>
+    </div>
+    <div class="sg-inline-fields">
+      <sf-field [label]="f.layout.inline" labelPosition="inline" [hint]="f.layout.hint">
+        <sf-input [(value)]="layoutValue" />
+      </sf-field>
+      <sf-field [label]="f.switch.label" labelPosition="inline">
+        <sf-switch [(value)]="developer">{{ f.switch.text }}</sf-switch>
+      </sf-field>
+    </div>
+  </div>
+
+  <!-- Text input -->
+  <div class="sg-sub">
+    <h3 class="sg-sub__title">{{ 'styleguide.page.forms.controls.input' | transloco }}</h3>
+    <div class="sg-grid">
+      @for (st of states; track st.id) {
+        <div class="sg-cell">
+          <p class="sg-caption">{{ st.key | transloco }}</p>
+          <sf-field [label]="f.input.label" [hint]="st.normal ? f.input.hint : undefined" [error]="st.invalid ? f.error : null" [required]="st.normal">
+            <sf-input [(value)]="text" [placeholder]="f.input.placeholder" [readonly]="st.readonly" [disabled]="st.disabled" [required]="st.normal" />
+          </sf-field>
+        </div>
+      }
+    </div>
+  </div>
+
+  <!-- Textarea -->
+  <div class="sg-sub">
+    <h3 class="sg-sub__title">{{ 'styleguide.page.forms.controls.textarea' | transloco }}</h3>
+    <div class="sg-grid">
+      @for (st of states; track st.id) {
+        <div class="sg-cell">
+          <p class="sg-caption">{{ st.key | transloco }}</p>
+          <sf-field [label]="f.textarea.label" [hint]="st.normal ? f.textarea.hint : undefined" [error]="st.invalid ? f.error : null" [optional]="st.normal">
+            <sf-textarea [(value)]="longText" [rows]="3" [maxlength]="160" [readonly]="st.readonly" [disabled]="st.disabled" />
+          </sf-field>
+        </div>
+      }
+    </div>
+  </div>
+
+  <!-- Select -->
+  <div class="sg-sub">
+    <h3 class="sg-sub__title">{{ 'styleguide.page.forms.controls.select' | transloco }}</h3>
+    <div class="sg-grid">
+      @for (st of states; track st.id) {
+        <div class="sg-cell">
+          <p class="sg-caption">{{ st.key | transloco }}</p>
+          <sf-field [label]="f.select.label" [error]="st.invalid ? f.error : null">
+            <sf-select [(value)]="locale" [options]="f.select.options" [placeholder]="f.select.placeholder" [readonly]="st.readonly" [disabled]="st.disabled" />
+          </sf-field>
+        </div>
+      }
+    </div>
+  </div>
+
+  <!-- Number -->
+  <div class="sg-sub">
+    <h3 class="sg-sub__title">{{ 'styleguide.page.forms.controls.number' | transloco }}</h3>
+    <div class="sg-grid">
+      @for (st of states; track st.id) {
+        <div class="sg-cell">
+          <p class="sg-caption">{{ st.key | transloco }}</p>
+          <sf-field [label]="f.number.label" [error]="st.invalid ? f.error : null">
+            <sf-number-input [(value)]="count" [min]="1" [max]="100" [unit]="f.number.unit" [readonly]="st.readonly" [disabled]="st.disabled" />
+          </sf-field>
+        </div>
+      }
+    </div>
+  </div>
+
+  <!-- Date -->
+  <div class="sg-sub">
+    <h3 class="sg-sub__title">{{ 'styleguide.page.forms.controls.date' | transloco }}</h3>
+    <div class="sg-grid">
+      @for (st of states; track st.id) {
+        <div class="sg-cell">
+          <p class="sg-caption">{{ st.key | transloco }}</p>
+          <sf-field [label]="f.date.label" [error]="st.invalid ? f.error : null">
+            <sf-date-input mode="date" [(value)]="date" [readonly]="st.readonly" [disabled]="st.disabled" />
+          </sf-field>
+        </div>
+      }
+    </div>
+  </div>
+
+  <!-- Time -->
+  <div class="sg-sub">
+    <h3 class="sg-sub__title">{{ 'styleguide.page.forms.controls.time' | transloco }}</h3>
+    <div class="sg-grid">
+      @for (st of states; track st.id) {
+        <div class="sg-cell">
+          <p class="sg-caption">{{ st.key | transloco }}</p>
+          <sf-field [label]="f.time.label" [error]="st.invalid ? f.error : null">
+            <sf-date-input mode="time" [minuteStep]="15" [(value)]="time" [readonly]="st.readonly" [disabled]="st.disabled" />
+          </sf-field>
+        </div>
+      }
+    </div>
+  </div>
+
+  <!-- Date and time -->
+  <div class="sg-sub">
+    <h3 class="sg-sub__title">{{ 'styleguide.page.forms.controls.datetime' | transloco }}</h3>
+    <div class="sg-grid sg-grid--wide">
+      @for (st of states; track st.id) {
+        <div class="sg-cell">
+          <p class="sg-caption">{{ st.key | transloco }}</p>
+          <sf-field [label]="f.datetime.label" [error]="st.invalid ? f.error : null">
+            <sf-date-input mode="datetime" [(value)]="dateTime" [readonly]="st.readonly" [disabled]="st.disabled" />
+          </sf-field>
+        </div>
+      }
+    </div>
+  </div>
+
+  <!-- Search -->
+  <div class="sg-sub">
+    <h3 class="sg-sub__title">{{ 'styleguide.page.forms.controls.search' | transloco }}</h3>
+    <div class="sg-grid">
+      @for (st of states; track st.id) {
+        <div class="sg-cell">
+          <p class="sg-caption">{{ st.key | transloco }}</p>
+          <sf-field [label]="f.search.label" [error]="st.invalid ? f.error : null">
+            <sf-search-input [(value)]="query" [placeholder]="f.search.placeholder" [readonly]="st.readonly" [disabled]="st.disabled" />
+          </sf-field>
+        </div>
+      }
+    </div>
+  </div>
+
+  <!-- Colour -->
+  <div class="sg-sub">
+    <h3 class="sg-sub__title">{{ 'styleguide.page.forms.controls.color' | transloco }}</h3>
+    <div class="sg-grid">
+      @for (st of states; track st.id) {
+        <div class="sg-cell">
+          <p class="sg-caption">{{ st.key | transloco }}</p>
+          <sf-field [label]="f.color.label" [error]="st.invalid ? f.error : null">
+            <sf-color-input [(value)]="color" [readonly]="st.readonly" [disabled]="st.disabled" />
+          </sf-field>
+        </div>
+      }
+    </div>
+  </div>
+
+  <!-- File drop -->
+  <div class="sg-sub">
+    <h3 class="sg-sub__title">{{ 'styleguide.page.forms.controls.file' | transloco }}</h3>
+    <div class="sg-grid sg-grid--wide">
+      @for (st of states; track st.id) {
+        <div class="sg-cell">
+          <p class="sg-caption">{{ st.key | transloco }}</p>
+          <sf-field [label]="f.file.label" [hint]="st.normal ? f.file.hint : undefined" [error]="st.invalid ? f.error : null">
+            <sf-file-drop [(value)]="files" [accept]="f.file.accept" [maxSize]="f.file.maxSize" [readonly]="st.readonly" [disabled]="st.disabled" />
+          </sf-field>
+        </div>
+      }
+    </div>
+  </div>
+
+  <!-- Checkbox -->
+  <div class="sg-sub">
+    <h3 class="sg-sub__title">{{ 'styleguide.page.forms.controls.checkbox' | transloco }}</h3>
+    <div class="sg-grid">
+      @for (st of states; track st.id) {
+        <div class="sg-cell">
+          <p class="sg-caption">{{ st.key | transloco }}</p>
+          <sf-field [label]="f.checkbox.label" [error]="st.invalid ? f.error : null">
+            <sf-checkbox [(value)]="checked" [readonly]="st.readonly" [disabled]="st.disabled">{{ f.checkbox.text }}</sf-checkbox>
+            @if (st.normal) {
+              <sf-checkbox [(value)]="allChecked" [(indeterminate)]="someChecked">{{ f.checkbox.indeterminate }}</sf-checkbox>
+            }
+          </sf-field>
+        </div>
+      }
+    </div>
+  </div>
+
+  <!-- Radio group -->
+  <div class="sg-sub">
+    <h3 class="sg-sub__title">{{ 'styleguide.page.forms.controls.radio' | transloco }}</h3>
+    <div class="sg-grid">
+      @for (st of states; track st.id) {
+        <div class="sg-cell">
+          <p class="sg-caption">{{ st.key | transloco }}</p>
+          <sf-field [label]="f.radio.label" [error]="st.invalid ? f.error : null">
+            <sf-radio-group [(value)]="mode" [options]="f.radio.options" [readonly]="st.readonly" [disabled]="st.disabled" />
+          </sf-field>
+        </div>
+      }
+    </div>
+  </div>
+
+  <!-- Switch -->
+  <div class="sg-sub">
+    <h3 class="sg-sub__title">{{ 'styleguide.page.forms.controls.switch' | transloco }}</h3>
+    <div class="sg-grid">
+      @for (st of states; track st.id) {
+        <div class="sg-cell">
+          <p class="sg-caption">{{ st.key | transloco }}</p>
+          <sf-field [label]="f.switch.label" [error]="st.invalid ? f.error : null">
+            <sf-switch [(value)]="developer" [readonly]="st.readonly" [disabled]="st.disabled">{{ f.switch.text }}</sf-switch>
+          </sf-field>
+        </div>
+      }
+    </div>
+  </div>
+
+  <!-- Segmented -->
+  <div class="sg-sub">
+    <h3 class="sg-sub__title">{{ 'styleguide.page.forms.controls.segmented' | transloco }}</h3>
+    <div class="sg-grid sg-grid--wide">
+      @for (st of states; track st.id) {
+        <div class="sg-cell">
+          <p class="sg-caption">{{ st.key | transloco }}</p>
+          <sf-field [label]="f.segmented.label" [error]="st.invalid ? f.error : null">
+            <sf-segmented [(value)]="view" [options]="f.segmented.options" [readonly]="st.readonly" [disabled]="st.disabled" />
+          </sf-field>
+        </div>
+      }
+    </div>
+  </div>
+
+  <!-- Combobox -->
+  <div class="sg-sub">
+    <h3 class="sg-sub__title">{{ 'styleguide.page.forms.controls.combobox' | transloco }}</h3>
+    <div class="sg-grid">
+      @for (st of states; track st.id) {
+        <div class="sg-cell">
+          <p class="sg-caption">{{ st.key | transloco }}</p>
+          <sf-field [label]="f.combobox.label" [error]="st.invalid ? f.error : null">
+            <sf-combobox [(value)]="template" [options]="f.combobox.options" [placeholder]="f.combobox.placeholder" [readonly]="st.readonly" [disabled]="st.disabled" />
+          </sf-field>
+        </div>
+      }
+    </div>
+  </div>
+
+  <!-- Combobox, multiple -->
+  <div class="sg-sub">
+    <h3 class="sg-sub__title">{{ 'styleguide.page.forms.controls.multi' | transloco }}</h3>
+    <div class="sg-grid sg-grid--wide">
+      @for (st of states; track st.id) {
+        <div class="sg-cell">
+          <p class="sg-caption">{{ st.key | transloco }}</p>
+          <sf-field [label]="f.multi.label" [error]="st.invalid ? f.error : null">
+            <sf-combobox multiple [(value)]="tags" [options]="f.multi.options" [placeholder]="f.multi.placeholder" [readonly]="st.readonly" [disabled]="st.disabled" />
+          </sf-field>
+        </div>
+      }
+    </div>
+  </div>
+
+  <!-- Slider -->
+  <div class="sg-sub">
+    <h3 class="sg-sub__title">{{ 'styleguide.page.forms.controls.slider' | transloco }}</h3>
+    <div class="sg-grid">
+      @for (st of states; track st.id) {
+        <div class="sg-cell">
+          <p class="sg-caption">{{ st.key | transloco }}</p>
+          <sf-field [label]="f.slider.label" [error]="st.invalid ? f.error : null">
+            <sf-slider [(value)]="quality" [step]="5" [unit]="f.slider.unit" [readonly]="st.readonly" [disabled]="st.disabled" />
+          </sf-field>
+        </div>
+      }
+    </div>
+  </div>
+</section>

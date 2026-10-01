@@ -1,0 +1,45 @@
+// Shared frame of the sample's Changes and Schedules areas (M35.9): the area fills the main region (no page scroll),
+// header and bars at the top, the table takes the rest. `@use`d by each area component, so the rules are scoped to it.
+
+:host {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sf-space-4);
+  height: 100%;
+  min-height: 0;
+  padding: var(--sf-space-4) var(--sf-space-6);
+  overflow: hidden;
+}
+
+.area__table {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.cell-name {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sf-space-2);
+  min-width: 0;
+}
+
+.cell-name__icon {
+  flex-shrink: 0;
+  color: var(--sf-text-subtle);
+  font-size: var(--sf-fs-18);
+}
+
+.cell-name__text {
+  overflow: hidden;
+  color: var(--sf-text);
+  font-weight: var(--sf-weight-medium);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cell-muted {
+  overflow: hidden;
+  color: var(--sf-text-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

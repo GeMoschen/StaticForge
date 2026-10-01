@@ -1,0 +1,67 @@
+<div class="sf-card" [class.is-collapsed]="!expanded()">
+  <div
+    #header
+    class="sf-card__header"
+    tabindex="-1"
+    [attr.draggable]="canDrag() ? 'true' : null"
+    (keydown)="onKeydown($event)"
+    (dragstart)="onDragStart($event)"
+    (dragend)="onDragEnd($event)"
+  >
+    @if (canDrag()) {
+      <sf-icon class="sf-card__handle" name="drag_indicator" />
+    }
+    @if (icon()) {
+      <sf-icon class="sf-card__icon" [name]="icon()!" />
+    }
+    @switch (level()) {
+      @case (2) {
+        <h2 class="sf-card__title" [id]="titleId"><ng-container *ngTemplateOutlet="title" /></h2>
+      }
+      @case (4) {
+        <h4 class="sf-card__title" [id]="titleId"><ng-container *ngTemplateOutlet="title" /></h4>
+      }
+      @case (5) {
+        <h5 class="sf-card__title" [id]="titleId"><ng-container *ngTemplateOutlet="title" /></h5>
+      }
+      @case (6) {
+        <h6 class="sf-card__title" [id]="titleId"><ng-container *ngTemplateOutlet="title" /></h6>
+      }
+      @default {
+        <h3 class="sf-card__title" [id]="titleId"><ng-container *ngTemplateOutlet="title" /></h3>
+      }
+    }
+    <div class="sf-card__actions">
+      @if (collapsible()) {
+        <sf-button
+          variant="ghost"
+          size="sm"
+          [icon]="expanded() ? 'expand_less' : 'expand_more'"
+          [label]="(expanded() ? 'shared.card.collapse' : 'shared.card.expand') | transloco: { type: type() }"
+          [aria-expanded]="expanded()"
+          [aria-controls]="bodyId"
+          (click)="toggle()"
+        />
+      }
+      @if (hasMenu()) {
+        <sf-menu
+          size="sm"
+          [items]="menuItems()"
+          [label]="'shared.card.actions' | transloco: { type: type() }"
+          (itemSelected)="menuAction.emit($event)"
+        />
+      }
+    </div>
+  </div>
+  <div class="sf-card__body" [id]="bodyId" [hidden]="!expanded()">
+    <ng-content />
+  </div>
+</div>
+
+<ng-template #title>
+  <span class="sf-card__type">{{ type() }}</span>&ngsp;<span class="sf-card__separator">·</span>&ngsp;<span
+    class="sf-card__summary"
+    [class.is-untitled]="!summaryText()"
+    >{{ summaryText() ?? ('shared.card.untitled' | transloco) }}</span
+  >
+</ng-template>

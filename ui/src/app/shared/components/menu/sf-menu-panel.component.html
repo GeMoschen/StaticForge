@@ -25,6 +25,9 @@
         'shared.menu.unavailable' | transloco: { reason: entry.item.disabledReason }
       }}</span>
     }
+    @if (entry.item.description) {
+      <span [id]="baseId + '-description-' + entry.index">{{ entry.item.description }}</span>
+    }
   }
 </div>
 
@@ -36,6 +39,7 @@
       role="menuitem"
       tabindex="-1"
       [routerLink]="entry.item.link"
+      [attr.aria-describedby]="entry.describedBy"
       [attr.aria-keyshortcuts]="entry.keyShortcuts"
       (click)="onItemClick(entry, $event)"
       (mouseenter)="onItemHover(entry, $event)"
@@ -50,7 +54,7 @@
       role="menuitem"
       tabindex="-1"
       [attr.aria-disabled]="entry.disabled || null"
-      [attr.aria-describedby]="entry.disabled && entry.item.disabledReason ? baseId + '-reason-' + entry.index : null"
+      [attr.aria-describedby]="entry.describedBy"
       [attr.aria-keyshortcuts]="entry.keyShortcuts"
       [attr.aria-haspopup]="entry.hasChildren ? 'menu' : null"
       [attr.aria-expanded]="entry.hasChildren ? openSubmenuId() === entry.item.id : null"
@@ -70,7 +74,15 @@
   @if (entry.item.icon) {
     <sf-icon class="sf-menu__icon" [name]="entry.item.icon" />
   }
-  <span class="sf-menu__label">{{ entry.item.label }}</span>
+  @if (entry.item.description) {
+    <span class="sf-menu__text">
+      <span class="sf-menu__label">{{ entry.item.label }}</span>
+      <!-- Read once, as the description (aria-describedby), not as part of the name. -->
+      <span class="sf-menu__description" aria-hidden="true">{{ entry.item.description }}</span>
+    </span>
+  } @else {
+    <span class="sf-menu__label">{{ entry.item.label }}</span>
+  }
   @if (entry.item.shortcut) {
     <sf-kbd class="sf-menu__shortcut" aria-hidden="true" [keys]="entry.item.shortcut" />
   }

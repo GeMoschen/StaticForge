@@ -1,0 +1,25 @@
+<ul class="ra__pills" [attr.aria-label]="'styleguide.sample.changes.actions.statusLabel' | transloco">
+  @for (s of statuses(); track s.lang) {
+    <li>
+      <sf-status size="sm" [tone]="tones[s.status]" [icon]="icons[s.status]" [label]="s.lang.toUpperCase()" [detail]="statusLabel(s)" />
+    </li>
+  }
+</ul>
+<sf-button
+  icon="publish"
+  [disabled]="unreleased().length === 0"
+  [disabledReason]="unreleased().length === 0 ? t('nothingToRelease') : null"
+  (click)="releaseOpen.set(true)"
+  >{{ 'styleguide.sample.changes.actions.release' | transloco }}</sf-button
+>
+<sf-button variant="secondary" icon="schedule" (click)="scheduleOpen.set(true)">{{
+  'styleguide.sample.changes.actions.schedule' | transloco
+}}</sf-button>
+<sf-menu variant="secondary" [label]="t('more', { name: name() })" [items]="moreItems()" />
+
+@if (releaseOpen()) {
+  <sf-sample-release-dialog [subject]="name()" [languages]="languages()" (closed)="releaseOpen.set(false)" />
+}
+@if (scheduleOpen()) {
+  <sf-sample-schedule-dialog kind="release" [subject]="scheduleSubject()" (closed)="scheduleOpen.set(false)" />
+}

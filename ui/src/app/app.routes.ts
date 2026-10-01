@@ -2,6 +2,7 @@ import { inject } from '@angular/core';
 import { Router, Routes } from '@angular/router';
 import { authGuard, instanceAdminGuard, loginGuard, projectMemberGuard } from './core/auth/auth.guard';
 import { passwordChangeGuard, setPasswordGuard } from './core/auth/password-change.guard';
+import { styleguideGuard } from './features/styleguide/styleguide.guard';
 import { projectResolver } from './core/project/project.resolver';
 import { LoginComponent } from './features/auth/login.component';
 import { AccountComponent } from './features/account/account.component';
@@ -38,6 +39,12 @@ import { SchedulesComponent } from './features/schedules/schedules.component';
  * fragile. The initial budget in `angular.json` is sized for the single bundle.
  */
 export const routes: Routes = [
+  {
+    // The living style guide (M35.9): dev builds, or instance admins.
+    path: 'styleguide',
+    canMatch: [styleguideGuard],
+    loadChildren: () => import('./features/styleguide/styleguide.routes').then((m) => m.STYLEGUIDE_ROUTES),
+  },
   {
     path: 'login',
     canMatch: [loginGuard],

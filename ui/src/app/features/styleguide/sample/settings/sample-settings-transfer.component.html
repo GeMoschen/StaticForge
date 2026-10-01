@@ -1,0 +1,16 @@
+<sf-page-header [title]="t('sections.importexport')" [subtitle]="t('transfer.subtitle')" />
+
+<sf-tabs #tabStrip [tabs]="tabs()" [selected]="state.transferTab()" [label]="t('transfer.tabsLabel')" (selectTab)="selectTab($event)" />
+
+<div
+  class="transfer__panel"
+  role="tabpanel"
+  [id]="tabStrip.panelId(state.transferTab())"
+  [attr.aria-labelledby]="tabStrip.tabId(state.transferTab())"
+>
+  @if (state.transferTab() === 'export') {
+    <sf-sample-settings-export />
+  } @else {
+    <sf-sample-settings-import />
+  }
+</div>

@@ -1,0 +1,59 @@
+<sf-catalog
+  [items]="cards()"
+  [types]="catalogTypes()"
+  [label]="label()"
+  [catalogId]="catalogId()"
+  [summaryOf]="summaryOf"
+  [level]="level()"
+  (add)="add(null, $event)"
+  (move)="move(null, $event)"
+  (duplicate)="duplicate(null, $event)"
+  (remove)="remove(null, $event)"
+>
+  <ng-template sfCatalogCard [sfCatalogCardItems]="cards()" let-item>
+    <div class="card-fields">
+      <ng-container *ngTemplateOutlet="fields; context: { $implicit: item }" />
+      @if (item.badges; as badges) {
+        <sf-catalog
+          class="card-fields__nested"
+          [items]="badges"
+          [types]="badgeTypes"
+          [label]="nestedLabel(item)"
+          [catalogId]="catalogId() + ':' + item.id"
+          [summaryOf]="summaryOf"
+          [level]="level() + 1"
+          (add)="add(item, $event)"
+          (move)="move(item, $event)"
+          (duplicate)="duplicate(item, $event)"
+          (remove)="remove(item, $event)"
+        >
+          <ng-template sfCatalogCard [sfCatalogCardItems]="badges" let-badge>
+            <div class="card-fields"><ng-container *ngTemplateOutlet="fields; context: { $implicit: badge }" /></div>
+          </ng-template>
+        </sf-catalog>
+      }
+    </div>
+  </ng-template>
+</sf-catalog>
+
+<ng-template #fields let-card>
+  @for (field of fieldsOf(card); track field.id) {
+    <sf-field [class.card-fields__wide]="field.kind === 'longtext'" [label]="field.label">
+      @switch (field.kind) {
+        @case ('longtext') {
+          <sf-textarea [rows]="2" [value]="card.fields[field.id] ?? ''" (valueChange)="setField(card, field.id, $event)" />
+        }
+        @case ('select') {
+          <sf-select
+            [options]="field.options ?? []"
+            [value]="card.fields[field.id] ?? null"
+            (valueChange)="setField(card, field.id, $event ?? '')"
+          />
+        }
+        @default {
+          <sf-input [value]="card.fields[field.id] ?? ''" (valueChange)="setField(card, field.id, $event)" />
+        }
+      }
+    </sf-field>
+  }
+</ng-template>

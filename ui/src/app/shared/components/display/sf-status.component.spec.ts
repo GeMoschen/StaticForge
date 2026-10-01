@@ -1,5 +1,5 @@
-import { render, screen } from '@testing-library/angular';
-import { describe, expect, it } from 'vitest';
+import { fireEvent, render, screen } from '@testing-library/angular';
+import { describe, expect, it, vi } from 'vitest';
 import { SfStatusComponent, SfStatusTone } from './sf-status.component';
 
 describe('SfStatusComponent', () => {
@@ -32,5 +32,25 @@ describe('SfStatusComponent', () => {
     const status = screen.getByText('Running').closest('sf-status')!;
     expect(status).toHaveClass('sf-status--sm');
     expect(status.querySelector('.material-symbols-outlined')?.textContent?.trim()).toBe('sync');
+  });
+
+  it('keeps a short label with the state as screen-reader text and tooltip (detail)', async () => {
+    vi.useFakeTimers();
+    await render(`<sf-status tone="success" label="DE" detail="Released" />`, { imports: [SfStatusComponent] });
+    const status = document.querySelector('sf-status')!;
+
+    expect(status.textContent?.replace(/\s+/g, ' ').trim()).toContain('DE: Released');
+    fireEvent.mouseEnter(status.querySelector('.sf-status__body')!);
+    vi.advanceTimersByTime(600);
+    expect(screen.getByRole('tooltip')).toHaveTextContent('DE: Released');
+    vi.useRealTimers();
+  });
+
+  it('shows only the icon, keeping the label for screen readers (iconOnly)', async () => {
+    await render(`<sf-status tone="warning" label="Changed" iconOnly />`, { imports: [SfStatusComponent] });
+
+    const label = screen.getByText('Changed');
+    expect(label).toHaveClass('sf-sr-only');
+    expect(document.querySelector('sf-status')).toHaveClass('sf-status--icon-only');
   });
 });

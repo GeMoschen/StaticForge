@@ -1,0 +1,71 @@
+@use 'sample-area';
+
+.cell-when {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--sf-space-2);
+  min-width: 0;
+}
+
+.cell-when__time {
+  color: var(--sf-text);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+// The history drawer.
+.facts {
+  display: flex;
+  flex-direction: column;
+  margin: 0 0 var(--sf-space-4);
+}
+
+.facts__row {
+  display: grid;
+  grid-template-columns: 8rem minmax(0, 1fr);
+  gap: var(--sf-space-3);
+  padding: var(--sf-space-2) 0;
+  border-bottom: 1px solid var(--sf-border);
+  font-size: var(--sf-fs-13);
+  line-height: var(--sf-lh-13);
+
+  dt {
+    color: var(--sf-text-muted);
+  }
+
+  dd {
+    margin: 0;
+    color: var(--sf-text);
+  }
+}
+
+.history__heading {
+  margin: 0 0 var(--sf-space-2);
+  color: var(--sf-text);
+  font-size: var(--sf-fs-14);
+  line-height: var(--sf-lh-14);
+  font-weight: var(--sf-weight-semibold);
+}
+
+.history {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.history__item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sf-space-1);
+  padding: var(--sf-space-2) 0;
+  border-bottom: 1px solid var(--sf-border);
+  font-size: var(--sf-fs-13);
+  line-height: var(--sf-lh-13);
+}
+
+.history__outcome {
+  color: var(--sf-text);
+  font-weight: var(--sf-weight-medium);
+}

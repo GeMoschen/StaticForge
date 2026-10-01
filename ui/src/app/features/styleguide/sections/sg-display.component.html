@@ -1,0 +1,214 @@
+<!-- Display -->
+<section class="sg-section" [id]="s.display.id" [attr.aria-labelledby]="s.display.id + '-title'">
+  <h2 class="sg-section__title" [id]="s.display.id + '-title'" tabindex="-1">{{ s.display.key | transloco }}</h2>
+
+  <div class="sg-sub">
+    <h3 class="sg-sub__title">{{ 'styleguide.page.display.badges' | transloco }}</h3>
+    <div class="sg-row">
+      @for (badge of badges; track badge.tone) {
+        <sf-badge [tone]="badge.tone">{{ badge.label }}</sf-badge>
+      }
+    </div>
+    <div class="sg-row">
+      @for (badge of badges; track badge.tone) {
+        <sf-badge [tone]="badge.tone" [icon]="badge.icon ?? null">{{ badge.label }}</sf-badge>
+      }
+    </div>
+  </div>
+
+  <div class="sg-sub">
+    <h3 class="sg-sub__title">{{ 'styleguide.page.display.statuses' | transloco }}</h3>
+    <div class="sg-row">
+      @for (status of statuses; track status.tone) {
+        <sf-status [tone]="status.tone" [label]="status.label" />
+      }
+    </div>
+    <div class="sg-row">
+      @for (status of statuses; track status.tone) {
+        <sf-status size="sm" [tone]="status.tone" [label]="status.label" />
+      }
+    </div>
+  </div>
+
+  <div class="sg-sub">
+    <h3 class="sg-sub__title">{{ 'styleguide.page.display.tags' | transloco }}</h3>
+    <div class="sg-row">
+      @for (tag of tags(); track tag) {
+        <sf-tag [label]="tag" removable (removed)="removeTag(tag)" />
+      }
+      <sf-tag tone="accent" icon="star" [label]="d.featured" />
+      <sf-tag icon="lock" [label]="d.locked" removable disabled />
+      @if (tags().length < d.tags.length) {
+        <sf-button variant="ghost" size="sm" icon="undo" (click)="resetTags()">{{ 'styleguide.page.actions.reset' | transloco }}</sf-button>
+      }
+    </div>
+  </div>
+
+  <div class="sg-sub">
+    <h3 class="sg-sub__title">{{ 'styleguide.page.display.kbd' | transloco }}</h3>
+    <div class="sg-row">
+      @for (keys of d.shortcuts; track keys) {
+        <sf-kbd [keys]="keys" />
+      }
+    </div>
+  </div>
+
+  <div class="sg-sub">
+    <h3 class="sg-sub__title">{{ 'styleguide.page.display.avatars' | transloco }}</h3>
+    <div class="sg-row">
+      <sf-avatar size="sm" [name]="d.avatars[0]" />
+      <sf-avatar [name]="d.avatars[1]" />
+      <sf-avatar size="lg" [name]="d.avatars[2]" />
+      <sf-avatar />
+    </div>
+  </div>
+
+  <div class="sg-sub">
+    <h3 class="sg-sub__title">{{ 'styleguide.page.display.copyable' | transloco }}</h3>
+    <sf-copyable [value]="d.copyValue" [label]="d.copyLabel" />
+  </div>
+
+  <div class="sg-sub">
+    <h3 class="sg-sub__title">{{ 'styleguide.page.display.relativeTime' | transloco }}</h3>
+    <div class="sg-row">
+      @for (moment of moments; track $index) {
+        <sf-relative-time [value]="moment" />
+      }
+    </div>
+  </div>
+
+  <div class="sg-sub">
+    <h3 class="sg-sub__title">{{ 'styleguide.page.display.logo' | transloco }}</h3>
+    <div class="sg-row">
+      <sf-logo />
+      <sf-logo [wordmark]="false" [label]="d.logoLabel" />
+      <div class="sg-chrome sf-chrome">
+        <sf-logo />
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Layout -->
+<section class="sg-section" [id]="s.layout.id" [attr.aria-labelledby]="s.layout.id + '-title'">
+  <h2 class="sg-section__title" [id]="s.layout.id + '-title'" tabindex="-1">{{ s.layout.key | transloco }}</h2>
+
+  <div class="sg-sub">
+    <h3 class="sg-sub__title">{{ 'styleguide.page.layout.pageHeader' | transloco }}</h3>
+    <p class="sg-note">{{ 'styleguide.page.layout.pageHeaderNote' | transloco }}</p>
+  </div>
+
+  <div class="sg-sub">
+    <h3 class="sg-sub__title">{{ 'styleguide.page.layout.toolbar' | transloco }}</h3>
+    <sf-toolbar class="sg-toolbar" [label]="l.toolbar.label">
+      @for (item of l.toolbar.items; track item.icon) {
+        <sf-button variant="ghost" size="sm" [icon]="item.icon" [label]="item.label" />
+      }
+      <span class="sg-toolbar__separator" aria-hidden="true"></span>
+      <sf-button variant="secondary" size="sm" icon="add" (click)="notify(l.toolbar.insert)">{{ l.toolbar.insert }}</sf-button>
+    </sf-toolbar>
+  </div>
+
+  <div class="sg-sub">
+    <h3 class="sg-sub__title">{{ 'styleguide.page.layout.section' | transloco }}</h3>
+    <sf-section [heading]="l.section.heading" [level]="4" [description]="l.section.description">
+      <sf-button sfSectionActions variant="ghost" size="sm" icon="edit" (click)="notify(l.section.action)">{{
+        l.section.action
+      }}</sf-button>
+      <p class="sg-note">{{ l.section.body }}</p>
+    </sf-section>
+  </div>
+
+  <div class="sg-sub">
+    <h3 class="sg-sub__title">{{ 'styleguide.page.layout.emptyState' | transloco }}</h3>
+    <div class="sg-panel">
+      <sf-empty-state
+        icon="description"
+        [level]="4"
+        [title]="l.empty.title"
+        [description]="l.empty.description"
+        [primaryLabel]="l.empty.primary"
+        primaryIcon="add"
+        [secondaryLabel]="l.empty.secondary"
+        (primary)="notify(l.empty.primary)"
+        (secondary)="notify(l.empty.secondary)"
+      />
+    </div>
+  </div>
+
+  <div class="sg-sub">
+    <h3 class="sg-sub__title">{{ 'styleguide.page.layout.skeleton' | transloco }}</h3>
+    <div class="sg-grid">
+      @for (shape of skeletons; track shape) {
+        <div class="sg-cell">
+          <p class="sg-caption">{{ 'styleguide.page.layout.shapes.' + shape | transloco }}</p>
+          <sf-skeleton [shape]="shape" [rows]="4" [lines]="3" [label]="l.skeleton" />
+        </div>
+      }
+    </div>
+  </div>
+
+  <div class="sg-sub">
+    <h3 class="sg-sub__title">{{ 'styleguide.page.layout.banner' | transloco }}</h3>
+    @for (banner of l.banners; track banner.tone; let i = $index) {
+      @if (!dismissed().has(i)) {
+        <sf-banner [tone]="banner.tone" [title]="banner.title" dismissible (dismissed)="dismiss(i)">
+          {{ banner.message }}
+          @if (i === 3) {
+            <sf-button sfBannerActions variant="secondary" size="sm" (click)="notify(l.bannerAction)">{{
+              l.bannerAction
+            }}</sf-button>
+          }
+        </sf-banner>
+      }
+    }
+    @if (dismissed().size > 0) {
+      <div class="sg-row">
+        <sf-button variant="ghost" size="sm" icon="undo" (click)="showBanners()">{{ 'styleguide.page.actions.reset' | transloco }}</sf-button>
+      </div>
+    }
+  </div>
+
+  <div class="sg-sub">
+    <h3 class="sg-sub__title">{{ 'styleguide.page.layout.spinner' | transloco }}</h3>
+    <div class="sg-row">
+      <sf-spinner size="sm" [label]="l.spinner" />
+      <sf-spinner [label]="l.spinner" />
+      <sf-spinner inline [label]="l.spinner" />
+    </div>
+  </div>
+
+  <div class="sg-sub">
+    <h3 class="sg-sub__title">{{ 'styleguide.page.layout.tabs' | transloco }}</h3>
+    <p class="sg-caption">{{ 'styleguide.page.layout.tabsMode' | transloco }}</p>
+    <div class="sg-tabs">
+      <sf-tabs #tabs [tabs]="l.tabs" [label]="l.tabsLabel" [selected]="selectedTab()" (selectTab)="selectedTab.set($event)" />
+      <div class="sg-tabs__panel" role="tabpanel" [id]="tabs.panelId(selectedTab())" [attr.aria-labelledby]="tabs.tabId(selectedTab())">
+        <p class="sg-note">{{ l.tabPanel }}</p>
+      </div>
+    </div>
+    <p class="sg-caption">{{ 'styleguide.page.layout.navMode' | transloco }}</p>
+    <div class="sg-tabs">
+      <sf-tabs mode="nav" [tabs]="l.navTabs" [label]="l.navLabel" />
+    </div>
+  </div>
+
+  <div class="sg-sub">
+    <h3 class="sg-sub__title">{{ 'styleguide.page.layout.sideNav' | transloco }}</h3>
+    <p class="sg-note">{{ 'styleguide.page.layout.sideNavNote' | transloco }}</p>
+    <p class="sg-caption">{{ 'styleguide.page.layout.sideNavList' | transloco }}</p>
+    <div class="sg-side-nav">
+      <sf-side-nav class="sg-side-nav__nav" mode="list" [items]="l.sideNav" [label]="l.sideNavLabel" [current]="sideNavCurrent()" (select)="sideNavCurrent.set($event)" />
+      <div class="sg-side-nav__panel">
+        <p class="sg-note">{{ l.sideNavPanel[sideNavCurrent()] }}</p>
+      </div>
+    </div>
+    <p class="sg-caption">{{ 'styleguide.page.layout.sideNavNarrow' | transloco }}</p>
+    <div class="sg-side-nav sg-side-nav--narrow">
+      <sf-side-nav mode="select" [items]="l.sideNav" [label]="l.sideNavLabel" [current]="sideNavCurrent()" (select)="sideNavCurrent.set($event)" />
+      <div class="sg-side-nav__panel">
+        <p class="sg-note">{{ l.sideNavPanel[sideNavCurrent()] }}</p>
+      </div>
+    </div>
+  </div>
+</section>

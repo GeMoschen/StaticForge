@@ -661,6 +661,24 @@ export class SfDataTableComponent<T> implements OnInit, OnDestroy {
 
   // ── Selection ─────────────────────────────────────────────────────────────
 
+  /**
+   * Selects exactly the rows with these keys (a host restoring a selection, or a scripted state); keys of rows not on
+   * the current page stay selected. Does nothing on a table that isn't `selectable`, and emits no `selectionChange`
+   * when the selection is already exactly these keys.
+   */
+  selectKeys(keys: readonly string[]): void {
+    if (!this.selectable()) {
+      return;
+    }
+    const next = new Set(keys);
+    const current = this.selectedKeys();
+    if (!this.allMatching() && next.size === current.size && [...next].every((key) => current.has(key))) {
+      return;
+    }
+    this.setSelection(next, false);
+    this.anchor = null;
+  }
+
   /** Deselects everything. */
   clearSelection(): void {
     this.setSelection(new Set(), false);

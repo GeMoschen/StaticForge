@@ -1,0 +1,103 @@
+:host {
+  display: block;
+  min-inline-size: 0;
+  font-family: var(--sf-font-ui);
+  font-size: var(--sf-fs-13);
+  line-height: var(--sf-lh-13);
+  color: var(--sf-text);
+}
+
+.sf-catalog {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sf-gap);
+  min-inline-size: 0;
+}
+
+.sf-catalog__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sf-space-2);
+  min-block-size: var(--sf-control-height-sm);
+}
+
+.sf-catalog__label {
+  font-weight: var(--sf-weight-semibold);
+}
+
+.sf-catalog__count {
+  color: var(--sf-text-muted);
+}
+
+.sf-catalog__toggle-all {
+  margin-inline-start: auto;
+}
+
+.sf-catalog__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sf-gap);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.sf-catalog__item {
+  position: relative;
+  min-inline-size: 0;
+}
+
+// The "+" between this card and the next: a strip over the gap, invisible until hovered or focused.
+.sf-catalog__insert {
+  position: absolute;
+  z-index: calc(var(--sf-z-base) + 1);
+  inset-inline: 0;
+  inset-block-end: calc(var(--sf-gap) / -2 - var(--sf-space-3));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  block-size: calc(2 * var(--sf-space-3));
+  opacity: 0;
+  transition: opacity var(--sf-duration-fast) var(--sf-ease-standard);
+
+  &:hover,
+  &:focus-within {
+    opacity: 1;
+  }
+
+  // Above the line.
+  > sf-button,
+  > sf-menu {
+    position: relative;
+  }
+}
+
+.sf-catalog__insert-line {
+  position: absolute;
+  inset-inline: 0;
+  inset-block-start: calc(50% - 1px);
+  block-size: 2px;
+  border-radius: var(--sf-radius-pill);
+  background: var(--sf-accent);
+  pointer-events: none;
+}
+
+.sf-catalog__empty {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sf-space-3);
+  padding: var(--sf-space-3) var(--sf-pad-panel);
+  border: 1px dashed var(--sf-border-strong);
+  border-radius: var(--sf-radius-lg);
+}
+
+.sf-catalog__empty-text {
+  margin: 0;
+  color: var(--sf-text-muted);
+}
+
+.sf-catalog__add {
+  display: flex;
+}

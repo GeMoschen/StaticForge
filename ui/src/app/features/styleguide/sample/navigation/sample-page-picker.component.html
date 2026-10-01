@@ -1,0 +1,37 @@
+<sf-dialog size="lg" [title]="'styleguide.sample.navigation.picker.title' | transloco" describedBy="sample-picker-preview" (closed)="closed.emit()">
+  <sf-tree
+    class="picker__tree"
+    sort="none"
+    [label]="'styleguide.sample.navigation.picker.tree' | transloco"
+    [loadChildren]="loader"
+    [selection]="initialSelection()"
+    [multiselect]="false"
+    [expandActions]="false"
+    (selectionChange)="onSelection($event)"
+    (open)="onSelection([$event.id])"
+  />
+
+  <div class="picker__preview" id="sample-picker-preview" role="status">
+    <span class="picker__preview-label">{{ 'styleguide.sample.navigation.picker.preview' | transloco }}</span>
+    @if (candidate(); as page) {
+      <sf-icon class="picker__preview-icon" [name]="page.startPage ? 'home' : 'description'" />
+      <span class="picker__preview-name">{{ page.name }}</span>
+      <code class="picker__preview-url">{{ page.url }}</code>
+      <sf-status
+        size="sm"
+        [tone]="tones[page.status[lang()]]"
+        [icon]="icons[page.status[lang()]]"
+        [label]="'styleguide.sample.status.' + page.status[lang()] | transloco"
+      />
+    } @else if (candidateEntry()) {
+      <span class="picker__preview-none">{{ 'styleguide.sample.navigation.picker.folder' | transloco }}</span>
+    } @else {
+      <span class="picker__preview-none">{{ 'styleguide.sample.navigation.picker.none' | transloco }}</span>
+    }
+  </div>
+
+  <ng-container sfDialogFooter>
+    <sf-button variant="secondary" (click)="closed.emit()">{{ 'styleguide.sample.navigation.picker.cancel' | transloco }}</sf-button>
+    <sf-button [disabled]="!candidate()" (click)="confirm()">{{ 'styleguide.sample.navigation.picker.ok' | transloco }}</sf-button>
+  </ng-container>
+</sf-dialog>

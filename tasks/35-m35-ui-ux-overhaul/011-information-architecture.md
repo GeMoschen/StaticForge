@@ -24,7 +24,9 @@ area: frontend
   - A left side menu instead of tabs.
   - Sub-pages split from General: **General** (name, description, archive), **Languages**, **Channels**, **Media**,
     **Code highlighting**, **Compaction**.
-  - Then Members, Quality, Redirects, URL registry, Import/export.
+  - Then Members and Import/export, in a grouped side menu (M35.9 decision 32): PROJECT (General, Languages,
+    Channels, Media, Code highlighting), MAINTENANCE (Compaction, Import / export), PEOPLE (Members).
+  - Quality, Redirects and the URL registry live in **Publishing** (M35.9 decision 30), not Settings.
   - Each sub-page has its own header and one save area.
 - **Revisions** move out of Settings to `/p/:key/history` (the full page is built in M35.12). Old URLs redirect.
 - Screens behind developer mode and permissions are hidden per M35.10.
@@ -39,3 +41,8 @@ area: frontend
 ## Out of scope
 
 - Restyling the screen contents (M35.24, M35.25).
+
+## Notes (M35.9)
+
+- The Publishing area and the Settings side menu use `sf-side-nav` (M35.9 decisions 28–29): a secondary side menu,
+  not page tabs.

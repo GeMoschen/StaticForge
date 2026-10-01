@@ -1,0 +1,37 @@
+<sf-splitter
+  class="media__split"
+  collapsible
+  [defaultSize]="treeWidth"
+  [min]="200"
+  [max]="400"
+  [label]="'styleguide.sample.media.folders.resize' | transloco"
+>
+  <section sfSplitterStart class="pane" aria-labelledby="sample-media-folders-title">
+    <div class="pane__head">
+      <span class="pane__title" id="sample-media-folders-title">{{ 'styleguide.sample.media.folders.title' | transloco }}</span>
+      <sf-button variant="secondary" size="sm" icon="create_new_folder" (click)="newFolder()">{{
+        'styleguide.sample.media.folders.new' | transloco
+      }}</sf-button>
+    </div>
+    <sf-tree
+      class="pane__tree"
+      [label]="'styleguide.sample.media.folders.title' | transloco"
+      [loadChildren]="loader()"
+      [selection]="treeSelection()"
+      [multiselect]="false"
+      [actions]="treeActions"
+      [createKinds]="createKinds"
+      [expandActions]="false"
+      (open)="onOpen($event)"
+      (rename)="state.notice()"
+      (create)="state.notice()"
+      (delete)="onDelete($event)"
+    />
+  </section>
+
+  <sf-sample-media-library sfSplitterEnd class="media__library" />
+</sf-splitter>
+
+@if (state.asset()) {
+  <sf-sample-media-detail />
+}

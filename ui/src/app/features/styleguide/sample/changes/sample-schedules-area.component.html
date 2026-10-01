@@ -1,0 +1,94 @@
+<sf-page-header class="area__header" [title]="t('title')" [subtitle]="t('subtitle')">
+  <ng-container sfPageHeaderActions>
+    <sf-menu variant="primary" [text]="t('new.label')" [label]="t('new.label')" [items]="newItems()" />
+  </ng-container>
+</sf-page-header>
+
+<sf-data-table
+  class="area__table"
+  [columnChooser]="false"
+  [columns]="columns()"
+  [rows]="schedules()"
+  [rowKey]="rowKey"
+  [rowLabel]="rowLabel"
+  [label]="t('table')"
+  [emptyTitle]="t('empty')"
+  [emptyDescription]="t('emptyHint')"
+  (rowOpen)="historyOf.set($event)"
+>
+  <ng-template sfDataTableCell="kind" [sfDataTableCellRows]="schedules()" let-row>
+    <span class="cell-name">
+      <sf-icon class="cell-name__icon" [name]="kindIcons[row.kind]" />
+      <span>{{ t('kinds.' + row.kind) }}</span>
+    </span>
+  </ng-template>
+  <ng-template sfDataTableCell="what" [sfDataTableCellRows]="schedules()" let-row>
+    <span class="cell-name">
+      <span class="cell-name__text">{{ row.what }}</span>
+      @if (row.thenGenerate) {
+        <sf-badge tone="accent" icon="build" [label]="t('thenGenerate')" />
+      }
+    </span>
+  </ng-template>
+  <ng-template sfDataTableCell="when" [sfDataTableCellRows]="schedules()" let-row>
+    <span class="cell-when">
+      <span class="cell-when__time">{{ at(row) | sfDateTime }}</span>
+      <span class="cell-muted">{{ row.zone }}</span>
+    </span>
+  </ng-template>
+  <ng-template sfDataTableCell="repeat" [sfDataTableCellRows]="schedules()" let-row>
+    <span class="cell-muted">{{ t('repeat.' + (row.repeat ?? 'once')) }}</span>
+  </ng-template>
+  <ng-template sfDataTableCell="owner" [sfDataTableCellRows]="schedules()" let-row>
+    <span class="cell-name">
+      <sf-avatar size="sm" [name]="row.owner.name" />
+      <span class="cell-muted">{{ row.owner.name }}</span>
+    </span>
+  </ng-template>
+  <ng-template sfDataTableCell="status" [sfDataTableCellRows]="schedules()" let-row>
+    <sf-status size="sm" [tone]="statusTones[row.status]" [icon]="statusIcons[row.status]" [label]="t('statuses.' + row.status)" />
+  </ng-template>
+  <ng-template sfDataTableCell="actions" [sfDataTableCellRows]="schedules()" let-row>
+    <sf-menu size="sm" [label]="t('actions.label', { what: row.what })" [items]="rowActions(row)" />
+  </ng-template>
+</sf-data-table>
+
+@if (dialog(); as d) {
+  <sf-sample-schedule-dialog [kind]="d.kind" [subject]="d.subject" (closed)="dialog.set(null)" />
+}
+
+@if (historyOf(); as h) {
+  <sf-drawer [title]="t('history.title', { what: h.what })" (closed)="historyOf.set(null)">
+    <dl class="facts">
+      <div class="facts__row">
+        <dt>{{ t('columns.status') }}</dt>
+        <dd><sf-status size="sm" [tone]="statusTones[h.status]" [icon]="statusIcons[h.status]" [label]="t('statuses.' + h.status)" /></dd>
+      </div>
+      <div class="facts__row">
+        <dt>{{ t('columns.when') }}</dt>
+        <dd>{{ at(h) | sfDateTime }} · {{ h.zone }}</dd>
+      </div>
+      <div class="facts__row">
+        <dt>{{ t('columns.repeat') }}</dt>
+        <dd>{{ t('repeat.' + (h.repeat ?? 'once')) }}</dd>
+      </div>
+      <div class="facts__row">
+        <dt>{{ t('columns.owner') }}</dt>
+        <dd>{{ h.owner.name }}</dd>
+      </div>
+    </dl>
+    <h3 class="history__heading">{{ t('history.executions') }}</h3>
+    @if (h.history.length) {
+      <ol class="history">
+        @for (e of h.history; track $index) {
+          <li class="history__item">
+            <span class="history__outcome">{{ t('history.outcomes.' + e.outcome) }} · <sf-relative-time [value]="ago(e.minutesAgo)" /></span>
+            <span class="cell-muted">{{ e.note }}</span>
+          </li>
+        }
+      </ol>
+    } @else {
+      <p class="cell-muted">{{ t('history.none') }}</p>
+    }
+  </sf-drawer>
+}

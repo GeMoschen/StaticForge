@@ -1,0 +1,146 @@
+<section class="sg-section" [id]="s.id" [attr.aria-labelledby]="s.id + '-title'">
+  <h2 class="sg-section__title" [id]="s.id + '-title'" tabindex="-1">{{ s.key | transloco }}</h2>
+  <p class="sg-intro">{{ 'styleguide.page.cards.intro' | transloco }}</p>
+
+  <div class="sg-sub">
+    <h3 class="sg-sub__title">{{ 'styleguide.page.cards.card' | transloco }}</h3>
+    <div class="sg-card-grid">
+      <div class="sg-cell">
+        <p class="sg-caption">{{ 'styleguide.page.cards.states.expanded' | transloco }}</p>
+        <sf-card
+          [type]="c.single.type"
+          [icon]="c.single.icon"
+          [summary]="c.single.summary"
+          [menuItems]="c.menu"
+          [level]="4"
+          draggable
+          (menuAction)="chosen($event)"
+        >
+          <p class="sg-note">{{ c.single.body }}</p>
+        </sf-card>
+      </div>
+      <div class="sg-cell">
+        <p class="sg-caption">{{ 'styleguide.page.cards.states.collapsed' | transloco }}</p>
+        <sf-card
+          [type]="c.single.type"
+          [icon]="c.single.icon"
+          [summary]="c.single.summary"
+          [menuItems]="c.menu"
+          [expanded]="false"
+          [level]="4"
+          draggable
+          (menuAction)="chosen($event)"
+        >
+          <p class="sg-note">{{ c.single.body }}</p>
+        </sf-card>
+      </div>
+      <div class="sg-cell">
+        <p class="sg-caption">{{ 'styleguide.page.cards.states.untitled' | transloco }}</p>
+        <sf-card [type]="c.single.textType" [icon]="c.single.textIcon" [menuItems]="c.menu" [level]="4" (menuAction)="chosen($event)">
+          <p class="sg-note">{{ c.single.body }}</p>
+        </sf-card>
+      </div>
+      <div class="sg-cell">
+        <p class="sg-caption">{{ 'styleguide.page.cards.states.longSummary' | transloco }}</p>
+        <sf-card
+          [type]="c.single.textType"
+          [icon]="c.single.textIcon"
+          [summary]="c.single.textSummary"
+          [menuItems]="c.menu"
+          [level]="4"
+          draggable
+          (menuAction)="chosen($event)"
+        >
+          <p class="sg-note">{{ c.single.body }}</p>
+        </sf-card>
+      </div>
+      <div class="sg-cell">
+        <p class="sg-caption">{{ 'styleguide.page.states.readonly' | transloco }}</p>
+        <sf-card [type]="c.single.type" [icon]="c.single.icon" [summary]="c.single.summary" [menuItems]="c.menu" [level]="4" readonly>
+          <p class="sg-note">{{ c.single.body }}</p>
+        </sf-card>
+      </div>
+    </div>
+  </div>
+
+  <div class="sg-sub">
+    <h3 class="sg-sub__title">{{ 'styleguide.page.cards.catalog' | transloco }}</h3>
+    <p class="sg-note">{{ 'styleguide.page.cards.catalogNote' | transloco }}</p>
+    <div class="sg-panel sg-catalog">
+      <sf-catalog
+        catalogId="styleguide.cards"
+        [label]="c.catalogLabel"
+        [items]="cards()"
+        [types]="c.types"
+        [summaryOf]="summaryOf"
+        [level]="4"
+        (add)="add('cards', null, $event.type, $event.index)"
+        (move)="move('cards', null, $event.from, $event.to)"
+        (duplicate)="duplicate('cards', null, $event.item, $event.index)"
+        (remove)="remove('cards', null, $event.item, $event.index)"
+      >
+        <ng-template sfCatalogCard [sfCatalogCardItems]="cards()" let-item>
+          <sf-field [label]="fieldLabel(item)">
+            <sf-input [value]="item.title" (valueChange)="setTitle('cards', item.id, $event)" />
+          </sf-field>
+          @if (item.children; as slides) {
+            <sf-catalog
+              [catalogId]="'styleguide.cards.' + item.id"
+              [label]="c.slidesLabel"
+              [items]="slides"
+              [types]="c.slideTypes"
+              [summaryOf]="summaryOf"
+              [level]="5"
+              (add)="add('cards', item.id, $event.type, $event.index)"
+              (move)="move('cards', item.id, $event.from, $event.to)"
+              (duplicate)="duplicate('cards', item.id, $event.item, $event.index)"
+              (remove)="remove('cards', item.id, $event.item, $event.index)"
+            >
+              <ng-template sfCatalogCard [sfCatalogCardItems]="slides" let-slide>
+                <sf-field [label]="fieldLabel(slide)">
+                  <sf-input [value]="slide.title" (valueChange)="setTitle('cards', slide.id, $event)" />
+                </sf-field>
+              </ng-template>
+            </sf-catalog>
+          }
+        </ng-template>
+      </sf-catalog>
+    </div>
+  </div>
+
+  <div class="sg-sub">
+    <h3 class="sg-sub__title">{{ 'styleguide.page.cards.emptyCatalog' | transloco }}</h3>
+    <div class="sg-panel sg-catalog">
+      <sf-catalog
+        [label]="c.emptyLabel"
+        [items]="empty()"
+        [types]="c.types"
+        [summaryOf]="summaryOf"
+        [level]="4"
+        (add)="add('empty', null, $event.type, $event.index)"
+        (move)="move('empty', null, $event.from, $event.to)"
+        (duplicate)="duplicate('empty', null, $event.item, $event.index)"
+        (remove)="remove('empty', null, $event.item, $event.index)"
+      >
+        <ng-template sfCatalogCard [sfCatalogCardItems]="empty()" let-item>
+          <sf-field [label]="fieldLabel(item)">
+            <sf-input [value]="item.title" (valueChange)="setTitle('empty', item.id, $event)" />
+          </sf-field>
+        </ng-template>
+      </sf-catalog>
+    </div>
+  </div>
+
+  <div class="sg-sub">
+    <h3 class="sg-sub__title">{{ 'styleguide.page.cards.readonlyCatalog' | transloco }}</h3>
+    <div class="sg-panel sg-catalog">
+      <sf-catalog [label]="c.readonlyLabel" [items]="readonlyCards" [types]="c.types" [summaryOf]="summaryOf" [level]="4" readonly>
+        <ng-template sfCatalogCard [sfCatalogCardItems]="readonlyCards" let-item>
+          <sf-field [label]="fieldLabel(item)">
+            <sf-input [value]="item.title" readonly />
+          </sf-field>
+        </ng-template>
+      </sf-catalog>
+    </div>
+  </div>
+</section>

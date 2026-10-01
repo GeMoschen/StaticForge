@@ -1,0 +1,60 @@
+<sf-field class="import__drop" [label]="t('import.archive')" [hint]="t('import.archiveHint')">
+  <sf-file-drop accept=".zip" [value]="files()" (valueChange)="files.set($event)" />
+</sf-field>
+
+@if (archive()) {
+  <div class="import__bar">
+    <span class="import__analysis" role="status">
+      <sf-icon class="import__analysis-icon" name="fact_check" />
+      {{ analysis() }}
+    </span>
+    <div class="import__all" role="group" [attr.aria-label]="t('import.setAll')">
+      <span class="import__all-label" aria-hidden="true">{{ t('import.setAll') }}</span>
+      @for (choice of choiceOptions(); track choice.value) {
+        <sf-button variant="ghost" size="sm" (click)="chooseAll(choice.value)">{{ choice.label }}</sf-button>
+      }
+    </div>
+  </div>
+
+  <sf-data-table
+    class="import__table"
+    [columns]="columns()"
+    [rows]="conflicts()"
+    [rowKey]="rowKey"
+    [rowLabel]="rowLabel"
+    [label]="t('import.tableLabel')"
+    [emptyTitle]="t('import.noConflicts')"
+    [columnChooser]="false"
+  >
+    <ng-template sfDataTableCell="name" [sfDataTableCellRows]="conflicts()" let-row>
+      <span class="cell-stack">
+        <span class="cell-name__text">{{ row.name }}</span>
+        @if (row.path) {
+          <span class="cell-muted">{{ row.path }}</span>
+        }
+      </span>
+    </ng-template>
+    <ng-template sfDataTableCell="reason" [sfDataTableCellRows]="conflicts()" let-row>
+      <span class="cell-muted">{{ t('import.reasons.' + row.reason) }}</span>
+    </ng-template>
+    <ng-template sfDataTableCell="choice" [sfDataTableCellRows]="conflicts()" let-row>
+      <sf-select
+        class="import__choice"
+        [options]="choiceOptions()"
+        [value]="row.choice"
+        [aria-label]="t('import.choiceLabel', { name: row.name })"
+        (valueChange)="choose(row, $event)"
+      />
+    </ng-template>
+  </sf-data-table>
+
+  <div class="import__footer">
+    <sf-field class="import__release" [label]="t('import.release.label')">
+      <sf-radio-group [options]="releaseOptions()" [value]="releaseMode()" (valueChange)="releaseMode.set($event ?? 'keep')" />
+    </sf-field>
+    <div class="import__go">
+      <span class="import__summary">{{ choiceSummary() }}</span>
+      <sf-button icon="upload" (click)="runImport()">{{ t('import.import') }}</sf-button>
+    </div>
+  </div>
+}

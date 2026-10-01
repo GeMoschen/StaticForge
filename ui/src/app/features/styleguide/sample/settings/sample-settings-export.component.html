@@ -1,0 +1,117 @@
+<ol class="steps" [attr.aria-label]="t('export.stepsLabel')">
+  @for (step of steps; track step; let i = $index) {
+    <li
+      class="steps__item"
+      [class.is-current]="state.exportStep() === step"
+      [class.is-done]="index(state.exportStep()) > i"
+      [attr.aria-current]="state.exportStep() === step ? 'step' : null"
+    >
+      @if (reachable(step) && state.exportStep() !== step) {
+        <button type="button" class="steps__button" (click)="go(step)">
+          <span class="steps__number" aria-hidden="true">{{ i + 1 }}</span>
+          <span class="steps__label">{{ t('export.steps.' + step) }}</span>
+        </button>
+      } @else {
+        <span class="steps__button">
+          <span class="steps__number" aria-hidden="true">
+            @if (index(state.exportStep()) > i) {
+              <sf-icon name="check" />
+            } @else {
+              {{ i + 1 }}
+            }
+          </span>
+          <span class="steps__label">{{ t('export.steps.' + step) }}</span>
+        </span>
+      }
+    </li>
+  }
+</ol>
+
+@switch (state.exportStep()) {
+  @case ('select') {
+    <div class="step__body">
+      <p class="step__intro">{{ t('export.selectIntro') }}</p>
+      <sf-sample-export-tree class="step__tree" [nodes]="tree" [(selection)]="selection" />
+    </div>
+    <div class="step__footer">
+      <span class="step__summary" role="status">{{ summary() }}</span>
+      <div class="step__actions">
+        <sf-button variant="secondary" icon="tune" (click)="go('options')">{{ t('export.toOptions') }}</sf-button>
+        <sf-button icon="download" [disabled]="!counts().size" (click)="start()">{{ t('export.export') }}</sf-button>
+      </div>
+    </div>
+  }
+  @case ('options') {
+    <div class="step__body">
+      <div class="step__options">
+        <sf-field [hint]="t('export.schedulesHint')">
+          <sf-switch [value]="includeSchedules()" (valueChange)="includeSchedules.set($event)">{{ t('export.schedules') }}</sf-switch>
+        </sf-field>
+        <sf-field [hint]="t('export.releaseStateHint')">
+          <sf-switch [value]="includeReleaseState()" (valueChange)="includeReleaseState.set($event)">{{
+            t('export.releaseState')
+          }}</sf-switch>
+        </sf-field>
+      </div>
+    </div>
+    <div class="step__footer">
+      <span class="step__summary" role="status">{{ summary() }}</span>
+      <div class="step__actions">
+        <sf-button variant="secondary" icon="arrow_back" (click)="go('select')">{{ t('export.back') }}</sf-button>
+        <sf-button icon="download" [disabled]="!counts().size" (click)="start()">{{ t('export.export') }}</sf-button>
+      </div>
+    </div>
+  }
+  @case ('run') {
+    <div class="step__body step__body--center">
+      <div class="run">
+        <span class="run__label">{{ t('export.running', { store: runningStore() }) }}</span>
+        <span class="run__bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" [attr.aria-valuenow]="progress()" [attr.aria-label]="t('export.progressLabel')">
+          <span class="run__fill" [style.inline-size.%]="progress()"></span>
+        </span>
+        <span class="run__percent">{{ t('export.percent', { n: progress() }) }}</span>
+      </div>
+    </div>
+    <div class="step__footer">
+      <span class="step__summary">{{ summary() }}</span>
+      <div class="step__actions">
+        <sf-button variant="secondary" (click)="cancel()">{{ t('cancel') }}</sf-button>
+      </div>
+    </div>
+  }
+  @case ('result') {
+    <div class="step__body">
+      <div class="result">
+        <sf-status tone="success" icon="check_circle" [label]="t('export.done')" />
+        <dl class="result__list">
+          @for (entry of counts(); track entry[0]) {
+            <div class="result__item">
+              <dt>{{ t('stores.' + entry[0]) }}</dt>
+              <dd>{{ entry[1] }}</dd>
+            </div>
+          }
+          <div class="result__item">
+            <dt>{{ t('export.schedules') }}</dt>
+            <dd>{{ includeSchedules() ? t('export.included') : t('export.notIncluded') }}</dd>
+          </div>
+          <div class="result__item">
+            <dt>{{ t('export.releaseState') }}</dt>
+            <dd>{{ includeReleaseState() ? t('export.included') : t('export.notIncluded') }}</dd>
+          </div>
+        </dl>
+        <div class="result__file">
+          <sf-icon class="result__file-icon" name="folder_zip" />
+          <span class="result__file-name">{{ archiveName }}</span>
+          <span class="result__file-size">{{ archiveSize() }}</span>
+        </div>
+      </div>
+    </div>
+    <div class="step__footer">
+      <span class="step__summary">{{ summary() }}</span>
+      <div class="step__actions">
+        <sf-button variant="secondary" icon="restart_alt" (click)="restart()">{{ t('export.again') }}</sf-button>
+        <sf-button icon="download" (click)="download()">{{ t('export.download') }}</sf-button>
+      </div>
+    </div>
+  }
+}

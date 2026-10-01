@@ -1,0 +1,69 @@
+<header #header class="sg-header">
+  <sf-page-header [title]="'styleguide.page.title' | transloco" [secondaryActions]="headerMenu()">
+    <div sfPageHeaderBreadcrumb class="sg-brand"><sf-logo /></div>
+    <sf-status sfPageHeaderStatus tone="info" size="sm" [label]="'styleguide.page.status' | transloco" />
+    <div sfPageHeaderActions class="sg-switches">
+      <div class="sg-switch">
+        <span id="sg-theme-label" class="sg-switch__label">{{ 'styleguide.page.themeSwitch.label' | transloco }}</span>
+        <sf-segmented
+          size="sm"
+          aria-labelledby="sg-theme-label"
+          [options]="themeOptions()"
+          [value]="theme()"
+          (valueChange)="setTheme($event)"
+        />
+      </div>
+      <div class="sg-switch">
+        <span id="sg-density-label" class="sg-switch__label">{{ 'styleguide.page.densitySwitch.label' | transloco }}</span>
+        <sf-segmented
+          size="sm"
+          aria-labelledby="sg-density-label"
+          [options]="densityOptions()"
+          [value]="density()"
+          (valueChange)="setDensity($event)"
+        />
+      </div>
+      <sf-button
+        variant="secondary"
+        size="sm"
+        icon="dashboard"
+        link="/styleguide/sample"
+        [queryParams]="{ theme: theme(), density: density() }"
+        >{{ 'styleguide.page.openSample' | transloco }}</sf-button
+      >
+    </div>
+  </sf-page-header>
+</header>
+
+<div class="sg-body">
+  <nav class="sg-index" [attr.aria-label]="'styleguide.page.index.label' | transloco">
+    @for (group of groups; track group.key) {
+      <p class="sg-index__group">{{ group.key | transloco }}</p>
+      <ul class="sg-index__list">
+        @for (section of group.sections; track section.id) {
+          <li>
+            <a
+              class="sg-index__link"
+              [class.is-current]="current() === section.id"
+              [attr.href]="'#' + section.id"
+              [attr.aria-current]="current() === section.id ? 'location' : null"
+              (click)="go($event, section.id)"
+              >{{ section.key | transloco }}</a
+            >
+          </li>
+        }
+      </ul>
+    }
+  </nav>
+
+  <main class="sg-main">
+    <p class="sg-lead">{{ 'styleguide.page.intro' | transloco }}</p>
+    <sf-sg-tokens [density]="density()" />
+    <sf-sg-controls />
+    <sf-sg-display />
+    <sf-sg-overlays />
+    <sf-sg-data />
+    <sf-sg-cards />
+    <sf-sg-code />
+  </main>
+</div>

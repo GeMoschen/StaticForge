@@ -31,6 +31,8 @@ export interface CodeEditorConfig {
   /** The names completion offers, read when it opens. */
   names: () => readonly string[];
   onChange: (value: string) => void;
+  /** Where the caret moved (1-based line and column); called only when it changes. */
+  onCursor?: (line: number, column: number) => void;
 }
 
 /** What the component drives a created editor with. */
@@ -46,6 +48,8 @@ export interface CodeEditorController {
   /** Switches an `octl` editor's host format; loads the format's grammar first when needed. */
   setFormat(format: CodeFormat, svg: boolean): void;
   goTo(line: number, column: number): void;
+  /** Opens the search panel (as Ctrl+F does). */
+  openSearch(): void;
   insert(snippet: string, caret: number): void;
   focus(): void;
   destroy(): void;

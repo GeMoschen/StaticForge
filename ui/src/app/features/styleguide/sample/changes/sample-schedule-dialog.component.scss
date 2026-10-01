@@ -1,0 +1,38 @@
+@use 'sample-dialog';
+
+.sd__kind,
+.rd__row,
+.sd__then {
+  display: block;
+  margin-bottom: var(--sf-space-4);
+}
+
+.rd__row {
+  display: grid;
+}
+
+.sd__subject {
+  margin: 0;
+  color: var(--sf-text);
+  font-size: var(--sf-fs-14);
+  line-height: var(--sf-lh-14);
+  font-weight: var(--sf-weight-medium);
+}
+
+.sd__preview {
+  padding: var(--sf-space-3);
+  border-radius: var(--sf-radius-md);
+  background: var(--sf-surface-sunken);
+}
+
+.sd__runs {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sf-space-1);
+  margin: 0;
+  padding-inline-start: var(--sf-space-5);
+  color: var(--sf-text);
+  font-size: var(--sf-fs-13);
+  line-height: var(--sf-lh-13);
+  font-variant-numeric: tabular-nums;
+}

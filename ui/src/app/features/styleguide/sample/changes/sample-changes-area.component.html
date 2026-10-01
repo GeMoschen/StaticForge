@@ -1,0 +1,104 @@
+<sf-page-header class="area__header" [title]="t('title')" [subtitle]="t('subtitle')">
+  <sf-badge sfPageHeaderStatus [label]="t('count', { count: rows().length })" />
+</sf-page-header>
+
+<div class="area__bar" role="search" [attr.aria-label]="'styleguide.sample.changes.filterBar' | transloco">
+  <sf-search-input
+    class="area__search"
+    [value]="search()"
+    [placeholder]="t(dev() ? 'searchDev' : 'search')"
+    [aria-label]="t(dev() ? 'searchDev' : 'search')"
+    (valueChange)="search.set($event)"
+  />
+  @for (menu of filterMenus(); track menu.id) {
+    <sf-menu variant="secondary" size="sm" align="start" [text]="menu.text" [label]="menu.name" [items]="menu.items" />
+  }
+  <span class="area__bar-end">
+    <sf-menu
+      variant="ghost"
+      size="sm"
+      [text]="t('sort.pill', { sort: t('sort.' + sort()) })"
+      [label]="'styleguide.sample.changes.sort.label' | transloco"
+      [items]="sortItems()"
+    />
+  </span>
+</div>
+
+@if (chips().length) {
+  <ul class="area__chips" [attr.aria-label]="'styleguide.sample.changes.activeFilters' | transloco">
+    @for (chip of chips(); track chip.id) {
+      <li><sf-tag removable [label]="chip.label" (removed)="setFilter(chip.id, null)" /></li>
+    }
+    <li>
+      <sf-button variant="ghost" size="sm" (click)="clearFilters()">{{ 'styleguide.sample.changes.clearFilters' | transloco }}</sf-button>
+    </li>
+  </ul>
+}
+
+<div class="area__body">
+  @if (diff(); as d) {
+    <sf-splitter class="area__split" sized="end" [defaultSize]="420" [min]="320" [max]="640" [minOther]="360" [label]="'styleguide.sample.changes.diff.resize' | transloco">
+      <div sfSplitterStart class="area__pane">
+        <ng-container *ngTemplateOutlet="tableTpl" />
+      </div>
+      <sf-sample-change-diff sfSplitterEnd class="area__diff" [change]="d" (closed)="diffId.set(null)" />
+    </sf-splitter>
+  } @else {
+    <ng-container *ngTemplateOutlet="tableTpl" />
+  }
+</div>
+
+<ng-template #tableTpl>
+  <sf-data-table
+    class="area__table"
+    selectable
+    [columnChooser]="false"
+    [columns]="columns()"
+    [rows]="rows()"
+    [rowKey]="rowKey"
+    [rowLabel]="rowLabel"
+    [label]="t('table')"
+    [bulkActions]="bulkActions()"
+    [emptyTitle]="t(filtered() ? 'emptyFiltered' : 'empty')"
+    [emptyDescription]="t(filtered() ? 'emptyFilteredHint' : 'emptyHint')"
+    (rowOpen)="openDiff($event)"
+    (selectionChange)="onSelection($event)"
+  >
+    <ng-template sfDataTableCell="name" [sfDataTableCellRows]="rows()" let-row>
+      <span class="cell-name" [class.is-open]="row.id === diffId()">
+        <sf-icon class="cell-name__icon" [name]="typeIcons[row.type]" [sfTooltip]="t('types.' + row.type)" />
+        <span class="cell-name__text">{{ row.name }}</span>
+        @if (dev()) {
+          <code class="cell-uid">{{ row.uid }}</code>
+        }
+      </span>
+    </ng-template>
+    <ng-template sfDataTableCell="lang" [sfDataTableCellRows]="rows()" let-row>
+      <span class="cell-lang">
+        <abbr class="cell-lang__code" [attr.title]="langNames[row.lang]">{{ row.lang.toUpperCase() }}</abbr>
+        @if (row.lang === defaultLang) {
+          <span class="cell-muted">{{ 'styleguide.sample.changes.defaultLang' | transloco }}</span>
+        }
+      </span>
+    </ng-template>
+    <ng-template sfDataTableCell="status" [sfDataTableCellRows]="rows()" let-row>
+      <sf-status size="sm" [tone]="tones[row.status]" [icon]="statusIcons[row.status]" [label]="t('statuses.' + row.status)" />
+    </ng-template>
+    <ng-template sfDataTableCell="changed" [sfDataTableCellRows]="rows()" let-row>
+      <span class="cell-changed">
+        <sf-avatar size="sm" [name]="row.by.name" />
+        <span class="cell-changed__text">{{ row.by.name }} · <sf-relative-time [value]="minutesAgo(row.minutes)" /></span>
+      </span>
+    </ng-template>
+    <ng-template sfDataTableCell="folder" [sfDataTableCellRows]="rows()" let-row>
+      <span class="cell-muted">{{ row.folder }}</span>
+    </ng-template>
+  </sf-data-table>
+</ng-template>
+
+@if (release(); as r) {
+  <sf-sample-release-dialog [subject]="r.subject" [languages]="r.languages" (closed)="release.set(null)" />
+}
+@if (schedule(); as s) {
+  <sf-sample-schedule-dialog kind="release" [subject]="s.subject" (closed)="schedule.set(null)" />
+}

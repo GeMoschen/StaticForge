@@ -1,0 +1,253 @@
+@let page = state.page();
+<div class="editor__head">
+  <sf-page-header [title]="page.name" [secondaryActions]="moreActions()" (secondaryAction)="secondary($event)">
+    <sf-sample-breadcrumb
+      sfPageHeaderBreadcrumb
+      [crumbs]="state.breadcrumb()"
+      [label]="'styleguide.sample.breadcrumb' | transloco"
+      (navigate)="state.navigate($event)"
+    />
+    <span sfPageHeaderStatus class="editor__status">
+      <sf-button
+        class="editor__favorite"
+        [class.is-on]="favorite()"
+        variant="ghost"
+        size="sm"
+        [aria-pressed]="favorite()"
+        [aria-label]="'styleguide.sample.editor.favorite' | transloco"
+        [tooltip]="(favorite() ? 'styleguide.sample.editor.unfavorite' : 'styleguide.sample.editor.favorite') | transloco"
+        (click)="toggleFavorite()"
+      >
+        <sf-icon class="editor__favorite-icon" name="star" />
+      </sf-button>
+    </span>
+    <ng-container sfPageHeaderActions>
+      <span class="editor__save" role="status">
+        <sf-icon [name]="saving() ? 'sync' : 'cloud_done'" />
+        {{ (saving() ? 'styleguide.sample.editor.saving' : 'styleguide.sample.editor.saved') | transloco }}
+      </span>
+      <sf-button variant="ghost" icon="history" [label]="'styleguide.sample.editor.history' | transloco" (click)="state.history.set('page')" />
+      <sf-button variant="secondary" icon="visibility" [aria-pressed]="preview()" (click)="preview.set(!preview())">{{
+        'styleguide.sample.editor.preview' | transloco
+      }}</sf-button>
+      <sf-sample-release-actions [statuses]="releaseStatuses()" [name]="page.name" />
+    </ng-container>
+  </sf-page-header>
+
+  @if (state.devMode()) {
+    <dl class="editor__meta">
+      <div class="editor__meta-item">
+        <dt>{{ 'styleguide.sample.editor.template' | transloco }}</dt>
+        <dd>{{ page.template }}</dd>
+      </div>
+      <div class="editor__meta-item">
+        <dt>{{ 'styleguide.sample.editor.uid' | transloco }}</dt>
+        <dd><sf-copyable [value]="page.uid" [label]="'styleguide.sample.editor.uid' | transloco" /></dd>
+      </div>
+      <div class="editor__meta-item">
+        <dt>{{ 'styleguide.sample.editor.path' | transloco }}</dt>
+        <dd><code class="editor__path">{{ page.url }}</code></dd>
+      </div>
+    </dl>
+  }
+</div>
+
+<div class="editor__body">
+  <nav class="outline" [attr.aria-label]="'styleguide.sample.editor.outline' | transloco">
+    <p class="outline__heading" id="sample-outline-heading">{{ 'styleguide.sample.editor.outline' | transloco }}</p>
+    <ul class="outline__list" role="listbox" aria-labelledby="sample-outline-heading">
+      @for (row of outline(); track row.id; let i = $index) {
+        <li
+          role="option"
+          class="outline__row"
+          [class.is-section]="row.level === 2"
+          [class.is-selected]="selected() === row.id"
+          [id]="'sample-outline-' + row.id"
+          [attr.aria-selected]="selected() === row.id"
+          [attr.aria-keyshortcuts]="row.section ? 'Alt+ArrowUp Alt+ArrowDown' : null"
+          [attr.tabindex]="selected() === row.id ? 0 : -1"
+          (click)="select(row)"
+          (keydown)="onOutlineKeydown($event, row, i)"
+        >
+          <sf-icon class="outline__icon" [name]="row.icon" />
+          <span class="outline__label">{{ row.label }}</span>
+        </li>
+      }
+    </ul>
+    <p class="outline__hint">{{ 'styleguide.sample.editor.reorderHint' | transloco }}</p>
+    <span class="sf-sr-only" aria-live="polite">{{ announcement() }}</span>
+  </nav>
+
+  @if (preview()) {
+    <sf-splitter
+      class="editor__split"
+      sized="end"
+      collapsible
+      [defaultSize]="400"
+      [min]="300"
+      [minOther]="360"
+      [label]="'styleguide.sample.editor.resizePreview' | transloco"
+    >
+      <div sfSplitterStart class="editor__form-pane"><ng-container *ngTemplateOutlet="form" /></div>
+      <section sfSplitterEnd class="preview" [attr.aria-label]="'styleguide.sample.editor.previewPane' | transloco">
+        <div class="preview__bar">
+          <span class="preview__title">
+            <sf-icon name="visibility" />
+            {{ 'styleguide.sample.editor.previewPane' | transloco }}
+            <sf-tag [label]="state.lang().toUpperCase()" />
+          </span>
+          <sf-segmented
+            size="sm"
+            [options]="devices()"
+            [value]="device()"
+            [aria-label]="'styleguide.sample.editor.device' | transloco"
+            (valueChange)="$event && device.set($event)"
+          />
+          <sf-button
+            variant="ghost"
+            size="sm"
+            icon="open_in_new"
+            [label]="'styleguide.sample.editor.openPreview' | transloco"
+            (click)="state.notice()"
+          />
+        </div>
+        <div class="preview__stage">
+          <iframe
+            class="preview__frame preview__frame--{{ device() }}"
+            sandbox=""
+            [title]="'styleguide.sample.editor.previewFrame' | transloco: { name: page.name }"
+            [srcdoc]="previewDoc()"
+          ></iframe>
+        </div>
+      </section>
+    </sf-splitter>
+  } @else {
+    <div class="editor__form-pane"><ng-container *ngTemplateOutlet="form" /></div>
+  }
+</div>
+
+<ng-template #form>
+  @let v = values();
+  <div class="form">
+    <sf-section [id]="cardId('fields')" [class.is-selected]="selected() === 'fields'" [heading]="'styleguide.sample.editor.pageFields' | transloco">
+      <div class="form__grid">
+        <sf-field class="form__wide" required [label]="fields.title">
+          <sf-input required [value]="v.title" (valueChange)="setText('title', $event)" />
+        </sf-field>
+        <sf-field class="form__wide" [label]="fields.teaser" [hint]="'styleguide.sample.editor.teaserHint' | transloco">
+          <sf-textarea [rows]="3" [value]="v.teaser" (valueChange)="setText('teaser', $event)" />
+        </sf-field>
+        <sf-field [label]="fields.date">
+          <sf-date-input [value]="date()" (valueChange)="date.set($event)" />
+        </sf-field>
+        <sf-field [label]="fields.category">
+          <sf-select [options]="categories" [value]="category()" (valueChange)="category.set($event)" />
+        </sf-field>
+        <sf-field class="form__wide" [label]="fields.tags">
+          <sf-combobox multiple [options]="tagOptions" [value]="tags()" (valueChange)="tags.set($event)" />
+        </sf-field>
+        <sf-field class="form__wide" [label]="fields.metaDescription" [error]="metaError()">
+          <sf-textarea [rows]="3" [invalid]="!!metaError()" [value]="metaDescription()" (valueChange)="metaDescription.set($event)" />
+        </sf-field>
+        <sf-field [label]="fields.author" [hint]="'styleguide.sample.editor.authorHint' | transloco">
+          <sf-input readonly [value]="shared.author" />
+        </sf-field>
+        <sf-field [label]="fields.inNavigation">
+          <sf-switch [value]="inNavigation()" (valueChange)="inNavigation.set($event)" />
+        </sf-field>
+      </div>
+    </sf-section>
+
+    <div class="form__body" [id]="cardId('body')" [class.is-selected]="selected() === 'body'">
+      <h2 class="form__body-title">
+        <sf-icon name="view_agenda" />
+        {{ bodyName }}
+      </h2>
+      <sf-button variant="secondary" size="sm" icon="add" (click)="state.notice()">{{
+        'styleguide.sample.editor.addSection' | transloco
+      }}</sf-button>
+    </div>
+
+    @for (section of sections(); track section.id) {
+      <sf-section [id]="cardId(section.id)" [class.is-selected]="selected() === section.id" [level]="3" [heading]="section.name">
+        <sf-menu
+          sfSectionActions
+          size="sm"
+          [items]="sectionMenus().get(section.id) ?? []"
+          [label]="'styleguide.sample.editor.sectionActions' | transloco: { name: section.name }"
+        />
+        @switch (section.kind) {
+          @case ('hero') {
+            <div class="form__grid">
+              <sf-field class="form__wide" [label]="fields.headline">
+                <sf-input [value]="v.headline" (valueChange)="setText('headline', $event)" />
+              </sf-field>
+              <sf-field class="form__wide" [label]="fields.image">
+                <div class="media">
+                  <img class="media__thumb" alt="" [src]="heroImage" />
+                  <div class="media__info">
+                    <span class="media__name">{{ shared.image.name }}</span>
+                    <span class="media__dims">{{ shared.image.dimensions }}</span>
+                  </div>
+                  <sf-button variant="secondary" size="sm" icon="swap_horiz" (click)="state.notice()">{{
+                    'styleguide.sample.editor.replace' | transloco
+                  }}</sf-button>
+                  <sf-button
+                    variant="ghost"
+                    size="sm"
+                    icon="delete"
+                    [label]="'styleguide.sample.editor.remove' | transloco"
+                    (click)="state.notice()"
+                  />
+                </div>
+              </sf-field>
+              <sf-field class="form__wide" [label]="fields.alt">
+                <sf-input [value]="alt()" (valueChange)="alt.set($event)" />
+              </sf-field>
+              <sf-field [label]="fields.cta">
+                <sf-input [value]="v.cta" (valueChange)="setText('cta', $event)" />
+              </sf-field>
+              <sf-field [label]="fields.ctaLink">
+                <sf-input icon="link" [value]="ctaLink()" (valueChange)="ctaLink.set($event)" />
+              </sf-field>
+            </div>
+          }
+          @case ('text') {
+            <sf-field [label]="fields.text">
+              <sf-textarea [rows]="6" [value]="v.text" (valueChange)="setText('text', $event)" />
+            </sf-field>
+          }
+          @case ('product') {
+            <div class="form__grid">
+              <sf-field [label]="fields.product">
+                <sf-select [options]="products" [value]="product()" (valueChange)="product.set($event)" />
+              </sf-field>
+              <sf-field [label]="fields.showPrice">
+                <sf-switch [value]="showPrice()" (valueChange)="showPrice.set($event)" />
+              </sf-field>
+            </div>
+          }
+          @case ('quote') {
+            <div class="form__grid">
+              <sf-field class="form__wide" [label]="fields.quote">
+                <sf-textarea [rows]="3" [value]="v.quote" (valueChange)="setText('quote', $event)" />
+              </sf-field>
+              <sf-field class="form__wide" [label]="fields.attribution">
+                <sf-input [value]="attribution()" (valueChange)="attribution.set($event)" />
+              </sf-field>
+            </div>
+          }
+        }
+      </sf-section>
+    }
+
+    <div class="form__catalog" [id]="cardId('catalog')" [class.is-selected]="selected() === 'catalog'">
+      <sf-sample-catalog-field
+        catalogId="sample-page-teasers"
+        [label]="teasersField.label"
+        [types]="teasersField.types"
+        [(cards)]="teasers"
+      />
+    </div>
+  </div>
+</ng-template>

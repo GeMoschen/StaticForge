@@ -1,0 +1,51 @@
+// The dialog body: the page tree (a fixed height, it scrolls inside) above the preview line.
+.picker__tree {
+  height: 22rem;
+  border: 1px solid var(--sf-border);
+  border-radius: var(--sf-radius-md);
+  background: var(--sf-surface);
+  overflow: hidden;
+}
+
+.picker__preview {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sf-space-2);
+  min-height: var(--sf-control-height);
+  margin-top: var(--sf-space-3);
+  padding: var(--sf-space-2) var(--sf-space-3);
+  border-radius: var(--sf-radius-md);
+  background: var(--sf-surface-sunken);
+  font-size: var(--sf-fs-13);
+  line-height: var(--sf-lh-13);
+}
+
+.picker__preview-label {
+  color: var(--sf-text-subtle);
+  font-size: var(--sf-fs-12);
+  line-height: var(--sf-lh-12);
+  font-weight: var(--sf-weight-semibold);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.picker__preview-icon {
+  color: var(--sf-text-muted);
+  font-size: var(--sf-fs-16);
+}
+
+.picker__preview-name {
+  color: var(--sf-text);
+  font-weight: var(--sf-weight-medium);
+}
+
+.picker__preview-url {
+  color: var(--sf-text-muted);
+  font-family: var(--sf-font-mono);
+  font-size: var(--sf-fs-12);
+}
+
+.picker__preview-none {
+  color: var(--sf-text-muted);
+}

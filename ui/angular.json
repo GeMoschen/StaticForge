@@ -25,7 +25,7 @@
             "polyfills": [],
             "tsConfig": "tsconfig.app.json",
             "inlineStyleLanguage": "scss",
-            "assets": [{ "glob": "**/*", "input": "src/assets", "output": "assets" }],
+            "assets": [{ "glob": "**/*", "input": "src/assets", "output": "assets" }, "src/favicon.svg"],
             "styles": [
               "node_modules/@fontsource-variable/inter/wght.css",
               "node_modules/@fontsource-variable/jetbrains-mono/wght.css",

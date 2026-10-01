@@ -1,0 +1,89 @@
+:host {
+  // One log line; the virtual scroller reads it (a fixed px row height keeps the maths exact).
+  --sample-log-row: 20px;
+
+  display: flex;
+  flex-direction: column;
+  gap: var(--sf-space-2);
+  min-height: 0;
+  padding-top: var(--sf-space-3);
+}
+
+.log__bar {
+  display: flex;
+  align-items: center;
+  gap: var(--sf-space-3);
+  min-block-size: var(--sf-control-height-sm);
+  color: var(--sf-text-muted);
+  font-size: var(--sf-fs-12);
+  line-height: var(--sf-lh-12);
+}
+
+.log__follow {
+  color: var(--sf-info-text);
+}
+
+.log__view {
+  --sf-row-height: var(--sample-log-row);
+
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding: var(--sf-space-2) 0;
+  border: 1px solid var(--sf-border);
+  border-radius: var(--sf-radius-md);
+  background: var(--sf-code-bg);
+  color: var(--sf-code-fg);
+  font-family: var(--sf-font-mono);
+  font-size: var(--sf-fs-12);
+
+  &:focus-visible {
+    outline-offset: -2px;
+  }
+}
+
+.log__line {
+  display: flex;
+  gap: var(--sf-space-3);
+  block-size: var(--sample-log-row);
+  padding: 0 var(--sf-space-3);
+  line-height: var(--sample-log-row);
+  white-space: pre;
+
+  &.is-warning {
+    background: var(--sf-warning-subtle);
+    color: var(--sf-warning-text);
+  }
+
+  &.is-error {
+    background: var(--sf-danger-subtle);
+    color: var(--sf-danger-text);
+  }
+}
+
+.log__n {
+  flex: 0 0 auto;
+  min-inline-size: 4ch;
+  color: var(--sf-code-gutter-fg);
+  text-align: end;
+  user-select: none;
+}
+
+.log__time {
+  flex: 0 0 auto;
+  color: var(--sf-code-comment);
+}
+
+.log__stage {
+  flex: 0 0 auto;
+  color: var(--sf-code-keyword);
+}
+
+.is-warning .log__stage,
+.is-error .log__stage {
+  color: inherit;
+}
+
+.log__text {
+  min-width: 0;
+}

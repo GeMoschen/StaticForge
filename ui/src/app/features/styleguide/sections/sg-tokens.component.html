@@ -1,0 +1,256 @@
+<!-- Colours -->
+<section class="sg-section" [id]="s.colors.id" [attr.aria-labelledby]="s.colors.id + '-title'">
+  <h2 class="sg-section__title" [id]="s.colors.id + '-title'" tabindex="-1">{{ s.colors.key | transloco }}</h2>
+  <p class="sg-intro">{{ 'styleguide.page.colors.intro' | transloco }}</p>
+  @for (group of colorGroups(); track group.id) {
+    <div class="sg-sub">
+      <h3 class="sg-sub__title">{{ group.key | transloco }}</h3>
+      <ul class="sg-swatches" [class.sg-swatches--chrome]="group.id === 'chrome'">
+        @for (token of group.tokens; track token.name) {
+          <li class="sg-swatch">
+            <span class="sg-swatch__chip" [style.background]="cssVar(token.name)"></span>
+            <div class="sg-swatch__meta">
+              <code class="sg-swatch__name">--sf-{{ token.name }}</code>
+              <span class="sg-mono">{{ token.value ?? dash }}</span>
+            </div>
+            <ul class="sg-checks">
+              @for (check of token.checks; track $index) {
+                <li class="sg-check">
+                  <span
+                    class="sg-check__sample"
+                    aria-hidden="true"
+                    [style.color]="cssVar(check.fg)"
+                    [style.background]="cssVar(check.bg)"
+                    >{{ glyphs }}</span
+                  >
+                  <span class="sg-check__pair">
+                    {{ (check.onOther ? 'styleguide.page.colors.on' : 'styleguide.page.colors.under') | transloco: { name: check.other } }}
+                  </span>
+                  <span class="sg-check__ratio">
+                    @if (check.ratio !== null) {
+                      {{ 'styleguide.page.colors.ratio' | transloco: { ratio: check.ratio } }}
+                    }
+                  </span>
+                  <sf-badge [tone]="check.tone">{{ check.verdict | transloco: { min: check.min } }}</sf-badge>
+                </li>
+              } @empty {
+                <li class="sg-check sg-note">{{ 'styleguide.page.colors.noPairs' | transloco }}</li>
+              }
+            </ul>
+          </li>
+        }
+      </ul>
+    </div>
+  }
+</section>
+
+<!-- Type -->
+<section class="sg-section" [id]="s.type.id" [attr.aria-labelledby]="s.type.id + '-title'">
+  <h2 class="sg-section__title" [id]="s.type.id + '-title'" tabindex="-1">{{ s.type.key | transloco }}</h2>
+  <p class="sg-intro">{{ 'styleguide.page.type.intro' | transloco }}</p>
+  <div class="sg-sub">
+    <h3 class="sg-sub__title">{{ 'styleguide.page.type.sizes' | transloco }}</h3>
+    <div class="sg-scroll">
+      <table class="sg-table">
+        <thead>
+          <tr>
+            <th scope="col">{{ 'styleguide.page.tokens.token' | transloco }}</th>
+            <th scope="col">{{ 'styleguide.page.type.size' | transloco }}</th>
+            <th scope="col">{{ 'styleguide.page.type.lineHeight' | transloco }}</th>
+            <th scope="col">{{ 'styleguide.page.tokens.sample' | transloco }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (size of typeSizes; track size) {
+            <tr>
+              <td><code class="sg-mono">--sf-fs-{{ size }}</code></td>
+              <td class="sg-mono">{{ scale('fs-' + size) }}</td>
+              <td class="sg-mono">{{ scale('lh-' + size) }}</td>
+              <td>
+                <span
+                  class="sg-type-sample"
+                  [style.font-size]="cssVar('fs-' + size)"
+                  [style.line-height]="cssVar('lh-' + size)"
+                  >{{ typeSample }}</span
+                >
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <div class="sg-sub">
+    <h3 class="sg-sub__title">{{ 'styleguide.page.type.weights' | transloco }}</h3>
+    <div class="sg-grid">
+      @for (weight of weights; track weight) {
+        <div class="sg-cell">
+          <code class="sg-mono">--sf-weight-{{ weight }}: {{ scale('weight-' + weight) }}</code>
+          <span class="sg-type-weight" [style.font-weight]="cssVar('weight-' + weight)">{{ typeSample }}</span>
+        </div>
+      }
+    </div>
+  </div>
+  <div class="sg-sub">
+    <h3 class="sg-sub__title">{{ 'styleguide.page.type.families' | transloco }}</h3>
+    <div class="sg-grid">
+      @for (family of families; track family) {
+        <div class="sg-cell">
+          <code class="sg-mono">--sf-{{ family }}</code>
+          <span class="sg-type-family" [style.font-family]="cssVar(family)">{{
+            family === 'font-mono' ? monoSample : typeSample
+          }}</span>
+          <span class="sg-mono">{{ scale(family) }}</span>
+        </div>
+      }
+    </div>
+  </div>
+</section>
+
+<!-- Spacing and layout -->
+<section class="sg-section" [id]="s.spacing.id" [attr.aria-labelledby]="s.spacing.id + '-title'">
+  <h2 class="sg-section__title" [id]="s.spacing.id + '-title'" tabindex="-1">{{ s.spacing.key | transloco }}</h2>
+  <p class="sg-intro">{{ 'styleguide.page.spacing.intro' | transloco }}</p>
+  <ul class="sg-bars">
+    @for (step of spacing; track step) {
+      <li class="sg-bar-row">
+        <code class="sg-mono sg-bar-row__name">--sf-space-{{ step }}</code>
+        <span class="sg-mono sg-bar-row__value">{{ scale('space-' + step) }}</span>
+        <span class="sg-bar" [style.width]="cssVar('space-' + step)"></span>
+      </li>
+    }
+  </ul>
+  <div class="sg-sub">
+    <h3 class="sg-sub__title">{{ 'styleguide.page.spacing.layout' | transloco }}</h3>
+    <table class="sg-table">
+      <tbody>
+        @for (name of layoutTokens; track name) {
+          <tr>
+            <td><code class="sg-mono">--sf-{{ name }}</code></td>
+            <td class="sg-mono">{{ scale(name) }}</td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- Radius -->
+<section class="sg-section" [id]="s.radius.id" [attr.aria-labelledby]="s.radius.id + '-title'">
+  <h2 class="sg-section__title" [id]="s.radius.id + '-title'" tabindex="-1">{{ s.radius.key | transloco }}</h2>
+  <div class="sg-grid">
+    @for (radius of radii; track radius) {
+      <div class="sg-cell">
+        <span class="sg-radius" [style.border-radius]="cssVar('radius-' + radius)"></span>
+        <code class="sg-mono">--sf-radius-{{ radius }}</code>
+        <span class="sg-mono">{{ scale('radius-' + radius) }}</span>
+      </div>
+    }
+  </div>
+</section>
+
+<!-- Elevation -->
+<section class="sg-section" [id]="s.elevation.id" [attr.aria-labelledby]="s.elevation.id + '-title'">
+  <h2 class="sg-section__title" [id]="s.elevation.id + '-title'" tabindex="-1">{{ s.elevation.key | transloco }}</h2>
+  <p class="sg-intro">{{ 'styleguide.page.elevation.intro' | transloco }}</p>
+  <div class="sg-grid sg-elevations">
+    @for (level of elevations; track level) {
+      <div class="sg-elevation" [style.box-shadow]="cssVar('elevation-' + level)">
+        <code class="sg-swatch__name">--sf-elevation-{{ level }}</code>
+        <span class="sg-mono">{{ scale('elevation-' + level) }}</span>
+      </div>
+    }
+  </div>
+</section>
+
+<!-- z-index -->
+<section class="sg-section" [id]="s.stacking.id" [attr.aria-labelledby]="s.stacking.id + '-title'">
+  <h2 class="sg-section__title" [id]="s.stacking.id + '-title'" tabindex="-1">{{ s.stacking.key | transloco }}</h2>
+  <p class="sg-intro">{{ 'styleguide.page.zIndex.intro' | transloco }}</p>
+  <table class="sg-table sg-z">
+    <thead>
+      <tr>
+        <th scope="col">{{ 'styleguide.page.tokens.token' | transloco }}</th>
+        <th scope="col">{{ 'styleguide.page.tokens.value' | transloco }}</th>
+        <th scope="col">{{ 'styleguide.page.zIndex.use' | transloco }}</th>
+      </tr>
+    </thead>
+    <tbody>
+      @for (layer of zLayers; track layer) {
+        <tr>
+          <td><code class="sg-mono">--sf-z-{{ layer }}</code></td>
+          <td class="sg-mono">{{ scale('z-' + layer) }}</td>
+          <td>{{ 'styleguide.page.zIndex.layers.' + layer | transloco }}</td>
+        </tr>
+      }
+    </tbody>
+  </table>
+</section>
+
+<!-- Motion -->
+<section class="sg-section" [id]="s.motion.id" [attr.aria-labelledby]="s.motion.id + '-title'">
+  <h2 class="sg-section__title" [id]="s.motion.id + '-title'" tabindex="-1">{{ s.motion.key | transloco }}</h2>
+  <p class="sg-intro">{{ 'styleguide.page.motion.intro' | transloco }}</p>
+  <div class="sg-row">
+    <sf-button variant="secondary" [icon]="playing() ? 'replay' : 'play_arrow'" (click)="playing.set(!playing())">
+      {{ 'styleguide.page.motion.play' | transloco }}
+    </sf-button>
+  </div>
+  <div class="sg-sub">
+    <h3 class="sg-sub__title">{{ 'styleguide.page.motion.durations' | transloco }}</h3>
+    <ul class="sg-tracks">
+      @for (duration of durations; track duration) {
+        <li class="sg-track-row">
+          <code class="sg-mono sg-track-row__name">--sf-duration-{{ duration }}</code>
+          <span class="sg-mono sg-track-row__value">{{ scale('duration-' + duration) }}</span>
+          <span class="sg-track" [class.is-playing]="playing()">
+            <span
+              class="sg-track__dot"
+              [style.transition-duration]="cssVar('duration-' + duration)"
+              [style.transition-timing-function]="cssVar('ease-standard')"
+            ></span>
+          </span>
+        </li>
+      }
+    </ul>
+  </div>
+  <div class="sg-sub">
+    <h3 class="sg-sub__title">{{ 'styleguide.page.motion.easings' | transloco }}</h3>
+    <ul class="sg-tracks">
+      @for (easing of easings; track easing) {
+        <li class="sg-track-row">
+          <code class="sg-mono sg-track-row__name">--sf-ease-{{ easing }}</code>
+          <span class="sg-mono sg-track-row__value">{{ scale('ease-' + easing) }}</span>
+          <span class="sg-track" [class.is-playing]="playing()">
+            <span
+              class="sg-track__dot"
+              [style.transition-duration]="cssVar('duration-slow')"
+              [style.transition-timing-function]="cssVar('ease-' + easing)"
+            ></span>
+          </span>
+        </li>
+      }
+    </ul>
+  </div>
+</section>
+
+<!-- Density -->
+<section class="sg-section" [id]="s.density.id" [attr.aria-labelledby]="s.density.id + '-title'">
+  <h2 class="sg-section__title" [id]="s.density.id + '-title'" tabindex="-1">{{ s.density.key | transloco }}</h2>
+  <p class="sg-intro">{{ 'styleguide.page.density.intro' | transloco: { density: ('styleguide.page.densitySwitch.' + density() | transloco) } }}</p>
+  <ul class="sg-density">
+    @for (token of densityTokens; track token.name) {
+      <li class="sg-density__item">
+        <span class="sg-density__frame">
+          <span
+            class="sg-density__bar"
+            [style.height]="token.axis === 'height' ? cssVar(token.name) : null"
+            [style.width]="token.axis === 'width' ? cssVar(token.name) : null"
+          ></span>
+        </span>
+        <code class="sg-mono">--sf-{{ token.name }}</code>
+        <span class="sg-mono">{{ scale(token.name) }}</span>
+      </li>
+    }
+  </ul>
+</section>

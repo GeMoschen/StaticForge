@@ -1,0 +1,43 @@
+<ul class="tree" role="list">
+  @for (store of nodes(); track store.id) {
+    <li class="tree__store">
+      <div class="tree__row">
+        <sf-button
+          variant="ghost"
+          size="sm"
+          [icon]="collapsed().has(store.id) ? 'chevron_right' : 'expand_more'"
+          [label]="t('export.toggleStore', { name: name(store) })"
+          [aria-expanded]="!collapsed().has(store.id)"
+          (click)="toggleExpanded(store.id)"
+        />
+        <sf-checkbox
+          class="tree__check"
+          [value]="state(store) === 'all'"
+          [indeterminate]="state(store) === 'some'"
+          (valueChange)="toggle(store, $event)"
+        >
+          <span class="tree__label">
+            <sf-icon class="tree__icon" [name]="store.icon" />
+            <span class="tree__name">{{ name(store) }}</span>
+            <span class="tree__count">{{ t('export.items', { n: total(store) }) }}</span>
+          </span>
+        </sf-checkbox>
+      </div>
+      @if (!collapsed().has(store.id)) {
+        <ul class="tree__children" role="list">
+          @for (folder of store.children ?? []; track folder.id) {
+            <li class="tree__row tree__row--child">
+              <sf-checkbox class="tree__check" [value]="state(folder) === 'all'" (valueChange)="toggle(folder, $event)">
+                <span class="tree__label">
+                  <sf-icon class="tree__icon" [name]="folder.icon" />
+                  <span class="tree__name">{{ folder.name }}</span>
+                  <span class="tree__count">{{ t('export.items', { n: folder.count }) }}</span>
+                </span>
+              </sf-checkbox>
+            </li>
+          }
+        </ul>
+      }
+    </li>
+  }
+</ul>

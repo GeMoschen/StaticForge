@@ -1,0 +1,221 @@
+<sf-splitter
+  class="area__split"
+  collapsible
+  [defaultSize]="treeWidth"
+  [min]="220"
+  [max]="460"
+  [label]="'styleguide.sample.navigation.resize' | transloco"
+>
+  <section sfSplitterStart class="pane" aria-labelledby="sample-nav-title">
+    <div class="pane__head">
+      <span class="pane__title" id="sample-nav-title">{{ 'styleguide.sample.navigation.title' | transloco }}</span>
+      <sf-menu
+        variant="secondary"
+        size="sm"
+        [text]="'styleguide.sample.navigation.new' | transloco"
+        [label]="'styleguide.sample.navigation.newLabel' | transloco"
+        [items]="newItems()"
+      />
+    </div>
+    <sf-tree
+      class="pane__tree"
+      sort="none"
+      reorderable
+      rootDroppable
+      [label]="'styleguide.sample.navigation.title' | transloco"
+      [loadChildren]="loader()"
+      [selection]="treeSelection()"
+      [multiselect]="false"
+      [actions]="treeActions"
+      [expandActions]="false"
+      (open)="onOpen($event)"
+      (reorder)="onReorder($event)"
+      (move)="onMove($event)"
+      (rename)="onRename($event)"
+      (delete)="onDelete($event)"
+    />
+    <p class="area__hint">{{ 'styleguide.sample.navigation.reorderHint' | transloco }}</p>
+  </section>
+
+  <div sfSplitterEnd class="detail">
+    @if (selected(); as entry) {
+      @if (entry.kind === 'folder') {
+        <!-- A menu folder: its entry page and a table of its items. -->
+        <div class="detail__head">
+          <sf-page-header
+            [title]="entry.label"
+            [subtitle]="folderUrl() ? ('styleguide.sample.navigation.folderUrl' | transloco: { url: folderUrl() }) : null"
+            [secondaryActions]="folderActions()"
+            (secondaryAction)="onAction($event)"
+          >
+            <ng-container sfPageHeaderActions>
+              <sf-button icon="add_link" (click)="create('item', entry.id)">{{ 'styleguide.sample.navigation.newMenuItem' | transloco }}</sf-button>
+            </ng-container>
+          </sf-page-header>
+          @if (devMode()) {
+            <dl class="detail__meta">
+              <div class="detail__meta-item">
+                <dt>{{ 'styleguide.sample.navigation.item.uid' | transloco }}</dt>
+                <dd><sf-copyable [value]="entry.uid" [label]="'styleguide.sample.navigation.item.uid' | transloco" /></dd>
+              </div>
+            </dl>
+          }
+        </div>
+        <div class="detail__table">
+          <sf-field
+            class="folder__entry"
+            labelPosition="inline"
+            [label]="'styleguide.sample.navigation.entryPage' | transloco"
+            [hint]="'styleguide.sample.navigation.entryPageHint' | transloco"
+          >
+            <sf-select
+              [options]="entryOptions()"
+              [value]="entryPage()"
+              [placeholder]="'styleguide.sample.navigation.noEntryPage' | transloco"
+              (valueChange)="setEntryPage(entry.id, $event)"
+            />
+          </sf-field>
+          <sf-data-table
+            class="folder__table"
+            [columns]="columns()"
+            [rows]="rows()"
+            [rowKey]="rowKey"
+            [rowLabel]="rowLabel"
+            [columnChooser]="false"
+            [label]="'styleguide.sample.navigation.table' | transloco: { name: entry.label }"
+            [emptyTitle]="'styleguide.sample.navigation.tableEmpty' | transloco"
+            (rowOpen)="openRow($event)"
+          >
+            <ng-template sfDataTableCell="label" [sfDataTableCellRows]="rows()" let-row>
+              <span class="cell-label">
+                <sf-icon class="cell-label__icon" [name]="row.entry.kind === 'folder' ? 'folder' : 'link'" />
+                <span class="cell-label__text">{{ row.entry.label }}</span>
+                @if (row.isEntryPage) {
+                  <sf-badge tone="accent" icon="login" [label]="'styleguide.sample.navigation.entryPage' | transloco" />
+                }
+              </span>
+            </ng-template>
+            <ng-template sfDataTableCell="target" [sfDataTableCellRows]="rows()" let-row>
+              @if (row.target; as page) {
+                <span class="cell-target">{{ page.name }}</span>
+              } @else {
+                <span class="cell-muted">{{ 'styleguide.sample.navigation.item.noTarget' | transloco }}</span>
+              }
+            </ng-template>
+            <ng-template sfDataTableCell="url" [sfDataTableCellRows]="rows()" let-row>
+              @if (row.url) {
+                <code class="cell-url">{{ row.url }}</code>
+              }
+            </ng-template>
+            <ng-template sfDataTableCell="visible" [sfDataTableCellRows]="rows()" let-row>
+              @if (row.entry.visible) {
+                <sf-status size="sm" tone="success" icon="visibility" [label]="'styleguide.sample.navigation.visible' | transloco" />
+              } @else {
+                <sf-status size="sm" tone="neutral" icon="visibility_off" [label]="'styleguide.sample.navigation.hidden' | transloco" />
+              }
+            </ng-template>
+          </sf-data-table>
+        </div>
+      } @else {
+        <!-- A menu item: its label, visibility and target page. -->
+        <div class="detail__head">
+          <sf-page-header [title]="entry.label" [secondaryActions]="itemActions()" (secondaryAction)="onAction($event)">
+            <span sfPageHeaderStatus>
+              @if (entry.visible) {
+                <sf-status size="sm" tone="success" icon="visibility" [label]="'styleguide.sample.navigation.visible' | transloco" />
+              } @else {
+                <sf-status size="sm" tone="neutral" icon="visibility_off" [label]="'styleguide.sample.navigation.hidden' | transloco" />
+              }
+            </span>
+          </sf-page-header>
+          @if (devMode()) {
+            <dl class="detail__meta">
+              <div class="detail__meta-item">
+                <dt>{{ 'styleguide.sample.navigation.item.uid' | transloco }}</dt>
+                <dd><sf-copyable [value]="entry.uid" [label]="'styleguide.sample.navigation.item.uid' | transloco" /></dd>
+              </div>
+            </dl>
+          }
+        </div>
+        <div class="detail__scroll">
+          <div class="form">
+            <sf-section [heading]="'styleguide.sample.navigation.item.section' | transloco">
+              <div class="form__grid">
+                <sf-field required [label]="'styleguide.sample.navigation.item.label' | transloco">
+                  <sf-input required [value]="entry.label" (valueChange)="setLabel(entry.id, $event)" />
+                </sf-field>
+                <sf-field
+                  [label]="'styleguide.sample.navigation.item.showInMenu' | transloco"
+                  [hint]="'styleguide.sample.navigation.item.showInMenuHint' | transloco"
+                >
+                  <sf-switch [value]="entry.visible" (valueChange)="setVisible(entry.id, $event)" />
+                </sf-field>
+
+                <sf-field class="form__wide" [label]="'styleguide.sample.navigation.item.target' | transloco">
+                  @if (target(); as page) {
+                    <div class="target">
+                      <sf-icon class="target__icon" [name]="page.startPage ? 'home' : 'description'" />
+                      <div class="target__info">
+                        <span class="target__name">{{ page.name }}</span>
+                        <code class="target__url">{{ page.url }}</code>
+                      </div>
+                      <sf-status
+                        size="sm"
+                        [tone]="tones[statusOf(page)]"
+                        [icon]="icons[statusOf(page)]"
+                        [label]="'styleguide.sample.status.' + statusOf(page) | transloco"
+                      />
+                      <sf-button
+                        variant="ghost"
+                        size="sm"
+                        icon="open_in_new"
+                        [aria-label]="'styleguide.sample.navigation.item.openLabel' | transloco: { name: page.name }"
+                        (click)="openTarget(page)"
+                        >{{ 'styleguide.sample.navigation.item.open' | transloco }}</sf-button
+                      >
+                      <sf-button variant="secondary" size="sm" icon="swap_horiz" (click)="pickerOpen.set(true)">{{
+                        'styleguide.sample.navigation.item.change' | transloco
+                      }}</sf-button>
+                    </div>
+                  } @else {
+                    <div class="target target--empty">
+                      <sf-icon class="target__icon" name="link_off" />
+                      <span class="target__none">{{ 'styleguide.sample.navigation.item.noTarget' | transloco }}</span>
+                      <sf-button variant="secondary" size="sm" icon="search" (click)="pickerOpen.set(true)">{{
+                        'styleguide.sample.navigation.item.choose' | transloco
+                      }}</sf-button>
+                    </div>
+                  }
+                </sf-field>
+
+                <sf-field class="form__wide" [label]="'styleguide.sample.navigation.item.publicUrl' | transloco">
+                  <sf-input readonly monospace icon="public" [value]="target()?.url ?? ''" />
+                </sf-field>
+
+                @if (devMode() && targetUuid(); as uuid) {
+                  <sf-field class="form__wide" [label]="'styleguide.sample.navigation.item.targetUuid' | transloco">
+                    <sf-copyable [value]="uuid" [label]="'styleguide.sample.navigation.item.targetUuid' | transloco" />
+                  </sf-field>
+                }
+              </div>
+            </sf-section>
+          </div>
+        </div>
+      }
+    } @else {
+      <div class="detail__head">
+        <sf-page-header [title]="'styleguide.sample.navigation.title' | transloco" />
+      </div>
+      <sf-empty-state
+        class="detail__empty"
+        icon="menu"
+        [title]="'styleguide.sample.navigation.emptyTitle' | transloco"
+        [description]="'styleguide.sample.navigation.emptyText' | transloco"
+      />
+    }
+  </div>
+</sf-splitter>
+
+@if (pickerOpen() && selectedItem(); as item) {
+  <sf-sample-page-picker [current]="item.targetId" [lang]="lang()" (picked)="setTarget(item.id, $event)" (closed)="pickerOpen.set(false)" />
+}

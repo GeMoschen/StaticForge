@@ -1,0 +1,152 @@
+// The style guide page (M35.9): a sticky header, a sticky index on the left, the sections on the right. The window
+// scrolls (so full-page screenshots capture everything); --sg-header-height is measured and bound on the host.
+
+:host {
+  display: block;
+  min-height: 100vh;
+  background: var(--sf-bg);
+  color: var(--sf-text);
+  font-family: var(--sf-font-ui);
+}
+
+.sg-header {
+  position: sticky;
+  top: 0;
+  z-index: var(--sf-z-sticky);
+  padding: var(--sf-space-3) var(--sf-space-6);
+  border-bottom: 1px solid var(--sf-border);
+  background: var(--sf-surface);
+}
+
+.sg-brand {
+  display: flex;
+  align-items: center;
+  color: var(--sf-text-muted);
+}
+
+.sg-switches {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sf-space-2) var(--sf-space-4);
+}
+
+.sg-switch {
+  display: flex;
+  align-items: center;
+  gap: var(--sf-space-2);
+}
+
+.sg-switch__label {
+  font-size: var(--sf-fs-13);
+  line-height: var(--sf-lh-13);
+  font-weight: var(--sf-weight-medium);
+  color: var(--sf-text-muted);
+}
+
+.sg-body {
+  display: grid;
+  grid-template-columns: 13rem minmax(0, 1fr);
+  gap: var(--sf-space-8);
+  max-width: 90rem;
+  margin: 0 auto;
+  padding: 0 var(--sf-space-6) var(--sf-space-16);
+}
+
+.sg-index {
+  position: sticky;
+  top: var(--sg-header-height, 6rem);
+  align-self: start;
+  max-height: calc(100vh - var(--sg-header-height, 6rem));
+  overflow-y: auto;
+  padding-block: var(--sf-space-6);
+}
+
+.sg-index__group {
+  margin: var(--sf-space-4) 0 var(--sf-space-1);
+  padding-inline: var(--sf-space-3);
+  font-size: var(--sf-fs-12);
+  line-height: var(--sf-lh-12);
+  font-weight: var(--sf-weight-semibold);
+  color: var(--sf-text-subtle);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+
+  &:first-child {
+    margin-top: 0;
+  }
+}
+
+.sg-index__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.sg-index__link {
+  display: flex;
+  align-items: center;
+  min-height: var(--sf-row-height);
+  padding-inline: var(--sf-space-3);
+  border-inline-start: 2px solid transparent;
+  border-radius: 0 var(--sf-radius-sm) var(--sf-radius-sm) 0;
+  color: var(--sf-text-muted);
+  font-size: var(--sf-fs-13);
+  line-height: var(--sf-lh-13);
+  text-decoration: none;
+
+  &:hover {
+    background: var(--sf-hover);
+    color: var(--sf-text);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--sf-focus-ring);
+    outline-offset: -2px;
+  }
+
+  &.is-current {
+    border-inline-start-color: var(--sf-accent);
+    background: var(--sf-accent-subtle);
+    color: var(--sf-accent);
+    font-weight: var(--sf-weight-medium);
+  }
+}
+
+.sg-main {
+  min-width: 0;
+  padding-top: var(--sf-space-6);
+}
+
+.sg-lead {
+  margin: 0 0 var(--sf-space-6);
+  max-width: 70ch;
+  color: var(--sf-text-muted);
+  font-size: var(--sf-fs-14);
+  line-height: var(--sf-lh-14);
+}
+
+// Narrow windows: the index goes above the sections and stops sticking.
+@media (max-width: 960px) {
+  .sg-header {
+    padding-inline: var(--sf-space-4);
+  }
+
+  .sg-body {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+    padding-inline: var(--sf-space-4);
+  }
+
+  .sg-index {
+    position: static;
+    max-height: none;
+    padding-bottom: 0;
+  }
+
+  .sg-index__list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--sf-space-1);
+  }
+}

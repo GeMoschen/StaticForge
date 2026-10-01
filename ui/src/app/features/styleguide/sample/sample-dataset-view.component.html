@@ -1,0 +1,87 @@
+@let ds = dataset();
+<div class="ds__head">
+  <sf-page-header [title]="ds.name" [secondaryActions]="moreActions()" (secondaryAction)="state.notice()">
+    <sf-sample-breadcrumb
+      sfPageHeaderBreadcrumb
+      [crumbs]="state.breadcrumb()"
+      [label]="'styleguide.sample.breadcrumb' | transloco"
+      (navigate)="state.navigate($event)"
+    />
+    <span sfPageHeaderStatus>
+      <sf-badge icon="dataset" [label]="'styleguide.sample.templates.kind.dataset' | transloco" />
+    </span>
+  </sf-page-header>
+  <div class="ds__meta">
+    <span class="ds__meta-label">{{ 'styleguide.sample.editor.uid' | transloco }}</span>
+    <sf-copyable [value]="ds.uid" [label]="'styleguide.sample.editor.uid' | transloco" />
+  </div>
+  <sf-tabs [idPrefix]="tabsId" [tabs]="tabs()" [selected]="tab()" [label]="'styleguide.sample.dataset.tabsLabel' | transloco" (selectTab)="selectTab($event)" />
+</div>
+
+<div class="ds__panel" role="tabpanel" [id]="panelId(tab())" [attr.aria-labelledby]="tabId(tab())">
+  @if (code(); as code) {
+    @for (key of [code.id]; track key) {
+      <sf-code-panel
+        class="ds__code"
+        [readOnly]="true"
+        [fileName]="code.fileName"
+        [languageLabel]="code.languageLabel"
+        [language]="code.language"
+        [format]="code.format"
+        [label]="'styleguide.sample.dataset.codeLabel' | transloco: { name: ds.name, file: code.fileName }"
+        [value]="code.source"
+      />
+    }
+  } @else {
+    <div class="overview">
+      <section class="overview__fields" aria-labelledby="sample-ds-fields">
+        <h2 class="overview__title" id="sample-ds-fields">{{ 'styleguide.sample.dataset.fields' | transloco }}</h2>
+        <sf-data-table
+          class="overview__table"
+          [columns]="columns()"
+          [rows]="ds.fields"
+          [rowKey]="fieldKey"
+          [rowLabel]="fieldLabel"
+          [columnChooser]="false"
+          [label]="'styleguide.sample.dataset.fieldsTable' | transloco: { name: ds.name }"
+        >
+          <ng-template sfDataTableCell="name" [sfDataTableCellRows]="ds.fields" let-field>
+            <span class="cell-field">
+              <span class="cell-field__label">{{ field.label }}</span>
+              <code class="cell-field__id">{{ field.id }}</code>
+            </span>
+          </ng-template>
+          <ng-template sfDataTableCell="required" [sfDataTableCellRows]="ds.fields" let-field>
+            <ng-container *ngTemplateOutlet="yesNo; context: { $implicit: field.required }" />
+          </ng-template>
+          <ng-template sfDataTableCell="localized" [sfDataTableCellRows]="ds.fields" let-field>
+            <ng-container *ngTemplateOutlet="yesNo; context: { $implicit: field.localized }" />
+          </ng-template>
+        </sf-data-table>
+      </section>
+
+      <sf-section class="overview__used" [heading]="'styleguide.sample.dataset.usedBy' | transloco">
+        @if (usedBy().length) {
+          <ul class="used">
+            @for (use of usedBy(); track use.set.id) {
+              <li class="used__item">
+                <sf-button variant="ghost" size="sm" icon="table_rows" (click)="state.openRecordSet(use.set.id)">{{ use.set.name }}</sf-button>
+                <span class="used__meta">{{ 'styleguide.sample.dataset.usedByMeta' | transloco: { path: use.path, count: use.count } }}</span>
+              </li>
+            }
+          </ul>
+        } @else {
+          <p class="used__none">{{ 'styleguide.sample.dataset.notUsed' | transloco }}</p>
+        }
+      </sf-section>
+    </div>
+  }
+</div>
+
+<ng-template #yesNo let-on>
+  @if (on) {
+    <sf-icon class="cell-yes" name="check" /><span class="sf-sr-only">{{ 'styleguide.sample.dataset.yes' | transloco }}</span>
+  } @else {
+    <span class="cell-no" aria-hidden="true">–</span><span class="sf-sr-only">{{ 'styleguide.sample.dataset.no' | transloco }}</span>
+  }
+</ng-template>

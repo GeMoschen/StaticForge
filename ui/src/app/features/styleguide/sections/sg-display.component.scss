@@ -1,0 +1,62 @@
+@use 'styleguide-common';
+
+// The logo on the dark top bar, as the app frame shows it.
+.sg-chrome {
+  display: inline-flex;
+  align-items: center;
+  padding: var(--sf-space-2) var(--sf-space-4);
+  border-radius: var(--sf-radius-md);
+  background: var(--sf-chrome-bg);
+  color: var(--sf-chrome-text);
+}
+
+.sg-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sf-space-1);
+  padding: var(--sf-space-1);
+  border: 1px solid var(--sf-border);
+  border-radius: var(--sf-radius-md);
+  background: var(--sf-surface);
+  align-self: flex-start;
+}
+
+.sg-toolbar__separator {
+  width: 1px;
+  align-self: stretch;
+  margin-inline: var(--sf-space-1);
+  background: var(--sf-border);
+}
+
+// Narrow on purpose: the strip runs out of room and moves tabs into "More".
+.sg-tabs {
+  max-width: 32rem;
+  min-width: 0;
+}
+
+.sg-tabs__panel {
+  padding: var(--sf-space-3) 0;
+}
+
+// The side nav beside its content, as an area lays it out; the narrow variant stacks (the nav is a select).
+.sg-side-nav {
+  display: grid;
+  grid-template-columns: 13rem minmax(0, 1fr);
+  gap: var(--sf-space-4);
+  max-width: 48rem;
+  padding: var(--sf-space-3);
+  border: 1px solid var(--sf-border);
+  border-radius: var(--sf-radius-md);
+  background: var(--sf-surface);
+}
+
+.sg-side-nav--narrow {
+  grid-template-columns: minmax(0, 1fr);
+  max-width: 24rem;
+}
+
+.sg-side-nav__panel {
+  min-width: 0;
+  padding: var(--sf-space-2);
+}

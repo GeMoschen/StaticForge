@@ -35,6 +35,8 @@ interface MenuEntry {
   readonly disabled: boolean;
   readonly hasChildren: boolean;
   readonly keyShortcuts: string | null;
+  /** The ids of the hidden disabled reason and description, for `aria-describedby`. */
+  readonly describedBy: string | null;
 }
 
 /** A run of items: a labelled group or plain items, with a separator above it when it isn't the first. */
@@ -102,12 +104,18 @@ export class SfMenuPanelComponent implements AfterViewInit, OnDestroy {
   protected readonly sections = computed<MenuSection[]>(() => {
     const sections: { group: string | null; separator: boolean; entries: MenuEntry[] }[] = [];
     this.items().forEach((item, index) => {
+      const disabled = isMenuItemDisabled(item);
+      const describedBy = [
+        disabled && item.disabledReason ? `${this.baseId}-reason-${index}` : null,
+        item.description ? `${this.baseId}-description-${index}` : null,
+      ].filter((id) => id !== null);
       const entry: MenuEntry = {
         item,
         index,
-        disabled: isMenuItemDisabled(item),
+        disabled,
         hasChildren: !!item.children?.length,
         keyShortcuts: toAriaKeyShortcuts(item.shortcut, this.isMac),
+        describedBy: describedBy.join(' ') || null,
       };
       const group = item.group ?? null;
       const last = sections.at(-1);

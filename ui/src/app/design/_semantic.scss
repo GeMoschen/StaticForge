@@ -52,6 +52,14 @@
   --sf-disabled-bg: var(--sf-slate-100);
   --sf-disabled-text: var(--sf-slate-400);
 
+  // App chrome: the dark top bar (M35.9 decision 1) — dark in both themes.
+  --sf-chrome-bg: var(--sf-slate-900);
+  --sf-chrome-text: var(--sf-slate-50);
+  --sf-chrome-text-muted: var(--sf-slate-300);
+  --sf-chrome-border: var(--sf-slate-700);
+  --sf-chrome-hover: var(--sf-slate-800);
+  --sf-chrome-accent: var(--sf-blue-400);
+
   // Code editor palette (CDL / OCTL / expressions / JSON)
   --sf-code-bg: var(--sf-slate-0);
   --sf-code-fg: var(--sf-slate-900);
@@ -121,6 +129,14 @@
   --sf-disabled-bg: var(--sf-slate-700);
   --sf-disabled-text: var(--sf-slate-500);
 
+  // The top bar is the darkest layer, below the page background.
+  --sf-chrome-bg: var(--sf-slate-950);
+  --sf-chrome-text: var(--sf-slate-100);
+  --sf-chrome-text-muted: var(--sf-slate-300);
+  --sf-chrome-border: var(--sf-slate-800);
+  --sf-chrome-hover: var(--sf-slate-800);
+  --sf-chrome-accent: var(--sf-blue-400);
+
   --sf-code-bg: var(--sf-slate-900);
   --sf-code-fg: var(--sf-slate-100);
   --sf-code-gutter-bg: var(--sf-slate-800);
@@ -164,4 +180,71 @@
 
 :root[data-theme='dark'] {
   @include sf-dark-colors;
+}
+
+// ── Code highlighting: the "refined" palette (M35.9 decision 18) ─────────────
+// An alternative to the syntax colours above, to compare at sign-off: calmer and closer to the slate/blue UI — blue
+// keywords, teal attributes and instructions, green strings, amber numbers, slate operators, upright muted comments —
+// and a quieter, desaturated palette for the host format around OCTL, so the `$CMS_…$` instructions stand out.
+// Only syntax colours change (background, gutter, selection stay the theme's), plus `--sf-code-comment-style`, the one
+// non-colour knob: the editor reads it with `italic` as the fallback, so the current palette leaves it unset. Not the default: applied when <html>
+// has data-code-palette="refined" (the style guide and the sample set it). Same theme selection as above; these rules
+// come after the theme blocks and the dark ones are more specific, so they win in both orders of the attributes.
+
+@mixin sf-light-code-refined {
+  --sf-code-keyword: #1d4ed8;
+  --sf-code-type: #0e7490;
+  --sf-code-attr: #0f766e;
+  --sf-code-atom: #4338ca;
+  --sf-code-string: #15803d;
+  --sf-code-number: #b45309;
+  --sf-code-comment: #64748b;
+  --sf-code-comment-style: normal;
+  --sf-code-function: #2563eb;
+  --sf-code-special: #0369a1;
+  --sf-code-operator: #475569;
+  --sf-code-tag: #0f766e;
+  --sf-code-fmt-tag: #3d5a80;
+  --sf-code-fmt-attr: #4a6b66;
+  --sf-code-fmt-string: #56663a;
+  --sf-code-fmt-keyword: #6a4f78;
+  --sf-code-fmt-number: #7a5a2e;
+  --sf-code-fmt-comment: #687385;
+  --sf-code-fmt-punct: #5f6b7a;
+}
+
+@mixin sf-dark-code-refined {
+  --sf-code-keyword: #8fb8f5;
+  --sf-code-type: #7cc9da;
+  --sf-code-attr: #6fcfc0;
+  --sf-code-atom: #aab4f0;
+  --sf-code-string: #8fd1a4;
+  --sf-code-number: #e6bb6e;
+  --sf-code-comment: #8a99ae;
+  --sf-code-comment-style: normal;
+  --sf-code-function: #79a8ee;
+  --sf-code-special: #8ec9ec;
+  --sf-code-operator: #b4c0cf;
+  --sf-code-tag: #5fd4c3;
+  --sf-code-fmt-tag: #93a9c6;
+  --sf-code-fmt-attr: #93b3ad;
+  --sf-code-fmt-string: #b3bd94;
+  --sf-code-fmt-keyword: #b8a6c4;
+  --sf-code-fmt-number: #c9b48e;
+  --sf-code-fmt-comment: #8794a8;
+  --sf-code-fmt-punct: #99a3b1;
+}
+
+:root[data-code-palette='refined'] {
+  @include sf-light-code-refined;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme])[data-code-palette='refined'] {
+    @include sf-dark-code-refined;
+  }
+}
+
+:root[data-theme='dark'][data-code-palette='refined'] {
+  @include sf-dark-code-refined;
 }

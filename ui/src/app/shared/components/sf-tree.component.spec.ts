@@ -1,6 +1,6 @@
 import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/angular';
+import { createEvent, fireEvent, render, screen, waitFor, within } from '@testing-library/angular';
 import { describe, expect, it, vi } from 'vitest';
 import { PreferencesService } from '../../core/preferences/preferences.service';
 import { ToastService } from '../../core/ui/toast.service';
@@ -58,6 +58,7 @@ async function setup(options: SetupOptions = {}) {
     delete: vi.fn(),
     move: vi.fn(),
     moveTo: vi.fn(),
+    reorder: vi.fn(),
   };
   const result = await render(SfTreeComponent, {
     inputs: {
@@ -407,6 +408,193 @@ describe('SfTreeComponent', () => {
     it('is not draggable without the move action', async () => {
       await setup({ inputs: { actions: [] } });
       expect(item('Gamma')).not.toHaveAttribute('draggable');
+    });
+  });
+
+  describe('reorder', () => {
+    const REORDER = { reorderable: true, sort: 'none' } as const; // root order: Beta, Gamma, alpha
+    const transfer = () => ({ setData: vi.fn(), getData: vi.fn(), effectAllowed: 'all', dropEffect: 'none' });
+    /** Fires a dragover / drop at a pointer height (jsdom has no DragEvent, so `clientY` is set by hand). */
+    const at = (type: 'dragOver' | 'drop', element: HTMLElement, data: object, clientY: number) => {
+      const event = createEvent[type](element, { dataTransfer: data });
+      Object.defineProperty(event, 'clientY', { value: clientY });
+      return fireEvent(element, event);
+    };
+    /** Every row 40px tall, the first at the top. */
+    const layOut = () =>
+      screen.getAllByRole('treeitem').forEach((row, index) => {
+        row.getBoundingClientRect = () => ({ top: index * 40, height: 40, bottom: index * 40 + 40 }) as DOMRect;
+      });
+    const rowOf = (name: string) => item(name).closest('.sf-tree__row');
+
+    it('drops before, inside or after a row by the pointer height (quarters), with an indicator and announcement', async () => {
+      const { reorder, move, fixture } = await setup({ inputs: REORDER });
+      layOut();
+      const data = transfer();
+      fireEvent.dragStart(item('alpha'), { dataTransfer: data });
+
+      // Upper quarter of Beta (row 0, 0–40): before it.
+      expect(at('dragOver', item('Beta'), data, 5)).toBe(false);
+      fixture.detectChanges();
+      expect(rowOf('Beta')).toHaveClass('is-drop-before');
+      expect(rowOf('Beta')).not.toHaveClass('is-drop-target');
+      expect(document.querySelector('[aria-live]')).toHaveTextContent('Move before Beta');
+
+      // The middle of a droppable row: inside, as before. Same row: not announced again.
+      at('dragOver', item('Beta'), data, 20);
+      fixture.detectChanges();
+      expect(rowOf('Beta')).toHaveClass('is-drop-target');
+      expect(document.querySelector('[aria-live]')).toHaveTextContent('Move before Beta');
+
+      // Lower quarter of Gamma (row 1, 40–80): after it — where alpha already is: no indicator, not allowed.
+      expect(at('dragOver', item('Gamma'), data, 75)).toBe(true);
+      fixture.detectChanges();
+      expect(rowOf('Gamma')).toHaveClass('is-drop-invalid');
+
+      // The middle of a leaf picks the nearer edge: the upper half of Gamma is before it.
+      expect(at('dragOver', item('Gamma'), data, 55)).toBe(false);
+      fixture.detectChanges();
+      expect(rowOf('Gamma')).toHaveClass('is-drop-before');
+      at('drop', item('Gamma'), data, 55);
+      expect(reorder).toHaveBeenCalledWith(
+        expect.objectContaining({ node: expect.objectContaining({ id: 'alpha' }), parent: null, index: 1, via: 'drag' }),
+      );
+      expect(move).not.toHaveBeenCalled();
+      expect(rowOf('Gamma')).not.toHaveClass('is-drop-before');
+    });
+
+    it('announces a drag per target row, not per zone within it', async () => {
+      const { fixture } = await setup({ inputs: REORDER });
+      layOut();
+      const live = document.querySelector('[aria-live]')!;
+      const records: MutationRecord[] = [];
+      const observer = new MutationObserver((delivered) => records.push(...delivered));
+      observer.observe(live, { characterData: true, characterDataOldValue: true, childList: true, subtree: true });
+      const data = transfer();
+      fireEvent.dragStart(item('Beta'), { dataTransfer: data });
+
+      at('dragOver', item('alpha'), data, 85); // before
+      at('dragOver', item('alpha'), data, 100); // inside
+      at('dragOver', item('alpha'), data, 115); // after
+      fixture.detectChanges();
+      expect(rowOf('alpha')).toHaveClass('is-drop-after');
+      at('dragOver', item('Gamma'), data, 75); // another row
+      fixture.detectChanges();
+
+      // Every text the region showed.
+      const shown = [...[...records, ...observer.takeRecords()].map((record) => record.oldValue?.trim() ?? ''), live.textContent!.trim()];
+      observer.disconnect();
+      expect(shown.filter(Boolean)).toEqual(['Move before alpha', 'Move after Gamma']);
+    });
+
+    it('keeps the whole row as the drop zone when several nodes are dragged', async () => {
+      const { reorder, move, fixture } = await setup({ inputs: REORDER });
+      layOut();
+      fireEvent.click(item('Gamma'));
+      fireEvent.click(item('Beta'), { ctrlKey: true });
+      const data = transfer();
+      fireEvent.dragStart(item('Gamma'), { dataTransfer: data });
+
+      // Upper quarter of alpha (row 2, 80–120): inside, not before.
+      expect(at('dragOver', item('alpha'), data, 82)).toBe(false);
+      fixture.detectChanges();
+      expect(rowOf('alpha')).toHaveClass('is-drop-target');
+      at('drop', item('alpha'), data, 82);
+      expect(reorder).not.toHaveBeenCalled();
+      expect(move).toHaveBeenCalledWith(
+        expect.objectContaining({
+          nodes: expect.arrayContaining([expect.objectContaining({ id: 'beta' }), expect.objectContaining({ id: 'gamma' })]),
+          target: expect.objectContaining({ id: 'alpha' }),
+        }),
+      );
+    });
+
+    it('drops "after" an expanded folder as its first child, where the line is drawn', async () => {
+      const { reorder, fixture } = await setup({ inputs: REORDER, expanded: ['beta'] });
+      await waitFor(() => expect(names()).toEqual(['Beta', 'Banana', 'Blueberries', 'Gamma', 'alpha']));
+      layOut();
+      const data = transfer();
+      fireEvent.dragStart(item('alpha'), { dataTransfer: data });
+
+      expect(at('dragOver', item('Beta'), data, 35)).toBe(false); // lower quarter of Beta (row 0)
+      fixture.detectChanges();
+      expect(rowOf('Beta')).toHaveClass('is-drop-after');
+      at('drop', item('Beta'), data, 35);
+      expect(reorder).toHaveBeenCalledWith(
+        expect.objectContaining({ parent: expect.objectContaining({ id: 'beta' }), index: 0, via: 'drag' }),
+      );
+    });
+
+    it('drops after a row as the index after the move, and inside a folder as a move', async () => {
+      const { reorder, move } = await setup({ inputs: REORDER });
+      layOut();
+      const data = transfer();
+      fireEvent.dragStart(item('Beta'), { dataTransfer: data });
+      at('drop', item('alpha'), data, 115); // lower quarter of row 2
+      expect(reorder).toHaveBeenCalledWith(expect.objectContaining({ parent: null, index: 2 }));
+
+      fireEvent.dragStart(item('Gamma'), { dataTransfer: data });
+      at('drop', item('alpha'), data, 100); // middle of row 2
+      expect(move).toHaveBeenCalledWith(expect.objectContaining({ target: expect.objectContaining({ id: 'alpha' }) }));
+    });
+
+    it('only reorders with sort="none": a sorted tree drops inside wherever the pointer is', async () => {
+      const { reorder, move, fixture } = await setup({ inputs: { reorderable: true } });
+      layOut();
+      const data = transfer();
+      fireEvent.dragStart(item('Gamma'), { dataTransfer: data });
+      at('dragOver', item('alpha'), data, 1);
+      fixture.detectChanges();
+      expect(rowOf('alpha')).toHaveClass('is-drop-target');
+      at('drop', item('alpha'), data, 1);
+      expect(move).toHaveBeenCalled();
+      expect(reorder).not.toHaveBeenCalled();
+
+      focus('Gamma');
+      key('ArrowUp', { altKey: true });
+      expect(reorder).not.toHaveBeenCalled();
+      expect(item('Beta')).toHaveFocus(); // a plain ArrowUp
+    });
+
+    it('moves the focused node among its siblings with Alt+↑/↓ and says so at the ends', async () => {
+      const { reorder } = await setup({ inputs: REORDER });
+      expect(item('Gamma')).toHaveAttribute('aria-keyshortcuts', 'Alt+ArrowUp Alt+ArrowDown');
+      focus('Gamma');
+      key('ArrowUp', { altKey: true });
+      expect(reorder).toHaveBeenLastCalledWith(
+        expect.objectContaining({ node: expect.objectContaining({ id: 'gamma' }), parent: null, index: 0, via: 'keyboard' }),
+      );
+      key('ArrowDown', { altKey: true });
+      expect(reorder).toHaveBeenLastCalledWith(expect.objectContaining({ index: 2 }));
+      expect(reorder).toHaveBeenCalledTimes(2);
+
+      focus('Beta');
+      key('ArrowUp', { altKey: true });
+      expect(document.querySelector('[aria-live]')).toHaveTextContent('“Beta” is already first');
+      focus('alpha');
+      key('ArrowDown', { altKey: true });
+      expect(document.querySelector('[aria-live]')).toHaveTextContent('“alpha” is already last');
+      expect(reorder).toHaveBeenCalledTimes(2);
+    });
+
+    it('does not reorder without the move action', async () => {
+      const { reorder } = await setup({ inputs: { ...REORDER, actions: [] } });
+      expect(item('Gamma')).not.toHaveAttribute('aria-keyshortcuts');
+      focus('Gamma');
+      key('ArrowUp', { altKey: true });
+      expect(reorder).not.toHaveBeenCalled();
+    });
+
+    it('announces the completed reorder and offers Undo', async () => {
+      const { reorder } = await setup({ inputs: REORDER });
+      const toasts = TestBed.inject(ToastService);
+      const undoToast = vi.spyOn(toasts, 'undo');
+      focus('Gamma');
+      key('ArrowUp', { altKey: true });
+      const undo = vi.fn();
+      reorder.mock.calls[0][0].completed(undo);
+      expect(undoToast).toHaveBeenCalledWith('Moved “Gamma” to position 1 of 3', undo);
+      expect(document.querySelector('[aria-live]')).toHaveTextContent('Moved “Gamma” to position 1 of 3');
     });
   });
 

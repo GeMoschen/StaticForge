@@ -1,0 +1,62 @@
+@use 'styleguide-common';
+
+.sg-code-palette {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sf-space-3);
+}
+
+.sg-code-palette__label {
+  font-size: var(--sf-fs-13);
+  line-height: var(--sf-lh-13);
+  font-weight: var(--sf-weight-medium);
+  color: var(--sf-text-muted);
+}
+
+// The panels fill the height they are given: fixed demo heights.
+.sg-code-box {
+  display: flex;
+  flex-direction: column;
+  height: 28rem;
+  min-width: 0;
+}
+
+.sg-code-box--small {
+  height: 18rem;
+}
+
+.sg-code-grid {
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 24rem), 1fr));
+}
+
+.sg-code-swatches {
+  overflow-x: auto;
+}
+
+.sg-code-chip {
+  display: inline-block;
+  width: 0.875rem;
+  height: 0.875rem;
+  margin-inline-end: var(--sf-space-2);
+  border-radius: var(--sf-radius-sm);
+  vertical-align: middle;
+}
+
+.sg-code-sample {
+  display: inline-block;
+  padding: 0 var(--sf-space-2);
+  border-radius: var(--sf-radius-sm);
+  background: var(--sf-code-bg);
+  font-family: var(--sf-font-mono);
+  font-size: var(--sf-fs-13);
+  line-height: var(--sf-lh-13);
+}
+
+.sg-code-ratio {
+  display: inline-block;
+  min-width: 4rem;
+  margin-inline-end: var(--sf-space-2);
+  font-family: var(--sf-font-mono);
+  font-size: var(--sf-fs-12);
+}

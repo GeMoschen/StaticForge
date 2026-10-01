@@ -33,6 +33,39 @@ describe('SfTreeModel', () => {
     expect(ids(create('none').model)).toEqual(['b', 'g', 'a']);
   });
 
+  it('places a node before or after a sibling at its index after the move, null when nothing changes', () => {
+    const { model } = create('none'); // root order: b, g, a
+    void model.expand('b');
+    expect(model.placement('a', 'b', 'before')).toEqual({ parentId: null, index: 0 });
+    expect(model.placement('b', 'a', 'after')).toEqual({ parentId: null, index: 2 });
+    expect(model.placement('b', 'a', 'before')).toEqual({ parentId: null, index: 1 });
+    expect(model.placement('b', 'g', 'before')).toBeNull(); // already right before g
+    expect(model.placement('g', 'a', 'before')).toBeNull(); // already right before a
+    expect(model.placement('g', 'g', 'after')).toBeNull();
+    // Next to a row of another parent: that parent, at that position.
+    expect(model.placement('g', 'b1', 'after')).toEqual({ parentId: 'b', index: 1 });
+  });
+
+  it('places a node "after" an expanded folder with loaded children as its first child', () => {
+    const { model } = create('none'); // root order: b, g, a
+    // Collapsed: after it, among its siblings.
+    expect(model.placement('g', 'b', 'after')).toBeNull(); // already right after b
+    expect(model.placement('a', 'b', 'after')).toEqual({ parentId: null, index: 1 });
+
+    void model.expand('b'); // b > b1
+    expect(model.placement('g', 'b', 'after')).toEqual({ parentId: 'b', index: 0 });
+    expect(model.placement('a', 'b', 'after')).toEqual({ parentId: 'b', index: 0 });
+    expect(model.placement('b1', 'b', 'after')).toBeNull(); // already b's first child
+  });
+
+  it('steps a node along its siblings and stops at the ends', () => {
+    const { model } = create('none');
+    expect(model.siblingStep('g', -1)).toEqual({ parentId: null, index: 0 });
+    expect(model.siblingStep('g', 1)).toEqual({ parentId: null, index: 2 });
+    expect(model.siblingStep('b', -1)).toBeNull();
+    expect(model.siblingStep('a', 1)).toBeNull();
+  });
+
   it('flattens with level, set size and position, and loads children once on expansion', () => {
     const { model, loader } = create();
     void model.expand('b');

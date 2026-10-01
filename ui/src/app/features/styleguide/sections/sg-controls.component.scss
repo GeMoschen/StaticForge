@@ -1,0 +1,13 @@
+@use 'styleguide-common';
+
+// Controls that need more room (date-time, file drop, segmented, tags) get wider cells.
+.sg-grid--wide {
+  grid-template-columns: repeat(auto-fill, minmax(17rem, 1fr));
+}
+
+.sg-inline-fields {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sf-space-3);
+  max-width: 40rem;
+}

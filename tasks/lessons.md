@@ -172,3 +172,12 @@
   UA's `[hidden] { display: none }` — every panel showed at once.
 - **Rule:** an element toggled with `hidden` whose styles set `display` needs an explicit `.x[hidden] { display: none; }`.
 
+
+## Visually hidden elements stretch scroll areas (2026-10-01)
+- **Mistake:** `.sf-sr-only` (absolute, no offsets) sat at its static position deep inside a long form. Its containing
+  block was a positioned ancestor outside the unpositioned scroll container, so it escaped the clipping, stretched
+  the ancestors' scroll area and `scrollIntoView` shifted the whole frame. Making only the splitter pane positioned
+  moved the problem one level down (a second scrollbar); the area had been patched locally twice before.
+- **Rule:** fix it at the source — absolutely positioned helpers that must not affect layout get explicit offsets
+  (`top: 0; left: 0`). When a scroll bug shows up, list every element with `scrollTop > 0` and every scroll
+  container's overflow before patching one container.

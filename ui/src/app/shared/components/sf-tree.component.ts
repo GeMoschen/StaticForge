@@ -40,10 +40,12 @@ import { SfIconComponent } from './sf-icon.component';
 import {
   SF_TREE_CREATE_ROW,
   SfTreeCreateKind,
+  SfTreeDropPosition,
   SfTreeLoader,
   SfTreeModel,
   SfTreeNode,
   SfTreeNodeRow,
+  SfTreePlacement,
   SfTreeRow,
   SfTreeSort,
   highlightSegments,
@@ -52,6 +54,7 @@ import {
 export type {
   SfTreeBadge,
   SfTreeCreateKind,
+  SfTreeDropPosition,
   SfTreeLoadResult,
   SfTreeLoader,
   SfTreeNode,
@@ -115,6 +118,27 @@ export interface SfTreeMoveRequest<T = unknown> {
   completed: SfTreeCompleted;
 }
 
+/**
+ * A sibling reorder ({@link SfTreeComponent.reorderable}): put `node` at `index` among the children of `parent` (`null`
+ * = root), counted after the move. `parent` is the node's own parent for `Alt+↑/↓` and usually for a drag; a drop
+ * before or after a row of another folder moves the node there at that position.
+ */
+export interface SfTreeReorderRequest<T = unknown> {
+  node: SfTreeNode<T>;
+  parent: SfTreeNode<T> | null;
+  index: number;
+  via: 'drag' | 'keyboard';
+  /** The host reordered: announces "Moved …" and shows a toast with an Undo button when `undo` is given. */
+  completed: SfTreeCompleted;
+}
+
+interface DropTarget {
+  /** The row under the pointer; `null` = the empty area (the root). */
+  id: string | null;
+  valid: boolean;
+  position: SfTreeDropPosition;
+}
+
 interface EditState {
   mode: 'rename' | 'create';
   id: string;
@@ -146,7 +170,8 @@ function toPromise<V>(value: SfTreeAsync<V>): Promise<V> {
  * **Keyboard.** ↑/↓ move, ←/→ collapse (or go to the parent) / expand (or go to the first child), Home/End, `*`
  * expands the siblings, letters type ahead; Enter opens, Space selects (Ctrl+Space toggles, Shift+Space and
  * Shift+arrows extend, Ctrl+arrows move focus only, Ctrl+A selects all); F2 renames, Del deletes (confirmed, with
- * Undo), Ctrl+X/C/V cut, copy and paste, Shift+F10 or the ContextMenu key open the context menu.
+ * Undo), Ctrl+X/C/V cut, copy and paste, Shift+F10 or the ContextMenu key open the context menu; with
+ * {@link reorderable}, Alt+↑/↓ move the focused node among its siblings.
  *
  * **Expansion** is kept per project and tree (`projectKey` + `treeId`) in the user's preferences and restored on init,
  * loading the expanded branches level by level.
@@ -177,6 +202,11 @@ export class SfTreeComponent<T = unknown> implements OnInit, OnDestroy {
   readonly label = input.required<string>();
   readonly loadChildren = input.required<SfTreeLoader<T>>();
   readonly sort = input<SfTreeSort>('name');
+  /**
+   * How status badges show: `icon` (default) keeps only the status icon, with the label as tooltip and screen-reader
+   * text, so names get the room — names never truncate before secondary information. `label` shows full pills.
+   */
+  readonly badgeStyle = input<'icon' | 'label'>('icon');
   readonly multiselect = input(true, { transform: booleanAttribute });
   /** The selected node ids (two-way). */
   readonly selection = model<readonly string[]>([]);
@@ -208,6 +238,13 @@ export class SfTreeComponent<T = unknown> implements OnInit, OnDestroy {
   readonly treeId = input<string | null>(null);
   /** Trees of one scope share cut/copy/paste; defaults to {@link treeId}, then the label. */
   readonly clipboardScope = input<string | null>(null);
+  /**
+   * Siblings can be reordered (M35.9 decision 23; only with `sort="none"`, and with the `move` action): a drag shows a
+   * drop indicator before / inside / after the row under the pointer — the upper and lower quarter of a row place the
+   * node before or after it, the middle moves it into a droppable node — and `Alt+↑/↓` moves the focused node among its
+   * siblings. Positions are emitted as {@link reorder}; moving into a node stays a {@link move}.
+   */
+  readonly reorderable = input(false, { transform: booleanAttribute });
 
   /** Enter, double click, or a plain click with {@link openOnClick}. */
   readonly open = output<SfTreeNode<T>>();
@@ -217,6 +254,8 @@ export class SfTreeComponent<T = unknown> implements OnInit, OnDestroy {
   readonly move = output<SfTreeMoveRequest<T>>();
   /** "Move to…": the host asks for a destination with a picker and performs the move. */
   readonly moveTo = output<SfTreeNode<T>[]>();
+  /** A sibling reorder ({@link reorderable}): the host applies it, then calls {@link refresh} and `completed`. */
+  readonly reorder = output<SfTreeReorderRequest<T>>();
 
   private readonly prefs = inject(PreferencesService);
   private readonly confirms = inject(ConfirmService);
@@ -239,7 +278,9 @@ export class SfTreeComponent<T = unknown> implements OnInit, OnDestroy {
 
   protected readonly edit = signal<EditState | null>(null);
   protected readonly hovered = signal<string | null>(null);
-  protected readonly dropTarget = signal<{ id: string | null; valid: boolean } | null>(null);
+  protected readonly dropTarget = signal<DropTarget | null>(null);
+  /** Reordering is on: {@link reorderable} with the loader's order (a sorted tree has no order to change). */
+  protected readonly canReorder = computed(() => this.reorderable() && this.sort() === 'none');
   protected readonly announcement = signal('');
   protected readonly searching = signal(false);
   /** Ids whose names are cut off (their tooltip shows the full name). */
@@ -556,6 +597,10 @@ export class SfTreeComponent<T = unknown> implements OnInit, OnDestroy {
 
   private handleKey(event: KeyboardEvent, row: SfTreeNodeRow<T>): boolean {
     const mod = event.ctrlKey || event.metaKey;
+    if (event.altKey && !mod && !event.shiftKey && (event.key === 'ArrowUp' || event.key === 'ArrowDown') && this.canReorder()) {
+      this.keyReorder(row, event.key === 'ArrowUp' ? -1 : 1);
+      return true;
+    }
     switch (event.key) {
       case 'ArrowDown':
       case 'ArrowUp':
@@ -1017,6 +1062,82 @@ export class SfTreeComponent<T = unknown> implements OnInit, OnDestroy {
     });
   }
 
+  // ── Reorder ────────────────────────────────────────────────────────────────
+
+  /** `Alt+↑/↓`: one place up or down among the siblings; at the ends it only says so. */
+  private keyReorder(row: SfTreeNodeRow<T>, delta: -1 | 1): void {
+    if (!this.allowed('move', [row.node]) || row.node.draggable === false) {
+      return;
+    }
+    const placement = this.state.siblingStep(row.id, delta);
+    if (!placement) {
+      this.announce(this.t(delta < 0 ? 'reorderAtStart' : 'reorderAtEnd', { name: row.node.label }));
+      return;
+    }
+    this.requestReorder(row.node, placement, 'keyboard');
+  }
+
+  /** A drop before / after: allowed in place among the siblings, or into another parent the node may move to. */
+  private isValidReorder(nodes: readonly SfTreeNode<T>[], placement: SfTreePlacement | null): placement is SfTreePlacement {
+    if (!placement || nodes.length !== 1) {
+      return false;
+    }
+    const [node] = nodes;
+    if (this.state.parentOf(node.id) === placement.parentId && this.state.node(node.id)) {
+      return true;
+    }
+    const parent = this.state.node(placement.parentId);
+    if (placement.parentId === null ? !this.rootDroppable() : !parent || !this.isDroppable(parent)) {
+      return false;
+    }
+    if (placement.parentId !== null && this.state.isSelfOrDescendant(placement.parentId, node.id)) {
+      return false;
+    }
+    return this.canDrop()?.(nodes, parent) ?? true;
+  }
+
+  private requestReorder(node: SfTreeNode<T>, placement: SfTreePlacement, via: 'drag' | 'keyboard'): void {
+    const sameParent = this.state.parentOf(node.id) === placement.parentId;
+    const count = (this.state.childrenOf(placement.parentId)?.length ?? 0) + (sameParent ? 0 : 1);
+    const message = this.t('reordered', { name: node.label, position: placement.index + 1, count });
+    const refocus = via === 'keyboard';
+    this.reorder.emit({
+      node,
+      parent: this.state.node(placement.parentId),
+      index: placement.index,
+      via,
+      completed: (undo) => {
+        this.completed(message, undo);
+        // The row re-rendered at its new place: keep the keyboard on it.
+        if (refocus && this.state.row(node.id)) {
+          this.focusRow(node.id);
+        }
+      },
+    });
+  }
+
+  /**
+   * Where a drag over `row` would drop: by the pointer's height in the row when reordering one node, else inside (a
+   * reorder moves a single node, so several dragged nodes keep the whole row as the drop zone).
+   */
+  private dropPosition(event: DragEvent, row: SfTreeNodeRow<T>): SfTreeDropPosition {
+    if (!this.canReorder() || (this.dragged?.length ?? 0) > 1) {
+      return 'inside';
+    }
+    const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+    const offset = event.clientY - rect.top;
+    if (offset < rect.height / 4) {
+      return 'before';
+    }
+    if (offset > (rect.height * 3) / 4) {
+      return 'after';
+    }
+    if (this.isDroppable(row.node)) {
+      return 'inside';
+    }
+    return offset < rect.height / 2 ? 'before' : 'after';
+  }
+
   private completed(message: string, undo?: () => void): void {
     this.announce(message);
     if (undo) {
@@ -1079,7 +1200,11 @@ export class SfTreeComponent<T = unknown> implements OnInit, OnDestroy {
       return; // the row's own handler decided
     }
     const target = row?.node ?? null;
-    const valid = this.isValidDrop(this.dragged, target, false);
+    const position = row ? this.dropPosition(event, row) : 'inside';
+    const valid =
+      position === 'inside'
+        ? this.isValidDrop(this.dragged, target, false)
+        : this.isValidReorder(this.dragged, this.state.placement(this.dragged[0].id, row!.id, position));
     if (valid) {
       event.preventDefault();
     }
@@ -1088,13 +1213,18 @@ export class SfTreeComponent<T = unknown> implements OnInit, OnDestroy {
     }
     const id = row?.id ?? null;
     const current = this.dropTarget();
-    if (current?.id === id && current.valid === valid) {
+    if (current?.id === id && current.valid === valid && current.position === position) {
       return;
     }
-    this.dropTarget.set({ id, valid });
-    this.announce(valid ? this.t('dropInto', { name: target?.label ?? this.label() }) : this.t('cannotDrop'));
+    this.dropTarget.set({ id, valid, position });
+    // Announced per row: moving between its before / inside / after zones would be too chatty.
+    if (current === null || current.id !== id) {
+      const name = target?.label ?? this.label();
+      const messages = { before: 'dropBefore', inside: 'dropInto', after: 'dropAfter' } as const;
+      this.announce(valid ? this.t(messages[position], { name }) : this.t('cannotDrop'));
+    }
     this.clearTimer(this.dragExpandTimer);
-    if (valid && row && row.expandable && !row.expanded) {
+    if (valid && position === 'inside' && row && row.expandable && !row.expanded) {
       this.dragExpandTimer = setTimeout(() => {
         if (this.dropTarget()?.id === row.id) {
           void this.expandNode(row.id);
@@ -1124,9 +1254,16 @@ export class SfTreeComponent<T = unknown> implements OnInit, OnDestroy {
     event.preventDefault();
     event.stopPropagation();
     const target = row?.node ?? null;
-    const valid = this.isValidDrop(nodes, target, false);
+    const position = row ? this.dropPosition(event, row) : 'inside';
     this.endDrag();
-    if (valid) {
+    if (position !== 'inside') {
+      const placement = this.state.placement(nodes[0].id, row!.id, position);
+      if (this.isValidReorder(nodes, placement)) {
+        this.requestReorder(nodes[0], placement, 'drag');
+      } else {
+        this.announce(this.t('cannotDrop'));
+      }
+    } else if (this.isValidDrop(nodes, target, false)) {
       this.requestMove(nodes, target, false, 'drag');
     } else {
       this.announce(this.t('cannotDrop'));

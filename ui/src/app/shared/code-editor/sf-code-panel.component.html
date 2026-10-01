@@ -1,0 +1,87 @@
+<div class="sf-code-panel__header">
+  <sf-icon class="sf-code-panel__file-icon" name="description" />
+  <span class="sf-code-panel__file">{{ fileName() }}</span>
+  <span class="sf-code-panel__language">{{ languageLabel() }}</span>
+  @if (readOnly()) {
+    <span class="sf-code-panel__readonly">
+      <sf-icon name="lock" />
+      {{ 'shared.codePanel.readOnly' | transloco }}
+    </span>
+  }
+  <span class="sf-code-panel__actions">
+    @if (canFormat()) {
+      <sf-button variant="ghost" size="sm" icon="format_align_left" (click)="formatCode()">{{
+        'shared.codePanel.format' | transloco
+      }}</sf-button>
+    }
+    <sf-button variant="ghost" size="sm" icon="search" aria-keyshortcuts="Control+F" (click)="find()">{{
+      'shared.codePanel.find' | transloco
+    }}</sf-button>
+  </span>
+</div>
+
+<sf-code-editor
+  class="sf-code-panel__editor"
+  [fill]="true"
+  [value]="value()"
+  [language]="language()"
+  [label]="label()"
+  [format]="format()"
+  [diagnostics]="diagnostics()"
+  [readOnly]="readOnly()"
+  [invalid]="errorCount() > 0"
+  (valueChange)="edited($event)"
+  (cursorChange)="cursor.set($event)"
+/>
+
+@if (problems().length) {
+  <section class="sf-code-panel__problems">
+    <button
+      type="button"
+      class="sf-code-panel__problems-toggle"
+      [attr.aria-expanded]="problemsOpen()"
+      [attr.aria-controls]="listId"
+      (click)="toggleProblems()"
+    >
+      <sf-icon [name]="problemsOpen() ? 'expand_more' : 'chevron_right'" />
+      <span>{{ 'shared.codePanel.problems' | transloco }}</span>
+      <span class="sf-code-panel__count">{{ problems().length }}</span>
+    </button>
+    @if (problemsOpen()) {
+      <ul class="sf-code-panel__list" [id]="listId" [attr.aria-label]="'shared.codePanel.problems' | transloco">
+        @for (problem of problems(); track $index) {
+          <li>
+            <button type="button" class="sf-code-panel__problem" (click)="jump(problem)">
+              <sf-status class="sf-code-panel__severity" size="sm" [tone]="problem.tone" [label]="problem.severityKey | transloco" />
+              <span class="sf-code-panel__message">
+                @if (problem.diagnostic.code) {
+                  <span class="sf-code-panel__code">{{ problem.diagnostic.code }}</span>
+                }
+                {{ problem.diagnostic.message }}
+              </span>
+              @if (problem.line) {
+                <span class="sf-code-panel__where">{{
+                  'shared.codePanel.position' | transloco: { line: problem.line, column: problem.column }
+                }}</span>
+              }
+            </button>
+          </li>
+        }
+      </ul>
+    }
+  </section>
+}
+
+<div class="sf-code-panel__status">
+  <span class="sf-code-panel__position">{{ 'shared.codePanel.position' | transloco: cursor() }}</span>
+  <span class="sf-code-panel__notice" role="status">{{ notice() ? (notice()! | transloco) : '' }}</span>
+  <span class="sf-code-panel__tally" [class.sf-code-panel__tally--errors]="errorCount() > 0">
+    <sf-icon name="error" />
+    {{ 'shared.codePanel.errors' | transloco: { count: errorCount() } }}
+  </span>
+  <span class="sf-code-panel__tally" [class.sf-code-panel__tally--warnings]="warningCount() > 0">
+    <sf-icon name="warning" />
+    {{ 'shared.codePanel.warnings' | transloco: { count: warningCount() } }}
+  </span>
+  <span class="sf-code-panel__status-language">{{ languageLabel() }}</span>
+</div>

@@ -1,0 +1,46 @@
+// The area fills the sample's main region; only the section's own panes scroll.
+:host {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sf-space-4);
+  height: 100%;
+  min-height: 0;
+  padding: var(--sf-space-4) var(--sf-space-6);
+}
+
+.area__status {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--sf-space-2);
+}
+
+.area__body {
+  display: grid;
+  flex: 1 1 auto;
+  grid-template-columns: 13rem minmax(0, 1fr);
+  gap: var(--sf-space-6);
+  min-height: 0;
+
+  // Narrow: the nav is a select above the section.
+  &.is-narrow {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+    gap: var(--sf-space-3);
+
+    .area__nav {
+      max-width: 20rem;
+    }
+  }
+}
+
+.area__nav {
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.area__content {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}

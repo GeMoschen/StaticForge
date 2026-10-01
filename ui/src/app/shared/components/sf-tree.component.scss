@@ -76,6 +76,26 @@
     box-shadow: inset 0 0 0 2px var(--sf-accent);
   }
 
+  // Reorder: a line between two rows, indented to the row's level.
+  &.is-drop-before::before,
+  &.is-drop-after::after {
+    position: absolute;
+    inset-inline: calc(var(--sf-space-4) * (var(--tree-level, 1) - 1) + var(--sf-space-1)) 0;
+    block-size: 2px;
+    border-radius: var(--sf-radius-pill);
+    background: var(--sf-accent);
+    content: '';
+    pointer-events: none;
+  }
+
+  &.is-drop-before::before {
+    inset-block-start: -1px;
+  }
+
+  &.is-drop-after::after {
+    inset-block-end: -1px;
+  }
+
   &.is-drop-invalid {
     box-shadow: inset 0 0 0 2px var(--sf-danger);
     cursor: no-drop;

@@ -1,0 +1,44 @@
+<div class="section__bar">
+  <h2 class="section__title">{{ t('sections.urls') }}</h2>
+</div>
+
+<sf-data-table
+  class="section__table"
+  searchable
+  [columns]="columns()"
+  [rows]="rows()"
+  [rowKey]="rowKey"
+  [rowLabel]="rowLabel"
+  [filters]="filters()"
+  [label]="t('sections.urls')"
+  [searchPlaceholder]="t('urls.search')"
+  [emptyTitle]="t('urls.empty')"
+  [emptyDescription]="t('urls.emptyHint')"
+  (rowOpen)="state.notice()"
+>
+  @if (rows().length > 0) {
+    <sf-menu sfDataTableToolbar variant="ghost" size="sm" [items]="moreActions()" [label]="t('urls.more')" />
+  }
+  <ng-template sfDataTableCell="target" [sfDataTableCellRows]="rows()" let-row>
+    <span class="cell-name">
+      <sf-icon class="cell-name__icon" [name]="typeIcons[row.type]" />
+      <span class="cell-name__text">{{ row.target }}</span>
+    </span>
+  </ng-template>
+  <ng-template sfDataTableCell="area" [sfDataTableCellRows]="rows()" let-row>
+    <span class="cell-muted">{{ t('urls.area.' + row.area) }}</span>
+  </ng-template>
+  <ng-template sfDataTableCell="url" [sfDataTableCellRows]="rows()" let-row>
+    <code class="cell-code">{{ row.url }}</code>
+  </ng-template>
+  <ng-template sfDataTableCell="overridden" [sfDataTableCellRows]="rows()" let-row>
+    @if (row.overridden) {
+      <sf-badge tone="accent" icon="edit" [label]="t('urls.manual')" />
+    } @else {
+      <span class="cell-muted">{{ t('urls.auto') }}</span>
+    }
+  </ng-template>
+  <ng-template sfDataTableCell="assigned" [sfDataTableCellRows]="rows()" let-row>
+    <span class="cell-muted"><sf-relative-time [value]="assigned(row)" /></span>
+  </ng-template>
+</sf-data-table>

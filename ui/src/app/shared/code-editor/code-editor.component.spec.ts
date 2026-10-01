@@ -18,6 +18,7 @@ import { loadFormat } from './formats';
     [readOnly]="readOnly()"
     [format]="format()"
     (valueChange)="changes.push($event); value.set($event)"
+    (cursorChange)="cursors.push($event)"
   />`,
 })
 class HostComponent {
@@ -27,6 +28,7 @@ class HostComponent {
   readonly readOnly = signal(false);
   readonly format = signal<CodeFormat>('PLAIN');
   readonly changes: string[] = [];
+  readonly cursors: { line: number; column: number }[] = [];
   readonly editor = viewChild.required(SfCodeEditorComponent);
 }
 
@@ -98,6 +100,26 @@ describe('SfCodeEditorComponent', () => {
     host.editor().insert('Y');
     expect(view().state.doc.line(2).text).toBe('  Xeditor text title { }');
     expect(view().state.readOnly).toBe(true);
+  });
+
+  it('reports where the caret moves, once per position', () => {
+    host.editor().goTo(2, 3);
+    host.editor().goTo(2, 3);
+    view().dispatch({ selection: { anchor: 0 } });
+    expect(host.cursors).toEqual([
+      { line: 2, column: 3 },
+      { line: 1, column: 1 },
+    ]);
+    // Typing moves it too.
+    view().dispatch({ changes: { from: 0, insert: 'ab' }, selection: { anchor: 2 } });
+    expect(host.cursors.at(-1)).toEqual({ line: 1, column: 3 });
+  });
+
+  it('opens the search panel', () => {
+    const root = fixture.nativeElement as HTMLElement;
+    expect(root.querySelector('.cm-search')).toBeNull();
+    host.editor().openSearch();
+    expect(root.querySelector('.cm-search')).not.toBeNull();
   });
 
   it('highlights an OCTL template as its format once the grammar has loaded', async () => {

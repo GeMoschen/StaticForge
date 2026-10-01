@@ -58,6 +58,33 @@ describe('SfMenuComponent', () => {
     expect(document.activeElement).toBe(screen.getByRole('menuitem', { name: 'Delete' }));
   });
 
+  it('leaves an arrow with Alt, Ctrl or Meta to the host: no menu, no preventDefault', async () => {
+    const { trigger } = await setup();
+
+    for (const modifier of ['altKey', 'ctrlKey', 'metaKey']) {
+      const key = createEvent.keyDown(trigger, { key: 'ArrowDown', [modifier]: true });
+      fireEvent(trigger, key);
+      expect(key.defaultPrevented).toBe(false);
+    }
+    expect(screen.queryByRole('menu')).toBeNull();
+    expect(trigger).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  it('describes a link item by its description', async () => {
+    await render(SfMenuComponent, {
+      inputs: {
+        items: [{ id: 'members', label: 'Members', link: '/members', description: 'Who can sign in' }],
+        label: 'More tabs',
+      },
+      providers: [provideRouter([{ path: '**', children: [] }])],
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'More tabs' }));
+    const item = await screen.findByRole('menuitem', { name: 'Members' });
+
+    expect(item.tagName).toBe('A');
+    expect(item).toHaveAccessibleDescription('Who can sign in');
+  });
+
   it('moves with the arrow keys (wrapping), Home and End, and reaches disabled items', async () => {
     const { trigger } = await setup();
     const menu = await openWith(trigger, 'ArrowDown');

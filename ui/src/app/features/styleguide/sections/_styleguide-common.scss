@@ -1,0 +1,142 @@
+// Shared look of the style guide sections (M35.9). `@use`d by each section component, so the rules are scoped to it.
+
+:host {
+  display: block;
+  min-width: 0;
+}
+
+.sg-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sf-space-4);
+  padding-block: var(--sf-space-8);
+  border-top: 1px solid var(--sf-border);
+  scroll-margin-top: calc(var(--sg-header-height, 6rem) + var(--sf-space-4));
+  min-width: 0;
+}
+
+.sg-section__title {
+  margin: 0;
+  font-size: var(--sf-fs-24);
+  line-height: var(--sf-lh-24);
+  font-weight: var(--sf-weight-semibold);
+  color: var(--sf-text);
+
+  &:focus {
+    outline: none;
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--sf-focus-ring);
+    outline-offset: 2px;
+    border-radius: var(--sf-radius-sm);
+  }
+}
+
+.sg-intro {
+  margin: 0;
+  max-width: 70ch;
+  color: var(--sf-text-muted);
+  font-size: var(--sf-fs-14);
+  line-height: var(--sf-lh-14);
+}
+
+.sg-sub {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sf-space-3);
+  min-width: 0;
+}
+
+.sg-sub__title {
+  margin: var(--sf-space-2) 0 0;
+  font-size: var(--sf-fs-16);
+  line-height: var(--sf-lh-16);
+  font-weight: var(--sf-weight-semibold);
+  color: var(--sf-text);
+}
+
+.sg-caption {
+  margin: 0;
+  font-size: var(--sf-fs-12);
+  line-height: var(--sf-lh-12);
+  font-weight: var(--sf-weight-medium);
+  color: var(--sf-text-subtle);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.sg-note {
+  margin: 0;
+  font-size: var(--sf-fs-13);
+  line-height: var(--sf-lh-13);
+  color: var(--sf-text-muted);
+}
+
+.sg-mono {
+  font-family: var(--sf-font-mono);
+  font-size: var(--sf-fs-12);
+  line-height: var(--sf-lh-12);
+  color: var(--sf-text-muted);
+  overflow-wrap: anywhere;
+}
+
+// A row of examples that wraps.
+.sg-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sf-space-3);
+  min-width: 0;
+}
+
+// A grid of example cells (states, sizes).
+.sg-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr));
+  gap: var(--sf-space-4);
+  min-width: 0;
+
+  > * {
+    min-width: 0;
+  }
+}
+
+.sg-cell {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sf-space-2);
+  min-width: 0;
+}
+
+// A framed demo area.
+.sg-panel {
+  padding: var(--sf-space-4);
+  border: 1px solid var(--sf-border);
+  border-radius: var(--sf-radius-lg);
+  background: var(--sf-surface);
+  min-width: 0;
+}
+
+// Name / value tables of the token scales.
+.sg-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--sf-fs-13);
+  line-height: var(--sf-lh-13);
+
+  th,
+  td {
+    padding: var(--sf-space-2) var(--sf-space-3);
+    border-bottom: 1px solid var(--sf-border);
+    text-align: start;
+    vertical-align: middle;
+  }
+
+  th {
+    font-weight: var(--sf-weight-semibold);
+    color: var(--sf-text-muted);
+    font-size: var(--sf-fs-12);
+    line-height: var(--sf-lh-12);
+  }
+}

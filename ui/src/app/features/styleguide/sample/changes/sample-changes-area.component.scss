@@ -1,0 +1,100 @@
+@use 'sample-area';
+
+// One row: search grows, the filter pills keep their size, the sort sits at the end. Wraps only as a last resort.
+.area__bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sf-space-2);
+}
+
+.area__search {
+  flex: 1 1 10rem;
+  min-width: 8rem;
+  max-width: 20rem;
+}
+
+.area__bar-end {
+  margin-inline-start: auto;
+}
+
+.area__chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sf-space-2);
+  margin: calc(-1 * var(--sf-space-2)) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.area__body {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.area__split {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.area__pane {
+  display: flex;
+  height: 100%;
+  min-width: 0;
+  padding-inline-end: var(--sf-space-3);
+}
+
+.area__table {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+}
+
+.area__diff {
+  height: 100%;
+}
+
+.cell-name.is-open .cell-name__text {
+  color: var(--sf-accent);
+}
+
+.cell-uid {
+  overflow: hidden;
+  color: var(--sf-text-subtle);
+  font-family: var(--sf-font-mono);
+  font-size: var(--sf-fs-12);
+  text-overflow: ellipsis;
+}
+
+.cell-lang {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sf-space-2);
+}
+
+.cell-lang__code {
+  padding: 0 var(--sf-space-1);
+  border: 1px solid var(--sf-border);
+  border-radius: var(--sf-radius-sm);
+  color: var(--sf-text);
+  font-size: var(--sf-fs-12);
+  line-height: var(--sf-lh-12);
+  font-weight: var(--sf-weight-medium);
+  text-decoration: none;
+}
+
+.cell-changed {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sf-space-2);
+  min-width: 0;
+}
+
+.cell-changed__text {
+  overflow: hidden;
+  color: var(--sf-text-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

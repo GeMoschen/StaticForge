@@ -1,0 +1,32 @@
+<div class="log__bar">
+  <span class="log__count">{{ t('log.lines', { count: lines().length }) }}</span>
+  @if (run().status === 'running') {
+    <span class="log__follow" role="status">{{ following() ? t('log.following') : t('log.paused') }}</span>
+    @if (!following()) {
+      <sf-button variant="secondary" size="sm" icon="vertical_align_bottom" (click)="jumpToEnd()">{{ t('log.jump') }}</sf-button>
+    }
+  }
+</div>
+<div
+  #view
+  class="log__view"
+  sfVirtualScroll
+  #v="sfVirtualScroll"
+  sfVirtualRowToken="--sample-log-row"
+  [sfVirtualCount]="lines().length"
+  role="region"
+  tabindex="0"
+  [attr.aria-label]="t('log.label', { n: run().number })"
+  (scroll)="onScroll()"
+>
+  <div [style.height.px]="v.window().before"></div>
+  @for (line of lines().slice(v.window().start, v.window().end); track line.n) {
+    <div class="log__line" [class.is-warning]="line.level === 'warning'" [class.is-error]="line.level === 'error'">
+      <span class="log__n" aria-hidden="true">{{ line.n }}</span>
+      <span class="log__time">{{ line.time }}</span>
+      <span class="log__stage">{{ '[' + line.stage + ']' }}</span>
+      <span class="log__text">{{ line.text }}</span>
+    </div>
+  }
+  <div [style.height.px]="v.window().after"></div>
+</div>

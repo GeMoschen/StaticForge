@@ -1,0 +1,17 @@
+@use 'styleguide-common';
+
+// Cards need more room than the other state cells.
+.sg-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(20rem, 1fr));
+  gap: var(--sf-space-4);
+  min-width: 0;
+
+  > * {
+    min-width: 0;
+  }
+}
+
+.sg-catalog {
+  max-width: 48rem;
+}

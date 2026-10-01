@@ -1,0 +1,85 @@
+<section class="uploads" aria-labelledby="sample-media-uploads-title">
+  <header class="uploads__head">
+    <h2 class="uploads__title" id="sample-media-uploads-title">{{ 'styleguide.sample.media.uploads.title' | transloco }}</h2>
+    <span class="uploads__summary" aria-live="polite">{{ summary() }}</span>
+    <sf-button
+      variant="ghost"
+      size="sm"
+      [icon]="collapsed() ? 'expand_less' : 'expand_more'"
+      [label]="(collapsed() ? 'styleguide.sample.media.uploads.expand' : 'styleguide.sample.media.uploads.collapse') | transloco"
+      [aria-expanded]="!collapsed()"
+      aria-controls="sample-media-uploads-list"
+      (click)="collapsed.set(!collapsed())"
+    />
+    @if (running() === 0) {
+      <sf-button
+        variant="ghost"
+        size="sm"
+        icon="close"
+        [label]="'styleguide.sample.media.uploads.close' | transloco"
+        (click)="state.clearUploads()"
+      />
+    }
+  </header>
+
+  <ul class="uploads__list" id="sample-media-uploads-list" [hidden]="collapsed()">
+    @for (upload of state.uploads(); track upload.id) {
+      <li class="upload" [class.upload--error]="upload.state === 'error'" [class.upload--done]="upload.state === 'done'">
+        <sf-icon
+          class="upload__icon"
+          [name]="upload.state === 'error' ? 'error' : upload.state === 'done' ? 'check_circle' : 'image'"
+        />
+        <div class="upload__main">
+          <div class="upload__line">
+            <span class="upload__name">{{ upload.name }}</span>
+            <span class="upload__size">{{ upload.sizeBytes | sfFileSize }}</span>
+          </div>
+          @switch (upload.state) {
+            @case ('uploading') {
+              <div
+                class="upload__bar"
+                role="progressbar"
+                aria-valuemin="0"
+                aria-valuemax="100"
+                [attr.aria-valuenow]="upload.progress"
+                [attr.aria-label]="'styleguide.sample.media.uploads.progress' | transloco: { name: upload.name }"
+              >
+                <span class="upload__fill" [style.inline-size.%]="upload.progress"></span>
+              </div>
+              <span class="upload__status">{{ 'styleguide.sample.media.uploads.percent' | transloco: { value: upload.progress } }}</span>
+            }
+            @case ('done') {
+              <span class="upload__status">{{ 'styleguide.sample.media.uploads.done' | transloco }}</span>
+            }
+            @default {
+              <span class="upload__status upload__status--error">{{ 'styleguide.sample.media.uploads.error' | transloco }}</span>
+            }
+          }
+        </div>
+        <div class="upload__actions">
+          @switch (upload.state) {
+            @case ('uploading') {
+              <sf-button
+                variant="ghost"
+                size="sm"
+                icon="close"
+                [label]="'styleguide.sample.media.uploads.cancel' | transloco: { name: upload.name }"
+                (click)="state.cancelUpload(upload.id)"
+              />
+            }
+            @case ('done') {
+              <sf-button variant="secondary" size="sm" (click)="addAltText(upload)">{{
+                'styleguide.sample.media.uploads.addAlt' | transloco
+              }}</sf-button>
+            }
+            @default {
+              <sf-button variant="secondary" size="sm" icon="refresh" (click)="state.retryUpload(upload.id)">{{
+                'styleguide.sample.media.uploads.retry' | transloco
+              }}</sf-button>
+            }
+          }
+        </div>
+      </li>
+    }
+  </ul>
+</section>

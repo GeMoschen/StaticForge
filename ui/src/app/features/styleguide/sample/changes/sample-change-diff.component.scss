@@ -1,0 +1,196 @@
+:host {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  border-inline-start: 1px solid var(--sf-border);
+  background: var(--sf-surface);
+}
+
+.diff__head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sf-space-2);
+  padding: var(--sf-space-3) var(--sf-space-4);
+  border-bottom: 1px solid var(--sf-border);
+}
+
+.diff__title-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sf-space-2);
+  min-width: 0;
+}
+
+.diff__type {
+  flex-shrink: 0;
+  color: var(--sf-text-subtle);
+  font-size: var(--sf-fs-18);
+}
+
+.diff__title {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  color: var(--sf-text);
+  font-size: var(--sf-fs-16);
+  line-height: var(--sf-lh-16);
+  font-weight: var(--sf-weight-semibold);
+  overflow-wrap: anywhere;
+}
+
+.diff__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sf-space-2);
+  color: var(--sf-text-muted);
+  font-size: var(--sf-fs-13);
+  line-height: var(--sf-lh-13);
+}
+
+.diff__tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sf-space-2);
+}
+
+.diff__legend {
+  flex: 1 1 auto;
+  color: var(--sf-text-subtle);
+  font-size: var(--sf-fs-12);
+  line-height: var(--sf-lh-12);
+}
+
+.diff__body {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: var(--sf-space-4);
+  min-height: 0;
+  overflow: auto;
+  padding: var(--sf-space-4);
+}
+
+.diff__note {
+  margin: 0;
+  padding: var(--sf-space-2) var(--sf-space-3);
+  border-radius: var(--sf-radius-md);
+  background: var(--sf-surface-sunken);
+  color: var(--sf-text-muted);
+  font-size: var(--sf-fs-13);
+  line-height: var(--sf-lh-13);
+}
+
+.diff__field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sf-space-1);
+}
+
+.diff__label {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sf-space-2);
+  margin: 0;
+  color: var(--sf-text-muted);
+  font-size: var(--sf-fs-12);
+  line-height: var(--sf-lh-12);
+  font-weight: var(--sf-weight-semibold);
+}
+
+.diff__unchanged {
+  color: var(--sf-text-subtle);
+  font-weight: var(--sf-weight-regular);
+}
+
+.diff__values {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--sf-space-2);
+
+  &--inline {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+  }
+}
+
+.diff__value {
+  display: flex;
+  gap: var(--sf-space-2);
+  min-width: 0;
+  padding: var(--sf-space-2);
+  border: 1px solid var(--sf-border);
+  border-radius: var(--sf-radius-sm);
+  background: var(--sf-bg);
+  color: var(--sf-text);
+  font-size: var(--sf-fs-13);
+  line-height: var(--sf-lh-13);
+
+  &--removed {
+    border-color: transparent;
+    background: var(--sf-danger-subtle);
+  }
+
+  &--added {
+    border-color: transparent;
+    background: var(--sf-success-subtle);
+  }
+
+  &--empty .diff__text {
+    color: var(--sf-text-subtle);
+    font-style: italic;
+  }
+}
+
+.diff__values--inline .diff__value {
+  border-radius: 0;
+
+  &:first-child {
+    border-start-start-radius: var(--sf-radius-sm);
+    border-start-end-radius: var(--sf-radius-sm);
+  }
+
+  &:last-child {
+    border-end-start-radius: var(--sf-radius-sm);
+    border-end-end-radius: var(--sf-radius-sm);
+  }
+}
+
+.diff__marker {
+  flex: 0 0 var(--sf-space-3);
+  color: var(--sf-text-muted);
+  font-family: var(--sf-font-mono);
+  font-weight: var(--sf-weight-semibold);
+}
+
+.diff__value--removed .diff__marker {
+  color: var(--sf-danger-text);
+}
+
+.diff__value--added .diff__marker {
+  color: var(--sf-success-text);
+}
+
+.diff__text {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+// Changed words: a stronger mark than the line plus an underline / strike-through, so not only colour tells.
+.diff__del {
+  border-radius: var(--sf-radius-sm);
+  background: var(--sf-danger-subtle);
+  color: var(--sf-danger-text);
+  text-decoration: line-through;
+  box-shadow: inset 0 -2px 0 var(--sf-danger);
+}
+
+.diff__ins {
+  border-radius: var(--sf-radius-sm);
+  background: var(--sf-success-subtle);
+  color: var(--sf-success-text);
+  text-decoration: none;
+  box-shadow: inset 0 -2px 0 var(--sf-success);
+}

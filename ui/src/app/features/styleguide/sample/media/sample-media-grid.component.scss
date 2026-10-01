@@ -1,0 +1,161 @@
+:host {
+  display: block;
+  overflow: auto;
+  padding-bottom: var(--sf-space-6);
+}
+
+.grid__row {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(10.5rem, 1fr));
+  gap: var(--sf-space-4);
+  padding: var(--sf-space-1);
+}
+
+// ── Card ─────────────────────────────────────────────────────────────────────
+.card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--sf-border);
+  border-radius: var(--sf-radius-md);
+  background: var(--sf-surface);
+  cursor: pointer;
+  transition:
+    border-color var(--sf-duration-fast) var(--sf-ease-standard),
+    box-shadow var(--sf-duration-fast) var(--sf-ease-standard);
+
+  &:hover {
+    border-color: var(--sf-border-strong);
+    box-shadow: var(--sf-elevation-1);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--sf-focus-ring);
+    outline-offset: 2px;
+  }
+
+  &.is-selected {
+    border-color: var(--sf-accent);
+    box-shadow: 0 0 0 1px var(--sf-accent);
+  }
+
+  &.is-open:not(.is-selected) {
+    border-color: var(--sf-accent);
+  }
+}
+
+.card__thumb {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  aspect-ratio: 4 / 3;
+  overflow: hidden;
+  background: var(--sf-surface-sunken);
+}
+
+// Transparent files (SVG, PNG) show a checkerboard behind them.
+.card__thumb--checker {
+  background: repeating-conic-gradient(var(--sf-surface-muted) 0 25%, var(--sf-surface) 0 50%) 0 0 / var(--sf-space-3)
+    var(--sf-space-3);
+}
+
+.card__thumb--page {
+  padding: var(--sf-space-2) 0 0;
+  align-items: flex-start;
+}
+
+.card__img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.card__img--contain {
+  object-fit: contain;
+  padding: var(--sf-space-2);
+}
+
+.card__thumb--page .card__img {
+  width: auto;
+  height: 100%;
+  padding: 0;
+  box-shadow: var(--sf-elevation-1);
+}
+
+.card__code {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: var(--sf-space-2) var(--sf-space-3);
+  overflow: hidden;
+  background: var(--sf-code-bg);
+  color: var(--sf-code-fg);
+  font-family: var(--sf-font-mono);
+  font-size: var(--sf-fs-12);
+  line-height: var(--sf-lh-12);
+  white-space: pre;
+}
+
+// The checkbox shows on hover, on focus and when selected.
+.card__check {
+  position: absolute;
+  inset-block-start: var(--sf-space-2);
+  inset-inline-start: var(--sf-space-2);
+  display: flex;
+  padding: var(--sf-space-1);
+  border-radius: var(--sf-radius-sm);
+  background: var(--sf-surface-raised);
+  box-shadow: var(--sf-elevation-1);
+  opacity: 0;
+  transition: opacity var(--sf-duration-fast) var(--sf-ease-standard);
+}
+
+.card:hover .card__check,
+.card:focus-within .card__check,
+.card.is-selected .card__check {
+  opacity: 1;
+}
+
+.card__status {
+  position: absolute;
+  inset-block-start: var(--sf-space-2);
+  inset-inline-end: var(--sf-space-2);
+  padding: var(--sf-space-1);
+  border-radius: var(--sf-radius-pill);
+  background: var(--sf-surface-raised);
+  box-shadow: var(--sf-elevation-1);
+}
+
+.card__text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sf-space-0);
+  min-width: 0;
+  padding: var(--sf-space-2) var(--sf-space-3);
+}
+
+// Long names truncate at the end only.
+.card__name {
+  overflow: hidden;
+  color: var(--sf-text);
+  font-size: var(--sf-fs-13);
+  line-height: var(--sf-lh-13);
+  font-weight: var(--sf-weight-medium);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.card__meta {
+  color: var(--sf-text-muted);
+  font-size: var(--sf-fs-12);
+  line-height: var(--sf-lh-12);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card,
+  .card__check {
+    transition: none;
+  }
+}

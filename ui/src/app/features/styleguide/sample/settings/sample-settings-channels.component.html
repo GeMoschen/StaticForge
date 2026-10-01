@@ -1,0 +1,69 @@
+<sf-page-header [title]="t('sections.channels')">
+  <ng-container sfPageHeaderActions>
+    <sf-button variant="secondary" icon="add" (click)="add()">{{ t('channels.add') }}</sf-button>
+    <sf-sample-settings-save [dirty]="state.channelsDirty()" (save)="save()" />
+  </ng-container>
+</sf-page-header>
+
+<p class="page__intro">{{ t('channels.intro') }}</p>
+
+<sf-data-table
+  class="page__table"
+  [columns]="columns()"
+  [rows]="state.channels()"
+  [rowKey]="rowKey"
+  [rowLabel]="rowLabel"
+  [label]="t('channels.tableLabel')"
+  [emptyTitle]="t('channels.empty')"
+  [columnChooser]="false"
+  (rowOpen)="edit($event)"
+>
+  <ng-template sfDataTableCell="key" [sfDataTableCellRows]="state.channels()" let-row>
+    <code class="cell-code">{{ row.key }}</code>
+  </ng-template>
+  <ng-template sfDataTableCell="name" [sfDataTableCellRows]="state.channels()" let-row>
+    <span class="cell-name__text">{{ row.name }}</span>
+  </ng-template>
+  <ng-template sfDataTableCell="enabled" [sfDataTableCellRows]="state.channels()" let-row>
+    <sf-switch
+      [value]="row.enabled"
+      [aria-label]="t('channels.enabledLabel', { name: row.name })"
+      (valueChange)="setEnabled(row, $event)"
+    />
+  </ng-template>
+  <ng-template sfDataTableCell="outputFolder" [sfDataTableCellRows]="state.channels()" let-row>
+    <code class="cell-code">{{ row.outputFolder }}</code>
+  </ng-template>
+</sf-data-table>
+
+@if (draft(); as d) {
+  <sf-drawer [title]="drawerTitle()" (closed)="close()">
+    <div class="form">
+      <sf-field [label]="t('channels.form.key')" [hint]="t('channels.form.keyHint')" required>
+        <sf-input monospace [value]="d.key" (valueChange)="patch({ key: $event })" />
+      </sf-field>
+      <sf-field [label]="t('channels.form.name')" required>
+        <sf-input [value]="d.name" (valueChange)="patch({ name: $event })" />
+      </sf-field>
+      <sf-field [hint]="t('channels.form.enabledHint')">
+        <sf-switch [value]="d.enabled" (valueChange)="patch({ enabled: $event })">{{ t('channels.form.enabled') }}</sf-switch>
+      </sf-field>
+      <sf-field [label]="t('channels.form.outputFolder')" [hint]="t('channels.form.outputFolderHint')">
+        <sf-input monospace [value]="d.outputFolder" (valueChange)="patch({ outputFolder: $event })" />
+      </sf-field>
+      <sf-field [label]="t('channels.form.extension')" [hint]="t('channels.form.extensionHint', { ext: d.extension || 'html' })">
+        <sf-input monospace [value]="d.extension" (valueChange)="patch({ extension: $event })" />
+      </sf-field>
+      <sf-field [label]="t('channels.form.highlightAs')" [hint]="t('channels.form.highlightAsHint')">
+        <sf-select [options]="highlightOptions()" [value]="d.highlightAs" (valueChange)="patch({ highlightAs: $event ?? 'text' })" />
+      </sf-field>
+    </div>
+    <ng-container sfDrawerFooter>
+      @if (d.original) {
+        <sf-button class="drawer__remove" variant="danger-ghost" icon="delete" (click)="remove()">{{ t('channels.remove') }}</sf-button>
+      }
+      <sf-button variant="secondary" (click)="close()">{{ t('cancel') }}</sf-button>
+      <sf-button [disabled]="!d.key || !d.name" (click)="apply()">{{ d.original ? t('apply') : t('channels.add') }}</sf-button>
+    </ng-container>
+  </sf-drawer>
+}
