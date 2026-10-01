@@ -158,6 +158,15 @@
 - **Rule:** a follow-up read after a save refreshes derived data but resets the form only while it is still unchanged
   since that save (compare against the dirty state before applying). Test it: save, type, then flush the reload.
 
+## jsdom lets a spec click a disabled button (2026-10-01)
+- **Mistake (found in M35.6):** two dataset-editor specs typed and then clicked Save at once. The button was still
+  disabled (the dirty state hadn't rendered yet), but jsdom dispatches `click` listeners on a disabled `<button>`, and
+  the event bubbled to the `(click)` on `<sf-button>`. The specs passed by doing what no user can; they broke as soon as
+  `sf-button` swallowed blocked clicks like a browser.
+- **Rule:** before a spec clicks a button that a state change enables, `await waitFor(() => expect(button).toBeEnabled())`.
+  A component that must not act while disabled/busy blocks the click itself (`sf-button` does), never relies on the
+  native `disabled` alone.
+
 ## `[hidden]` loses to `display` (2026-09-30)
 - **Mistake:** per-channel panels were switched with `[hidden]`, but their class set `display: flex`, which beats the
   UA's `[hidden] { display: none }` — every panel showed at once.

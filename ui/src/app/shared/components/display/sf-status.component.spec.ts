@@ -1,0 +1,36 @@
+import { render, screen } from '@testing-library/angular';
+import { describe, expect, it } from 'vitest';
+import { SfStatusComponent, SfStatusTone } from './sf-status.component';
+
+describe('SfStatusComponent', () => {
+  const tones: [SfStatusTone, string][] = [
+    ['neutral', 'radio_button_unchecked'],
+    ['info', 'info'],
+    ['success', 'check_circle'],
+    ['warning', 'warning'],
+    ['danger', 'error'],
+    ['accent', 'fiber_manual_record'],
+  ];
+
+  it.each(tones)('shows a %s status with its own icon next to the text', async (tone, icon) => {
+    await render(`<sf-status [tone]="tone" label="State" />`, {
+      imports: [SfStatusComponent],
+      componentProperties: { tone },
+    });
+
+    const status = screen.getByText('State').closest('sf-status')!;
+    expect(status).toHaveClass(`sf-status--${tone}`, 'sf-status--md');
+    const glyph = status.querySelector('.material-symbols-outlined')!;
+    expect(glyph.textContent?.trim()).toBe(icon);
+    // The icon is decoration: the text is what is read.
+    expect(glyph).toHaveAttribute('aria-hidden', 'true');
+  });
+
+  it('takes an icon override and the small size', async () => {
+    await render(`<sf-status tone="info" icon="sync" size="sm" label="Running" />`, { imports: [SfStatusComponent] });
+
+    const status = screen.getByText('Running').closest('sf-status')!;
+    expect(status).toHaveClass('sf-status--sm');
+    expect(status.querySelector('.material-symbols-outlined')?.textContent?.trim()).toBe('sync');
+  });
+});

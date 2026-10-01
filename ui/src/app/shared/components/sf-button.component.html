@@ -1,7 +1,75 @@
-<button
-  class="sf-button sf-button--{{ variant() }}"
-  [type]="type()"
-  [disabled]="disabled()"
->
-  <ng-content />
-</button>
+@if (isLink()) {
+  @if (link() !== null && !blocked()) {
+    <a
+      #element
+      [class]="classes()"
+      [routerLink]="link()"
+      [queryParams]="queryParams()"
+      [attr.target]="target()"
+      [attr.aria-label]="accessibleLabel()"
+      [attr.aria-current]="ariaCurrent()"
+      [attr.aria-describedby]="ariaDescribedBy()"
+      [attr.aria-keyshortcuts]="ariaKeyshortcuts()"
+      [sfTooltip]="tooltipText()"
+      [sfTooltipDescribes]="tooltipDescribes()"
+      (click)="onClick($event)"
+      ><ng-container *ngTemplateOutlet="content"
+    /></a>
+  } @else {
+    <a
+      #element
+      [class]="classes()"
+      [attr.href]="blocked() ? null : href()"
+      [attr.target]="target()"
+      [attr.rel]="target() === '_blank' ? 'noopener' : null"
+      [attr.role]="blocked() ? 'link' : null"
+      [attr.tabindex]="blocked() ? 0 : null"
+      [attr.aria-label]="accessibleLabel()"
+      [attr.aria-current]="ariaCurrent()"
+      [attr.aria-describedby]="ariaDescribedBy()"
+      [attr.aria-keyshortcuts]="ariaKeyshortcuts()"
+      [attr.aria-busy]="loading() || null"
+      [attr.aria-disabled]="blocked() || null"
+      [sfTooltip]="tooltipText()"
+      [sfTooltipDescribes]="tooltipDescribes()"
+      (click)="onClick($event)"
+      ><ng-container *ngTemplateOutlet="content"
+    /></a>
+  }
+} @else {
+  <button
+    #element
+    [class]="classes()"
+    [attr.type]="type()"
+    [disabled]="nativeDisabled()"
+    [attr.aria-disabled]="softDisabled() || loading() || null"
+    [attr.aria-busy]="loading() || null"
+    [attr.aria-label]="accessibleLabel()"
+    [attr.aria-expanded]="ariaExpanded()"
+    [attr.aria-controls]="ariaControls()"
+    [attr.aria-haspopup]="ariaHaspopup()"
+    [attr.aria-pressed]="ariaPressed()"
+    [attr.aria-current]="ariaCurrent()"
+    [attr.aria-describedby]="ariaDescribedBy()"
+    [attr.aria-keyshortcuts]="ariaKeyshortcuts()"
+    [sfTooltip]="tooltipText()"
+    [sfTooltipDescribes]="tooltipDescribes()"
+    (click)="onClick($event)"
+  >
+    <ng-container *ngTemplateOutlet="content" />
+  </button>
+}
+
+<ng-template #content>
+  @if (loading()) {
+    <span class="sf-button__spinner" aria-hidden="true"></span>
+  } @else if (icon()) {
+    <sf-icon class="sf-button__icon" [name]="icon()!" />
+  }
+  @if (!iconOnly()) {
+    <span class="sf-button__label"><ng-content /></span>
+    @if (iconTrailing()) {
+      <sf-icon class="sf-button__icon" [name]="iconTrailing()!" />
+    }
+  }
+</ng-template>

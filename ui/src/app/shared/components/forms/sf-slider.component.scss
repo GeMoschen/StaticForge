@@ -1,0 +1,108 @@
+:host {
+  display: block;
+}
+
+.sf-slider {
+  display: flex;
+  align-items: center;
+  gap: var(--sf-space-3);
+  min-height: var(--sf-control-height);
+}
+
+// The track: an accent part up to the thumb (`--slider-fill`, set by the component) and the rest in the border colour.
+@mixin track {
+  height: var(--sf-space-1);
+  border-radius: var(--sf-radius-pill);
+  background: linear-gradient(
+    to right,
+    var(--slider-track-on) 0 var(--slider-fill, 0%),
+    var(--slider-track-off) var(--slider-fill, 0%) 100%
+  );
+}
+
+@mixin thumb {
+  box-sizing: border-box;
+  width: var(--sf-space-4);
+  height: var(--sf-space-4);
+  border: 2px solid var(--sf-surface);
+  border-radius: 50%;
+  background: var(--slider-track-on);
+  box-shadow: var(--sf-elevation-1);
+  cursor: pointer;
+}
+
+.sf-slider__input {
+  --slider-track-on: var(--sf-accent);
+  --slider-track-off: var(--sf-border-strong);
+
+  flex: 1 1 auto;
+  min-width: 0;
+  height: var(--sf-control-height);
+  margin: 0;
+  background: transparent;
+  appearance: none;
+  cursor: pointer;
+
+  &::-webkit-slider-runnable-track {
+    @include track;
+  }
+
+  &::-moz-range-track {
+    @include track;
+  }
+
+  &::-webkit-slider-thumb {
+    @include thumb;
+
+    appearance: none;
+    margin-top: calc((var(--sf-space-1) - var(--sf-space-4)) / 2);
+  }
+
+  &::-moz-range-thumb {
+    @include thumb;
+  }
+
+  &:focus-visible {
+    outline: none;
+
+    &::-webkit-slider-thumb {
+      box-shadow: 0 0 0 2px var(--sf-surface), 0 0 0 4px var(--sf-focus-ring);
+    }
+
+    &::-moz-range-thumb {
+      box-shadow: 0 0 0 2px var(--sf-surface), 0 0 0 4px var(--sf-focus-ring);
+    }
+  }
+
+  &[aria-invalid='true'] {
+    --slider-track-on: var(--sf-danger);
+  }
+}
+
+// Read-only keeps the value fully visible but drops the accent, like the other read-only controls.
+.is-readonly .sf-slider__input {
+  --slider-track-on: var(--sf-text-muted);
+
+  cursor: default;
+}
+
+.is-disabled .sf-slider__input {
+  --slider-track-on: var(--sf-disabled-text);
+  --slider-track-off: var(--sf-disabled-bg);
+
+  cursor: not-allowed;
+}
+
+.sf-slider__value {
+  flex: 0 0 auto;
+  min-width: 3ch;
+  color: var(--sf-text);
+  font-size: var(--sf-fs-13);
+  line-height: var(--sf-lh-13);
+  font-variant-numeric: tabular-nums;
+  text-align: end;
+}
+
+.is-disabled .sf-slider__value {
+  color: var(--sf-disabled-text);
+}

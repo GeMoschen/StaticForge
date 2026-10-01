@@ -1,0 +1,123 @@
+:host {
+  display: block;
+  min-width: 0;
+}
+
+.sf-radio-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sf-space-1);
+}
+
+.sf-radio-group--horizontal {
+  flex-direction: row;
+  flex-wrap: wrap;
+  column-gap: var(--sf-space-4);
+}
+
+.sf-radio {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding-block: calc((var(--sf-row-height) - var(--sf-lh-13)) / 2);
+  box-sizing: border-box;
+  color: var(--sf-text);
+  font-family: var(--sf-font-ui);
+  font-size: var(--sf-fs-13);
+  line-height: var(--sf-lh-13);
+
+  &.is-disabled {
+    color: var(--sf-disabled-text);
+
+    .sf-radio__main {
+      cursor: not-allowed;
+    }
+
+    .sf-radio__description {
+      color: var(--sf-disabled-text);
+    }
+  }
+}
+
+.sf-radio__main {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: var(--sf-space-2);
+  cursor: pointer;
+
+  .is-readonly > & {
+    cursor: default;
+  }
+}
+
+// Lines up under the label text: the dot's width plus the gap.
+.sf-radio__description {
+  padding-inline-start: calc(1rem + var(--sf-space-2));
+  color: var(--sf-text-muted);
+  font-size: var(--sf-fs-12);
+  line-height: var(--sf-lh-12);
+}
+
+// The dot: the native radio without its native look; the inner dot is a currentColor disc.
+.sf-radio__dot {
+  appearance: none;
+  display: inline-grid;
+  place-content: center;
+  flex-shrink: 0;
+  width: 1rem;
+  height: 1rem;
+  margin: calc((var(--sf-lh-13) - 1rem) / 2) 0 0;
+  border: 1px solid var(--sf-border-strong);
+  border-radius: 50%;
+  background: var(--sf-surface);
+  color: var(--sf-accent);
+  cursor: inherit;
+  transition: border-color var(--sf-duration-fast) var(--sf-ease-standard);
+
+  &::before {
+    content: '';
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 50%;
+    background: currentColor;
+    transform: scale(0);
+    transition: transform var(--sf-duration-fast) var(--sf-ease-standard);
+  }
+
+  &:hover {
+    border-color: var(--sf-text-subtle);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--sf-focus-ring);
+    outline-offset: 1px;
+  }
+
+  &:checked {
+    border-color: var(--sf-accent);
+
+    &::before {
+      transform: scale(1);
+    }
+  }
+
+  &:disabled {
+    border-color: var(--sf-border);
+    background: var(--sf-disabled-bg);
+    color: var(--sf-disabled-text);
+  }
+}
+
+.sf-radio-group[aria-invalid='true'] .sf-radio__dot:not(:checked) {
+  border-color: var(--sf-danger);
+}
+
+// Read-only: the checked radio stays clearly readable in normal text colour on a quieter dot.
+.sf-radio-group[aria-readonly='true'] .sf-radio__dot {
+  background: var(--sf-bg);
+  color: var(--sf-text);
+
+  &:checked {
+    border-color: var(--sf-text-muted);
+  }
+}

@@ -224,6 +224,8 @@ describe('DatasetSchemaEditorComponent — record templates (M25.5.2)', () => {
     const { content } = await setup();
     await openTab(/^html/);
     typeCode(editor('html'), '<p/>');
+    // Save enables once the edit has rendered; a real click can't hit it earlier.
+    await waitFor(() => expect(saveButton().disabled).toBe(false));
     content.updateDataset.mockReturnValue(
       throwError(
         () =>
@@ -246,6 +248,8 @@ describe('DatasetSchemaEditorComponent — record templates (M25.5.2)', () => {
     const { content } = await setup();
     await openTab(/^html/);
     typeCode(editor('html'), '<li>$CMS_VALUE(role)$</li>');
+    // Save enables once the edit has rendered; a real click can't hit it earlier.
+    await waitFor(() => expect(saveButton().disabled).toBe(false));
     content.updateDataset.mockReturnValue(
       of({
         ...DATASET,

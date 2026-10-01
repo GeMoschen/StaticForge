@@ -1,0 +1,127 @@
+<div
+  #shell
+  class="sf-combobox"
+  [class.sf-combobox--multiple]="multiple()"
+  [class.is-invalid]="isInvalid()"
+  [class.is-readonly]="readonly()"
+  [class.is-disabled]="isDisabled()"
+  (click)="onShellClick($event)"
+>
+  @if (multiple()) {
+    @for (option of selectedOptions(); track $index; let i = $index) {
+      <sf-tag
+        class="sf-combobox__chip"
+        [label]="option.label"
+        [removable]="!readonly()"
+        [disabled]="isDisabled()"
+        (removed)="removeChip(i)"
+      />
+    }
+  }
+  <input
+    #input
+    type="text"
+    role="combobox"
+    class="sf-combobox__input"
+    autocomplete="off"
+    aria-autocomplete="list"
+    [id]="controlId()"
+    [value]="inputValue()"
+    [attr.placeholder]="placeholder()"
+    [readOnly]="readonly()"
+    [disabled]="isDisabled()"
+    [attr.aria-expanded]="open()"
+    [attr.aria-controls]="open() ? listId : null"
+    [attr.aria-activedescendant]="activeId()"
+    [attr.aria-label]="ariaLabel()"
+    [attr.aria-labelledby]="ariaLabelledBy()"
+    [attr.aria-describedby]="inputDescribedBy()"
+    [attr.aria-invalid]="isInvalid() || null"
+    [attr.aria-required]="isRequired() || null"
+    (input)="onInput($event)"
+    (keydown)="onKeydown($event)"
+    (blur)="onBlur()"
+  />
+  @let showOptions = 'shared.combobox.showOptions' | transloco;
+  <button
+    type="button"
+    class="sf-combobox__toggle"
+    tabindex="-1"
+    [disabled]="isDisabled() || readonly()"
+    [attr.aria-label]="showOptions"
+    [attr.aria-expanded]="open()"
+    [attr.aria-controls]="open() ? listId : null"
+    [sfTooltip]="showOptions"
+    [sfTooltipDescribes]="false"
+    (mousedown)="$event.preventDefault()"
+    (click)="toggleList()"
+  >
+    <sf-icon [name]="open() ? 'expand_less' : 'expand_more'" />
+  </button>
+</div>
+
+@if (open()) {
+  <div #panel class="sf-combobox__panel" [class.sf-combobox__panel--multiple]="multiple()">
+    <div
+      role="listbox"
+      class="sf-combobox__list"
+      [id]="listId"
+      [attr.aria-multiselectable]="multiple() || null"
+      [attr.aria-label]="ariaLabel()"
+      [attr.aria-labelledby]="groupLabelledBy()"
+    >
+      @for (section of sections(); track $index) {
+        @if (section.group !== null) {
+          <div role="group" class="sf-combobox__group" [attr.aria-label]="section.group">
+            <div class="sf-combobox__group-label" aria-hidden="true">{{ section.group }}</div>
+            <ng-container *ngTemplateOutlet="optionList; context: { $implicit: section.items }" />
+          </div>
+        } @else {
+          <ng-container *ngTemplateOutlet="optionList; context: { $implicit: section.items }" />
+        }
+      }
+    </div>
+    @if (loading()) {
+      <div class="sf-combobox__message">{{ 'shared.combobox.loading' | transloco }}</div>
+    } @else if (!filtered().length) {
+      <div class="sf-combobox__message">{{ 'shared.combobox.noResults' | transloco }}</div>
+    }
+  </div>
+}
+
+<div class="sf-sr-only" aria-live="polite" aria-atomic="true">
+  @if (open()) {
+    @if (loading()) {
+      {{ 'shared.combobox.loading' | transloco }}
+    } @else {
+      {{ 'shared.combobox.results' | transloco: { count: filtered().length } }}
+    }
+  }
+</div>
+@if (multiple() && values().length) {
+  <span class="sf-sr-only" [id]="selectionId">{{ 'shared.combobox.selected' | transloco: { count: values().length } }}</span>
+}
+
+<ng-template #optionList let-items>
+  @for (item of items; track item.index) {
+    <div
+      role="option"
+      class="sf-combobox__option"
+      [class.is-active]="item.index === activeIndex()"
+      [id]="optionId(item.index)"
+      [attr.aria-selected]="isSelected(item.option)"
+      [attr.aria-disabled]="item.option.disabled || null"
+      (mousedown)="$event.preventDefault()"
+      (mousemove)="hover(item.index)"
+      (click)="choose(item.option)"
+    >
+      <sf-icon class="sf-combobox__check" [name]="multiple() ? (isSelected(item.option) ? 'check_box' : 'check_box_outline_blank') : 'check'" />
+      <span class="sf-combobox__text">
+        <span class="sf-combobox__label">{{ item.option.label }}</span>
+        @if (item.option.description) {
+          <span class="sf-combobox__description">{{ item.option.description }}</span>
+        }
+      </span>
+    </div>
+  }
+</ng-template>

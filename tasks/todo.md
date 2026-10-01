@@ -10,7 +10,22 @@ every screen. Screen migration starts only after the style guide (M35.9) is sign
 - [x] M35.3 user preferences API + client store
 - [x] M35.4 Transloco setup + string extraction rules
 - [x] M35.5 design tokens v2, theme (light/dark/system), density
-- [ ] M35.6 base components and form controls
+- [x] M35.6 base components and form controls
+  - [x] Foundation: `SF_FIELD` context + `SfControl` base (CVA, ids, describedby, invalid, readonly), anchored
+        positioning util, `sfTooltip` (rewrite), `sf-button` v2 (backward compatible), minimal `sf-menu` (menu button —
+        M35.7 extends it with context menu/submenus), `shared.*` i18n keys
+  - [x] `sf-field` v2: `<label for>` instead of a wrapping `<label>`, required/optional, hint + error, `aria-describedby`/
+        `aria-invalid` (own controls via DI, projected native controls via DOM), group label for radios/checkboxes,
+        label top/inline
+  - [x] Text controls: input, textarea, select, number, date/time/datetime, search (clear,
+        Escape, `/`), color, file picker with drop zone
+  - [x] Choice controls: checkbox, radio group, switch, segmented, combobox (single/multi, type-ahead, ARIA 1.2)
+  - [x] Display: badge, status, tag, kbd, avatar, copyable, relative-time
+  - [x] `sf-tabs`: router mode (`<a>` + `aria-current`), overflow "More" menu
+  - [x] Layout: page-header, toolbar, section, empty-state v2, skeleton, banner; spinner styles out of inline `styles`
+  - [x] Verification: `npx vitest run`, `npx ng build`, `npm run lint`, components checked in a browser (themes, densities, popups in a clipping box)
+  - [x] Follow-up (user): slider, and a custom date/time picker (calendar dialog + time list) instead of the native pickers
+  - Review: see `35-m35-ui-ux-overhaul/006-base-components.md` (1,437 tests green, build + lint green, checked in Chrome)
 - [ ] M35.7 overlays: dialog, confirm, drawer, popover, menu, toast
 - [ ] M35.8 data table, tree, splitter
 - [ ] M35.9 style guide + **design gate (user sign-off)**

@@ -92,7 +92,7 @@
               <div class="cell-actions">
                 <sf-button
                   variant="ghost"
-                  [attr.aria-expanded]="store.expandedRunId() === run.id"
+                  [aria-expanded]="store.expandedRunId() === run.id"
                   (click)="store.toggleDetails(run)"
                 >
                   {{ store.expandedRunId() === run.id ? 'Hide details' : 'Details' }}

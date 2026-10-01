@@ -1,0 +1,189 @@
+@use '../../../design/forms' as forms;
+
+:host {
+  display: block;
+  min-width: 0;
+}
+
+.sf-combobox {
+  @include forms.sf-form-control-shell;
+
+  padding-inline-end: 0;
+  cursor: text;
+
+  &.is-disabled {
+    cursor: not-allowed;
+  }
+
+  &.is-readonly {
+    cursor: default;
+  }
+}
+
+.sf-combobox--multiple {
+  flex-wrap: wrap;
+  padding-block: calc(var(--sf-space-1) / 2);
+}
+
+.sf-combobox__input {
+  @include forms.sf-form-control-bare;
+
+  .sf-combobox--multiple & {
+    flex-basis: 4rem;
+    min-height: calc(var(--sf-control-height) - var(--sf-space-1) - 2px);
+  }
+}
+
+.sf-combobox__toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  align-self: stretch;
+  width: var(--sf-control-height-sm);
+  margin-inline-start: auto;
+  padding: 0;
+  border: none;
+  border-radius: 0 var(--sf-radius-md) var(--sf-radius-md) 0;
+  background: transparent;
+  color: var(--sf-text-muted);
+  font-size: var(--sf-fs-16);
+  cursor: pointer;
+
+  &:hover:not(:disabled) {
+    background: var(--sf-hover);
+    color: var(--sf-text);
+  }
+
+  &:disabled {
+    color: var(--sf-disabled-text);
+    cursor: inherit;
+  }
+}
+
+.sf-combobox.is-readonly .sf-combobox__toggle {
+  visibility: hidden;
+}
+
+.sf-combobox__panel {
+  position: fixed;
+  z-index: var(--sf-z-dropdown);
+  display: flex;
+  flex-direction: column;
+  max-width: min(32rem, calc(100vw - var(--sf-space-4)));
+  overflow-y: auto;
+  border: 1px solid var(--sf-border);
+  border-radius: var(--sf-radius-md);
+  background: var(--sf-surface-raised);
+  box-shadow: var(--sf-elevation-2);
+  box-sizing: border-box;
+}
+
+.sf-combobox__list {
+  padding: var(--sf-space-1) 0;
+
+  &:empty {
+    display: none;
+  }
+}
+
+.sf-combobox__group + .sf-combobox__group,
+.sf-combobox__option + .sf-combobox__group {
+  margin-top: var(--sf-space-1);
+  border-top: 1px solid var(--sf-border);
+}
+
+.sf-combobox__group-label {
+  padding: var(--sf-space-2) var(--sf-space-3) var(--sf-space-1);
+  color: var(--sf-text-muted);
+  font-size: var(--sf-fs-12);
+  font-weight: var(--sf-weight-semibold);
+  line-height: var(--sf-lh-12);
+}
+
+.sf-combobox__option {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sf-space-2);
+  min-height: var(--sf-row-height);
+  padding: calc((var(--sf-row-height) - var(--sf-lh-13)) / 2) var(--sf-space-3);
+  box-sizing: border-box;
+  color: var(--sf-text);
+  font-family: var(--sf-font-ui);
+  font-size: var(--sf-fs-13);
+  line-height: var(--sf-lh-13);
+  cursor: pointer;
+
+  &.is-active {
+    background: var(--sf-hover);
+    box-shadow: inset 2px 0 0 var(--sf-focus-ring);
+  }
+
+  &[aria-selected='true'] {
+    background: var(--sf-selection);
+  }
+
+  &[aria-disabled='true'] {
+    color: var(--sf-disabled-text);
+    cursor: not-allowed;
+
+    .sf-combobox__description {
+      color: var(--sf-disabled-text);
+    }
+  }
+}
+
+.sf-combobox__check {
+  flex-shrink: 0;
+  font-size: var(--sf-fs-16);
+  line-height: var(--sf-lh-13);
+  color: var(--sf-accent);
+}
+
+// Single choice: the check marks only the selected option (the icon keeps its space so labels line up).
+// The panel moves into <body> while open (anchorPanel), so these rules key on the panel's own modifier, never on the
+// combobox as an ancestor or sibling.
+.sf-combobox__panel:not(.sf-combobox__panel--multiple) .sf-combobox__option:not([aria-selected='true']) {
+  .sf-combobox__check {
+    visibility: hidden;
+  }
+}
+
+.sf-combobox__panel--multiple .sf-combobox__option {
+  &[aria-selected='true'] {
+    background: transparent;
+
+    &.is-active {
+      background: var(--sf-hover);
+    }
+  }
+
+  &:not([aria-selected='true']) .sf-combobox__check {
+    color: var(--sf-text-muted);
+  }
+}
+
+.sf-combobox__text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.sf-combobox__label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sf-combobox__description {
+  color: var(--sf-text-muted);
+  font-size: var(--sf-fs-12);
+  line-height: var(--sf-lh-12);
+}
+
+.sf-combobox__message {
+  padding: var(--sf-space-2) var(--sf-space-3);
+  color: var(--sf-text-muted);
+  font-size: var(--sf-fs-13);
+  line-height: var(--sf-lh-13);
+}

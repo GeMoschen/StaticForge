@@ -1,0 +1,26 @@
+:host {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sf-space-1);
+  min-inline-size: 0;
+  max-inline-size: 100%;
+  vertical-align: middle;
+}
+
+.sf-copyable__value {
+  min-inline-size: 0;
+  overflow: hidden;
+  padding: 0 var(--sf-space-1);
+  border-radius: var(--sf-radius-sm);
+  background: var(--sf-surface-sunken);
+  color: var(--sf-text-muted);
+  font-family: var(--sf-font-mono);
+  font-size: var(--sf-fs-12);
+  line-height: var(--sf-lh-12);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.sf-copyable__button {
+  flex-shrink: 0;
+}

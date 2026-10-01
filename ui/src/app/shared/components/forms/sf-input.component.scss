@@ -1,0 +1,23 @@
+@use '../../../design/forms' as forms;
+
+:host {
+  display: block;
+}
+
+.sf-input {
+  @include forms.sf-form-control-shell;
+}
+
+.sf-input__control {
+  @include forms.sf-form-control-bare;
+}
+
+.sf-input__control--mono {
+  font-family: var(--sf-font-mono);
+}
+
+.sf-input__icon {
+  flex-shrink: 0;
+  color: var(--sf-text-muted);
+  font-size: var(--sf-fs-16);
+}

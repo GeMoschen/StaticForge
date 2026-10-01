@@ -1,15 +1,80 @@
+:host {
+  display: block;
+}
+
 .sf-field {
   display: flex;
   flex-direction: column;
-  gap: var(--sf-1);
+  gap: var(--sf-space-1);
+  font-family: var(--sf-font-ui);
+}
+
+// Inline: label column beside the control, aligned with the control's first line.
+.sf-field--inline {
+  display: grid;
+  grid-template-columns: minmax(8rem, 12rem) minmax(0, 1fr);
+  column-gap: var(--sf-space-3);
+  align-items: start;
+
+  .sf-field__label {
+    min-height: var(--sf-control-height);
+    display: flex;
+    align-items: center;
+  }
 }
 
 .sf-field__label {
-  font-size: var(--sf-text-sm);
-  color: var(--sf-slate);
+  color: var(--sf-text);
+  font-size: var(--sf-fs-13);
+  line-height: var(--sf-lh-13);
+  font-weight: var(--sf-weight-medium);
+}
+
+.sf-field__required {
+  margin-inline-start: var(--sf-space-1);
+  color: var(--sf-danger-text);
+}
+
+.sf-field__optional {
+  margin-inline-start: var(--sf-space-1);
+  color: var(--sf-text-subtle);
+  font-weight: var(--sf-weight-regular);
+}
+
+.sf-field__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sf-space-1);
+  min-width: 0;
+}
+
+.sf-field__control {
+  min-width: 0;
+}
+
+.sf-field__hint,
+.sf-field__error {
+  margin: 0;
+  font-size: var(--sf-fs-12);
+  line-height: var(--sf-lh-12);
 }
 
 .sf-field__hint {
-  font-size: var(--sf-text-xs);
-  color: var(--sf-slate);
+  color: var(--sf-text-muted);
+}
+
+.sf-field__error {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sf-space-1);
+  color: var(--sf-danger-text);
+}
+
+.sf-field__error[hidden] {
+  display: none;
+}
+
+.sf-field__error-icon {
+  flex-shrink: 0;
+  font-size: var(--sf-fs-14);
 }

@@ -1,0 +1,57 @@
+:host {
+  --avatar-size: var(--sf-control-height);
+
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  inline-size: var(--avatar-size);
+  block-size: var(--avatar-size);
+  overflow: hidden;
+  border-radius: var(--sf-radius-pill);
+  font-family: var(--sf-font-ui);
+  font-size: var(--sf-fs-13);
+  line-height: 1;
+  font-weight: var(--sf-weight-semibold);
+  vertical-align: middle;
+  user-select: none;
+}
+
+:host(.sf-avatar--sm) {
+  --avatar-size: var(--sf-space-6);
+
+  font-size: var(--sf-fs-12);
+}
+
+:host(.sf-avatar--lg) {
+  --avatar-size: var(--sf-space-12);
+
+  font-size: var(--sf-fs-18);
+}
+
+.sf-avatar__image {
+  inline-size: 100%;
+  block-size: 100%;
+  object-fit: cover;
+}
+
+// Colour pairs picked by a hash of the name (keep TONE_COUNT in the component in step).
+:host(.sf-avatar--tone-0) {
+  background: var(--sf-accent-subtle);
+  color: var(--sf-accent);
+}
+
+:host(.sf-avatar--tone-1) {
+  background: var(--sf-info-subtle);
+  color: var(--sf-info-text);
+}
+
+:host(.sf-avatar--tone-2) {
+  background: var(--sf-success-subtle);
+  color: var(--sf-success-text);
+}
+
+:host(.sf-avatar--tone-3) {
+  background: var(--sf-warning-subtle);
+  color: var(--sf-warning-text);
+}

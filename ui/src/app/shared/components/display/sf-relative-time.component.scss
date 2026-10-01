@@ -1,0 +1,9 @@
+:host {
+  display: inline;
+}
+
+.sf-relative-time {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  border-radius: var(--sf-radius-sm);
+}

@@ -1,9 +1,37 @@
-<label class="sf-field">
+<div class="sf-field" [class.sf-field--inline]="labelPosition() === 'inline'">
   @if (label()) {
-    <span class="sf-field__label">{{ label() }}</span>
+    @if (labelFor(); as target) {
+      <label class="sf-field__label" [id]="labelId" [for]="target">
+        {{ label() }}<ng-container *ngTemplateOutlet="marker" />
+      </label>
+    } @else {
+      <span class="sf-field__label" [id]="labelId">{{ label() }}<ng-container *ngTemplateOutlet="marker" /></span>
+    }
   }
-  <ng-content />
-  @if (hint()) {
-    <span class="sf-field__hint">{{ hint() }}</span>
+  <div class="sf-field__body">
+    <div
+      #slot
+      class="sf-field__control"
+      [attr.role]="slotIsGroup() ? 'group' : null"
+      [attr.aria-labelledby]="slotIsGroup() ? labelId : null"
+      [attr.aria-describedby]="slotIsGroup() ? describedBy() : null"
+    >
+      <ng-content />
+    </div>
+    @if (hint()) {
+      <p class="sf-field__hint" [id]="hintId">{{ hint() }}</p>
+    }
+    <p class="sf-field__error" [id]="errorId" [hidden]="!hasError()">
+      <sf-icon class="sf-field__error-icon" name="error" />
+      <span>{{ error() }}<ng-content select="[sfFieldError]" /></span>
+    </p>
+  </div>
+</div>
+
+<ng-template #marker>
+  @if (required()) {
+    <span class="sf-field__required" aria-hidden="true">*</span>
+  } @else if (optional()) {
+    <span class="sf-field__optional">{{ 'shared.field.optional' | transloco }}</span>
   }
-</label>
+</ng-template>

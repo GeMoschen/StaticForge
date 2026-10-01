@@ -1,0 +1,31 @@
+:host {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sf-space-1);
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.sf-kbd__chord {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+  font: inherit;
+}
+
+.sf-kbd__key {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-inline-size: var(--sf-lh-12);
+  padding: 0 var(--sf-space-1);
+  border: 1px solid var(--sf-border);
+  box-shadow: inset 0 -1px 0 var(--sf-border);
+  border-radius: var(--sf-radius-sm);
+  background: var(--sf-surface-sunken);
+  color: var(--sf-text-muted);
+  font-family: var(--sf-font-ui);
+  font-size: var(--sf-fs-12);
+  line-height: var(--sf-lh-12);
+  font-weight: var(--sf-weight-medium);
+}

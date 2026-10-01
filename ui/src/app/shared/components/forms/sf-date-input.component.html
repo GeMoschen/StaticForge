@@ -1,0 +1,144 @@
+<div
+  #shell
+  class="sf-date-input"
+  [class.is-invalid]="dateInvalid() || timeInvalid()"
+  [class.is-readonly]="readonly()"
+  [class.is-disabled]="isDisabled()"
+>
+  @if (hasDate()) {
+    <input
+      #dateInput
+      class="sf-date-input__field sf-date-input__date"
+      type="text"
+      inputmode="numeric"
+      autocomplete="off"
+      spellcheck="false"
+      [id]="controlId()"
+      [value]="dateText()"
+      [placeholder]="datePlaceholder()"
+      [readOnly]="readonly()"
+      [disabled]="isDisabled()"
+      [required]="isRequired()"
+      [attr.aria-label]="ariaLabel()"
+      [attr.aria-labelledby]="ariaLabelledBy()"
+      [attr.aria-describedby]="dateDescribedBy()"
+      [attr.aria-invalid]="dateInvalid() || null"
+      [attr.aria-required]="isRequired() || null"
+      (input)="onDateInput($event)"
+      (blur)="onDateBlur()"
+      (keydown)="onDateKeydown($event)"
+    />
+    <sf-button
+      #calendarButton
+      class="sf-date-input__button"
+      variant="ghost"
+      size="sm"
+      icon="calendar_month"
+      [label]="'shared.datePicker.chooseDate' | transloco"
+      [disabled]="blocked()"
+      aria-haspopup="dialog"
+      [aria-expanded]="calendarOpen()"
+      [aria-controls]="calendarOpen() ? ids.dialog : null"
+      (click)="toggleCalendar()"
+    />
+    <span class="sf-sr-only" [id]="ids.dateHint">{{
+      'shared.datePicker.formatHint' | transloco: { example: pattern().example }
+    }}</span>
+  }
+  @if (hasTime()) {
+    @if (hasDate()) {
+      <span class="sf-date-input__divider" aria-hidden="true"></span>
+      <span hidden [id]="ids.timeWord">{{ 'shared.datePicker.time' | transloco }}</span>
+      @if (ariaLabel()) {
+        <span hidden [id]="ids.ownLabel">{{ ariaLabel() }}</span>
+      }
+    }
+    <input
+      #timeInput
+      class="sf-date-input__field sf-date-input__time"
+      [class.sf-date-input__time--alone]="!hasDate()"
+      type="text"
+      autocomplete="off"
+      spellcheck="false"
+      role="combobox"
+      aria-autocomplete="none"
+      aria-haspopup="listbox"
+      [id]="hasDate() ? ids.time : controlId()"
+      [value]="timeText()"
+      [placeholder]="timePlaceholder()"
+      [readOnly]="readonly()"
+      [disabled]="isDisabled()"
+      [required]="isRequired()"
+      [attr.aria-label]="hasDate() ? null : ariaLabel()"
+      [attr.aria-labelledby]="hasDate() ? timeLabelledBy() : ariaLabelledBy()"
+      [attr.aria-describedby]="timeDescribedBy()"
+      [attr.aria-invalid]="timeInvalid() || null"
+      [attr.aria-required]="isRequired() || null"
+      [attr.aria-expanded]="timesOpen()"
+      [attr.aria-controls]="timesOpen() ? ids.times : null"
+      [attr.aria-activedescendant]="timesOpen() && activeTime() >= 0 ? timeOptions()[activeTime()].id : null"
+      (input)="onTimeInput($event)"
+      (blur)="onTimeBlur()"
+      (keydown)="onTimeKeydown($event)"
+    />
+    <button
+      type="button"
+      class="sf-date-input__icon-button"
+      tabindex="-1"
+      [disabled]="blocked()"
+      [attr.aria-label]="'shared.datePicker.chooseTime' | transloco"
+      (click)="toggleTimes()"
+    >
+      <sf-icon name="schedule" />
+    </button>
+    <span class="sf-sr-only" [id]="ids.timeHint">{{
+      'shared.datePicker.timeFormatHint' | transloco: { example: timeExample() }
+    }}</span>
+  }
+</div>
+
+@if (calendarOpen()) {
+  <div
+    #calendarPanel
+    class="sf-date-input__panel sf-date-input__dialog"
+    role="dialog"
+    aria-modal="true"
+    [id]="ids.dialog"
+    [attr.aria-label]="'shared.datePicker.dialog' | transloco"
+    (keydown)="onDialogKeydown($event)"
+  >
+    <sf-calendar [value]="calendarValue()" [min]="calendarMin()" [max]="calendarMax()" (picked)="pickDate($event)" />
+    <div class="sf-date-input__footer">
+      <sf-button variant="ghost" size="sm" [disabled]="!todayInRange()" (click)="pickToday()">{{
+        'shared.datePicker.today' | transloco
+      }}</sf-button>
+      @if (!isRequired()) {
+        <sf-button variant="ghost" size="sm" (click)="clearDate()">{{ 'shared.datePicker.clear' | transloco }}</sf-button>
+      }
+    </div>
+  </div>
+}
+
+@if (timesOpen()) {
+  <ul
+    #timesPanel
+    class="sf-date-input__panel sf-date-input__times"
+    role="listbox"
+    [id]="ids.times"
+    [attr.aria-label]="'shared.datePicker.times' | transloco"
+  >
+    @for (option of timeOptions(); track option.minutes; let index = $index) {
+      <li
+        class="sf-date-input__time-option"
+        role="option"
+        [id]="option.id"
+        [class.is-active]="index === activeTime()"
+        [attr.aria-selected]="option.minutes === selectedMinutes()"
+        (mousedown)="$event.preventDefault()"
+        (click)="pickTime(index)"
+      >
+        {{ option.label }}
+      </li>
+    }
+  </ul>
+}

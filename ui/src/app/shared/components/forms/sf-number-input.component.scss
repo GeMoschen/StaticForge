@@ -1,0 +1,22 @@
+@use '../../../design/forms' as forms;
+
+:host {
+  display: block;
+}
+
+.sf-number-input {
+  @include forms.sf-form-control-shell;
+}
+
+.sf-number-input__control {
+  @include forms.sf-form-control-bare;
+
+  font-variant-numeric: tabular-nums;
+}
+
+.sf-number-input__unit {
+  flex-shrink: 0;
+  color: var(--sf-text-muted);
+  font-size: var(--sf-fs-13);
+  line-height: var(--sf-lh-13);
+}

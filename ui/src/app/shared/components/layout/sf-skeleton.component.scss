@@ -1,0 +1,105 @@
+:host {
+  display: block;
+  min-inline-size: 0;
+}
+
+.sf-skeleton__shapes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sf-space-2);
+}
+
+.sf-skeleton--row .sf-skeleton__shapes,
+.sf-skeleton--tree .sf-skeleton__shapes,
+.sf-skeleton--table .sf-skeleton__shapes {
+  gap: 0;
+}
+
+.sf-skeleton--form .sf-skeleton__shapes {
+  gap: var(--sf-gap);
+}
+
+// A shimmering block: the border tone with a lighter band (towards the surface) sweeping across.
+.sf-skeleton__block {
+  display: block;
+  border-radius: var(--sf-radius-sm);
+  background: linear-gradient(
+    90deg,
+    var(--sf-border) 25%,
+    color-mix(in srgb, var(--sf-border) 45%, transparent) 50%,
+    var(--sf-border) 75%
+  );
+  background-size: 200% 100%;
+  animation: sf-skeleton-shimmer 1.4s ease-in-out infinite;
+}
+
+.sf-skeleton__bar {
+  block-size: var(--sf-fs-12);
+  max-inline-size: 100%;
+}
+
+.sf-skeleton__line {
+  block-size: var(--sf-fs-13);
+  margin-block: calc((var(--sf-lh-13) - var(--sf-fs-13)) / 2);
+}
+
+.sf-skeleton__icon {
+  flex-shrink: 0;
+  inline-size: var(--sf-fs-16);
+  block-size: var(--sf-fs-16);
+}
+
+.sf-skeleton__row {
+  display: flex;
+  align-items: center;
+  gap: var(--sf-space-2);
+  block-size: var(--sf-row-height);
+  padding-inline: var(--sf-pad-cell-x);
+
+  .sf-skeleton__bar {
+    flex: 0 1 auto;
+  }
+}
+
+.sf-skeleton__row[data-indent='1'] {
+  padding-inline-start: calc(var(--sf-pad-cell-x) + var(--sf-space-4));
+}
+
+.sf-skeleton__row[data-indent='2'] {
+  padding-inline-start: calc(var(--sf-pad-cell-x) + var(--sf-space-8));
+}
+
+.sf-skeleton__table-row {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  align-items: center;
+  gap: var(--sf-pad-cell-x);
+  block-size: var(--sf-table-row-height);
+  padding-inline: var(--sf-pad-cell-x);
+  border-block-end: 1px solid var(--sf-border);
+}
+
+.sf-skeleton__table-row--head {
+  background: var(--sf-surface-sunken);
+}
+
+.sf-skeleton__field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sf-space-1);
+}
+
+.sf-skeleton__control {
+  block-size: var(--sf-control-height);
+  border-radius: var(--sf-radius-md);
+}
+
+@keyframes sf-skeleton-shimmer {
+  from {
+    background-position: 100% 0;
+  }
+
+  to {
+    background-position: -100% 0;
+  }
+}

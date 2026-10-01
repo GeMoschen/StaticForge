@@ -1,7 +1,6 @@
-// Shared form-control visual language, `@use`d from feature components that
-// own their own <input>/<select>/<textarea> markup (sf-field is a thin
-// label wrapper and doesn't style the control itself).
-// Height and padding follow the density (data-density on <html>).
+// Shared form-control visual language. The M35.6 controls (`shared/components/forms/`) and feature components that
+// still own native <input>/<select>/<textarea> markup `@use` this. Height and padding follow the density
+// (data-density on <html>); every colour is a semantic token, so both themes follow.
 
 @mixin sf-form-control {
   width: 100%;
@@ -29,18 +28,98 @@
 
   &:focus-visible {
     border-color: var(--sf-focus-ring);
-    box-shadow: 0 0 0 2px var(--sf-focus-ring);
+    box-shadow: 0 0 0 1px var(--sf-focus-ring);
     outline: none;
   }
 
-  &:disabled,
+  &[aria-invalid='true'] {
+    border-color: var(--sf-danger);
+
+    &:focus-visible {
+      box-shadow: 0 0 0 1px var(--sf-danger);
+    }
+  }
+
+  // Read-only stays fully readable (normal text colour, both themes); only the page-background fill and the quieter
+  // border say it can't be edited. (Not surface-sunken: that is near-black in dark mode and looks emphasised.)
   &[readonly] {
-    background: var(--sf-disabled-bg);
-    color: var(--sf-text-muted);
+    background: var(--sf-bg);
+    border-color: var(--sf-border);
+    color: var(--sf-text);
   }
 
   &:disabled {
+    background: var(--sf-disabled-bg);
+    border-color: var(--sf-border);
     color: var(--sf-disabled-text);
+    cursor: not-allowed;
+  }
+}
+
+// The same look on a wrapper that holds an input plus adornments (icons, clear button, chips): the wrapper draws the
+// border, the inner input is borderless. State classes: --focus (inner input focused), --invalid, --readonly,
+// --disabled.
+@mixin sf-form-control-shell {
+  display: flex;
+  align-items: center;
+  gap: var(--sf-space-1);
+  width: 100%;
+  min-height: var(--sf-control-height);
+  padding: 0 var(--sf-pad-control-x);
+  border: 1px solid var(--sf-border-strong);
+  border-radius: var(--sf-radius-md);
+  background: var(--sf-surface);
+  color: var(--sf-text);
+  box-sizing: border-box;
+  transition:
+    border-color var(--sf-duration-fast) var(--sf-ease-standard),
+    box-shadow var(--sf-duration-fast) var(--sf-ease-standard);
+
+  &:hover {
+    border-color: var(--sf-text-subtle);
+  }
+
+  &:focus-within {
+    border-color: var(--sf-focus-ring);
+    box-shadow: 0 0 0 1px var(--sf-focus-ring);
+  }
+
+  &.is-invalid {
+    border-color: var(--sf-danger);
+  }
+
+  &.is-readonly {
+    background: var(--sf-bg);
+    border-color: var(--sf-border);
+  }
+
+  &.is-disabled {
+    background: var(--sf-disabled-bg);
+    border-color: var(--sf-border);
+    color: var(--sf-disabled-text);
+    cursor: not-allowed;
+  }
+}
+
+// The borderless input inside a shell.
+@mixin sf-form-control-bare {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: calc(var(--sf-control-height) - 2px);
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font-family: var(--sf-font-ui);
+  font-size: var(--sf-fs-13);
+  line-height: var(--sf-lh-13);
+  outline: none;
+
+  &::placeholder {
+    color: var(--sf-text-subtle);
+  }
+
+  &:disabled {
     cursor: not-allowed;
   }
 }

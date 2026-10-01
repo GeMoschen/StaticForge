@@ -310,7 +310,9 @@
     },
     "tabs": {
       "errors": "{count, plural, one {error} other {errors}}",
-      "unsaved": "(unsaved)"
+      "unsaved": "(unsaved)",
+      "more": "More",
+      "moreLabel": "More tabs"
     },
     "codeEditor": {
       "goToPosition": "Go to line {line}, column {column}",
@@ -318,6 +320,107 @@
     },
     "revisionSummary": {
       "moreAssets": "{base} · {count} assets"
+    },
+    "field": {
+      "optional": "(optional)"
+    },
+    "search": {
+      "clear": "Clear search",
+      "placeholder": "Search…",
+      "shortcut": "Press / to search"
+    },
+    "combobox": {
+      "noResults": "No matches",
+      "loading": "Loading…",
+      "remove": "Remove {label}",
+      "showOptions": "Show options",
+      "selected": "{count, plural, one {# selected} other {# selected}}",
+      "results": "{count, plural, =0 {No matches} one {# option} other {# options}}"
+    },
+    "fileDrop": {
+      "prompt": "Drop a file here or",
+      "promptMultiple": "Drop files here or",
+      "choose": "Choose a file",
+      "chooseMultiple": "Choose files",
+      "remove": "Remove {name}",
+      "rejectedType": "{name} is not an accepted file type.",
+      "tooLarge": "{name} is larger than {max}.",
+      "dropping": "Release to add"
+    },
+    "color": {
+      "hex": "Hex value",
+      "picker": "Pick a colour"
+    },
+    "tag": {
+      "remove": "Remove {label}"
+    },
+    "copyable": {
+      "copy": "Copy",
+      "copyLabel": "Copy {label}",
+      "copied": "Copied",
+      "failed": "Copy failed"
+    },
+    "banner": {
+      "dismiss": "Dismiss",
+      "tone": {
+        "info": "Information",
+        "success": "Success",
+        "warning": "Warning",
+        "danger": "Error"
+      }
+    },
+    "pageHeader": {
+      "moreActions": "More actions"
+    },
+    "kbd": {
+      "ctrl": "Ctrl",
+      "cmd": "⌘",
+      "alt": "Alt",
+      "option": "⌥",
+      "shift": "Shift",
+      "enter": "Enter",
+      "escape": "Esc",
+      "space": "Space",
+      "tab": "Tab",
+      "backspace": "Backspace",
+      "delete": "Del",
+      "up": "↑",
+      "down": "↓",
+      "left": "←",
+      "right": "→",
+      "cmdName": "Command",
+      "optionName": "Option",
+      "upName": "Up arrow",
+      "downName": "Down arrow",
+      "leftName": "Left arrow",
+      "rightName": "Right arrow",
+      "then": "then"
+    },
+    "avatar": {
+      "unknown": "Unknown user"
+    },
+    "datePicker": {
+      "chooseDate": "Choose date",
+      "chooseTime": "Choose time",
+      "dialog": "Choose a date",
+      "times": "Times",
+      "time": "Time",
+      "previousMonth": "Previous month",
+      "nextMonth": "Next month",
+      "previousYear": "Previous year",
+      "nextYear": "Next year",
+      "today": "Today",
+      "clear": "Clear",
+      "formatHint": "Format: {example}",
+      "timeFormatHint": "Format: {example}",
+      "outOfRange": "Outside the allowed dates",
+      "placeholder": {
+        "day": "DD",
+        "month": "MM",
+        "year": "YYYY",
+        "time24": "hh:mm",
+        "time12": "hh:mm AM"
+      }
     }
   },
   "shell": {

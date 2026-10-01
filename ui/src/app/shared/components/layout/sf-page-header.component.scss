@@ -1,0 +1,62 @@
+:host {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sf-space-1);
+  min-inline-size: 0;
+  font-family: var(--sf-font-ui);
+}
+
+.sf-page-header__main {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--sf-space-2) var(--sf-space-4);
+  min-inline-size: 0;
+}
+
+.sf-page-header__heading {
+  display: flex;
+  flex: 1 1 16rem;
+  flex-direction: column;
+  gap: var(--sf-space-1);
+  min-inline-size: 0;
+}
+
+.sf-page-header__title-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sf-space-2);
+  min-inline-size: 0;
+  min-block-size: var(--sf-control-height);
+}
+
+.sf-page-header__title {
+  min-inline-size: 0;
+  margin: 0;
+  color: var(--sf-text);
+  font-size: var(--sf-fs-20);
+  line-height: var(--sf-lh-20);
+  font-weight: var(--sf-weight-semibold);
+  // Wraps instead of truncating: a cut-off title couldn't be read in full by keyboard or touch.
+  overflow-wrap: anywhere;
+}
+
+.sf-page-header__subtitle {
+  margin: 0;
+  color: var(--sf-text-muted);
+  font-size: var(--sf-fs-13);
+  line-height: var(--sf-lh-13);
+}
+
+.sf-page-header__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sf-space-2);
+  min-block-size: var(--sf-control-height);
+
+  &:empty {
+    display: none;
+  }
+}

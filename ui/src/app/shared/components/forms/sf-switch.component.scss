@@ -1,0 +1,113 @@
+:host {
+  display: inline-flex;
+  min-width: 0;
+}
+
+.sf-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sf-space-2);
+  min-height: var(--sf-row-height);
+  padding: 0;
+  border: none;
+  border-radius: var(--sf-radius-sm);
+  background: transparent;
+  color: var(--sf-text);
+  font-family: var(--sf-font-ui);
+  font-size: var(--sf-fs-13);
+  line-height: var(--sf-lh-13);
+  text-align: start;
+  cursor: pointer;
+
+  &:focus-visible {
+    outline: none;
+
+    .sf-switch__track {
+      outline: 2px solid var(--sf-focus-ring);
+      outline-offset: 1px;
+    }
+  }
+
+  &:hover .sf-switch__track {
+    border-color: var(--sf-text-subtle);
+  }
+
+  &.is-readonly {
+    cursor: default;
+  }
+
+  &:disabled {
+    color: var(--sf-disabled-text);
+    cursor: not-allowed;
+  }
+}
+
+.sf-switch__text:empty {
+  display: none;
+}
+
+.sf-switch__track {
+  position: relative;
+  flex-shrink: 0;
+  width: 1.75rem;
+  height: 1rem;
+  border: 1px solid var(--sf-border-strong);
+  border-radius: var(--sf-radius-pill);
+  background: var(--sf-surface-sunken);
+  box-sizing: border-box;
+  transition:
+    background-color var(--sf-duration-fast) var(--sf-ease-standard),
+    border-color var(--sf-duration-fast) var(--sf-ease-standard);
+}
+
+.sf-switch__thumb {
+  position: absolute;
+  top: 1px;
+  left: 1px;
+  width: 0.75rem;
+  height: 0.75rem;
+  border-radius: 50%;
+  background: var(--sf-text-muted);
+  transition:
+    transform var(--sf-duration-fast) var(--sf-ease-standard),
+    background-color var(--sf-duration-fast) var(--sf-ease-standard);
+}
+
+.sf-switch[aria-checked='true'] {
+  .sf-switch__track {
+    border-color: var(--sf-accent);
+    background: var(--sf-accent);
+  }
+
+  .sf-switch__thumb {
+    background: var(--sf-on-accent);
+    transform: translateX(0.75rem);
+  }
+}
+
+.sf-switch.is-invalid .sf-switch__track {
+  border-color: var(--sf-danger);
+}
+
+// Read-only: on/off stays readable (thumb position and normal text), without the accent fill of an editable switch.
+.sf-switch.is-readonly {
+  .sf-switch__track {
+    border-color: var(--sf-border-strong);
+    background: var(--sf-bg);
+  }
+
+  .sf-switch__thumb {
+    background: var(--sf-text);
+  }
+}
+
+.sf-switch:disabled {
+  .sf-switch__track {
+    border-color: var(--sf-border);
+    background: var(--sf-disabled-bg);
+  }
+
+  .sf-switch__thumb {
+    background: var(--sf-disabled-text);
+  }
+}

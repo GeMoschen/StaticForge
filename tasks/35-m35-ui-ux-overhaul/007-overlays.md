@@ -36,7 +36,10 @@ and 12.
 - **`sf-drawer`:** right side, modal or non-modal, resizable through the splitter (M35.8), used for detail and history.
 - **`sf-popover`:** anchored, click- or focus-triggered, `Escape` and outside click close it, and it closes on route
   change.
-- **`sf-menu`:**
+- **`sf-menu`:** M35.6 already built the menu button (`shared/components/menu/sf-menu.component.ts`: items with icon,
+  disabled, danger, separator, router link; arrow keys, Home/End, type-ahead, Escape/Tab/outside click, focus restore)
+  and the anchored positioning (`shared/overlay/anchored-position.ts`), because tab overflow and the page header need
+  them. Extend those rather than starting a second menu.
   - Menu button (⋮ or labelled), context menu (right click, `Shift+F10`, the ContextMenu key), submenus, and item
     groups with separators.
   - Items: icons, disabled with a reason, shortcut hints, danger items.

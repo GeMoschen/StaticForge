@@ -1,0 +1,49 @@
+@use '../../../design/forms' as forms;
+
+:host {
+  display: block;
+}
+
+.sf-search-input {
+  @include forms.sf-form-control-shell;
+
+  padding-inline-end: var(--sf-space-1);
+}
+
+.sf-search-input__control {
+  @include forms.sf-form-control-bare;
+
+  // The component draws its own clear button.
+  appearance: none;
+
+  &::-webkit-search-cancel-button,
+  &::-webkit-search-decoration {
+    appearance: none;
+    display: none;
+  }
+}
+
+.sf-search-input__icon {
+  flex-shrink: 0;
+  color: var(--sf-text-muted);
+  font-size: var(--sf-fs-16);
+}
+
+.sf-search-input__clear {
+  flex-shrink: 0;
+}
+
+.sf-search-input__hint {
+  flex-shrink: 0;
+  min-width: var(--sf-space-5);
+  margin-inline-end: var(--sf-space-1);
+  padding: 0 var(--sf-space-1);
+  border: 1px solid var(--sf-border);
+  border-radius: var(--sf-radius-sm);
+  background: var(--sf-surface-sunken);
+  color: var(--sf-text-muted);
+  font-family: var(--sf-font-mono);
+  font-size: var(--sf-fs-12);
+  line-height: var(--sf-lh-12);
+  text-align: center;
+}

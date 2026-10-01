@@ -1,0 +1,75 @@
+<div class="sf-tabs">
+  @if (mode() === 'nav') {
+    <nav class="sf-tabs__nav" [attr.aria-label]="label()">
+      <div #list class="sf-tabs__list">
+        @for (tab of tabs(); track tab.id; let index = $index) {
+          <a
+            class="sf-tabs__tab"
+            [class.sf-tabs__tab--overflow]="overflow().has(index)"
+            [attr.data-sf-tab]="tab.id"
+            [attr.aria-hidden]="overflow().has(index) || null"
+            [attr.tabindex]="overflow().has(index) ? -1 : null"
+            [routerLink]="tab.link"
+            routerLinkActive="sf-tabs__tab--active"
+            ariaCurrentWhenActive="page"
+            [routerLinkActiveOptions]="{ exact: !!tab.exact }"
+            (isActiveChange)="onActiveChange(tab.id, $event)"
+            ><ng-container *ngTemplateOutlet="content; context: { $implicit: tab }"
+          /></a>
+        }
+      </div>
+    </nav>
+  } @else {
+    <div #list class="sf-tabs__list" role="tablist" [attr.aria-label]="label()">
+      @for (tab of tabs(); track tab.id; let index = $index) {
+        <button
+          type="button"
+          role="tab"
+          class="sf-tabs__tab"
+          [class.sf-tabs__tab--active]="tab.id === selected()"
+          [class.sf-tabs__tab--overflow]="overflow().has(index)"
+          [id]="tabId(tab.id)"
+          [attr.data-sf-tab]="tab.id"
+          [attr.aria-hidden]="overflow().has(index) || null"
+          [attr.aria-selected]="tab.id === selected()"
+          [attr.aria-controls]="panelId(tab.id)"
+          [attr.tabindex]="tab.id === selected() ? 0 : -1"
+          (click)="selectTab.emit(tab.id)"
+          (keydown)="onKeydown($event, tab.id)"
+        >
+          <ng-container *ngTemplateOutlet="content; context: { $implicit: tab }" />
+        </button>
+      }
+    </div>
+  }
+  @if (moreItems().length > 0) {
+    <sf-menu
+      class="sf-tabs__more"
+      [items]="moreItems()"
+      [label]="'shared.tabs.moreLabel' | transloco"
+      [text]="'shared.tabs.more' | transloco"
+      variant="ghost"
+      size="sm"
+      align="end"
+      (itemSelected)="onMoreSelected($event)"
+    />
+  }
+  <div class="sf-tabs__extra">
+    <ng-content />
+  </div>
+</div>
+
+<ng-template #content let-tab>
+  {{ tab.label }}
+  @if (tab.note) {
+    <span class="sf-tabs__note">{{ tab.note }}</span>
+  }
+  @if (tab.errors) {
+    <span class="sf-tabs__errors"
+      >{{ tab.errors }}<span class="sf-sr-only"> {{ 'shared.tabs.errors' | transloco: { count: tab.errors } }}</span></span
+    >
+  }
+  @if (tab.dirty) {
+    <span class="sf-tabs__dirty" aria-hidden="true">•</span><span class="sf-sr-only"> {{ 'shared.tabs.unsaved' | transloco }}</span>
+  }
+</ng-template>

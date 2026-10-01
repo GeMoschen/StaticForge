@@ -1,0 +1,73 @@
+@use '../../../design/forms' as forms;
+
+:host {
+  display: block;
+}
+
+.sf-color-input {
+  @include forms.sf-form-control-shell;
+
+  gap: var(--sf-space-2);
+  padding-inline-start: var(--sf-space-1);
+}
+
+.sf-color-input__swatch {
+  flex-shrink: 0;
+  width: calc(var(--sf-control-height) - var(--sf-space-2));
+  height: calc(var(--sf-control-height) - var(--sf-space-2));
+  padding: 0;
+  border: 1px solid var(--sf-border);
+  border-radius: var(--sf-radius-sm);
+  background: transparent;
+  cursor: pointer;
+
+  &::-webkit-color-swatch-wrapper {
+    padding: 0;
+  }
+
+  &::-webkit-color-swatch {
+    border: none;
+    border-radius: var(--sf-radius-sm);
+  }
+
+  &::-moz-color-swatch {
+    border: none;
+    border-radius: var(--sf-radius-sm);
+  }
+
+  &:focus-visible {
+    outline: 1px solid var(--sf-focus-ring);
+    outline-offset: 1px;
+  }
+
+  &:disabled {
+    cursor: default;
+  }
+}
+
+// No value: the picker still has to show some colour; strike it through so it doesn't read as black.
+.sf-color-input__swatch--empty {
+  &::-webkit-color-swatch {
+    background: linear-gradient(
+      to top right,
+      var(--sf-surface) calc(50% - 1px),
+      var(--sf-border-strong) 50%,
+      var(--sf-surface) calc(50% + 1px)
+    ) !important;
+  }
+
+  &::-moz-color-swatch {
+    background: linear-gradient(
+      to top right,
+      var(--sf-surface) calc(50% - 1px),
+      var(--sf-border-strong) 50%,
+      var(--sf-surface) calc(50% + 1px)
+    ) !important;
+  }
+}
+
+.sf-color-input__hex {
+  @include forms.sf-form-control-bare;
+
+  font-family: var(--sf-font-mono);
+}

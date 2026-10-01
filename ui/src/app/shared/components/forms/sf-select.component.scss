@@ -1,0 +1,39 @@
+@use '../../../design/forms' as forms;
+
+:host {
+  display: block;
+}
+
+.sf-select {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.sf-select__control {
+  @include forms.sf-form-control;
+
+  appearance: none;
+  padding-inline-end: calc(var(--sf-pad-control-x) + var(--sf-space-5));
+  cursor: pointer;
+
+  // A native select has no read-only state; the component blocks changes and shows the read-only look.
+  &.is-readonly {
+    background: var(--sf-bg);
+    border-color: var(--sf-border);
+    color: var(--sf-text);
+    cursor: default;
+  }
+}
+
+.sf-select__chevron {
+  position: absolute;
+  inset-inline-end: var(--sf-space-2);
+  color: var(--sf-text-muted);
+  font-size: var(--sf-fs-18);
+  pointer-events: none;
+}
+
+.sf-select__control:disabled + .sf-select__chevron {
+  color: var(--sf-disabled-text);
+}

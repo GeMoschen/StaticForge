@@ -1,0 +1,110 @@
+:host {
+  display: block;
+}
+
+// No gap on the group: the live region is always rendered (so it announces), and an empty one takes no space.
+.sf-file-drop {
+  font-family: var(--sf-font-ui);
+  font-size: var(--sf-fs-13);
+  line-height: var(--sf-lh-13);
+  color: var(--sf-text);
+}
+
+.sf-file-drop__zone {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sf-space-2);
+  padding: var(--sf-space-4) var(--sf-space-3);
+  border: 1px dashed var(--sf-border-strong);
+  border-radius: var(--sf-radius-md);
+  background: var(--sf-surface);
+  color: var(--sf-text-muted);
+  transition:
+    border-color var(--sf-duration-fast) var(--sf-ease-standard),
+    background var(--sf-duration-fast) var(--sf-ease-standard);
+
+  &.is-dragover {
+    border-style: solid;
+    border-color: var(--sf-accent);
+    background: var(--sf-accent-subtle);
+    color: var(--sf-text);
+  }
+
+  &.is-invalid {
+    border-color: var(--sf-danger);
+  }
+
+  &.is-readonly {
+    background: var(--sf-bg);
+    border-color: var(--sf-border);
+  }
+
+  &.is-disabled {
+    background: var(--sf-disabled-bg);
+    border-color: var(--sf-border);
+    color: var(--sf-disabled-text);
+  }
+}
+
+.sf-file-drop__icon {
+  font-size: var(--sf-fs-20);
+}
+
+.sf-file-drop__files {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sf-space-1);
+  margin: var(--sf-space-2) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.sf-file-drop__file {
+  display: flex;
+  align-items: center;
+  gap: var(--sf-space-2);
+  min-height: var(--sf-control-height);
+  padding: 0 var(--sf-space-1) 0 var(--sf-space-2);
+  border: 1px solid var(--sf-border);
+  border-radius: var(--sf-radius-md);
+  background: var(--sf-surface-raised);
+}
+
+.sf-file-drop__file-icon {
+  flex-shrink: 0;
+  color: var(--sf-text-muted);
+  font-size: var(--sf-fs-16);
+}
+
+.sf-file-drop__file-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sf-file-drop__file-size {
+  flex-shrink: 0;
+  color: var(--sf-text-muted);
+  font-size: var(--sf-fs-12);
+  line-height: var(--sf-lh-12);
+  font-variant-numeric: tabular-nums;
+}
+
+.sf-file-drop__message {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sf-space-1);
+  margin: var(--sf-space-2) 0 0;
+  color: var(--sf-danger-text);
+  font-size: var(--sf-fs-12);
+  line-height: var(--sf-lh-12);
+}
+
+.sf-file-drop__message-icon {
+  flex-shrink: 0;
+  font-size: var(--sf-fs-14);
+}

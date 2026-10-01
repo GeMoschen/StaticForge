@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 /**
  * Flags user-visible English literals in Angular templates (M35.4): text nodes and the `title`, `aria-label`,
- * `placeholder`, `alt` (and `label`, `hint`, `description` of `sf-*` components) attributes, static or bound, plus string
- * literals inside `{{ … }}` interpolations. Every such text belongs in `assets/i18n/en.json` and is shown through the
+ * `placeholder`, `alt`, `sfTooltip` (and the text inputs of `sf-*` components: `label`, `hint`, `description`, `tooltip`,
+ * … — see COMPONENT_TEXT_ATTRIBUTES) attributes, static or bound, plus string literals inside `{{ … }}` interpolations. Every such text belongs in `assets/i18n/en.json` and is shown through the
  * `transloco` pipe or `TranslocoService.translate()`.
  *
  * Scans `src/app/**` `*.html` and the inline `template:` of `*.ts` components.
@@ -30,8 +30,21 @@ const baselinePath = join(dirname(fileURLToPath(import.meta.url)), 'i18n-literal
 /** Files under these prefixes (relative to `ui/`, forward slashes) may never be in the baseline. */
 const STRICT_PREFIXES = ['src/app/shared/', 'src/app/core/ui/', 'src/app/app.component.'];
 
-const TEXT_ATTRIBUTES = new Set(['title', 'aria-label', 'aria-description', 'placeholder', 'alt']);
-const COMPONENT_TEXT_ATTRIBUTES = new Set(['label', 'hint', 'description', 'heading']);
+const TEXT_ATTRIBUTES = new Set(['title', 'aria-label', 'aria-description', 'placeholder', 'alt', 'sfTooltip']);
+// The text inputs of the sf-* components (M35.6 added tooltip, disabledReason, subtitle, error, text, the action labels).
+const COMPONENT_TEXT_ATTRIBUTES = new Set([
+  'label',
+  'hint',
+  'description',
+  'heading',
+  'tooltip',
+  'disabledReason',
+  'subtitle',
+  'error',
+  'text',
+  'primaryLabel',
+  'secondaryLabel',
+]);
 const SKIPPED_ELEMENTS = new Set(['kbd', 'code', 'pre', 'style', 'script']);
 const VOID_ELEMENTS = new Set(['input', 'br', 'hr', 'img', 'meta', 'link', 'source', 'col']);
 

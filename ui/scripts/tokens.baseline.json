@@ -199,10 +199,6 @@
     "colors": 1,
     "zIndex": 0
   },
-  "src/app/shared/components/sf-button.component.scss": {
-    "colors": 4,
-    "zIndex": 0
-  },
   "src/app/shared/components/sf-context-menu.component.scss": {
     "colors": 0,
     "zIndex": 1

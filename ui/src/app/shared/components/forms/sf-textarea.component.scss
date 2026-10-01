@@ -1,0 +1,17 @@
+@use '../../../design/forms' as forms;
+
+:host {
+  display: block;
+}
+
+.sf-textarea {
+  @include forms.sf-form-control;
+
+  display: block;
+  padding-block: var(--sf-space-2);
+  resize: vertical;
+}
+
+.sf-textarea--mono {
+  font-family: var(--sf-font-mono);
+}

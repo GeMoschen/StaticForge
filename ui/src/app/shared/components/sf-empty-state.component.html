@@ -1,12 +1,38 @@
 <div class="sf-empty-state">
   @if (icon()) {
     <span class="sf-empty-state__icon">
-      <sf-icon [name]="icon()!" size="2.5rem" />
+      <sf-icon [name]="icon()!" size="var(--sf-space-12)" />
     </span>
   }
-  <h2 class="sf-empty-state__title">{{ title() ?? ('common.nothingHereYet' | transloco) }}</h2>
+  @switch (level()) {
+    @case (3) {
+      <h3 class="sf-empty-state__title">{{ title() ?? ('common.nothingHereYet' | transloco) }}</h3>
+    }
+    @case (4) {
+      <h4 class="sf-empty-state__title">{{ title() ?? ('common.nothingHereYet' | transloco) }}</h4>
+    }
+    @case (5) {
+      <h5 class="sf-empty-state__title">{{ title() ?? ('common.nothingHereYet' | transloco) }}</h5>
+    }
+    @case (6) {
+      <h6 class="sf-empty-state__title">{{ title() ?? ('common.nothingHereYet' | transloco) }}</h6>
+    }
+    @default {
+      <h2 class="sf-empty-state__title">{{ title() ?? ('common.nothingHereYet' | transloco) }}</h2>
+    }
+  }
   @if (description()) {
     <p class="sf-empty-state__description">{{ description() }}</p>
+  }
+  @if (primaryLabel() || secondaryLabel()) {
+    <div class="sf-empty-state__actions">
+      @if (primaryLabel()) {
+        <sf-button variant="primary" [icon]="primaryIcon()" (click)="primary.emit()">{{ primaryLabel() }}</sf-button>
+      }
+      @if (secondaryLabel()) {
+        <sf-button variant="secondary" (click)="secondary.emit()">{{ secondaryLabel() }}</sf-button>
+      }
+    </div>
   }
   <ng-content />
 </div>

@@ -54,7 +54,7 @@
                 variant="ghost"
                 [disabled]="readOnly() || !row.code"
                 (click)="suggestLabel(rowIndex)"
-                [attr.aria-label]="'Suggest a label for ' + (row.code || 'this language')"
+                [aria-label]="'Suggest a label for ' + (row.code || 'this language')"
               >
                 Suggest
               </sf-button>
@@ -62,7 +62,7 @@
                 variant="ghost"
                 [disabled]="readOnly() || rowIndex === 0"
                 (click)="move(rowIndex, -1)"
-                [attr.aria-label]="'Move ' + (row.code || 'this language') + ' up'"
+                [aria-label]="'Move ' + (row.code || 'this language') + ' up'"
               >
                 ↑
               </sf-button>
@@ -70,7 +70,7 @@
                 variant="ghost"
                 [disabled]="readOnly() || rowIndex === rows().length - 1"
                 (click)="move(rowIndex, 1)"
-                [attr.aria-label]="'Move ' + (row.code || 'this language') + ' down'"
+                [aria-label]="'Move ' + (row.code || 'this language') + ' down'"
               >
                 ↓
               </sf-button>
@@ -78,7 +78,7 @@
                 variant="ghost"
                 [disabled]="readOnly()"
                 (click)="removeLocale(rowIndex)"
-                [attr.aria-label]="'Remove ' + (row.code || 'this language')"
+                [aria-label]="'Remove ' + (row.code || 'this language')"
               >
                 Remove
               </sf-button>

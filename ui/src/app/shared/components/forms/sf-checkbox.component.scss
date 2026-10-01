@@ -1,0 +1,117 @@
+:host {
+  display: inline-flex;
+  min-width: 0;
+}
+
+.sf-checkbox {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: var(--sf-space-2);
+  min-height: var(--sf-row-height);
+  padding-block: calc((var(--sf-row-height) - var(--sf-lh-13)) / 2);
+  box-sizing: border-box;
+  color: var(--sf-text);
+  font-family: var(--sf-font-ui);
+  font-size: var(--sf-fs-13);
+  line-height: var(--sf-lh-13);
+  cursor: pointer;
+
+  &.is-readonly {
+    cursor: default;
+  }
+
+  &.is-disabled {
+    color: var(--sf-disabled-text);
+    cursor: not-allowed;
+  }
+}
+
+.sf-checkbox__text:empty {
+  display: none;
+}
+
+// The box: the native input without its native look. The mark is drawn with borders in currentColor.
+.sf-checkbox__box {
+  appearance: none;
+  display: inline-grid;
+  place-content: center;
+  flex-shrink: 0;
+  width: 1rem;
+  height: 1rem;
+  margin: calc((var(--sf-lh-13) - 1rem) / 2) 0 0;
+  border: 1px solid var(--sf-border-strong);
+  border-radius: var(--sf-radius-sm);
+  background: var(--sf-surface);
+  color: var(--sf-on-accent);
+  cursor: inherit;
+  transition:
+    background-color var(--sf-duration-fast) var(--sf-ease-standard),
+    border-color var(--sf-duration-fast) var(--sf-ease-standard);
+
+  &::before {
+    content: '';
+    box-sizing: border-box;
+    width: 0.3125rem;
+    height: 0.5625rem;
+    margin-top: -0.125rem;
+    border: solid currentColor;
+    border-width: 0 0.125rem 0.125rem 0;
+    transform: rotate(45deg) scale(0);
+  }
+
+  &:hover {
+    border-color: var(--sf-text-subtle);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--sf-focus-ring);
+    outline-offset: 1px;
+  }
+
+  &:checked,
+  &:indeterminate {
+    border-color: var(--sf-accent);
+    background: var(--sf-accent);
+  }
+
+  &:checked::before {
+    transform: rotate(45deg) scale(1);
+  }
+
+  &:indeterminate::before {
+    width: 0.5rem;
+    height: 0;
+    margin-top: 0;
+    border-width: 0 0 0.125rem;
+    transform: none;
+  }
+
+  &[aria-invalid='true'] {
+    border-color: var(--sf-danger);
+  }
+
+  // Read-only: the state stays clearly readable; a quieter box on the page background says it can't be changed.
+  &[aria-readonly='true'] {
+    border-color: var(--sf-border-strong);
+    background: var(--sf-bg);
+    color: var(--sf-text);
+
+    &:checked,
+    &:indeterminate {
+      border-color: var(--sf-text-muted);
+      background: var(--sf-bg);
+    }
+  }
+
+  &:disabled {
+    border-color: var(--sf-border);
+    background: var(--sf-disabled-bg);
+    color: var(--sf-disabled-text);
+
+    &:checked,
+    &:indeterminate {
+      border-color: var(--sf-border);
+      background: var(--sf-disabled-bg);
+    }
+  }
+}
