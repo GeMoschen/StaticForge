@@ -120,6 +120,32 @@ describe('PreferencesService', () => {
     expect(http.expectOne(URL).request.body).toEqual({ projects: { acme: { editingLocale: null } } });
   });
 
+  it('stores a table column layout: order and hidden replace, widths merge per column', () => {
+    const { prefs, http } = setup();
+    expect(prefs.tableColumns('pages')).toEqual({});
+
+    prefs.setTableColumns('pages', { order: ['name', 'status'], hidden: ['status'], widths: { name: 240 } });
+    prefs.setTableColumns('pages', { hidden: [], widths: { status: 96 } });
+
+    expect(prefs.tableColumns('pages')).toEqual({ order: ['name', 'status'], hidden: [], widths: { name: 240, status: 96 } });
+    vi.advanceTimersByTime(500);
+    expect(http.expectOne(URL).request.body).toEqual({
+      tableColumns: { pages: { order: ['name', 'status'], hidden: [], widths: { name: 240, status: 96 } } },
+    });
+  });
+
+  it('forgets a table column layout with null', () => {
+    const { prefs, http } = setup();
+    prefs.setTableColumns('pages', { hidden: ['status'] });
+    vi.advanceTimersByTime(500);
+    answer(http.expectOne(URL));
+
+    prefs.setTableColumns('pages', null);
+    expect(prefs.tableColumns('pages')).toEqual({});
+    vi.advanceTimersByTime(500);
+    expect(http.expectOne(URL).request.body).toEqual({ tableColumns: { pages: null } });
+  });
+
   it('caps recents at 20, newest first, without duplicates', () => {
     const { prefs } = setup();
     for (let i = 0; i < 25; i++) {

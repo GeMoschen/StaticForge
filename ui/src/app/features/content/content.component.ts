@@ -17,7 +17,6 @@ import {
   type StoreTreeMoveEvent,
   type StoreTreeNode,
 } from '../../shared/components/sf-store-tree-node.component';
-import { SfTreeComponent } from '../../shared/components/sf-tree.component';
 import { consumeQueryParam } from '../../shared/deep-link';
 import { ContextMenuItem, ContextMenuService } from '../../shared/services/context-menu.service';
 import {
@@ -77,7 +76,6 @@ const SET_ROUTE = /\/content\/sets\/([^/?#;]+)/;
     SfIconComponent,
     SfSpinnerComponent,
     SfStoreTreeNodeComponent,
-    SfTreeComponent,
     MoveTargetDialogComponent,
   ],
   providers: [ContentStoreRefresh],

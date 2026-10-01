@@ -1,1 +1,208 @@
-<ng-content />
+@if (filterable() || expandActions()) {
+  <div class="sf-tree__toolbar">
+    @if (filterable()) {
+      <sf-search-input
+        class="sf-tree__filter"
+        [value]="state.query()"
+        [placeholder]="'shared.tree.filterPlaceholder' | transloco"
+        [aria-label]="'shared.tree.filterLabel' | transloco: { label: label() }"
+        (valueChange)="onQuery($event)"
+      />
+    }
+    @if (expandActions()) {
+      <sf-button variant="ghost" size="sm" icon="unfold_more" [label]="'shared.tree.expandAll' | transloco" (click)="expandAll()" />
+      <sf-button
+        variant="ghost"
+        size="sm"
+        icon="unfold_less"
+        [label]="'shared.tree.collapseAll' | transloco"
+        (click)="collapseAll()"
+      />
+    }
+  </div>
+}
+
+@if (rootLoading()) {
+  <sf-skeleton class="sf-tree__skeleton" shape="tree" [rows]="6" [label]="'shared.tree.loading' | transloco" />
+} @else if (rootFailed()) {
+  <sf-empty-state
+    class="sf-tree__empty"
+    icon="error"
+    [level]="3"
+    [title]="'shared.tree.loadFailed' | transloco"
+    [primaryLabel]="'shared.tree.retry' | transloco"
+    primaryIcon="refresh"
+    (primary)="retryRoot()"
+  />
+} @else if (noResults()) {
+  <sf-empty-state class="sf-tree__empty" icon="search_off" [level]="3" [title]="'shared.tree.noResults' | transloco" />
+}
+
+<div
+  #viewport
+  class="sf-tree__viewport"
+  tabindex="-1"
+  sfVirtualScroll
+  [sfVirtualCount]="state.rows().length"
+  role="tree"
+  [attr.aria-label]="label()"
+  [attr.aria-multiselectable]="multiselect() || null"
+  [attr.aria-busy]="state.loading().size > 0 || searching() || null"
+  [class.is-drop-root]="dropTarget()?.id === null && dropTarget()?.valid"
+  (keydown)="onKeydown($event)"
+  (scroll)="onScroll()"
+  (dragover)="onDragOver($event, null)"
+  (drop)="onDrop($event, null)"
+>
+  <div class="sf-tree__spacer" role="none" [style.height.px]="window()?.before ?? 0"></div>
+  @for (row of windowRows(); track row.id) {
+    @switch (row.kind) {
+      @case ('node') {
+        @if (row.kind === 'node') {
+          <div
+            class="sf-tree__row"
+            role="none"
+            [class.is-selected]="state.isSelected(row.id)"
+            [class.is-cut]="cutIds().has(row.id)"
+            [class.is-drop-target]="dropTarget()?.id === row.id && dropTarget()?.valid"
+            [class.is-drop-invalid]="dropTarget()?.id === row.id && !dropTarget()?.valid"
+            [style.--tree-level]="row.level"
+            (mouseenter)="hovered.set(row.id)"
+            (mouseleave)="hovered.set(null)"
+            (focusin)="onRowFocus(row)"
+          >
+            <div
+              class="sf-tree__item"
+              role="treeitem"
+              [attr.data-node-id]="row.id"
+              [attr.tabindex]="row.id === tabStop() ? 0 : -1"
+              [attr.aria-level]="row.level"
+              [attr.aria-setsize]="row.setSize"
+              [attr.aria-posinset]="row.posInSet"
+              [attr.aria-expanded]="row.expandable ? row.expanded : null"
+              [attr.aria-selected]="state.isSelected(row.id)"
+              [attr.aria-busy]="row.loading || null"
+              [attr.draggable]="isDraggable(row) ? 'true' : null"
+              [sfTooltip]="truncated().has(row.id) ? row.node.label : ''"
+              [sfTooltipDescribes]="false"
+              (click)="onRowClick($event, row)"
+              (dblclick)="onRowDoubleClick(row)"
+              (contextmenu)="onContextMenu($event, row)"
+              (dragstart)="onDragStart($event, row)"
+              (dragover)="onDragOver($event, row)"
+              (dragleave)="onDragLeave($event, row)"
+              (drop)="onDrop($event, row)"
+              (dragend)="endDrag()"
+            >
+              <span class="sf-tree__toggle" aria-hidden="true" (click)="onToggleClick($event, row)">
+                @if (row.expandable) {
+                  <sf-icon [name]="row.expanded ? 'expand_more' : 'chevron_right'" />
+                }
+              </span>
+              @if (row.node.icon) {
+                <sf-icon class="sf-tree__icon" [name]="row.node.icon" />
+              }
+              @if (edit()?.id === row.id) {
+                <span class="sf-tree__edit">
+                  <input
+                    class="sf-tree__edit-input"
+                    type="text"
+                    autocomplete="off"
+                    [value]="edit()?.draft ?? ''"
+                    [attr.aria-label]="'shared.tree.rename' | transloco"
+                    [attr.aria-invalid]="edit()?.error ? true : null"
+                    [attr.aria-describedby]="edit()?.error ? editErrorId() : null"
+                    [attr.aria-busy]="edit()?.busy || null"
+                    (keydown)="onEditKeydown($event)"
+                    (input)="onEditInput($event)"
+                    (blur)="onEditBlur($event)"
+                    (click)="$event.stopPropagation()"
+                  />
+                  @if (edit()?.error; as error) {
+                    <span class="sf-tree__edit-error" role="alert" [id]="editErrorId()">{{ error }}</span>
+                  }
+                </span>
+              } @else {
+                <span class="sf-tree__name" [attr.data-node-id]="row.id">
+                  @for (segment of segments(row); track $index) {
+                    @if (segment.match) {
+                      <mark class="sf-tree__match">{{ segment.text }}</mark>
+                    } @else {
+                      <span>{{ segment.text }}</span>
+                    }
+                  }
+                </span>
+                @if (row.node.secondary) {
+                  <span class="sf-tree__secondary">{{ row.node.secondary }}</span>
+                }
+              }
+              @if (row.node.badges?.length) {
+                <span class="sf-tree__badges">
+                  @for (badge of row.node.badges; track $index) {
+                    @if (badge.kind === 'badge') {
+                      <sf-badge [tone]="badge.tone ?? 'neutral'" [label]="badge.label" [icon]="badge.icon ?? null" />
+                    } @else {
+                      <sf-status size="sm" [tone]="badge.tone ?? 'neutral'" [label]="badge.label" [icon]="badge.icon ?? null" />
+                    }
+                  }
+                </span>
+              }
+            </div>
+            @if (rowMenus().get(row.id); as items) {
+              <sf-menu
+                class="sf-tree__menu"
+                size="sm"
+                [items]="items"
+                [label]="'shared.tree.actions' | transloco: { name: row.node.label }"
+              />
+            }
+          </div>
+        }
+      }
+      @case ('loading') {
+        <div class="sf-tree__row sf-tree__row--loading" role="none" aria-hidden="true" [style.--tree-level]="row.level">
+          <span class="sf-tree__toggle"></span>
+          <span class="sf-tree__spinner"></span>
+          <span class="sf-tree__loading-text">{{ 'shared.tree.loading' | transloco }}</span>
+        </div>
+      }
+      @case ('create') {
+        @if (row.kind === 'create') {
+          <div class="sf-tree__row is-creating" role="none" [style.--tree-level]="row.level">
+            <div
+              class="sf-tree__item"
+              role="treeitem"
+              [attr.aria-level]="row.level"
+              aria-selected="false"
+              [attr.aria-label]="createLabel(row.createKind)"
+            >
+              <span class="sf-tree__toggle" aria-hidden="true"></span>
+              <sf-icon class="sf-tree__icon" [name]="row.createKind === 'folder' ? 'folder' : 'description'" />
+              <span class="sf-tree__edit">
+                <input
+                  class="sf-tree__edit-input"
+                  type="text"
+                  autocomplete="off"
+                  [value]="edit()?.draft ?? ''"
+                  [attr.aria-label]="createLabel(row.createKind)"
+                  [attr.aria-invalid]="edit()?.error ? true : null"
+                  [attr.aria-describedby]="edit()?.error ? editErrorId() : null"
+                  [attr.aria-busy]="edit()?.busy || null"
+                  (keydown)="onEditKeydown($event)"
+                  (input)="onEditInput($event)"
+                  (blur)="onEditBlur($event)"
+                />
+                @if (edit()?.error; as error) {
+                  <span class="sf-tree__edit-error" role="alert" [id]="editErrorId()">{{ error }}</span>
+                }
+              </span>
+            </div>
+          </div>
+        }
+      }
+    }
+  }
+  <div class="sf-tree__spacer" role="none" [style.height.px]="window()?.after ?? 0"></div>
+</div>
+
+<div class="sf-sr-only" aria-live="polite">{{ announcement() }}</div>

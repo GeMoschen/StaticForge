@@ -22,7 +22,7 @@
     </button>
 
     @if (treeNodes().length > 0) {
-      <sf-tree>
+      <div>
         @for (node of treeNodes(); track node.uuid) {
           <sf-store-tree-node
             [node]="node"
@@ -37,7 +37,7 @@
             (changed)="onTreeChanged()"
           />
         }
-      </sf-tree>
+      </div>
     } @else if (!loading()) {
       <p class="content__hint">Folders group record sets; a record set holds the records of one dataset.</p>
     }

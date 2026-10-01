@@ -181,7 +181,7 @@ A code audit and a screenshot run found the following. The run used a seeded pro
 | M35.5 | [Design tokens v2, theme and density](005-tokens-theme-density.md) | 1 design system | frontend | M35.3 | done |
 | M35.6 | [Base components and form controls](006-base-components.md) | 1 design system | frontend | M35.5 | done |
 | M35.7 | [Overlays: dialog, confirm, drawer, popover, menu, toast](007-overlays.md) | 1 design system | frontend | M35.5 | done |
-| M35.8 | [Data table, tree and splitter](008-table-tree-splitter.md) | 1 design system | frontend | M35.6, M35.7 | todo |
+| M35.8 | [Data table, tree and splitter](008-table-tree-splitter.md) | 1 design system | frontend | M35.6, M35.7 | done |
 | M35.9 | [Style guide and design gate](009-style-guide-gate.md) | 1 design system | frontend | M35.6, M35.7, M35.8 | todo |
 | M35.10 | [App frame: top bar, rail, developer mode, titles](010-app-frame.md) | 2 frame | frontend | M35.2, M35.4, M35.9 | todo |
 | M35.11 | [Information architecture: Publishing, Settings menu](011-information-architecture.md) | 2 frame | frontend | M35.10 | todo |

@@ -24,7 +24,7 @@
       @if (topLevelNodes().length === 0) {
         <sf-empty-state title="No navigation yet" description="Create a folder or reference to get started." />
       } @else {
-        <sf-tree>
+        <div>
           @for (node of treeNodes(); track node.uuid) {
             <sf-store-tree-node
               [node]="node"
@@ -38,7 +38,7 @@
               (changed)="onTreeNodeRenamed()"
             />
           }
-        </sf-tree>
+        </div>
       }
     }
   </aside>

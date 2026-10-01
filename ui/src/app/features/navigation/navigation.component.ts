@@ -7,7 +7,6 @@ import { SfButtonComponent } from '../../shared/components/sf-button.component';
 import { SfEmptyStateComponent } from '../../shared/components/sf-empty-state.component';
 import { SfIconComponent } from '../../shared/components/sf-icon.component';
 import { SfSpinnerComponent } from '../../shared/components/sf-spinner.component';
-import { SfTreeComponent } from '../../shared/components/sf-tree.component';
 import {
   SfStoreTreeNodeComponent,
   type FolderRenameFn,
@@ -55,7 +54,6 @@ interface RawReferencePayload {
     SfEmptyStateComponent,
     SfIconComponent,
     SfSpinnerComponent,
-    SfTreeComponent,
     SfCreateAssetDialogComponent,
     NavFolderDetailComponent,
     NavReferenceDetailComponent,

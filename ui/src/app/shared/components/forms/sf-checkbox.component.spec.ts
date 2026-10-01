@@ -62,6 +62,12 @@ describe('SfCheckboxComponent', () => {
     expect(box).toBeChecked();
   });
 
+  it('takes the native box out of the tab order with controlTabindex', async () => {
+    await render(`<sf-checkbox aria-label="Select row" [controlTabindex]="-1" />`, { imports: [SfCheckboxComponent] });
+
+    expect(screen.getByRole('checkbox', { name: 'Select row' })).toHaveAttribute('tabindex', '-1');
+  });
+
   it('is disabled', async () => {
     await render(`<sf-checkbox disabled>Off</sf-checkbox>`, { imports: [SfCheckboxComponent] });
 

@@ -1,0 +1,302 @@
+@if (showToolbar()) {
+  <div class="sf-data-table__toolbar">
+    @if (searchable()) {
+      @let placeholder = searchPlaceholder() ?? ('shared.dataTable.searchPlaceholder' | transloco);
+      <sf-search-input
+        class="sf-data-table__search"
+        [aria-label]="placeholder"
+        [placeholder]="placeholder"
+        [value]="searchDraft()"
+        (valueChange)="onSearch($event)"
+      />
+    }
+    @if (filters().length > 0) {
+      <sf-menu
+        [items]="filterItems()"
+        [label]="'shared.dataTable.filters' | transloco"
+        [text]="'shared.dataTable.filters' | transloco"
+        variant="secondary"
+        size="sm"
+        align="start"
+      />
+    }
+    @if (chips().length > 0) {
+      <ul class="sf-data-table__chips" role="list">
+        @for (chip of chips(); track chip.filterId + ':' + chip.value) {
+          <li>
+            <sf-tag
+              removable
+              [label]="'shared.dataTable.filterChip' | transloco: { filter: chip.filterLabel, value: chip.label }"
+              (removed)="removeChip(chip)"
+            />
+          </li>
+        }
+      </ul>
+    }
+    @if (filtered()) {
+      <sf-button variant="ghost" size="sm" (click)="clearFilters()">{{ 'shared.dataTable.clearFilters' | transloco }}</sf-button>
+    }
+    <span class="sf-data-table__toolbar-end">
+      <ng-content select="[sfDataTableToolbar]" />
+      @if (chooserAvailable()) {
+        <sf-button variant="ghost" size="sm" icon="view_column" [sfPopoverTrigger]="chooser">{{
+          'shared.dataTable.columns' | transloco
+        }}</sf-button>
+        <sf-popover #chooser [label]="'shared.dataTable.columns' | transloco" align="end">
+          <sf-data-table-columns
+            [columns]="layout().ordered"
+            [hidden]="layout().hidden"
+            (toggled)="onColumnToggled($event)"
+            (moved)="onColumnMoved($event)"
+          />
+        </sf-popover>
+      }
+    </span>
+  </div>
+}
+
+@if (selectable()) {
+  <span class="sf-sr-only" aria-live="polite">{{
+    selectedCount() > 0 ? ('shared.dataTable.selected' | transloco: { count: selectedCount() }) : ''
+  }}</span>
+  @if (selectedCount() > 0) {
+    <div class="sf-data-table__bulk" role="group" [attr.aria-label]="'shared.dataTable.bulkActions' | transloco">
+      <span class="sf-data-table__bulk-count">{{ 'shared.dataTable.selected' | transloco: { count: selectedCount() } }}</span>
+      @if (offerAllMatching()) {
+        <sf-button variant="ghost" size="sm" (click)="selectAllMatching()">{{
+          'shared.dataTable.selectAllMatching' | transloco: { count: matchingCount() }
+        }}</sf-button>
+      }
+      <span class="sf-data-table__bulk-actions">
+        @for (action of bulkActions(); track action.id) {
+          <sf-button size="sm" [variant]="action.variant ?? 'secondary'" [icon]="action.icon ?? null" (click)="runBulkAction(action)">{{
+            action.label
+          }}</sf-button>
+        }
+        <ng-content select="[sfDataTableBulkActions]" />
+      </span>
+      <sf-button variant="ghost" size="sm" (click)="clearSelection()">{{ 'shared.dataTable.clearSelection' | transloco }}</sf-button>
+    </div>
+  }
+}
+
+@if (error()) {
+  <sf-banner class="sf-data-table__error" tone="danger" live="assertive">
+    {{ errorMessage() ?? ('shared.dataTable.error' | transloco) }}
+    <sf-button sfBannerActions variant="secondary" size="sm" icon="refresh" (click)="retry.emit()">{{
+      'shared.dataTable.retry' | transloco
+    }}</sf-button>
+  </sf-banner>
+}
+
+<div
+  #scroller
+  class="sf-data-table__scroller"
+  sfVirtualScroll
+  #v="sfVirtualScroll"
+  [sfVirtualCount]="pageRows().length"
+  sfVirtualRowToken="--sf-table-row-height"
+  tabindex="-1"
+  (scroll)="onScroll()"
+  (keydown)="onScrollerKeydown($event)"
+>
+  @if (showSkeleton()) {
+    <sf-skeleton shape="table" [rows]="8" />
+  } @else {
+    @let win = v.window();
+    <table
+      class="sf-data-table__grid"
+      role="grid"
+      [class.sf-data-table__grid--sticky-first]="stickyFirstColumn()"
+      [class.sf-data-table__grid--selectable]="selectable()"
+      [attr.aria-label]="label()"
+      [attr.aria-rowcount]="matchingCount() + 1"
+      [attr.aria-colcount]="columnSpan()"
+      [attr.aria-busy]="loading() || null"
+      [attr.aria-multiselectable]="selectable() || null"
+    >
+      <colgroup>
+        @if (selectable()) {
+          <col class="sf-data-table__check-col" />
+        }
+        @for (column of visibleColumns(); track column.id) {
+          <col [style.width.px]="widthOf(column)" />
+        }
+      </colgroup>
+      <thead>
+        <tr aria-rowindex="1">
+          @if (selectable()) {
+            <th scope="col" class="sf-data-table__check">
+              <sf-checkbox
+                [aria-label]="'shared.dataTable.selectPage' | transloco"
+                [value]="pageSelection() === 'all'"
+                [indeterminate]="pageSelection() === 'some'"
+                [disabled]="pageRows().length === 0"
+                (valueChange)="togglePage($event)"
+              />
+            </th>
+          }
+          @for (column of visibleColumns(); track column.id; let first = $first) {
+            <th
+              #header
+              scope="col"
+              class="sf-data-table__th"
+              [class.sf-data-table__first]="first"
+              [attr.data-column]="column.id"
+              [attr.data-align]="column.align ?? null"
+              [attr.aria-sort]="ariaSort(column)"
+            >
+              <div class="sf-data-table__th-inner">
+                @if (column.sortable) {
+                  @let sort = sortOf(column);
+                  <button
+                    type="button"
+                    class="sf-data-table__sort"
+                    (click)="onSortClick($event, column)"
+                    (keydown)="onSortKeydown($event, column)"
+                  >
+                    <ng-container *ngTemplateOutlet="headerContent; context: { $implicit: column }" />
+                    @if (sort) {
+                      <sf-icon class="sf-data-table__sort-icon" [name]="sort.direction === 'asc' ? 'arrow_upward' : 'arrow_downward'" />
+                      @if (query().sort.length > 1) {
+                        <span class="sf-data-table__sort-position" aria-hidden="true">{{ sort.position }}</span>
+                      }
+                      @if (sort.position > 1) {
+                        <span class="sf-sr-only">{{
+                          (sort.direction === 'asc' ? 'shared.dataTable.sortAscending' : 'shared.dataTable.sortDescending') | transloco
+                        }}</span>
+                      }
+                    } @else {
+                      <sf-icon class="sf-data-table__sort-icon sf-data-table__sort-icon--idle" name="unfold_more" />
+                    }
+                  </button>
+                } @else {
+                  <span class="sf-data-table__th-label">
+                    <ng-container *ngTemplateOutlet="headerContent; context: { $implicit: column }" />
+                  </span>
+                }
+                <span
+                  class="sf-data-table__resize"
+                  role="separator"
+                  tabindex="0"
+                  aria-orientation="vertical"
+                  [attr.aria-label]="'shared.dataTable.resizeColumn' | transloco: { name: column.header }"
+                  [attr.aria-valuenow]="widthOf(column)"
+                  [attr.aria-valuemin]="minWidthOf(column)"
+                  [attr.aria-valuemax]="maxWidth"
+                  (keydown)="onResizeKeydown($event, column, header)"
+                  (pointerdown)="onResizeStart($event, column, header)"
+                  (pointermove)="onResizeMove($event, column)"
+                  (pointerup)="onResizeEnd(column)"
+                  (pointercancel)="onResizeEnd(column)"
+                ></span>
+              </div>
+            </th>
+          }
+        </tr>
+      </thead>
+      <tbody>
+        @if (win.before > 0) {
+          <tr class="sf-data-table__spacer" aria-hidden="true">
+            <td [attr.colspan]="columnSpan()" [style.height.px]="win.before"></td>
+          </tr>
+        }
+        @for (row of pageRows().slice(win.start, win.end); track rowKey()(row); let i = $index) {
+          @let index = win.start + i;
+          @let selected = isSelected(row);
+          <tr
+            class="sf-data-table__row"
+            [class.is-selected]="selected"
+            [class.is-active]="index === active()"
+            [attr.data-row-index]="index"
+            [attr.aria-rowindex]="offset() + index + 2"
+            [attr.aria-selected]="selectable() ? selected : null"
+            [attr.tabindex]="isTabStop(index, win.start, win.end) ? 0 : -1"
+            (keydown)="onRowKeydown($event, row, index)"
+            (click)="onRowClick($event, row, index)"
+            (focus)="onRowFocus(index)"
+          >
+            @if (selectable()) {
+              <td class="sf-data-table__check" (click)="onCheckCellClick($event, index)">
+                <sf-checkbox
+                  [aria-label]="'shared.dataTable.selectRow' | transloco: { name: labelOf(row) }"
+                  [controlTabindex]="-1"
+                  [value]="selected"
+                  (valueChange)="setRowSelected(row, index, $event)"
+                />
+              </td>
+            }
+            @for (column of visibleColumns(); track column.id; let first = $first) {
+              <td class="sf-data-table__td" [class.sf-data-table__first]="first" [attr.data-align]="column.align ?? null">
+                @let template = cellTemplates().get(column.id);
+                @if (template) {
+                  <ng-container *ngTemplateOutlet="template; context: cellContext(row, column, offset() + index)" />
+                } @else {
+                  {{ cellText(row, column) }}
+                }
+              </td>
+            }
+          </tr>
+        }
+        @if (win.after > 0) {
+          <tr class="sf-data-table__spacer" aria-hidden="true">
+            <td [attr.colspan]="columnSpan()" [style.height.px]="win.after"></td>
+          </tr>
+        }
+      </tbody>
+    </table>
+
+    @if (showEmpty()) {
+      <sf-empty-state
+        class="sf-data-table__empty"
+        icon="search_off"
+        [level]="3"
+        [title]="emptyTitle() ?? ('shared.dataTable.empty' | transloco)"
+        [description]="emptyDescription()"
+        [secondaryLabel]="filtered() ? ('shared.dataTable.clearFilters' | transloco) : null"
+        (secondary)="clearFilters()"
+      />
+    }
+
+    @if (hasMore()) {
+      <div class="sf-data-table__more">
+        <sf-button variant="secondary" size="sm" [loading]="loading()" (click)="requestMore(true)">{{
+          'shared.dataTable.loadMore' | transloco
+        }}</sf-button>
+      </div>
+    }
+  }
+</div>
+
+@if (paging() === 'pager' && matchingCount() > 0) {
+  <div class="sf-data-table__pager">
+    <sf-button
+      variant="ghost"
+      size="sm"
+      icon="chevron_left"
+      [label]="'shared.dataTable.previousPage' | transloco"
+      [disabled]="currentPage() === 0"
+      (click)="goToPage(currentPage() - 1)"
+    />
+    <span class="sf-data-table__page" aria-live="polite">{{
+      'shared.dataTable.page' | transloco: { page: currentPage() + 1, pages: pageCount() }
+    }}</span>
+    <sf-button
+      variant="ghost"
+      size="sm"
+      icon="chevron_right"
+      [label]="'shared.dataTable.nextPage' | transloco"
+      [disabled]="currentPage() + 1 >= pageCount()"
+      (click)="goToPage(currentPage() + 1)"
+    />
+  </div>
+}
+
+<ng-template #headerContent let-column>
+  @let template = headerTemplates().get(column.id);
+  @if (template) {
+    <ng-container *ngTemplateOutlet="template; context: { $implicit: column }" />
+  } @else {
+    <span class="sf-data-table__header-text">{{ column.header }}</span>
+  }
+</ng-template>

@@ -34,6 +34,16 @@ export interface ProjectPreferences {
   gridColumns?: Record<string, string[]>;
 }
 
+/** The column layout of one data table (`sf-data-table` with a `tableId`); every part is optional. */
+export interface TableColumnsPreference {
+  /** Column ids in display order (columns missing here follow in their definition order). */
+  order?: string[];
+  /** Ids of the hidden columns. */
+  hidden?: string[];
+  /** Column widths in px by column id. */
+  widths?: Record<string, number>;
+}
+
 export interface PreferencesDocument {
   schemaVersion: number;
   theme?: ThemePreference;
@@ -44,6 +54,8 @@ export interface PreferencesDocument {
   paneSizes?: Record<string, number>;
   previewView?: PreviewViewPreference;
   issueScopes?: string[];
+  /** Column layouts by table id (instance-wide: a table looks the same in every project). */
+  tableColumns?: Record<string, TableColumnsPreference>;
   projects?: Record<string, ProjectPreferences>;
 }
 

@@ -19,6 +19,7 @@ import {
   PreviewViewPreference,
   RECENTS_CAP,
   RecentEntry,
+  TableColumnsPreference,
   ThemePreference,
 } from './preferences.types';
 
@@ -112,6 +113,29 @@ export class PreferencesService {
   }
   setPaneSize(paneId: string, size: number): void {
     this.set(['paneSizes', paneId], size);
+  }
+  /** The column layout of a data table (tracks the document when read reactively); empty when none is stored. */
+  tableColumns(tableId: string): TableColumnsPreference {
+    return this.document().tableColumns?.[tableId] ?? {};
+  }
+  /**
+   * Stores the parts of a table's column layout that are given (`order` and `hidden` replace; `widths` merge per column).
+   * `null` forgets the whole layout.
+   */
+  setTableColumns(tableId: string, state: TableColumnsPreference | null): void {
+    if (state === null) {
+      this.set(['tableColumns', tableId], null);
+      return;
+    }
+    if (state.order) {
+      this.set(['tableColumns', tableId, 'order'], state.order);
+    }
+    if (state.hidden) {
+      this.set(['tableColumns', tableId, 'hidden'], state.hidden);
+    }
+    for (const [columnId, width] of Object.entries(state.widths ?? {})) {
+      this.set(['tableColumns', tableId, 'widths', columnId], width);
+    }
   }
 
   // Typed per-project accessors (read inside computed/templates: they track the document).

@@ -84,12 +84,17 @@ describe('SfDrawerComponent', () => {
     fixture.detectChanges();
     expect(host.width).toBe(496);
     expect(handle).toHaveAttribute('aria-valuenow', '496');
-    fireEvent.keyDown(handle, { key: 'End' });
+    fireEvent.keyDown(handle, { key: 'Home' });
     fixture.detectChanges();
     expect(host.width).toBe(320);
     fireEvent.keyDown(handle, { key: 'ArrowRight' });
     fixture.detectChanges();
     expect(host.width).toBe(320);
+
+    // Double click: back to the width it opened with.
+    fireEvent.dblClick(handle);
+    fixture.detectChanges();
+    expect(host.width).toBe(480);
   });
 
   it('closes with its × button', async () => {

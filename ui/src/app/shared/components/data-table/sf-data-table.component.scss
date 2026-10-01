@@ -1,0 +1,344 @@
+// sf-data-table (M35.8). A flex column that takes the height it is given: the toolbar, bulk bar and pager keep their
+// size, the scroller between them scrolls (and is the only thing that does). Rows are exactly
+// --sf-table-row-height tall (the virtual window relies on it), cells never wrap.
+// Sticky layers: body cells of the first column < header cells < the header's first column, all inside the
+// scroller's own stacking context.
+
+:host {
+  --data-table-check-width: var(--sf-space-10);
+
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  gap: var(--sf-space-2);
+  min-height: 0;
+  min-width: 0;
+  max-height: 100%;
+}
+
+.sf-data-table__toolbar,
+.sf-data-table__bulk,
+.sf-data-table__pager {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sf-gap);
+}
+
+.sf-data-table__search {
+  flex: 0 1 18rem;
+  min-width: 10rem;
+}
+
+.sf-data-table__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sf-space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.sf-data-table__toolbar-end {
+  display: flex;
+  align-items: center;
+  gap: var(--sf-gap);
+  margin-inline-start: auto;
+}
+
+.sf-data-table__bulk {
+  padding: var(--sf-space-1) var(--sf-pad-panel);
+  border: 1px solid var(--sf-border);
+  border-radius: var(--sf-radius-md);
+  background: var(--sf-accent-subtle);
+  color: var(--sf-text);
+  font-size: var(--sf-fs-13);
+}
+
+.sf-data-table__bulk-count {
+  font-weight: var(--sf-weight-semibold);
+}
+
+.sf-data-table__bulk-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sf-gap);
+  margin-inline-start: auto;
+}
+
+.sf-data-table__error {
+  flex: none;
+}
+
+.sf-data-table__scroller {
+  position: relative;
+  isolation: isolate;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  border: 1px solid var(--sf-border);
+  border-radius: var(--sf-radius-md);
+  background: var(--sf-surface);
+
+  // Holds the keyboard focus while the active row is scrolled out of the rendered window.
+  &:focus {
+    outline: none;
+  }
+
+  &:focus-visible {
+    box-shadow: inset 0 0 0 2px var(--sf-focus-ring);
+  }
+}
+
+// ── Grid ────────────────────────────────────────────────────────────────────
+
+.sf-data-table__grid {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: separate;
+  border-spacing: 0;
+  color: var(--sf-text);
+  font-family: var(--sf-font-ui);
+  font-size: var(--sf-fs-13);
+  line-height: var(--sf-lh-13);
+}
+
+.sf-data-table__check-col {
+  width: var(--data-table-check-width);
+}
+
+th,
+td {
+  box-sizing: border-box;
+  height: var(--sf-table-row-height);
+  padding: 0 var(--sf-pad-cell-x);
+  overflow: hidden;
+  border-bottom: 1px solid var(--sf-border);
+  text-align: start;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: middle;
+
+  &[data-align='center'] {
+    text-align: center;
+  }
+
+  &[data-align='end'] {
+    text-align: end;
+  }
+}
+
+th {
+  position: sticky;
+  top: 0;
+  z-index: calc(var(--sf-z-sticky) + 1);
+  background: var(--sf-surface-sunken);
+  color: var(--sf-text-muted);
+  font-size: var(--sf-fs-12);
+  font-weight: var(--sf-weight-medium);
+}
+
+td {
+  background: var(--sf-surface);
+}
+
+.sf-data-table__check {
+  width: var(--data-table-check-width);
+  text-align: center;
+}
+
+.sf-data-table__grid--sticky-first {
+  .sf-data-table__check,
+  .sf-data-table__first {
+    position: sticky;
+    inset-inline-start: 0;
+    z-index: var(--sf-z-sticky);
+  }
+
+  th.sf-data-table__check,
+  th.sf-data-table__first {
+    z-index: calc(var(--sf-z-sticky) + 2);
+  }
+
+  &.sf-data-table__grid--selectable .sf-data-table__first {
+    inset-inline-start: var(--data-table-check-width);
+  }
+
+  .sf-data-table__first {
+    box-shadow: inset -1px 0 0 var(--sf-border);
+  }
+}
+
+.sf-data-table__th-inner {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  height: 100%;
+}
+
+.sf-data-table__th-label,
+.sf-data-table__sort {
+  display: inline-flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: var(--sf-space-1);
+  min-width: 0;
+  overflow: hidden;
+}
+
+[data-align='end'] .sf-data-table__sort,
+[data-align='end'] .sf-data-table__th-label {
+  justify-content: flex-end;
+}
+
+[data-align='center'] .sf-data-table__sort,
+[data-align='center'] .sf-data-table__th-label {
+  justify-content: center;
+}
+
+.sf-data-table__header-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sf-data-table__sort {
+  height: 100%;
+  padding: 0;
+  border: none;
+  border-radius: var(--sf-radius-sm);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+
+  &:hover {
+    color: var(--sf-text);
+  }
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: inset 0 0 0 2px var(--sf-focus-ring);
+  }
+}
+
+.sf-data-table__sort-icon {
+  flex: none;
+  color: var(--sf-accent);
+  font-size: var(--sf-fs-14);
+}
+
+.sf-data-table__sort-icon--idle {
+  color: var(--sf-text-subtle);
+  opacity: 0;
+}
+
+.sf-data-table__sort:hover .sf-data-table__sort-icon--idle,
+.sf-data-table__sort:focus-visible .sf-data-table__sort-icon--idle {
+  opacity: 1;
+}
+
+.sf-data-table__sort-position {
+  flex: none;
+  color: var(--sf-accent);
+  font-size: var(--sf-fs-12);
+  font-variant-numeric: tabular-nums;
+}
+
+// The resize handle: a thin bar on the header's end edge, wider to the pointer than it looks.
+.sf-data-table__resize {
+  flex: none;
+  align-self: stretch;
+  width: var(--sf-space-2);
+  margin-inline-end: calc(-1 * var(--sf-pad-cell-x));
+  cursor: col-resize;
+  touch-action: none;
+
+  &::after {
+    content: '';
+    display: block;
+    width: 2px;
+    height: 60%;
+    margin: 20% auto 0;
+    border-radius: var(--sf-radius-sm);
+    background: var(--sf-border);
+  }
+
+  &:hover::after,
+  &:focus-visible::after {
+    background: var(--sf-accent);
+  }
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: inset 0 0 0 2px var(--sf-focus-ring);
+  }
+}
+
+// ── Rows ────────────────────────────────────────────────────────────────────
+
+.sf-data-table__row {
+  cursor: default;
+  // Keyboard moves scroll the row into view below the sticky header.
+  scroll-margin-top: var(--sf-table-row-height);
+
+  &:hover td {
+    background: var(--sf-hover);
+  }
+
+  &.is-selected td {
+    background: var(--sf-selection);
+  }
+
+  &:focus {
+    outline: none;
+  }
+
+  &:focus-visible td {
+    box-shadow: inset 0 2px 0 var(--sf-focus-ring), inset 0 -2px 0 var(--sf-focus-ring);
+  }
+
+  &:focus-visible td:first-child {
+    box-shadow:
+      inset 2px 0 0 var(--sf-focus-ring),
+      inset 0 2px 0 var(--sf-focus-ring),
+      inset 0 -2px 0 var(--sf-focus-ring);
+  }
+
+  &:focus-visible td:last-child {
+    box-shadow:
+      inset -2px 0 0 var(--sf-focus-ring),
+      inset 0 2px 0 var(--sf-focus-ring),
+      inset 0 -2px 0 var(--sf-focus-ring);
+  }
+}
+
+.sf-data-table__spacer td {
+  height: auto;
+  padding: 0;
+  border: none;
+  background: transparent;
+}
+
+// ── States and paging ───────────────────────────────────────────────────────
+
+.sf-data-table__empty {
+  display: block;
+  padding: var(--sf-space-8) var(--sf-space-4);
+}
+
+.sf-data-table__more {
+  display: flex;
+  justify-content: center;
+  padding: var(--sf-space-2);
+}
+
+.sf-data-table__pager {
+  justify-content: flex-end;
+  color: var(--sf-text-muted);
+  font-size: var(--sf-fs-13);
+}
+
+.sf-data-table__page {
+  font-variant-numeric: tabular-nums;
+}

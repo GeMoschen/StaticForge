@@ -1,0 +1,68 @@
+:host {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+}
+
+:host(.sf-splitter--horizontal) {
+  flex-direction: row;
+}
+
+:host(.sf-splitter--vertical) {
+  flex-direction: column;
+}
+
+.sf-splitter__pane {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+
+  // The sized pane keeps its px basis; the other takes the rest.
+  &.is-sized {
+    flex: 0 0 auto;
+  }
+
+  &[hidden] {
+    display: none;
+  }
+}
+
+// The handle: a hairline that widens its hit area with padding and shows the accent on hover and focus.
+.sf-splitter__handle {
+  position: relative;
+  flex: 0 0 auto;
+  background: var(--sf-border);
+  touch-action: none;
+
+  &::before {
+    content: '';
+    position: absolute;
+    inset: calc(-1 * var(--sf-space-1));
+  }
+
+  &:hover,
+  &:focus-visible {
+    background: var(--sf-accent);
+    outline: none;
+  }
+}
+
+:host(.sf-splitter--horizontal) .sf-splitter__handle {
+  width: 1px;
+  cursor: col-resize;
+}
+
+:host(.sf-splitter--vertical) .sf-splitter__handle {
+  height: 1px;
+  cursor: row-resize;
+}
+
+// Collapsed: the restore button takes a narrow strip where the pane was (in the flow, so it never covers the other
+// pane's content).
+.sf-splitter__restore {
+  flex: 0 0 auto;
+  align-self: flex-start;
+  margin: var(--sf-space-1);
+}

@@ -13,7 +13,6 @@ import {
   type StoreTreeMoveEvent,
   type StoreTreeNode,
 } from '../../shared/components/sf-store-tree-node.component';
-import { SfTreeComponent } from '../../shared/components/sf-tree.component';
 import { ContextMenuItem, ContextMenuService } from '../../shared/services/context-menu.service';
 import { consumeQueryParam } from '../../shared/deep-link';
 import { GlobalSetDetailComponent } from './global-set-detail.component';
@@ -46,7 +45,6 @@ const STARTER_CONTENT = `editor text title { label "Title" required }
     SfIconComponent,
     SfSpinnerComponent,
     SfStoreTreeNodeComponent,
-    SfTreeComponent,
     GlobalSetDetailComponent,
   ],
   templateUrl: './globals.component.html',

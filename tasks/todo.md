@@ -40,7 +40,17 @@ every screen. Screen migration starts only after the style guide (M35.9) is sign
   - [x] `lint:dialogs` script (warning; error in M35.27) + list of remaining `window.*` calls for the screen tasks
   - [x] Verification: vitest, ng build, lint, check in Chrome
   - Review: see `35-m35-ui-ux-overhaul/007-overlays.md` (1,512 tests green, build + lint green, checked in Chrome)
-- [ ] M35.8 data table, tree, splitter
+- [x] M35.8 data table, tree, splitter
+  - [x] Virtual scroll primitive (no CDK): pure window maths + `sfVirtualScroll` directive, density-aware row height
+  - [x] `sfSeparator` handle directive (role=separator, keys, pointer, double click) shared by `sf-splitter` and the
+        drawer edge; `sf-splitter` (horizontal/vertical, min/max, collapse/restore, persisted per pane id)
+  - [x] `sf-tree` (data-driven, replaces the empty wrapper): lazy children, ARIA tree, full keyboard, multi-select,
+        F2/Del/clipboard/context menu, ⋮ button, filter, persisted expansion, drag and drop + keyboard move, inline
+        create/rename, truncation rule, skeleton, virtualized
+  - [x] `sf-data-table`: columns (templates, multi-sort, resize, hide, reorder, chooser persisted), sticky header/first
+        column, selection + bulk bar, row keyboard, filter bar synced to the URL, paging/infinite, states, virtualized
+  - [x] Verification: vitest, ng build, lint, 5,000-node tree and 1,000-row table smooth in Chrome
+  - Review: see `35-m35-ui-ux-overhaul/008-table-tree-splitter.md` (1,620 tests green, build + lint green, checked in Chrome)
 - [ ] M35.9 style guide + **design gate (user sign-off)**
 - [ ] M35.10 app frame: top bar, rail, developer mode, titles
 - [ ] M35.11 IA: Publishing area, Settings side menu + split

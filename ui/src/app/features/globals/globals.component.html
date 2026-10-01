@@ -26,7 +26,7 @@
         description="Create a property set to hold site-wide values such as the site title or social links."
       />
     } @else {
-      <sf-tree>
+      <div>
         @for (node of treeNodes(); track node.uuid) {
           <sf-store-tree-node
             [node]="node"
@@ -40,7 +40,7 @@
             (changed)="onSetChanged()"
           />
         }
-      </sf-tree>
+      </div>
     }
   </aside>
 

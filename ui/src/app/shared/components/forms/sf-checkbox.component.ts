@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, model } from '@angular/core';
+import { ChangeDetectionStrategy, Component, input, model } from '@angular/core';
 import { SfControlBase, provideSfControl } from './sf-control';
 
 /**
@@ -11,6 +11,8 @@ import { SfControlBase, provideSfControl } from './sf-control';
  *
  * - Value: `boolean`. `indeterminate` shows the mixed state; a user change clears it (two-way bindable).
  * - `readonly`: `aria-readonly`, clicks and `Space` don't toggle, the box stays readable.
+ * - `controlTabindex`: the native box's `tabindex` (`-1` keeps it out of the tab order, e.g. inside a grid row that is
+ *   the tab stop itself).
  */
 @Component({
   selector: 'sf-checkbox',
@@ -31,6 +33,7 @@ import { SfControlBase, provideSfControl } from './sf-control';
         [checked]="value()"
         [indeterminate]="indeterminate()"
         [disabled]="isDisabled()"
+        [attr.tabindex]="controlTabindex()"
         [attr.aria-label]="ariaLabel()"
         [attr.aria-labelledby]="labelledBy(text)"
         [attr.aria-describedby]="describedBy()"
@@ -49,6 +52,7 @@ import { SfControlBase, provideSfControl } from './sf-control';
 export class SfCheckboxComponent extends SfControlBase<boolean> {
   readonly value = model(false);
   readonly indeterminate = model(false);
+  readonly controlTabindex = input<number | null>(null);
 
   constructor() {
     super('group');
