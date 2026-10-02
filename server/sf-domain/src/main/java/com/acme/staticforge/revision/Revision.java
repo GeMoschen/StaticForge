@@ -22,6 +22,9 @@ import org.hibernate.type.SqlTypes;
 @IdClass(Revision.RevisionId.class)
 public class Revision {
 
+    /** Width of {@code search_text}. */
+    public static final int SEARCH_TEXT_LENGTH = 4000;
+
     @Id
     @Column(name = "project_id", nullable = false)
     private Long projectId;
@@ -45,6 +48,14 @@ public class Revision {
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "summary", nullable = false)
     private JsonNode summary;
+
+    /**
+     * Lower-cased item names (and uids) of the touched assets, one per line, truncated to the column: what the history
+     * search ({@code q}) matches besides the comment. Written with the summary; revisions from before it was added
+     * ({@code null}) match on their comment only.
+     */
+    @Column(name = "search_text", length = SEARCH_TEXT_LENGTH)
+    private String searchText;
 
     /**
      * The revision's own changes were absorbed by revision compaction (M29.4.1, spec §7.7): some removed version
@@ -97,6 +108,14 @@ public class Revision {
 
     public void setSummary(JsonNode summary) {
         this.summary = summary;
+    }
+
+    public String getSearchText() {
+        return searchText;
+    }
+
+    public void setSearchText(String searchText) {
+        this.searchText = searchText;
     }
 
     public boolean isCompacted() {

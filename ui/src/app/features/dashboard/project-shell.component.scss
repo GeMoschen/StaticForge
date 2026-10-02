@@ -1,13 +1,9 @@
-// Fills the frame's main region: the revision spine on the left, the screen beside it.
+// Fills the frame's main region with the open screen.
 :host {
   display: flex;
   flex: 1 1 auto;
   min-width: 0;
   min-height: 0;
-}
-
-.shell__spine {
-  flex-shrink: 0;
 }
 
 .shell__content {

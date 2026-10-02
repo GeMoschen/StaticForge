@@ -1,0 +1,58 @@
+@let r = revision();
+<header class="rev__head">
+  <div class="rev__title-row">
+    <sf-icon class="rev__kind" [name]="kindIcons[r.kind]" />
+    <h2 class="rev__title" id="history-rev-title">{{ t('page.revision', { n: r.id }) }}</h2>
+    <sf-button variant="ghost" size="sm" icon="close" [label]="t('detail.close')" (click)="closed.emit()" />
+  </div>
+  <p class="rev__summary">{{ summary() }}</p>
+  <div class="rev__meta">
+    <sf-avatar size="sm" [name]="r.byName" />
+    <span>{{ r.byName }} · {{ when() }} · {{ t('kinds.' + r.kind) }}</span>
+  </div>
+  <div class="rev__actions">
+    <sf-button variant="primary" size="sm" icon="visibility" (click)="view()">{{ t('detail.view') }}</sf-button>
+    @if (canRollBack()) {
+      <sf-button variant="danger-ghost" size="sm" icon="history" [disabled]="archived()" (click)="rollBack()">{{ t('detail.rollBack') }}</sf-button>
+    }
+  </div>
+</header>
+
+<div class="rev__body">
+  @if (loading()) {
+    <sf-spinner />
+  } @else if (failed()) {
+    <p class="rev__none" role="alert">{{ t('detail.loadFailed') }}</p>
+  } @else {
+    @if (diff()?.compacted) {
+      <p class="rev__none" role="note"><sf-icon name="compress" /> {{ diff()?.message ?? t('detail.compacted') }}</p>
+    }
+    <h3 class="rev__section">{{ t('detail.changed', { count: items().length }) }}</h3>
+    @for (item of items(); track $index) {
+      <section class="rev__asset" [attr.aria-label]="nameOf(item)">
+        <div class="rev__asset-head">
+          <sf-icon class="rev__asset-icon" [name]="typeIcon(item.asset.type)" />
+          <h4 class="rev__asset-name">{{ nameOf(item) }}</h4>
+          <sf-status size="sm" [tone]="tone(item.asset.action)" [icon]="actionIcon(item.asset.action)" [label]="actionLabel(item.asset.action)" />
+          <span class="rev__langs">
+            @for (lang of item.ref?.locales ?? []; track lang) {
+              <sf-tag [label]="lang.toUpperCase()" />
+            }
+          </span>
+          @if (canRestore() && item.asset.uuid) {
+            <sf-button class="rev__restore" variant="ghost" size="sm" icon="restore" (click)="restore(item)">{{
+              t(item.asset.action?.toLowerCase() === 'delete' ? 'detail.undelete' : 'detail.restoreAsset')
+            }}</sf-button>
+          }
+        </div>
+        @if (item.asset.compacted) {
+          <p class="rev__none">{{ diff()?.message ?? t('detail.compacted') }}</p>
+        } @else {
+          <sf-visual-diff [asset]="item.asset" [projectKey]="projectKey()" [revisionId]="r.id" />
+        }
+      </section>
+    } @empty {
+      <p class="rev__none">{{ t('detail.noChanges') }}</p>
+    }
+  }
+</div>

@@ -30,7 +30,7 @@ import {
   inRange,
   revisionById,
 } from './history-data';
-import { SampleHistoryRangeDialogComponent } from './sample-history-range-dialog.component';
+import { HistoryRangeDialogComponent } from '../../../history/history-range-dialog.component';
 import { SampleHistoryRevisionComponent } from './sample-history-revision.component';
 
 /** `by:anna,kind:edit,range:week,q:price` ⇄ the filters (the `hfilter` query parameter); `range:custom,from:2026-09-01,to:2026-09-30`. */
@@ -129,7 +129,7 @@ export function filterHistory(filters: HistoryFilters, now = Date.now()): Histor
   standalone: true,
   imports: [
     NgTemplateOutlet,
-    SampleHistoryRangeDialogComponent,
+    HistoryRangeDialogComponent,
     SampleHistoryRevisionComponent,
     SfAvatarComponent,
     SfBadgeComponent,

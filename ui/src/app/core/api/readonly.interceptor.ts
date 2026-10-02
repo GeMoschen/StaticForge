@@ -10,9 +10,8 @@ const PROJECT_API_PREFIX = /\/api\/v1\/projects\//;
 
 /**
  * `POST /assets/{uuid}/restore` and `POST /projects/{key}/restore` are the one
- * legitimate class of write issued *about* a past revision (from
- * `revision-diff.component.ts`, reached via the same `timeTravel.enter()` call that
- * puts the app into time travel) — they must keep working while time-travelling.
+ * legitimate class of write issued *about* a past revision (from the History
+ * drawer, page and time-travel banner, `HistoryActions`) — they must keep working while time-travelling.
  */
 const RESTORE_PATH = /\/restore$/;
 

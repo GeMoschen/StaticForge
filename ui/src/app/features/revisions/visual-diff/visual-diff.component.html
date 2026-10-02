@@ -18,7 +18,7 @@
       [class.sf-vdiff__change--remove]="change.remove"
     >
       <header class="sf-vdiff__change-header">
-        <span class="sf-vdiff__path">{{ labelPath(change.path) }}</span>
+        <span class="sf-vdiff__path">{{ labelOf(change) }}</span>
         @if (change.add) {
           <span class="sf-vdiff__badge sf-vdiff__badge--add">Added</span>
         } @else if (change.remove) {

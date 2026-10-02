@@ -36,7 +36,14 @@
 
   <div class="topbar__group topbar__group--icons">
     @if (inProject()) {
-      <sf-button variant="ghost" icon="history" [link]="historyLink()" [label]="'frame.topbar.history' | transloco" />
+      <sf-button
+        variant="ghost"
+        icon="history"
+        aria-haspopup="dialog"
+        [attr.aria-expanded]="history.isOpen()"
+        [label]="'frame.topbar.history' | transloco"
+        (click)="history.toggle()"
+      />
     }
     <sf-button
       variant="ghost"

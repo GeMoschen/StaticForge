@@ -66,6 +66,34 @@ public class DiffServiceImpl implements DiffService {
         return new RevisionDiff(projectId, revisionId, diffs, compacted, compacted ? RevisionDiff.COMPACTED_MESSAGE : null);
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public AssetDiff diffAsset(long projectId, UUID assetUuid, long from, Long to) {
+        Asset asset = assetRepository
+                .findByProjectIdAndUuid(projectId, assetUuid)
+                .orElseThrow(() -> new SfException(ProblemFactory.notFound("Asset not found.")));
+        long target = to != null
+                ? to
+                : revisionRepository.findHeadRevisionId(projectId).orElseThrow(() -> revisionNotFound());
+        for (long revision : new long[] {from, target}) {
+            if (revisionRepository.findByProjectIdAndRevisionId(projectId, revision).isEmpty()) {
+                throw revisionNotFound();
+            }
+        }
+        Optional<AssetVersion> before = assetVersionRepository.findValidAtRevision(asset.getId(), from);
+        Optional<AssetVersion> after = assetVersionRepository.findValidAtRevision(asset.getId(), target);
+        if (compactedHistory.mayBeCompacted(projectId, Math.max(from, target))
+                && (before.map(v -> v.isCompactedAt(from)).orElse(false)
+                        || after.map(v -> v.isCompactedAt(target)).orElse(false))) {
+            return new AssetDiff(asset.getUuid(), asset.getUid(), asset.getAssetType().name(), "UPDATE", List.of(), true);
+        }
+        return diffVerse(asset, before, after).orElseThrow();
+    }
+
+    private static SfException revisionNotFound() {
+        return new SfException(ProblemFactory.notFound("Revision not found."));
+    }
+
     private Optional<AssetDiff> diffEntry(long projectId, JsonNode entry, long revisionId, boolean mayBeCompacted) {
         String uuidText = entry.has("uuid") ? entry.get("uuid").asText() : null;
         if (uuidText == null || uuidText.isBlank()) {

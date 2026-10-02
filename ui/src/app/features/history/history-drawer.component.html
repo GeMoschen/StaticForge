@@ -1,0 +1,100 @@
+<sf-drawer [title]="title()" [width]="460" (closed)="close()">
+  @if (isProject()) {
+    <div class="hd__filters" role="group" [attr.aria-label]="t('filters.label')">
+      @for (menu of menus(); track menu.id) {
+        <sf-menu variant="secondary" size="md" align="start" [text]="menu.text" [label]="menu.name" [items]="menu.items" />
+      }
+      @if (filtered()) {
+        <sf-button variant="ghost" size="md" (click)="clear()">{{ t('filters.clear') }}</sf-button>
+      }
+    </div>
+  } @else {
+    <p class="hd__lead">{{ t('page.versionsLead') }}</p>
+  }
+
+  @if (failed()) {
+    <p class="hd__empty" role="alert">{{ t('page.loadFailed') }}</p>
+  } @else if (rows().length === 0 && !loading()) {
+    <p class="hd__empty">{{ t('drawer.empty') }}</p>
+  }
+
+  @if (rows().length > 0) {
+    <ol class="hd__list" [attr.aria-label]="title()">
+      @for (row of rows(); track row.id) {
+        <li class="hd__item" [class.is-current]="row.id === currentId()">
+          <sf-avatar class="hd__avatar" size="sm" [name]="row.byName" />
+          <div class="hd__main">
+            <div class="hd__head">
+              <span class="hd__summary">{{ summary(row) }}</span>
+              @if (row.id === currentId()) {
+                <sf-badge tone="info" [label]="t('drawer.current')" />
+              }
+            </div>
+            <div class="hd__meta">
+              <span>{{ isOwn(row) ? t('page.you') : row.byName }}</span>
+              <span aria-hidden="true">·</span>
+              <sf-relative-time [value]="row.at" />
+              <span aria-hidden="true">·</span>
+              <span class="hd__rev">{{ t('page.revision', { n: row.id }) }}</span>
+            </div>
+            <div class="hd__tags">
+              <sf-icon class="hd__kind" [name]="kindIcons[row.kind]" [attr.title]="t('kinds.' + row.kind)" />
+              @for (lang of row.locales; track lang) {
+                <sf-tag [label]="lang" />
+              }
+              @if (isProject()) {
+                @let named = names(row);
+                <span class="hd__assets">{{ named.names }}@if (named.more) { {{ t('page.moreAssets', { count: named.more }) }} }</span>
+              }
+            </div>
+            <div class="hd__actions">
+              <sf-button variant="ghost" size="sm" icon="visibility" (click)="view(row)">{{ t('actions.view') }}</sf-button>
+              @if (isProject()) {
+                <sf-button variant="ghost" size="sm" icon="open_in_new" (click)="openFull(row.id)">{{ t('actions.details') }}</sf-button>
+              } @else if (row.id !== currentId()) {
+                <sf-button
+                  variant="ghost"
+                  size="sm"
+                  icon="compare_arrows"
+                  [attr.aria-expanded]="comparing() === row.id"
+                  (click)="toggleCompare(row)"
+                  >{{ t('actions.compare') }}</sf-button
+                >
+                @if (canRestoreItem()) {
+                  <sf-button variant="ghost" size="sm" icon="restore" (click)="restore(row)">{{ t('actions.restore') }}</sf-button>
+                }
+              }
+            </div>
+            @if (comparing() === row.id) {
+              <div class="hd__compare">
+                <p class="hd__compare-lead">{{ t('drawer.compareLead', { n: row.id }) }}</p>
+                @let diff = compareDiff();
+                @if (compareLoading()) {
+                  <sf-spinner />
+                } @else if (diff) {
+                  <sf-visual-diff [asset]="diff" [projectKey]="projectKey() ?? ''" [revisionId]="row.id" />
+                }
+              </div>
+            }
+          </div>
+        </li>
+      }
+    </ol>
+  }
+
+  @if (loading()) {
+    <sf-spinner />
+  } @else if (canLoadMore()) {
+    <div class="hd__more">
+      <sf-button variant="secondary" size="sm" (click)="loadMore()">{{ t('page.loadMore') }}</sf-button>
+    </div>
+  }
+
+  @if (rangeDialog()) {
+    <sf-history-range-dialog [from]="filter().date.from" [to]="filter().date.to" (applied)="applyRange($event)" (closed)="rangeDialog.set(false)" />
+  }
+
+  <div sfDrawerFooter class="hd__footer">
+    <sf-button variant="secondary" icon="history" (click)="openFull(null)">{{ t('drawer.openFull') }}</sf-button>
+  </div>
+</sf-drawer>

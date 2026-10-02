@@ -29,6 +29,7 @@ import {
   TEMPLATES_ROOT_UID,
   type TemplateAssetKind,
 } from './types';
+import { useFrameItem } from '../../core/frame/use-frame-item';
 
 /** What a new dataset starts with: one field, so its first record already has something to fill in. */
 const NEW_DATASET_CONTENT = `editor text name { label "Name" required }
@@ -83,6 +84,13 @@ export class TemplatesComponent {
 
   constructor() {
     this.store.bind(this.projectKey);
+    // The open template or dataset: the breadcrumb ends with it, and the History drawer shows its versions (M35.12).
+    useFrameItem(() => {
+      const uuid = this.store.selectedUuid();
+      const open = uuid ? this.store.templates().find((t) => t.uuid === uuid) : null;
+      const label = open?.displayName || open?.uid;
+      return label && uuid ? { label, asset: { uuid } } : null;
+    });
 
     effect(() => {
       const key = this.projectKey();

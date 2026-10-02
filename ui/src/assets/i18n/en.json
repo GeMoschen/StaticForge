@@ -2518,5 +2518,139 @@
         "placeholder": "Editing this kind of template is part of M35.21."
       }
     }
+  },
+  "history": {
+    "page": {
+      "title": "History",
+      "subtitle": "Every change to the project, newest first.",
+      "count": "{count, plural, one {# revision} other {# revisions}}",
+      "revision": "Revision {n}",
+      "you": "You",
+      "unknownAuthor": "Unknown user",
+      "projectTitle": "Project history",
+      "itemTitle": "History of “{name}”",
+      "versionsLead": "The versions of this item, newest first. Restoring writes an old version as a new one; nothing is lost.",
+      "moreAssets": "+ {count} more",
+      "search": "Search summaries and item names",
+      "table": "Project revisions",
+      "empty": "No revisions match",
+      "emptyHint": "Try another author, type or date.",
+      "loadFailed": "The history could not be loaded.",
+      "loadMore": "Load more"
+    },
+    "verb": {
+      "CREATE": "Created",
+      "UPDATE": "Changed",
+      "DELETE": "Deleted",
+      "RESTORE": "Restored",
+      "MOVE": "Moved",
+      "RENAME": "Renamed",
+      "UID_CHANGE": "Changed the UID of",
+      "BULK": "Changed",
+      "IMPORT": "Imported",
+      "RELEASE": "Released",
+      "UNPUBLISH": "Unpublished",
+      "DISCARD": "Discarded changes of"
+    },
+    "summary": {
+      "one": "{verb} {name}",
+      "many": "{verb} {name} and {count, plural, one {# more} other {# more}}"
+    },
+    "kinds": {
+      "edit": "Edit",
+      "release": "Release",
+      "restore": "Restore",
+      "create": "Created",
+      "delete": "Deleted",
+      "import": "Import"
+    },
+    "ranges": {
+      "today": "Today",
+      "week": "Last 7 days",
+      "month": "Last 30 days",
+      "custom": "Custom range…",
+      "from": "from {date}",
+      "until": "until {date}"
+    },
+    "filters": {
+      "label": "Filter the history",
+      "by": "Author",
+      "kind": "Type",
+      "range": "Date",
+      "any": "Any",
+      "picked": "{filter}: {value}",
+      "selected": "Selected",
+      "clear": "Clear filters"
+    },
+    "columns": {
+      "rev": "Revision",
+      "summary": "What happened",
+      "kind": "Type",
+      "changed": "Changed",
+      "by": "Author"
+    },
+    "actions": {
+      "view": "View",
+      "compare": "Compare with current",
+      "restore": "Restore",
+      "details": "Details",
+      "created": "Created",
+      "changed": "Changed",
+      "deleted": "Deleted",
+      "released": "Released",
+      "restored": "Restored"
+    },
+    "drawer": {
+      "openFull": "Open full history",
+      "current": "Current",
+      "empty": "No revisions match.",
+      "compareLead": "Revision {n} (left) against the current state (right)."
+    },
+    "detail": {
+      "resize": "Resize the revision pane",
+      "close": "Close the revision",
+      "view": "View this state",
+      "rollBack": "Roll back project…",
+      "changed": "{count, plural, one {# item changed} other {# items changed}}",
+      "restoreAsset": "Restore this item",
+      "undelete": "Restore deleted item",
+      "noChanges": "This revision has no item changes.",
+      "loadFailed": "The revision could not be loaded.",
+      "compacted": "The exact changes of this revision were compacted; the state at the end of the day is kept."
+    },
+    "diff": {
+      "unchanged": "Unchanged",
+      "sameAsCurrent": "Same as now"
+    },
+    "range": {
+      "title": "Custom date range",
+      "lead": "Show revisions made between two days (both included). Leave one empty for an open end.",
+      "from": "From",
+      "to": "To",
+      "order": "The end date is before the start date.",
+      "cancel": "Cancel",
+      "apply": "Apply"
+    },
+    "banner": {
+      "viewing": "Viewing revision {n}",
+      "by": "by {name}",
+      "readOnly": "Read-only",
+      "back": "Back to now",
+      "restore": "Restore this state"
+    },
+    "confirm": {
+      "restoreTitle": "Restore “{name}” to revision {n}?",
+      "restoreMessage": "The item goes back to this version as a new revision. The current one stays in the history.",
+      "restoreConfirm": "Restore",
+      "restored": "“{name}” restored to revision {n}.",
+      "restoreFailed": "Could not restore “{name}” — someone may have edited it since; reload and try again.",
+      "undone": "Undone — “{name}” is as before.",
+      "undoFailed": "Could not undo — try again from the history.",
+      "rollbackTitle": "Roll the whole project back to revision {n}?",
+      "rollbackMessage": "Everything changed after revision {n} is written back to how it was, as one new revision. Nothing is deleted from the history. Type the project key to confirm.",
+      "rollbackConfirm": "Roll back to revision {n}",
+      "rolledBack": "Project rolled back to revision {n}.",
+      "rollbackFailed": "Could not roll the project back — try again in a moment."
+    }
   }
 }

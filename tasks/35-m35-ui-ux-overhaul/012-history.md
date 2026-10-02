@@ -1,6 +1,6 @@
 ---
 id: M35.12
-status: todo
+status: done
 depends: [M35.10]
 epic: m35-ui-ux-overhaul
 feature: frame
@@ -46,10 +46,10 @@ for their review and sign-off; record the decisions in `009-style-guide-gate.md`
 
 ## Acceptance criteria
 
-- [ ] No spine markup or styles left.
-- [ ] Vitest: drawer per context (asset vs project), restore with undo, time-travel read-only and exit on project
+- [x] No spine markup or styles left.
+- [x] Vitest: drawer per context (asset vs project), restore with undo, time-travel read-only and exit on project
       change.
-- [ ] Screenshots reviewed. `npx vitest run` and `npx ng build` green.
+- [x] Screenshots reviewed. `npx vitest run` and `npx ng build` green.
 
 ## Notes (M35.9 / M35.10)
 
@@ -69,3 +69,34 @@ for their review and sign-off; record the decisions in `009-style-guide-gate.md`
   (`history-filter-menus.ts`), the custom range dialog, the field diff, the time-travel banner and the roll-back /
   restore actions (`sample/history/`) — move what is generic into `shared` / `features/revisions` instead of copying.
 - Remove with the spine: `revision-spine.*`, its use in `project-shell`, and the `onTick` navigation.
+
+## Review (2026-10-02)
+
+Built to the signed-off sample (gate decisions 35–46); checked in Chrome against a seeded backend (drawer in the project
+and in an editor, compare, view, banner, history page, detail pane, typed roll-back with Undo, refresh after a roll-back).
+`npx vitest run` 236 files / 2,022 tests, `npx ng build` and `npm run lint` green; backend suites green.
+
+- **Backend** (agent, `RevisionHistoryApiTest`, `ChangedLocalesTest`): `RevisionView.createdByName`; summary items carry
+  `name` (stored for new revisions, derived for old ones) and `locales` (derived, batched); `GET /revisions` filters
+  `changeType` (repeatable), `from`/`to`, `q`, all in the database before paging, plus `X-Total-Count`; asset history with
+  `changedByName`, paging and the header; `POST /restore` takes an optional `comment` (500 chars, else 400);
+  `GET /assets/{uuid}/diff?from=&to=` for *Compare with current*; 400 (not 500) for malformed parameters. New column
+  `revision.search_text` (changelog 033) for `q`; revisions written before it match `q` on their comment only.
+- **UI** (`features/history/`): `HistoryService` / `history-model` (kinds, date filter, URL ⇄ filter ⇄ API) /
+  `history-rows` (rows, human summaries), `HistoryActions` (view, restore + Undo, roll back + Undo, refresh via
+  `ReleaseEventsStore`), `HistoryDrawerStore` + `HistoryDrawerComponent` (below the top bar), `HistoryPageComponent`
+  (`/history`, `/history/:revisionId`) with `HistoryRevisionComponent`, shared filter menus and range dialog (the sample
+  now uses them), the new time-travel banner (loads the revision: author and time; *Restore this state* for project
+  admins) and the frame accent. Pages, records, global sets and templates report their asset through `FrameContextStore`.
+- **Removed:** revision spine, old revisions list and diff screens, `RevisionsService`, `revision-summary.util`.
+- **Diff labels:** `sf-visual-diff` headers show the template's name for a field (`Title`), else the path made readable.
+- **Deviations / open:**
+  - A restore needs no write permission while time travelling, so the drawer, pane and banner follow the role
+    (`isEditor`, `isProjectAdmin`), not `canEditContent` / `canAdminProject`.
+  - The playwright journeys m6, m15, m17, m18, m19, m23, m25, m29 still click the spine (`sf-revision-spine`,
+    `.shell__timemachine`): M35.31 moves them to the drawer and the new banner. `docs/user-guide.md` §24 text on the
+    spine: M35.32.
+  - The compare view in the drawer reuses the existing field diff, which is cramped at 460 px (before / after side by
+    side); the drawer is resizable. Restyling the shared field diff belongs to M35.17.
+  - Revisions written before this change have no touched languages when the language data is not derivable (deletes,
+    moves, compacted history): their language tags are left out.

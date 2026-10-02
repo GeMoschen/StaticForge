@@ -9,17 +9,16 @@ import { CHANGE_PEOPLE, CHANGE_TYPE_ICONS, ChangeLang, ChangePerson, ChangeType 
 export { CHANGE_PEOPLE as HISTORY_PEOPLE, CHANGE_TYPE_ICONS as HISTORY_TYPE_ICONS };
 export type { ChangeLang as HistoryLang, ChangeType as HistoryAssetType };
 
-/** What a revision was: the change type of the API. */
-export type HistoryKind = 'edit' | 'release' | 'restore' | 'create' | 'delete' | 'import';
-export const HISTORY_KINDS: readonly HistoryKind[] = ['edit', 'release', 'restore', 'create', 'delete', 'import'];
-export const HISTORY_KIND_ICONS: Readonly<Record<HistoryKind, string>> = {
-  edit: 'edit_note',
-  release: 'publish',
-  restore: 'restore',
-  create: 'add_circle',
-  delete: 'delete',
-  import: 'upload',
-};
+export {
+  HISTORY_KINDS,
+  HISTORY_KIND_ICONS,
+  HISTORY_RANGES,
+  NO_DATE_FILTER,
+  type HistoryDateFilter,
+  type HistoryKind,
+  type HistoryRange,
+} from '../../../history/history-model';
+import type { HistoryDateFilter, HistoryKind, HistoryRange } from '../../../history/history-model';
 
 export type HistoryAction = 'created' | 'changed' | 'deleted' | 'released' | 'restored';
 
@@ -242,15 +241,6 @@ export function versionsOf(asset: string): readonly HistoryRevision[] {
   });
 }
 
-/** The date filter: a preset, or **custom** — an own from–to range (inclusive, `yyyy-MM-dd`; either end may be open). */
-export const HISTORY_RANGES = ['any', 'today', 'week', 'month', 'custom'] as const;
-export type HistoryRange = (typeof HISTORY_RANGES)[number];
-export interface HistoryDateFilter {
-  readonly range: HistoryRange;
-  readonly from: string | null;
-  readonly to: string | null;
-}
-export const NO_DATE_FILTER: HistoryDateFilter = { range: 'any', from: null, to: null };
 const RANGE_MINUTES: Readonly<Record<'any' | 'today' | 'week' | 'month', number>> = { any: Infinity, today: DAY, week: 7 * DAY, month: 30 * DAY };
 
 const isoDay = (date: Date): string =>

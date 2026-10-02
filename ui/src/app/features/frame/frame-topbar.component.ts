@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, inject, viewChild } from '@angular/core';
 import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
 import { AuthStore } from '../../core/auth/auth.store';
+import { HistoryDrawerStore } from '../history/history-drawer.store';
 import { SessionService } from '../../core/auth/session.service';
 import { buildBreadcrumb } from '../../core/frame/breadcrumb.util';
 import { DeveloperModeService } from '../../core/frame/developer-mode.service';
@@ -68,7 +69,7 @@ export class FrameTopbarComponent {
   private readonly userPopover = viewChild.required<SfPopoverComponent>('userMenu');
 
   protected readonly inProject = computed(() => this.frame.location().kind === 'project');
-  protected readonly historyLink = computed(() => ['/p', this.frame.projectKey() ?? '', 'history']);
+  protected readonly history = inject(HistoryDrawerStore);
 
   protected readonly crumbs = computed(() =>
     buildBreadcrumb({

@@ -2372,6 +2372,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{projectKey}/assets/{uuid}/diff": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["diff_2"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{key}/members": {
         parameters: {
             query?: never;
@@ -3432,6 +3448,7 @@ export interface components {
         ProjectRestoreRequest: {
             /** Format: int64 */
             toRevision?: number;
+            comment?: string;
         };
         RevisionView: {
             /** Format: int64 */
@@ -3442,6 +3459,7 @@ export interface components {
             createdAt?: string;
             /** Format: int64 */
             createdBy?: number;
+            createdByName?: string;
             changeType?: string;
             comment?: string;
             summary?: components["schemas"]["JsonNode"];
@@ -4178,8 +4196,6 @@ export interface components {
             totalElements?: number;
             /** Format: int32 */
             totalPages?: number;
-            first?: boolean;
-            last?: boolean;
             /** Format: int32 */
             size?: number;
             content?: components["schemas"]["UrlRegistryEntryView"][];
@@ -4189,18 +4205,20 @@ export interface components {
             /** Format: int32 */
             numberOfElements?: number;
             pageable?: components["schemas"]["PageableObject"];
+            first?: boolean;
+            last?: boolean;
             empty?: boolean;
         };
         PageableObject: {
             /** Format: int64 */
             offset?: number;
             sort?: components["schemas"]["SortObject"][];
-            unpaged?: boolean;
-            paged?: boolean;
             /** Format: int32 */
             pageSize?: number;
             /** Format: int32 */
             pageNumber?: number;
+            unpaged?: boolean;
+            paged?: boolean;
         };
         SortObject: {
             direction?: string;
@@ -4240,8 +4258,6 @@ export interface components {
             totalElements?: number;
             /** Format: int32 */
             totalPages?: number;
-            first?: boolean;
-            last?: boolean;
             /** Format: int32 */
             size?: number;
             content?: components["schemas"]["TemplateSummary"][];
@@ -4251,6 +4267,8 @@ export interface components {
             /** Format: int32 */
             numberOfElements?: number;
             pageable?: components["schemas"]["PageableObject"];
+            first?: boolean;
+            last?: boolean;
             empty?: boolean;
         };
         TemplateSummary: {
@@ -4499,8 +4517,6 @@ export interface components {
             totalElements?: number;
             /** Format: int32 */
             totalPages?: number;
-            first?: boolean;
-            last?: boolean;
             /** Format: int32 */
             size?: number;
             content?: components["schemas"]["MediaSummaryView"][];
@@ -4510,6 +4526,8 @@ export interface components {
             /** Format: int32 */
             numberOfElements?: number;
             pageable?: components["schemas"]["PageableObject"];
+            first?: boolean;
+            last?: boolean;
             empty?: boolean;
         };
         MediaTextView: {
@@ -4661,8 +4679,6 @@ export interface components {
             totalElements?: number;
             /** Format: int32 */
             totalPages?: number;
-            first?: boolean;
-            last?: boolean;
             /** Format: int32 */
             size?: number;
             content?: components["schemas"]["AssetSummaryView"][];
@@ -4672,6 +4688,8 @@ export interface components {
             /** Format: int32 */
             numberOfElements?: number;
             pageable?: components["schemas"]["PageableObject"];
+            first?: boolean;
+            last?: boolean;
             empty?: boolean;
         };
         UsageDto: {
@@ -4702,6 +4720,7 @@ export interface components {
             deleted?: boolean;
             /** Format: int64 */
             changedBy?: number;
+            changedByName?: string;
             /** Format: date-time */
             changedAt?: string;
         };
@@ -9074,6 +9093,10 @@ export interface operations {
                 since?: number;
                 userId?: number;
                 assetUuid?: string;
+                changeType?: string[];
+                from?: string;
+                to?: string;
+                q?: string;
                 pageable: components["schemas"]["Pageable"];
             };
             header?: never;
@@ -9889,7 +9912,10 @@ export interface operations {
     };
     history_1: {
         parameters: {
-            query?: never;
+            query?: {
+                page?: number;
+                size?: number;
+            };
             header?: never;
             path: {
                 projectKey: string;
@@ -9906,6 +9932,32 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["AssetHistoryEntry"][];
+                };
+            };
+        };
+    };
+    diff_2: {
+        parameters: {
+            query: {
+                from: number;
+                to?: number;
+            };
+            header?: never;
+            path: {
+                projectKey: string;
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["AssetDiff"];
                 };
             };
         };

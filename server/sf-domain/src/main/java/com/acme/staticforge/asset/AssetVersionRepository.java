@@ -67,6 +67,31 @@ public interface AssetVersionRepository extends JpaRepository<AssetVersion, Long
     List<AssetVersion> findValidAtRevisionByAssetIdIn(
             @Param("assetIds") java.util.Collection<Long> assetIds, @Param("revision") long revision);
 
+    /**
+     * Every version of {@code assetIds} that was valid at some revision in {@code [fromRevision, toRevision]}, in one
+     * query (history views resolving item names and touched languages for a page of revisions).
+     */
+    @Query("""
+            SELECT v FROM AssetVersion v
+            WHERE v.assetId IN :assetIds
+              AND v.validFromRevision <= :toRevision
+              AND (v.validToRevision IS NULL OR v.validToRevision > :fromRevision)
+            """)
+    List<AssetVersion> findValidBetween(
+            @Param("assetIds") java.util.Collection<Long> assetIds,
+            @Param("fromRevision") long fromRevision,
+            @Param("toRevision") long toRevision);
+
+    /** {@code [uuid, displayName]} of the open version of each asset in {@code uuids} (names for a revision summary). */
+    @Query("""
+            SELECT a.uuid, v.displayName FROM AssetVersion v JOIN v.asset a
+            WHERE a.projectId = :projectId
+              AND a.uuid IN :uuids
+              AND v.validToRevision IS NULL
+            """)
+    List<Object[]> findOpenDisplayNames(
+            @Param("projectId") long projectId, @Param("uuids") java.util.Collection<java.util.UUID> uuids);
+
     /** Current (open) versions within a project, filtered by type, folder-path prefix and a display-name substring. */
     @Query("""
             SELECT v FROM AssetVersion v

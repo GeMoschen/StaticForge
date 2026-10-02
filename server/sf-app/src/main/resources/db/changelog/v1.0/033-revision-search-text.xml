@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <!-- M35.12: the history search matches the item names of a revision's summary. The names are kept as plain text
+         next to the JSON summary (which has no portable JSON-path predicate across H2 and PostgreSQL). Revisions
+         written before this change have no value and match on their comment only. -->
+    <changeSet id="033-revision-search-text" author="sf">
+        <comment>Searchable item names of a revision's summary (M35.12).</comment>
+        <addColumn tableName="revision">
+            <column name="search_text" type="VARCHAR(4000)"/>
+        </addColumn>
+    </changeSet>
+</databaseChangeLog>

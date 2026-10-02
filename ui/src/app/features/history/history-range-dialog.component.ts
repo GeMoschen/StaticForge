@@ -1,16 +1,17 @@
-import { ChangeDetectionStrategy, Component, OnInit, computed, input, output, signal } from '@angular/core';
-import { SfDialogComponent, SfDialogFooterDirective } from '../../../../shared/components/dialog/sf-dialog.component';
-import { SfDateInputComponent } from '../../../../shared/components/forms/sf-date-input.component';
-import { SfButtonComponent } from '../../../../shared/components/sf-button.component';
-import { SfFieldComponent } from '../../../../shared/components/sf-field.component';
-import { injectSampleText } from '../changes/sample-area.util';
+import { ChangeDetectionStrategy, Component, OnInit, computed, inject, input, output, signal } from '@angular/core';
+import { TranslocoService } from '@jsverse/transloco';
+import { SfDialogComponent, SfDialogFooterDirective } from '../../shared/components/dialog/sf-dialog.component';
+import { SfDateInputComponent } from '../../shared/components/forms/sf-date-input.component';
+import { SfButtonComponent } from '../../shared/components/sf-button.component';
+import { SfFieldComponent } from '../../shared/components/sf-field.component';
 
 /**
- * The custom date range of the History filter (M35.9 review round 2): two dates, either may stay empty (open end).
- * *Apply* needs at least one date and From not after To; the dialog says so instead of just disabling the button.
+ * The custom date range of the History filter (M35.12): two dates, either may stay empty (open end). *Apply* needs at
+ * least one date and From not after To; a wrong order is said, a missing date is what the disabled button shows.
+ * `prefix` is where its texts live (`history` in the app, the style guide's own in the sample).
  */
 @Component({
-  selector: 'sf-sample-history-range-dialog',
+  selector: 'sf-history-range-dialog',
   standalone: true,
   imports: [SfButtonComponent, SfDateInputComponent, SfDialogComponent, SfDialogFooterDirective, SfFieldComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -43,14 +44,16 @@ import { injectSampleText } from '../changes/sample-area.util';
     }
   `,
 })
-export class SampleHistoryRangeDialogComponent implements OnInit {
+export class HistoryRangeDialogComponent implements OnInit {
   /** The range being edited. */
   readonly initialFrom = input<string | null>(null, { alias: 'from' });
   readonly initialTo = input<string | null>(null, { alias: 'to' });
+  /** Where the texts live. */
+  readonly prefix = input('history');
   readonly applied = output<{ readonly from: string | null; readonly to: string | null }>();
   readonly closed = output<void>();
 
-  protected readonly t = injectSampleText('styleguide.sample.history');
+  private readonly transloco = inject(TranslocoService);
   protected readonly from = signal<string | null>(null);
   protected readonly to = signal<string | null>(null);
 
@@ -61,5 +64,9 @@ export class SampleHistoryRangeDialogComponent implements OnInit {
   ngOnInit(): void {
     this.from.set(this.initialFrom());
     this.to.set(this.initialTo());
+  }
+
+  protected t(key: string): string {
+    return this.transloco.translate(`${this.prefix()}.${key}`);
   }
 }

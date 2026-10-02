@@ -6,6 +6,7 @@ import { render, waitFor } from '@testing-library/angular';
 import { of } from 'rxjs';
 import { describe, expect, it, vi } from 'vitest';
 import { ApiClient } from '../../core/api/api.client';
+import { FrameContextStore } from '../../core/frame/frame-context.store';
 import { EditingLocaleStore } from '../../core/project/editing-locale.store';
 import { LocalesStore } from '../../core/project/locales.store';
 import { provideProjectPermissions } from '../../core/project/testing/project-permissions.testing';
@@ -48,6 +49,7 @@ async function openRecord() {
       { provide: ContentService, useValue: content },
       { provide: ApiClient, useValue: api },
       { provide: EditingLocaleStore, useValue: { binding: signal(null) } },
+      { provide: FrameContextStore, useValue: { setItem: vi.fn() } },
       { provide: LocalesStore, useValue: { locales: signal([]) } },
       provideProjectPermissions({ role: () => 'EDITOR', readOnly: () => false }),
     ],

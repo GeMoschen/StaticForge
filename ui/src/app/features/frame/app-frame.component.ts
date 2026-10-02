@@ -6,6 +6,8 @@ import { FrameContextStore } from '../../core/frame/frame-context.store';
 import { railGroups } from '../../core/frame/rail-model';
 import { ProjectContextStore } from '../../core/project/project-context.store';
 import { ArchivedBannerComponent } from '../dashboard/archived-banner.component';
+import { HistoryDrawerComponent } from '../history/history-drawer.component';
+import { HistoryDrawerStore } from '../history/history-drawer.store';
 import { TimeTravelBannerComponent } from '../revisions/time-travel-banner.component';
 import { TimeTravelStore } from '../revisions/time-travel.store';
 import { FrameRailComponent } from './frame-rail.component';
@@ -23,6 +25,7 @@ import { FrameTopbarComponent } from './frame-topbar.component';
     ArchivedBannerComponent,
     FrameRailComponent,
     FrameTopbarComponent,
+    HistoryDrawerComponent,
     RouterOutlet,
     TimeTravelBannerComponent,
     TranslocoPipe,
@@ -37,6 +40,7 @@ export class AppFrameComponent {
   private readonly developerMode = inject(DeveloperModeService);
   protected readonly project = inject(ProjectContextStore);
   protected readonly timeTravel = inject(TimeTravelStore);
+  protected readonly history = inject(HistoryDrawerStore);
 
   protected readonly projectKey = this.frame.projectKey;
   protected readonly hasRail = computed(

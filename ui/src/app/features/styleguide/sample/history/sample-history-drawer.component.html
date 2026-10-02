@@ -72,7 +72,8 @@
   }
 
   @if (rangeDialog()) {
-    <sf-sample-history-range-dialog
+    <sf-history-range-dialog
+      prefix="styleguide.sample.history"
       [from]="date().from"
       [to]="date().to"
       (applied)="date.set({ range: 'custom', from: $event.from, to: $event.to }); rangeDialog.set(false)"

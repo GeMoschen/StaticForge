@@ -5,7 +5,7 @@
 @if (projectKey() !== null) {
   <div class="frame__banners">
     <sf-archived-banner [projectKey]="projectKey()" />
-    <sf-time-travel-banner [revisions]="project.revisions()" (back)="backToNow()" />
+    <sf-time-travel-banner (back)="backToNow()" />
   </div>
 }
 
@@ -17,3 +17,7 @@
     <router-outlet />
   </main>
 </div>
+
+@if (projectKey() !== null && history.isOpen()) {
+  <sf-history-drawer />
+}

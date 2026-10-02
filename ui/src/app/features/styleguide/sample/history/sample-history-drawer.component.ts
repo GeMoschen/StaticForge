@@ -24,7 +24,7 @@ import {
   versionsOf,
 } from './history-data';
 import { SampleHistoryDiffComponent } from './sample-history-diff.component';
-import { SampleHistoryRangeDialogComponent } from './sample-history-range-dialog.component';
+import { HistoryRangeDialogComponent } from '../../../history/history-range-dialog.component';
 
 /** Where the drawer was opened: an editor (that asset's versions) or anywhere else (the project's timeline). */
 export type HistoryContext = 'page' | 'record' | 'project';
@@ -45,7 +45,7 @@ export type HistoryContext = 'page' | 'record' | 'project';
   standalone: true,
   imports: [
     SampleHistoryDiffComponent,
-    SampleHistoryRangeDialogComponent,
+    HistoryRangeDialogComponent,
     SfAvatarComponent,
     SfBadgeComponent,
     SfButtonComponent,

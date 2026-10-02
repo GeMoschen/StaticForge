@@ -3,6 +3,7 @@ package com.acme.staticforge.revision;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
 /**
@@ -60,6 +61,13 @@ public interface RevisionService {
      * {@code assetUuid} to revisions whose {@code summary} touched that asset.
      */
     List<Revision> findRecent(long projectId, Long since, Long userId, UUID assetUuid, Pageable pageable);
+
+    /**
+     * Revisions of a project matching {@code filter}, newest first, one page of them with the total number of matches.
+     * Every criterion is applied in the database query before paging; the page's sort is ignored. An unpaged
+     * {@code pageable} returns all matches.
+     */
+    Page<Revision> search(long projectId, RevisionFilter filter, Pageable pageable);
 
     Optional<Revision> find(long projectId, long revisionId);
 }

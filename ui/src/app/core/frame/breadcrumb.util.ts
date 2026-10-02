@@ -14,6 +14,11 @@ export interface FrameItem {
   label: string;
   /** The folders above it, outermost first. */
   trail?: readonly Crumb[];
+  /**
+   * The open item as a versioned asset (a page, record, global set or template): the History drawer then shows this
+   * item's versions instead of the project's timeline (M35.12). Omit it for items without history of their own.
+   */
+  asset?: { readonly uuid: string };
 }
 
 export interface CrumbInput {

@@ -38,6 +38,7 @@ import { ReleaseBarComponent } from '../release/release-bar.component';
 import type { ReleaseMode } from '../release/release-choice.util';
 import { RecordActionsService } from './record-actions.service';
 import { RecordSidePanelComponent, type ContentIssue, type RecordSidePanelTab } from './record-side-panel.component';
+import { useFrameItem } from '../../core/frame/use-frame-item';
 
 type AssetHistoryEntry = components['schemas']['AssetHistoryEntry'];
 type UsageDto = components['schemas']['UsageDto'];
@@ -168,6 +169,12 @@ export class RecordEditorComponent implements OnDestroy {
   });
 
   constructor() {
+    // The breadcrumb ends with the open record, and the History drawer shows its versions (M35.12).
+    useFrameItem(() => {
+      const record = this.record();
+      const label = record?.displayName || record?.uid;
+      return label ? { label, ...(record?.uuid ? { asset: { uuid: record.uuid } } : {}) } : null;
+    });
     this.actions.bind({
       projectKey: this.projectKey,
       record: this.record,

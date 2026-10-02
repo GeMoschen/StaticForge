@@ -42,6 +42,7 @@ import { GlobalsService, etagFor, type Diagnostic, type GlobalSetDetailView } fr
 import { ReleaseBarComponent } from '../release/release-bar.component';
 import type { ReleaseMode } from '../release/release-choice.util';
 import { isOnline } from '../release/release-status.util';
+import { useFrameItem } from '../../core/frame/use-frame-item';
 
 const EMPTY_DEF: ContentDefinition = { editors: [], bodies: [] };
 
@@ -176,6 +177,12 @@ export class GlobalSetDetailComponent {
   });
 
   constructor() {
+    // The breadcrumb ends with the open set, and the History drawer shows its versions (M35.12).
+    useFrameItem(() => {
+      const set = this.detail();
+      const label = set?.displayName || set?.uid;
+      return label ? { label, ...(set?.uuid ? { asset: { uuid: set.uuid } } : {}) } : null;
+    });
     inject(DestroyRef).onDestroy(() => {
       if (this.cdlTimer) {
         clearTimeout(this.cdlTimer);

@@ -1,0 +1,100 @@
+// The page fills the main region (no page scroll): header and filter bar at the top, the table takes the rest.
+:host {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sf-space-4);
+  height: 100%;
+  min-height: 0;
+  padding: var(--sf-space-4) var(--sf-space-6);
+  overflow: hidden;
+}
+
+.cell-name__text {
+  overflow: hidden;
+  color: var(--sf-text);
+  font-weight: var(--sf-weight-medium);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cell-muted {
+  overflow: hidden;
+  color: var(--sf-text-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.area__bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sf-space-2);
+}
+
+.area__search {
+  flex: 1 1 10rem;
+  min-width: 8rem;
+  max-width: 20rem;
+}
+
+.area__body {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.area__split {
+  flex: 1 1 auto;
+  min-width: 0;
+  // Both panes are bordered cards: no hairline between them, and the handle sits centred in the gap (it still shows on
+  // hover and focus).
+  --sf-splitter-handle: transparent;
+  --sf-splitter-gap: var(--sf-space-2);
+}
+
+.area__pane {
+  display: flex;
+  height: 100%;
+  min-width: 0;
+}
+
+.area__table {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+}
+
+.area__detail {
+  height: 100%;
+}
+
+.cell-rev {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sf-space-2);
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--sf-weight-medium);
+
+  &.is-open {
+    color: var(--sf-accent);
+  }
+}
+
+.cell-rev__icon {
+  color: var(--sf-text-subtle);
+  font-size: var(--sf-fs-16);
+}
+
+.cell-changed {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sf-space-2);
+  min-width: 0;
+}
+
+.cell-changed__text {
+  overflow: hidden;
+  color: var(--sf-text-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

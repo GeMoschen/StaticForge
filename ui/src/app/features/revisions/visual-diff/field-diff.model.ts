@@ -12,6 +12,8 @@ export interface RenderedChange {
   add: boolean;
   remove: boolean;
   editor: EditorDefinition | null;
+  /** The field's name as the template calls it (`Title`); the editor above is stripped of it. */
+  label?: string;
   before: FormControl | FormGroup | FormArray | null;
   after: FormControl | FormGroup | FormArray | null;
   beforeJson?: unknown;
@@ -88,6 +90,7 @@ export function expandL10nChange<T extends PathChange>(change: T): T[] {
 
 /** Builds a {@link RenderedChange} from a raw {@link FieldChange} and an optional editor. */
 export function toRenderedChange(change: FieldChange, editor: EditorDefinition | null): RenderedChange {
+  const label = editor?.label?.trim() || undefined;
   // A whole language-dependent value that could not be split per language belongs in the JSON view, not in an editor.
   if (editor && (isL10n(change.before) || isL10n(change.after))) {
     editor = null;
@@ -100,6 +103,7 @@ export function toRenderedChange(change: FieldChange, editor: EditorDefinition |
       path: change.path ?? '',
       add: change.add === true,
       remove: change.remove === true,
+      label,
       editor: def,
       before: beforePresent ? buildReadonlyControl(def, change.before) : null,
       after: afterPresent ? buildReadonlyControl(def, change.after) : null,
@@ -109,10 +113,28 @@ export function toRenderedChange(change: FieldChange, editor: EditorDefinition |
     path: change.path ?? '',
     add: change.add === true,
     remove: change.remove === true,
+    label,
     editor: null,
     before: null,
     after: null,
     beforeJson: change.before,
     afterJson: change.after,
   };
+}
+
+/**
+ * A diff path read by a person (M35.12): `content.hero_headline` → `Hero headline`, `content.team.name` →
+ * `Team › Name` — never the stored path. An index (`items[2]`) reads as its position (`items 3`).
+ */
+export function humanizeDiffPath(path: string): string {
+  const cleaned = path.replace(/^payload\./, '').replace(/^content\./, '');
+  return cleaned
+    .split('.')
+    .filter((segment) => segment !== '')
+    .map((segment) => {
+      const withPosition = segment.replace(/\[(\d+)\]/g, (_, index: string) => ` ${Number(index) + 1}`);
+      const words = withPosition.replace(/[_-]+/g, ' ').replace(/([a-z])([A-Z])/g, '$1 $2').trim();
+      return words.charAt(0).toUpperCase() + words.slice(1).toLowerCase();
+    })
+    .join(' › ');
 }

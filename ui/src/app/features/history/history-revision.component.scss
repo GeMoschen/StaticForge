@@ -1,0 +1,124 @@
+// A card like the table beside it: the same border and radius on every side.
+:host {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  border: 1px solid var(--sf-border);
+  border-radius: var(--sf-radius-md);
+  background: var(--sf-surface);
+}
+
+.rev__head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sf-space-2);
+  padding: var(--sf-space-3) var(--sf-space-4);
+  border-bottom: 1px solid var(--sf-border);
+}
+
+.rev__title-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sf-space-2);
+}
+
+.rev__kind {
+  color: var(--sf-text-subtle);
+  font-size: var(--sf-fs-18);
+}
+
+.rev__title {
+  flex: 1 1 auto;
+  margin: 0;
+  font-size: var(--sf-fs-16);
+  line-height: var(--sf-lh-16);
+  font-weight: var(--sf-weight-semibold);
+}
+
+.rev__summary {
+  margin: 0;
+  color: var(--sf-text);
+  font-size: var(--sf-fs-14);
+  line-height: var(--sf-lh-14);
+}
+
+.rev__meta {
+  display: flex;
+  align-items: center;
+  gap: var(--sf-space-2);
+  color: var(--sf-text-muted);
+  font-size: var(--sf-fs-12);
+  line-height: var(--sf-lh-12);
+}
+
+.rev__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sf-space-2);
+}
+
+.rev__body {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: var(--sf-space-4);
+  min-height: 0;
+  overflow: auto;
+  padding: var(--sf-space-4);
+}
+
+.rev__section {
+  margin: 0;
+  color: var(--sf-text-muted);
+  font-size: var(--sf-fs-12);
+  line-height: var(--sf-lh-12);
+  font-weight: var(--sf-weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.rev__asset {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sf-space-2);
+  padding: var(--sf-space-3);
+  border: 1px solid var(--sf-border);
+  border-radius: var(--sf-radius-md);
+}
+
+.rev__asset-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sf-space-2);
+}
+
+.rev__langs {
+  display: inline-flex;
+  gap: var(--sf-space-1);
+}
+
+.rev__asset-icon {
+  color: var(--sf-text-subtle);
+  font-size: var(--sf-fs-18);
+}
+
+.rev__asset-name {
+  margin: 0;
+  font-size: var(--sf-fs-14);
+  line-height: var(--sf-lh-14);
+  font-weight: var(--sf-weight-semibold);
+}
+
+.rev__restore {
+  margin-inline-start: auto;
+}
+
+.rev__none {
+  margin: 0;
+  color: var(--sf-text-muted);
+  font-size: var(--sf-fs-13);
+  line-height: var(--sf-lh-13);
+}

@@ -32,8 +32,7 @@ import { SettingsShellComponent } from './features/settings/settings-shell.compo
 import { ChannelsComponent } from './features/channels/channels.component';
 import { PublishingShellComponent } from './features/publishing/publishing-shell.component';
 import { PublishingRunsComponent } from './features/publishing/publishing-runs.component';
-import { RevisionsListComponent } from './features/revisions/revisions-list.component';
-import { RevisionDiffComponent } from './features/revisions/revision-diff.component';
+import { HistoryPageComponent } from './features/history/history-page.component';
 import { ContentComponent } from './features/content/content.component';
 import { RecordEditorComponent } from './features/content/record-editor.component';
 import { RecordSetViewComponent } from './features/content/record-set-view.component';
@@ -196,9 +195,9 @@ export const routes: Routes = [
               { path: 'urls', title: routeTitle('frame.sub.publishing.urls'), component: ProjectSettingsUrlRegistryComponent },
             ],
           },
-          // The project's history (M35.12 builds the full page); it was Settings › Revisions.
-          { path: 'history', title: routeTitle('frame.section.history'), component: RevisionsListComponent },
-          { path: 'history/:revisionId', title: routeTitle('frame.section.history'), component: RevisionDiffComponent },
+          // The project's history (M35.12): the timeline, and a revision's detail beside it. It was Settings › Revisions.
+          { path: 'history', title: routeTitle('frame.section.history'), component: HistoryPageComponent },
+          { path: 'history/:revisionId', title: routeTitle('frame.section.history'), component: HistoryPageComponent },
           {
             path: 'settings',
             title: routeTitle('frame.section.settings'),

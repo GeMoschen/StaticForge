@@ -20,12 +20,16 @@ import com.acme.staticforge.asset.RecordNaming;
 import com.acme.staticforge.asset.UidLiteralReference;
 import com.acme.staticforge.asset.UpdateAssetCommand;
 import com.acme.staticforge.asset.UsageView;
+import com.acme.staticforge.common.ProblemFactory;
 import com.acme.staticforge.common.SfException;
 import com.acme.staticforge.asset.folder.FolderService;
 import com.acme.staticforge.project.ProjectService;
+import com.acme.staticforge.revision.AssetDiff;
+import com.acme.staticforge.revision.DiffService;
 import com.acme.staticforge.revision.RevisionContext;
 import com.acme.staticforge.security.SecuritySupport;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -57,10 +61,14 @@ public class AssetController {
     private final SecuritySupport securitySupport;
     private final ReleaseBlocks releaseBlocks;
     private final CompactedReads compactedReads;
+    private final RevisionViews revisionViews;
+    private final DiffService diffService;
 
     public AssetController(ProjectService projectService, AssetService assetService,
             FolderService folderService, SecuritySupport securitySupport, ReleaseBlocks releaseBlocks,
-            CompactedReads compactedReads) {
+            CompactedReads compactedReads, RevisionViews revisionViews, DiffService diffService) {
+        this.revisionViews = revisionViews;
+        this.diffService = diffService;
         this.compactedReads = compactedReads;
         this.projectService = projectService;
         this.assetService = assetService;
@@ -110,8 +118,38 @@ public class AssetController {
 
     @GetMapping("/{uuid}/history")
     @PreAuthorize("@projectAuth.has(#projectKey, " + ProjectRoleExpr.VIEWER + ")")
-    public List<AssetHistoryEntry> history(@PathVariable String projectKey, @PathVariable UUID uuid) {
-        return assetService.history(projectId(projectKey), uuid).stream().map(AssetController::toHistory).toList();
+    public ResponseEntity<List<AssetHistoryEntry>> history(
+            @PathVariable String projectKey,
+            @PathVariable UUID uuid,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size) {
+        List<AssetVersionView> all = assetService.history(projectId(projectKey), uuid);
+        // Paged only when asked for (page or size given), newest first like the full list; X-Total-Count is the whole.
+        List<AssetVersionView> slice = all;
+        if (page != null || size != null) {
+            int pageSize = size == null ? 20 : size;
+            int pageNumber = page == null ? 0 : page;
+            if (pageNumber < 0 || pageSize < 1) {
+                throw new SfException(ProblemFactory.badRequest("page must be >= 0 and size >= 1.", "size"));
+            }
+            long from = Math.min((long) pageNumber * pageSize, all.size());
+            slice = all.subList((int) from, (int) Math.min(all.size(), from + pageSize));
+        }
+        Map<Long, String> names = revisionViews.displayNames(slice.stream().map(AssetVersionView::changedBy).toList());
+        return ResponseEntity.ok()
+                .header(RevisionController.TOTAL_COUNT_HEADER, Integer.toString(all.size()))
+                .body(slice.stream().map(v -> toHistory(v, names)).toList());
+    }
+
+    /** Diff of the asset's content as of revision {@code from} against {@code to} (default: its current state). */
+    @GetMapping("/{uuid}/diff")
+    @PreAuthorize("@projectAuth.has(#projectKey, " + ProjectRoleExpr.VIEWER + ")")
+    public AssetDiff diff(
+            @PathVariable String projectKey,
+            @PathVariable UUID uuid,
+            @RequestParam long from,
+            @RequestParam(required = false) Long to) {
+        return diffService.diffAsset(projectId(projectKey), uuid, from, to);
     }
 
     @GetMapping("/{uuid}/versions/{revision}")
@@ -230,8 +268,10 @@ public class AssetController {
         return new AffectedTemplate(ref.assetUuid(), ref.assetUid(), ref.assetType().name(), ref.displayName(), ref.channelKey());
     }
 
-    private static AssetHistoryEntry toHistory(AssetVersionView v) {
-        return new AssetHistoryEntry(v.validFromRevision(), v.displayName(), v.deleted(), v.changedBy(), v.changedAt());
+    private static AssetHistoryEntry toHistory(AssetVersionView v, Map<Long, String> names) {
+        return new AssetHistoryEntry(
+                v.validFromRevision(), v.displayName(), v.deleted(), v.changedBy(),
+                v.changedBy() == null ? null : names.get(v.changedBy()), v.changedAt());
     }
 
     private static com.acme.staticforge.api.dto.MoveResultDto toMoveResult(

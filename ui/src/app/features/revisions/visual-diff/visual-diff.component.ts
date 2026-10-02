@@ -20,7 +20,7 @@ import {
   resolveObjectEditorPrefix,
   valueAtPath,
 } from './resolve-editor';
-import { expandL10nChange, toRenderedChange, RenderedChange } from './field-diff.model';
+import { expandL10nChange, humanizeDiffPath, toRenderedChange, RenderedChange } from './field-diff.model';
 import { SfFieldDiffComponent } from './field-diff.component';
 import { SfBodyDiffComponent } from './body-diff.component';
 import type { components } from '../../../core/api/generated/schema.d.ts';
@@ -76,6 +76,14 @@ export class SfVisualDiffComponent {
   /** A field path with its language spelled out. */
   protected labelPath(path: string | undefined): string {
     return formatDiffPath(path, this.localeLabels());
+  }
+
+  /** What the change header says: the template's name for the field (else the path made readable), and the language. */
+  protected labelOf(change: RenderedChange): string {
+    const formatted = this.labelPath(change.path);
+    const match = /^(.*?)( \([^)]*\))?$/.exec(formatted);
+    const base = match?.[1] ?? formatted;
+    return `${change.label ?? humanizeDiffPath(base)}${match?.[2] ?? ''}`;
   }
 
   readonly asset = input.required<AssetDiff>();

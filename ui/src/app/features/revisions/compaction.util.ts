@@ -1,8 +1,5 @@
 /** The notices of compacted history (M29.5.2, epic decision 13), worded once for every place that shows them. */
 
-/** Marks a revision whose own exact changes were compacted (`RevisionView.compacted`): spine and list. */
-export const COMPACTED_REVISION_HINT = 'Exact changes compacted — end-of-day state kept';
-
 /** The time-travel banner, when the travelled-to revision or a read at it is compacted. */
 export const COMPACTED_TIME_TRAVEL_NOTICE = 'Compacted history: you see the state at the end of that day';
 

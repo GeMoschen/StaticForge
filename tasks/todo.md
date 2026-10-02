@@ -82,10 +82,11 @@ every screen. Screen migration starts only after the style guide (M35.9) is sign
     tasks are listed in the 010 task file.
 - [x] M35.11 IA: Publishing area, Settings side menu + split
   - Review: see `35-m35-ui-ux-overhaul/011-information-architecture.md` (route table, redirects, area shell); 1,971 tests, build + lint green
-- [ ] M35.12 history drawer, full history, time-travel banner (spine removed)
-  - Design **signed off 2026-10-02** in the sample (gate round 2, decisions 35–46): drawers below the top bar, backend
-    extended (author names, languages, item names, type/date filters, total), asset history for pages, records, global
-    sets, templates. Sample-first rule for all open M35 tasks (README).
+- [x] M35.12 history drawer, full history, time-travel banner (spine removed)
+  - Design signed off 2026-10-02 in the sample (gate round 2, decisions 35–46); built as signed off, backend extended
+    (author names, languages, item names, type/date/search filters, total, asset diff, restore comment).
+  - Review: see `35-m35-ui-ux-overhaul/012-history.md` (236 test files / 2,022 tests, build + lint + backend suites green,
+    checked in Chrome). Open: journeys that click the spine move in M35.31, user-guide text in M35.32.
 - [ ] M35.13 save UX, unsaved guards, confirm + undo
 - [ ] M35.14 keyboard-first: shortcut registry, palette actions, `?` sheet
 - [ ] M35.15 recents and favorites

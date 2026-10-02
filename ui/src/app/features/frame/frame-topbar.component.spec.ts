@@ -84,7 +84,7 @@ describe('FrameTopbarComponent', () => {
     const crumbs = screen.getByRole('navigation', { name: 'Location' });
     expect(crumbs.textContent).toContain('Pages');
     expect(crumbs.querySelector('[aria-current="page"]')?.textContent).toContain('Our story');
-    expect(screen.getByRole('link', { name: 'Project history' }).getAttribute('href')).toBe('/p/acme/history');
+    expect(screen.getByRole('button', { name: 'Project history' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Search or jump to…' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Keyboard shortcuts' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Account menu for Ada Lovelace' })).toBeTruthy();
@@ -112,13 +112,13 @@ describe('FrameTopbarComponent', () => {
   it('shows build status, Build now and History only inside a project', async () => {
     const inProject = await setup();
     expect(screen.getByRole('button', { name: 'Build now' })).toBeTruthy();
-    expect(screen.getByRole('link', { name: 'Project history' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Project history' })).toBeTruthy();
     inProject.fixture.destroy();
     restart();
 
     await setup({ url: '/' });
     expect(screen.queryByRole('button', { name: 'Build now' })).toBeNull();
-    expect(screen.queryByRole('link', { name: 'Project history' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Project history' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Published' })).toBeNull();
   });
 

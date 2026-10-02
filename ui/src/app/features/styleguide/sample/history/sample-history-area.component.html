@@ -71,7 +71,8 @@
 </ng-template>
 
 @if (rangeDialog()) {
-  <sf-sample-history-range-dialog
+  <sf-history-range-dialog
+    prefix="styleguide.sample.history"
     [from]="filters().date.from"
     [to]="filters().date.to"
     (applied)="applyRange($event)"

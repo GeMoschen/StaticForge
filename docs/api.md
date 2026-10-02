@@ -871,10 +871,47 @@ publish policy.").
 
 | Method | Path |
 |---|---|
-| `GET` | `/projects/{projectKey}/revisions` (`?since=`, `?userId=`, `?assetUuid=`) |
+| `GET` | `/projects/{projectKey}/revisions` (`?since=`, `?userId=`, `?assetUuid=`, `?changeType=`, `?from=`, `?to=`, `?q=`, `?page=`, `?size=`) |
 | `GET` | `/projects/{projectKey}/revisions/{revisionId}` |
 | `GET` | `/projects/{projectKey}/revisions/{revisionId}/diff` |
-| `POST` | `/projects/{projectKey}/restore` (project-wide rollback) |
+| `GET` | `/projects/{projectKey}/assets/{uuid}/diff` (`?from=`, `?to=`) |
+| `POST` | `/projects/{projectKey}/restore` (project-wide rollback; `ADMIN`) |
+
+**Revision list (M35.12).** `GET /revisions` answers a plain JSON list, newest first (`revisionId` descending; a `sort`
+parameter is ignored), and `X-Total-Count`: the number of revisions matching the filters, before paging. Every filter is
+applied in the database before paging, so a filtered page is full and the total is exact:
+
+| Parameter | Meaning |
+|---|---|
+| `since` | revision id; only revisions strictly newer |
+| `userId` | author |
+| `assetUuid` | an asset's UUID or uid; revisions whose summary touched it (unknown asset: empty list, total `0`) |
+| `changeType` | one or more of `CREATE UPDATE DELETE RESTORE MOVE RENAME UID_CHANGE BULK IMPORT RELEASE UNPUBLISH DISCARD`; repeat the parameter or comma-separate (`changeType=UPDATE,MOVE`); case-insensitive; an unknown value is `400` (`field: changeType`) |
+| `from`, `to` | ISO-8601 instants (`2026-09-12T14:03:00Z`) on `createdAt`; `from` inclusive, `to` exclusive; an unparseable value is `400` |
+| `q` | case-insensitive substring of the revision comment or of the display name (or uid) of an item in its summary. Revisions written before M35.12 have no stored names and match on their comment only |
+| `page`, `size` | zero-based page and page size (default `size` 20) |
+
+A revision view is `{projectId, revisionId, createdAt, createdBy, createdByName, changeType, comment, summary, compacted}`:
+
+- `createdByName` is the author's display name, `null` when the account is unknown or was deleted (anonymized).
+- `summary.assets[]` keeps its stored fields (`uuid`, `type`, `action`, `fields`, `uid`, `locale`, …) and gains
+  `name`, the item's display name as of the revision (uid when it has none), and `locales`, a string array of the
+  language codes whose content changed in that revision. `locales` is `[]` when the whole item was affected (delete,
+  move, rename), when the change is not a content change, or when compaction absorbed the change. A release,
+  unpublish or discard entry lists its own `locale`. New revisions store `name` with the summary; for older ones both
+  fields are derived when read (one batched lookup for the whole page), and nothing is written back.
+
+**Asset history and diff.** `GET /assets/{uuid}/history` is `[{revision, displayName, deleted, changedBy,
+changedByName, changedAt}]`, newest first, `changedByName` `null` for an unknown or deleted account. Without
+parameters it lists every version; with `page` (default `0`) and/or `size` (default `20`, at least `1`) it lists one page.
+`X-Total-Count` is the number of versions in either case. `GET /assets/{uuid}/diff?from=R[&to=S]` (`VIEWER`) is the
+diff of the asset's content as of revision `R` against revision `S` (default: the project's newest revision, the asset's
+current state) in the shape of one entry of `GET /revisions/{r}/diff`: `{uuid, uid, type, action, changes, compacted}`
+with field changes and per-block rich-text changes. `404` for an unknown asset or revision; `400` without `from`.
+
+**Project roll-back.** `POST /restore` takes `{toRevision, comment?}`. The comment is trimmed; when it is absent or
+blank the revision's comment is `Project restore to {toRevision}`; more than 500 characters is `400`
+(`field: comment`) before anything is written. The response is the new revision view.
 
 **Compacted history (M29, spec §7.7).** In a project that uses revision compaction, some old versions were removed
 and their intervals absorbed by the last version of the day. Reads say so; projects without compaction get

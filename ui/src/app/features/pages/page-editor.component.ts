@@ -70,7 +70,7 @@ export class PageEditorComponent {
     useFrameItem(() => {
       const page = this.editor.page();
       const label = page?.displayName || page?.uid;
-      return label ? { label } : null;
+      return label ? { label, ...(page?.uuid ? { asset: { uuid: page.uuid } } : {}) } : null;
     });
   }
 }
