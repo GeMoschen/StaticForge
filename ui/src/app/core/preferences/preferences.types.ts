@@ -9,9 +9,12 @@ export type PreviewViewPreference = 'draft' | 'published';
 
 /** One entry of a project's "recently opened" list. */
 export interface RecentEntry {
+  /** The asset type (`PAGE`, `RECORD`, `FOLDER`, …). */
   kind: string;
   uuid: string;
   title?: string;
+  /** Where it lives in its store (`/pages_root/news/`); tells a folder which store to open in. */
+  folderPath?: string;
   /** ISO-8601 instant of the visit. */
   at: string;
 }
@@ -21,6 +24,7 @@ export interface FavoriteEntry {
   kind: string;
   uuid: string;
   title?: string;
+  folderPath?: string;
 }
 
 /** What is remembered per project (keyed by project key under `projects`). */

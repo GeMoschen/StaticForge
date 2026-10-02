@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
+import { SfAssetFavoriteComponent } from '../../shared/components/sf-asset-favorite.component';
 import { saveStateOf } from '../../core/editor/editor-state';
 import { SfSaveStatusComponent } from '../../shared/components/layout/sf-save-status.component';
 import { RouterLink } from '@angular/router';
@@ -18,7 +19,7 @@ import { TemplatesStore } from './templates.store';
   selector: 'sf-template-meta-header',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [SfButtonComponent, SfFieldComponent, SfSaveStatusComponent, SfUidRenameComponent, RouterLink],
+  imports: [SfAssetFavoriteComponent, SfButtonComponent, SfFieldComponent, SfSaveStatusComponent, SfUidRenameComponent, RouterLink],
   templateUrl: './templates-meta-header.component.html',
   styleUrls: [
     './templates-panel.scss',

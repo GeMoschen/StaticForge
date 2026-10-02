@@ -1,3 +1,4 @@
+import { provideFavoritesStub } from '../../core/assets/testing/favorites.testing';
 import { fireEvent, render, screen, waitFor } from '@testing-library/angular';
 import { of, throwError } from 'rxjs';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -46,7 +47,7 @@ describe('NavReferenceDetailComponent', () => {
     const api = makeApiStub();
     await render(NavReferenceDetailComponent, {
       componentInputs: { projectKey: 'proj', reference },
-      providers: [
+      providers: [provideFavoritesStub(), 
         { provide: NavigationService, useValue: nav },
         { provide: ApiClient, useValue: api },
       ],
@@ -63,7 +64,7 @@ describe('NavReferenceDetailComponent', () => {
     const api = makeApiStub();
     await render(NavReferenceDetailComponent, {
       componentInputs: { projectKey: 'proj', reference },
-      providers: [
+      providers: [provideFavoritesStub(), 
         { provide: NavigationService, useValue: nav },
         { provide: ApiClient, useValue: api },
       ],
@@ -77,7 +78,7 @@ describe('NavReferenceDetailComponent', () => {
     const api = makeApiStub();
     await render(NavReferenceDetailComponent, {
       componentInputs: { projectKey: 'proj', reference },
-      providers: [
+      providers: [provideFavoritesStub(), 
         { provide: NavigationService, useValue: nav },
         { provide: ApiClient, useValue: api },
       ],
@@ -109,7 +110,7 @@ describe('NavReferenceDetailComponent', () => {
     const api = makeApiStub();
     await render(NavReferenceDetailComponent, {
       componentInputs: { projectKey: 'proj', reference },
-      providers: [
+      providers: [provideFavoritesStub(), 
         { provide: NavigationService, useValue: nav },
         { provide: ApiClient, useValue: api },
       ],
@@ -131,7 +132,7 @@ describe('NavReferenceDetailComponent', () => {
     const api = makeApiStub();
     await render(NavReferenceDetailComponent, {
       componentInputs: { projectKey: 'proj', reference },
-      providers: [
+      providers: [provideFavoritesStub(), 
         { provide: NavigationService, useValue: nav },
         { provide: ApiClient, useValue: api },
       ],
@@ -155,7 +156,7 @@ describe('NavReferenceDetailComponent', () => {
       const confirms = { confirm: vi.fn().mockResolvedValue(options.confirmed ?? true) };
       const view = await render(NavReferenceDetailComponent, {
         componentInputs: { projectKey: 'proj', reference },
-        providers: [
+        providers: [provideFavoritesStub(), 
           { provide: NavigationService, useValue: nav },
           { provide: ApiClient, useValue: api },
           { provide: ConfirmService, useValue: confirms },

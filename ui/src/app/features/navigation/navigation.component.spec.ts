@@ -1,3 +1,4 @@
+import { provideFavoritesStub } from '../../core/assets/testing/favorites.testing';
 import { fireEvent, render, screen, waitFor } from '@testing-library/angular';
 import { TestBed } from '@angular/core/testing';
 import { of, throwError } from 'rxjs';
@@ -52,7 +53,7 @@ describe('NavigationComponent', () => {
     const api = {};
     await render(NavigationComponent, {
       componentInputs: { projectKey: 'proj' },
-      providers: [
+      providers: [provideFavoritesStub(), 
         { provide: NavigationService, useValue: nav },
         { provide: ApiClient, useValue: api },
       ],
@@ -82,7 +83,7 @@ describe('NavigationComponent', () => {
     };
     await render(NavigationComponent, {
       componentInputs: { projectKey: 'proj' },
-      providers: [
+      providers: [provideFavoritesStub(), 
         { provide: NavigationService, useValue: nav },
         { provide: ApiClient, useValue: api },
       ],
@@ -112,7 +113,7 @@ describe('NavigationComponent', () => {
     };
     await render(NavigationComponent, {
       componentInputs: { projectKey: 'proj' },
-      providers: [
+      providers: [provideFavoritesStub(), 
         { provide: NavigationService, useValue: nav },
         { provide: ApiClient, useValue: api },
       ],
@@ -161,7 +162,7 @@ describe('NavigationComponent (undo of a move)', () => {
     };
     const view = await render(NavigationComponent, {
       componentInputs: { projectKey: 'proj' },
-      providers: [
+      providers: [provideFavoritesStub(), 
         { provide: NavigationService, useValue: service },
         { provide: ApiClient, useValue: {} },
       ],

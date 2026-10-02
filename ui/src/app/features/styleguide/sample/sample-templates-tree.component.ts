@@ -4,6 +4,9 @@ import { SfMenuComponent, SfMenuItem } from '../../../shared/components/menu/sf-
 import { SfTreeAction, SfTreeComponent, SfTreeDeleteRequest } from '../../../shared/components/sf-tree.component';
 import { SfTreeLoader, SfTreeNode } from '../../../shared/components/tree/tree-model';
 import { SampleTemplateEntry, SampleTemplateKind, templateChildren, templatePath } from './sample-content-data';
+import { FAVORITES_NODE, SampleFavorite, templateFavorite } from './sample-favorites';
+import { favoriteChildren, favoriteNodes, favoritesNode, isFavoriteNode } from './sample-favorites-nodes';
+import type { ContextMenuItem } from '../../../shared/services/context-menu.service';
 import { SampleState } from './sample-state';
 
 export const TEMPLATE_ICONS: Readonly<Record<SampleTemplateKind, string>> = {
@@ -44,7 +47,9 @@ export const TEMPLATE_ICONS: Readonly<Record<SampleTemplateKind, string>> = {
         [multiselect]="false"
         [actions]="actions"
         [expandActions]="false"
-        (open)="state.openTemplate($event.id)"
+        [menuItems]="menuItems"
+        [allowAction]="allowAction"
+        (open)="onOpen($event)"
         (rename)="state.notice()"
         (create)="state.notice()"
         (delete)="onDelete($event)"
@@ -56,11 +61,46 @@ export class SampleTemplatesTreeComponent {
   protected readonly state = inject(SampleState);
   private readonly tree = viewChild.required<SfTreeComponent<SampleTemplateEntry>>(SfTreeComponent);
   protected readonly actions: readonly SfTreeAction[] = ['rename', 'delete'];
+  /** The *Favorites* branch is a view: nothing in it is renamed, deleted or created. */
+  protected readonly allowAction = (_action: SfTreeAction, nodes: readonly SfTreeNode<SampleTemplateEntry>[]): boolean =>
+    !nodes.some((node) => isFavoriteNode(node.id));
+
+  /** The context menu's *Add to favorites* / *Remove from favorites* for a template, dataset or folder (M35.15). */
+  protected readonly menuItems = (nodes: readonly SfTreeNode<SampleTemplateEntry>[]): ContextMenuItem[] => {
+    const node = nodes.length === 1 ? nodes[0] : null;
+    if (!node || isFavoriteNode(node.id) || !node.data) {
+      return [];
+    }
+    const favorite = templateFavorite(node.data);
+    return [
+      {
+        label: this.state.t(this.state.isFavoriteKey(favorite.key) ? 'favorites.remove' : 'favorites.add'),
+        icon: 'star',
+        action: () => this.state.toggleFavoriteOf(favorite),
+      },
+    ];
+  };
+
+  protected onOpen(node: SfTreeNode<SampleTemplateEntry>): void {
+    if (isFavoriteNode(node.id)) {
+      this.state.openFavoriteNode(node.data as unknown as SampleFavorite | undefined);
+    } else {
+      this.state.openTemplate(node.id);
+    }
+  }
 
   protected readonly loader = computed<SfTreeLoader<SampleTemplateEntry>>(() => {
     const dev = this.state.devMode();
-    return (parent) =>
-      templateChildren(parent?.id ?? null).map(
+    const favorites = this.state.favorites();
+    const label = this.state.t('favorites.node');
+    return (parent) => {
+      if (parent?.id === FAVORITES_NODE) {
+        return favoriteNodes<SampleTemplateEntry>(favorites);
+      }
+      if (parent && isFavoriteNode(parent.id)) {
+        return favoriteChildren<SampleTemplateEntry>(parent.id, favorites);
+      }
+      const nodes = templateChildren(parent?.id ?? null).map(
         (entry): SfTreeNode<SampleTemplateEntry> => ({
           id: entry.id,
           label: entry.name,
@@ -71,9 +111,14 @@ export class SampleTemplatesTreeComponent {
           data: entry,
         }),
       );
+      return parent === null && favorites.length > 0 ? [favoritesNode<SampleTemplateEntry>(label), ...nodes] : nodes;
+    };
   });
 
   protected readonly selection = computed(() => {
+    if (this.state.favoritesOpen()) {
+      return [FAVORITES_NODE];
+    }
     const id = this.state.templateId();
     return id === null ? [] : [id];
   });

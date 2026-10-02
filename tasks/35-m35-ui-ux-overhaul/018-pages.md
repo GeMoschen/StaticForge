@@ -81,3 +81,13 @@ and list + detail panes are bordered cards with the splitter handle centred in a
 - M35.10 only reports the page name to the breadcrumb; folder segments need folder URLs - add them here. At 1024 px the
   preview is still clipped (the splitter and M35.27 fix it).
 - The project *Home* rail item still redirects to Pages until M35.28.
+
+## Notes (M35.15 favorites)
+
+- The pages tree and the folder table: add the pinned *Favorites* node (`pinned: true`, only while there are favorites; children from
+  `FavoritesService`, flat with an icon per kind, favorite folders as lazily loaded folder nodes, a click on the node opens
+  the Favorites list in the main pane) and *Add to / Remove from favorites* to the row context menu (and a hover/focus ☆
+  in table name cells). The design is in the sample (`/styleguide/sample`, gate round 5, decisions 57–58). Favorites are
+  not store-bound: the node lists them from every store.
+- Put the open item in the URL (`?asset=` / `?folder=`, or the route's UUID) so it is recorded as a recent.
+

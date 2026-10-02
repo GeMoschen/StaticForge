@@ -6,6 +6,7 @@
     <header class="global-detail__header">
       <div class="global-detail__title">
         <h2>{{ set.displayName ?? set.uid }}</h2>
+        <sf-asset-favorite type="GLOBAL_SET" [uuid]="set.uuid" [name]="set.displayName ?? set.uid" [folderPath]="set.folderPath" />
         <code class="global-detail__uid">{{ set.uid }}</code>
       </div>
       <button

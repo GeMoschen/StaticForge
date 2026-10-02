@@ -231,6 +231,30 @@ Added to the sample for M35.14 (`sample/keyboard/`; `/styleguide/sample?cmdk=` a
     (↑/↓, Space, Enter, Shift, Ctrl+A), release and build; actions are registered by the services and screens that own
     them (registry-driven), permission-checked through `ProjectAccessStore`.
 
+## Review round 5 (2026-10-02): recents and favorites (awaiting user sign-off)
+
+Added to the sample for M35.15 (`/styleguide/sample?area=pages&view=folder`; the editor star is on `view=editor`). **Not
+signed off yet** — the app is built only after the user approves.
+
+57. **Favorites mark (☆):** in the page editor header (as before), in the **Pages tree's context menu** (*Add to favorites* /
+    *Remove from favorites*, also Shift+F10) and in the **table's name cell** — a star button that shows on hover and
+    focus of the cell and stays, in the warning colour, while the item is a favorite. A toast confirms the change. The
+    palette gets the context action *Add to favorites* / *Remove from favorites* for the open item.
+58. **Favorites are not store-bound (user, 2026-10-02):** a favorite can be any asset — page, record, template, media file,
+    global set, navigation item — and the same list shows in every tree. The pinned first node *Favorites* (star; only while
+    there are favorites) sits at the top of every tree (Pages, Content, Templates in the sample; Media, Navigation and Globals
+    the same) and lists them all as flat shortcuts with an icon per kind and where they live as the secondary text; a child
+    opens the item in its own area. **Clicking the node itself opens the Favorites list** in the main pane, whichever area
+    is open: a table (Name with the star to remove it, Type, Location) of the favorites from all stores; a row opens the
+    item. **Folders are favoritable too** (tree context menu, the folder view's header menu, the table star) and show as
+    folders — in the *Favorites* branch and in the list: a favorite folder expands lazily (as the folder itself would,
+    sub-folders included, whichever store it belongs to) and a row or node opens the folder in its own area. Nothing in the
+    branch can be renamed, deleted or created. `sf-tree` gets `pinned` on a node (sorts before its siblings whatever its label).
+59. **Recents and favorites in the palette** follow the same lists (empty state: context actions, Recent, Favorites,
+    screens). Recent holds what was opened last, newest first, deduped.
+60. **Scope (user, 2026-10-02):** assets only (no settings pages); stale entries are dropped when a list shows (resolved
+    through the API), and again on open; the project home and dashboard blocks stay with M35.28.
+
 ## Notes / hazards
 
 - Sign-off: **signed off by the user on 2026-10-01** — gallery https://claude.ai/artifact/33yY26sd6H17UTP9sPPJid

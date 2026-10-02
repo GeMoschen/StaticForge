@@ -56,3 +56,13 @@ for their review and sign-off; record the decisions in `009-style-guide-gate.md`
   opening hours as a list, social links as a catalog of cards, footer text localized with language chips) and "Shop
   settings" (currency select, shipping threshold); `sf-page-header` with save status; the Schema tab (CDL in the code
   panel) and the usage chip as `sf-copyable` in developer mode only. Forms span the full width (decision 33).
+
+## Notes (M35.15 favorites)
+
+- The navigation and globals trees: add the pinned *Favorites* node (`pinned: true`, only while there are favorites; children from
+  `FavoritesService`, flat with an icon per kind, favorite folders as lazily loaded folder nodes, a click on the node opens
+  the Favorites list in the main pane) and *Add to / Remove from favorites* to the row context menu (and a hover/focus ☆
+  in table name cells). The design is in the sample (`/styleguide/sample`, gate round 5, decisions 57–58). Favorites are
+  not store-bound: the node lists them from every store.
+- Put the open item in the URL (`?asset=` / `?folder=`, or the route's UUID) so it is recorded as a recent.
+

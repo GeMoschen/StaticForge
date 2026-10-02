@@ -188,7 +188,7 @@ export class SamplePageEditorComponent {
   });
 
   // ── Header ─────────────────────────────────────────────────────────────────
-  protected readonly favorite = signal(false);
+  protected readonly favorite = computed(() => this.state.isFavorite(this.state.pageId()));
   protected readonly saving = signal(false);
   /** An edit is waiting for the debounce. */
   private readonly pending = signal(false);
@@ -370,7 +370,7 @@ export class SamplePageEditorComponent {
   }
 
   protected toggleFavorite(): void {
-    this.favorite.update((on) => !on);
+    this.state.toggleFavorite(this.state.pageId());
   }
 
   // ── Outline ────────────────────────────────────────────────────────────────

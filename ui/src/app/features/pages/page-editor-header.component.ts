@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, HostListener, computed, effect, inject, signal, untracked } from '@angular/core';
+import { SfAssetFavoriteComponent } from '../../shared/components/sf-asset-favorite.component';
 import { ShortcutService } from '../../core/ui/shortcut.service';
 import { ApiClient } from '../../core/api/api.client';
 import { from, switchMap, tap } from 'rxjs';
@@ -22,7 +23,7 @@ type PageView = components['schemas']['PageView'];
   selector: 'sf-page-editor-header',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [SfButtonComponent, SfSaveStatusComponent, SfUidRenameComponent, PageNavSettingsComponent],
+  imports: [SfAssetFavoriteComponent, SfButtonComponent, SfSaveStatusComponent, SfUidRenameComponent, PageNavSettingsComponent],
   templateUrl: './page-editor-header.component.html',
   styleUrl: './page-editor-header.component.scss',
 })

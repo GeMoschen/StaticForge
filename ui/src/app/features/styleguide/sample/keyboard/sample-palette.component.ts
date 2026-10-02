@@ -56,7 +56,11 @@ export class SamplePaletteComponent implements OnDestroy {
     const view = this.state.view();
     const item = view === 'editor' ? this.state.page().name : view === 'folder' ? (this.state.folder()?.name ?? null) : view === 'record' ? this.state.recordName(this.state.record()) : null;
     const dark = this.state.theme() === 'dark';
-    return { view, dev: this.state.devMode(), dark, compact: this.state.density() === 'compact', itemName: EDITOR_NAMES.includes(view) || view === 'folder' ? item : null };
+    return { view, dev: this.state.devMode(), dark, compact: this.state.density() === 'compact', itemName: EDITOR_NAMES.includes(view) || view === 'folder' ? item : null,
+      recents: this.state.recents(),
+      favorites: this.state.favorites(),
+      pageFavorite: view === 'editor' ? this.state.isFavorite(this.state.pageId()) : null,
+    };
   });
 
   protected readonly sections = computed<SectionView[]>(() => {
@@ -173,6 +177,12 @@ export class SamplePaletteComponent implements OnDestroy {
         break;
       case 'page':
         void this.state.canLeave().then((ok) => ok && this.state.openPage(run.id));
+        break;
+      case 'favorite-open':
+        this.state.openFavorite(run.favorite);
+        break;
+      case 'favorite':
+        this.state.toggleFavorite(this.state.pageId());
         break;
       case 'history':
         this.state.history.set(this.state.view() === 'editor' ? 'page' : 'project');

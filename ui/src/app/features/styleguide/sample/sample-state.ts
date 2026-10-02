@@ -19,6 +19,7 @@ import {
   templateEntry,
   templatePath,
 } from './sample-content-data';
+import { FAVORITE_SEED, SampleFavorite, favoriteKey, pageFavorite } from './sample-favorites';
 import {
   FIXED_FOLDER,
   FIXED_PAGE,
@@ -216,6 +217,92 @@ export class SampleState {
   /** The revision the full History page opens (the drawer's *Details*). */
   readonly historyRev = signal<number | null>(null);
   readonly shortcutsOpen = signal(false);
+
+  // ── Favorites and recents (M35.15) ─────────────────────────────────────────
+  /** Favorite pages: the star in the editor, the tree's context menu and the table, the tree's *Favorites* node and the palette share them. */
+  readonly favorites = signal<readonly SampleFavorite[]>(FAVORITE_SEED);
+  /** The pages opened last, newest first. */
+  readonly recents = signal<readonly string[]>(['p-spring-harvest', 'p-single-origins', 'p-home']);
+
+  /** The Favorites list fills the main pane (a tree's *Favorites* node was opened). */
+  readonly favoritesOpen = signal(false);
+
+  /** Whether the page or folder of the Pages store is a favorite. */
+  isFavorite(id: string): boolean {
+    return this.isFavoriteKey(favoriteKey('pages', id));
+  }
+
+  isFavoriteKey(key: string): boolean {
+    return this.favorites().some((favorite) => favorite.key === key);
+  }
+
+  /** Stars or unstars a page or folder of the Pages store. */
+  toggleFavorite(id: string): void {
+    const entry = entryById(id);
+    if (entry) {
+      this.toggleFavoriteOf(pageFavorite(entry));
+    }
+  }
+
+  /** Stars or unstars anything, from any store. */
+  toggleFavoriteOf(favorite: SampleFavorite): void {
+    if (this.isFavoriteKey(favorite.key)) {
+      this.removeFavorite(favorite.key);
+    } else {
+      this.favorites.update((all) => [...all, favorite]);
+      this.notice('favorites.added', { name: favorite.name });
+    }
+  }
+
+  removeFavorite(key: string): void {
+    const favorite = this.favorites().find((f) => f.key === key);
+    if (favorite) {
+      this.favorites.update((all) => all.filter((f) => f.key !== key));
+      this.notice('favorites.removed', { name: favorite.name });
+    }
+  }
+
+  /** A node of the *Favorites* branch: the pinned node opens the list, anything below it opens the item it stands for. */
+  openFavoriteNode(favorite: SampleFavorite | undefined): void {
+    if (favorite) {
+      this.openFavorite(favorite);
+    } else {
+      this.openFavorites();
+    }
+  }
+
+  /** Opens a favorite in its own area. Only pages, records and templates exist as screens of their own in the sample. */
+  openFavorite(favorite: SampleFavorite): void {
+    switch (favorite.kind) {
+      case 'page':
+        this.openPage(favorite.id);
+        break;
+      case 'folder':
+        if (favorite.area === 'pages') {
+          this.openFolder(favorite.id);
+        } else if (favorite.area === 'content') {
+          this.openContentFolder(favorite.id);
+        } else if (favorite.area === 'templates') {
+          this.openTemplate(favorite.id);
+        } else {
+          this.openArea(favorite.area);
+          this.notice('favorites.openedIn', { name: favorite.name, area: this.t(`rail.${favorite.area}`) });
+        }
+        break;
+      case 'recordset':
+        this.openRecordSet(favorite.id);
+        break;
+      case 'record':
+        this.openRecord(favorite.id);
+        break;
+      case 'template':
+        this.openTemplate(favorite.id);
+        break;
+      default:
+        this.openArea(favorite.area);
+        this.notice('favorites.openedIn', { name: favorite.name, area: this.t(`rail.${favorite.area}`) });
+    }
+  }
   /** The `?` sheet's search text when it opens (`sheetq`). */
   readonly shortcutsQuery = signal('');
   /** The command palette (M35.14): `null` = closed, else its query including a mode prefix (`>`, `#`, `@`). */
@@ -252,6 +339,9 @@ export class SampleState {
   readonly breadcrumb = computed<SampleCrumb[]>(() => {
     const area = this.area();
     const section = this.t(AREA_LABELS[area]);
+    if (this.favoritesOpen()) {
+      return [{ label: section, target: null }, { label: this.t('favorites.node') }];
+    }
     let path: { readonly id: string; readonly name: string }[];
     switch (this.view()) {
       case 'editor':
@@ -306,23 +396,33 @@ export class SampleState {
 
   // ── Navigation ─────────────────────────────────────────────────────────────
 
+  /** Shows the Favorites list in the open area (it stays where it is; the list is the same in every store). */
+  openFavorites(): void {
+    this.favoritesOpen.set(true);
+  }
+
   openFolder(id: string | null, preselect: readonly string[] = []): void {
+    this.favoritesOpen.set(false);
     this.folderId.set(id);
     this.preselect.set(preselect);
     this.view.set('folder');
   }
 
   openPage(id: string): void {
+    this.favoritesOpen.set(false);
+    this.recents.update((all) => [id, ...all.filter((existing) => existing !== id)].slice(0, 8));
     this.pageId.set(id);
     this.view.set('editor');
   }
 
   openContentFolder(id: string | null): void {
+    this.favoritesOpen.set(false);
     this.contentFolderId.set(id);
     this.view.set('contentfolder');
   }
 
   openRecordSet(id: string, preselect: readonly string[] = []): void {
+    this.favoritesOpen.set(false);
     this.recordSetId.set(id);
     this.contentFolderId.set(contentParentOf(id));
     this.preselect.set(preselect);
@@ -330,6 +430,7 @@ export class SampleState {
   }
 
   openRecord(id: string): void {
+    this.favoritesOpen.set(false);
     const set = recordSetOf(id);
     if (set) {
       this.recordSetId.set(set.id);
@@ -341,12 +442,14 @@ export class SampleState {
 
   /** A template, dataset or templates folder (`null` = the root). */
   openTemplate(id: string | null): void {
+    this.favoritesOpen.set(false);
     this.templateId.set(id);
     this.view.set(templateEntry(id)?.kind === 'dataset' ? 'dataset' : 'template');
   }
 
   /** The rail: an area's start (its root folder). */
   openArea(area: SampleArea): void {
+    this.favoritesOpen.set(false);
     if (area === 'pages') {
       this.openFolder(null);
     } else if (area === 'content') {

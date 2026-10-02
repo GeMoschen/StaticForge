@@ -35,6 +35,10 @@ import { SampleRailComponent } from './sample-rail.component';
 import { SampleRecordEditorComponent } from './sample-record-editor.component';
 import { SampleRecordSetComponent } from './sample-record-set.component';
 import { SampleEntry, childrenOf, parentOf, pathTo } from './sample-data';
+import { FAVORITES_NODE, SampleFavorite } from './sample-favorites';
+import { favoriteChildren, favoriteNodes, favoritesNode, isFavoriteNode } from './sample-favorites-nodes';
+import { SampleFavoritesViewComponent } from './sample-favorites-view.component';
+import type { ContextMenuItem } from '../../../shared/services/context-menu.service';
 import {
   AREA_OF_VIEW,
   SAMPLE_AREAS,
@@ -109,6 +113,7 @@ const OWN_PARAMS = ['area', 'view', 'template', 'tab', 'channel', 'focus', 'dev'
     SampleContentFolderComponent,
     SampleContentTreeComponent,
     SampleDatasetViewComponent,
+    SampleFavoritesViewComponent,
     SampleFolderViewComponent,
     SampleGlobalsAreaComponent,
     SampleHistoryAreaComponent,
@@ -150,18 +155,35 @@ export class SampleScreenComponent {
   protected readonly treeWidth =
     typeof matchMedia !== 'function' || matchMedia(WIDE_QUERY).matches ? TREE_WIDTH : TREE_WIDTH_NARROW;
   protected readonly treeActions: readonly SfTreeAction[] = ['rename', 'delete', 'create'];
+  /** The *Favorites* branch is a view: nothing in it is renamed, deleted or created. */
+  protected readonly allowAction = (_action: SfTreeAction, nodes: readonly SfTreeNode<SampleEntry>[]): boolean =>
+    !nodes.some((node) => isFavoriteNode(node.id));
 
   /** Lazy children with status badges (only when not released) and, in developer mode, the UID. */
   protected readonly loader = computed<SfTreeLoader<SampleEntry>>(() => {
     const dev = this.state.devMode();
     const lang = this.state.lang();
     this.state.t('status.released'); // tracks the language file
-    return (parent) => childrenOf(parent?.id ?? null).map((entry) => this.toNode(entry, dev, lang));
+    const favorites = this.state.favorites();
+    const label = this.state.t('favorites.node');
+    return (parent) => {
+      if (parent?.id === FAVORITES_NODE) {
+        return favoriteNodes<SampleEntry>(favorites);
+      }
+      if (parent && isFavoriteNode(parent.id)) {
+        return favoriteChildren<SampleEntry>(parent.id, favorites);
+      }
+      const nodes = childrenOf(parent?.id ?? null).map((entry) => this.toNode(entry, dev, lang));
+      return parent === null && favorites.length > 0 ? [favoritesNode<SampleEntry>(label), ...nodes] : nodes;
+    };
   });
 
   protected readonly treeSelection = computed(() => {
     if (this.state.view() === 'editor') {
       return [this.state.pageId()];
+    }
+    if (this.state.favoritesOpen()) {
+      return [FAVORITES_NODE];
     }
     const folder = this.state.folderId();
     return folder === null ? [] : [folder];
@@ -253,7 +275,30 @@ export class SampleScreenComponent {
     });
   }
 
+  /** The context menu's *Add to favorites* / *Remove from favorites* for a page or folder (M35.15). */
+  protected readonly treeMenuItems = (nodes: readonly SfTreeNode<SampleEntry>[]): ContextMenuItem[] => {
+    const node = nodes.length === 1 ? nodes[0] : null;
+    if (!node || isFavoriteNode(node.id) || !node.data) {
+      return [];
+    }
+    const entry = node.data;
+    const on = this.state.isFavorite(entry.id);
+    return [
+      {
+        label: this.state.t(on ? 'favorites.remove' : 'favorites.add'),
+        icon: 'star',
+        action: () => this.state.toggleFavorite(entry.id),
+      },
+    ];
+  };
+
   protected async onOpen(node: SfTreeNode<SampleEntry>): Promise<void> {
+    if (isFavoriteNode(node.id)) {
+      if (await this.state.canLeave()) {
+        this.state.openFavoriteNode(node.data as unknown as SampleFavorite | undefined);
+      }
+      return;
+    }
     const entry = node.data!;
     if (!(await this.state.canLeave())) {
       return;

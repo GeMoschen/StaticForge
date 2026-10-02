@@ -20,6 +20,7 @@
       <header class="record-editor__header">
         <div class="record-editor__title">
           <h2>{{ rec.displayName ?? rec.uid }}</h2>
+          <sf-asset-favorite type="RECORD" [uuid]="rec.uuid" [name]="rec.displayName ?? rec.uid" [folderPath]="rec.folderPath" />
           <code class="record-editor__uid">{{ rec.uid }}</code>
           @if (rec.datasetUid) {
             <span class="record-editor__badge" title="Dataset">{{ dataset()?.displayName ?? rec.datasetUid }}</span>

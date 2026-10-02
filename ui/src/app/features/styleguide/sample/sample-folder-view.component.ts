@@ -86,6 +86,15 @@ export class SampleFolderViewComponent {
   ]);
 
   protected readonly moreActions = computed<SfMenuItem[]>(() => [
+    ...(this.state.folderId() === null
+      ? []
+      : [
+          {
+            id: 'favorite',
+            label: this.state.t(this.state.isFavorite(this.state.folderId()!) ? 'favorites.remove' : 'favorites.add'),
+            icon: 'star',
+          },
+        ]),
     { id: 'settings', label: this.state.t('folder.settings'), icon: 'settings' },
     { id: 'rename', label: this.state.t('folder.rename'), icon: 'edit', shortcut: 'F2' },
     { id: 'move', label: this.state.t('folder.move'), icon: 'drive_file_move' },
@@ -134,7 +143,9 @@ export class SampleFolderViewComponent {
   }
 
   protected secondary(item: SfMenuItem): void {
-    if (item.id === 'delete') {
+    if (item.id === 'favorite') {
+      this.state.toggleFavorite(this.state.folderId()!);
+    } else if (item.id === 'delete') {
       void this.deleteEntries([this.title()]);
     } else {
       this.state.notice();

@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, DestroyRef, computed, inject, input, output, signal } from '@angular/core';
+import { SfAssetFavoriteComponent } from '../../shared/components/sf-asset-favorite.component';
 import { tap } from 'rxjs';
 import { ApiClient } from '../../core/api/api.client';
 import { ToastService } from '../../core/ui/toast.service';
@@ -38,7 +39,7 @@ interface StartNodeOption {
 @Component({
   selector: 'sf-nav-folder-detail',
   standalone: true,
-  imports: [SfButtonComponent, SfFieldComponent, SfIconComponent, SfUidRenameComponent, ReleaseBarComponent],
+  imports: [SfAssetFavoriteComponent, SfButtonComponent, SfFieldComponent, SfIconComponent, SfUidRenameComponent, ReleaseBarComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './nav-folder-detail.component.html',
   styleUrl: './nav-folder-detail.component.scss',

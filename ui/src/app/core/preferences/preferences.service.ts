@@ -168,6 +168,14 @@ export class PreferencesService {
     const rest = this.recents(projectKey).filter((r) => !(r.kind === entry.kind && r.uuid === entry.uuid));
     this.set(['projects', projectKey, 'recents'], [entry, ...rest].slice(0, RECENTS_CAP));
   }
+  /** Takes an entry out of the project's recents (a deleted asset). */
+  removeRecent(projectKey: string, uuid: string): void {
+    this.set(['projects', projectKey, 'recents'], this.recents(projectKey).filter((r) => r.uuid !== uuid));
+  }
+  /** Replaces the project's recents (a refresh of their names). */
+  setRecents(projectKey: string, recents: RecentEntry[]): void {
+    this.set(['projects', projectKey, 'recents'], recents);
+  }
   favorites(projectKey: string): FavoriteEntry[] {
     return this.document().projects?.[projectKey]?.favorites ?? [];
   }

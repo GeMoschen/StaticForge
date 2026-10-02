@@ -1,6 +1,6 @@
 import '@angular/compiler';
 import { provideHttpClient } from '@angular/common/http';
-import { provideHttpClientTesting } from '@angular/common/http/testing';
+import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { computed, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { Router, provideRouter } from '@angular/router';
@@ -138,6 +138,15 @@ describe('CommandPaletteComponent', () => {
     await open(shortcuts);
     await fireEvent.click(screen.getByRole('option', { name: /Spring harvest/ }));
     expect(navigate).toHaveBeenCalledWith(['/p', 'acme', 'pages', 'u1'], { queryParams: {} });
+  });
+
+  it('checks the recents against the server when it opens, so a deleted asset never shows', async () => {
+    const recents = signal([{ kind: 'PAGE', uuid: 'gone', title: 'Deleted page', at: '' }]);
+    const { shortcuts } = await setup({ recents: recents() });
+    const http = TestBed.inject(HttpTestingController);
+    await open(shortcuts);
+    expect(screen.getByRole('option', { name: /Deleted page/ })).toBeTruthy();
+    http.expectOne('/api/v1/projects/acme/assets/gone').flush(null, { status: 404, statusText: 'Not Found' });
   });
 
   it('closes on the Escape of the overlay stack and on a click outside', async () => {

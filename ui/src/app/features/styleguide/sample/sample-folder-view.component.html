@@ -35,6 +35,17 @@
       @if (row.startPage) {
         <sf-badge tone="accent" icon="home" [label]="'styleguide.sample.folder.startPage' | transloco" />
       }
+      <sf-button
+        class="cell-fav"
+        [class.is-on]="state.isFavorite(row.id)"
+        variant="ghost"
+        size="sm"
+        [aria-pressed]="state.isFavorite(row.id)"
+        [aria-label]="(state.isFavorite(row.id) ? 'styleguide.sample.favorites.remove' : 'styleguide.sample.favorites.add') | transloco"
+        (click)="$event.stopPropagation(); state.toggleFavorite(row.id)"
+      >
+        <sf-icon class="cell-fav__icon" name="star" />
+      </sf-button>
     </span>
   </ng-template>
   <ng-template sfDataTableCell="template" [sfDataTableCellRows]="rows()" let-row>

@@ -28,6 +28,8 @@ export interface SfTreeNode<T = unknown> {
   droppable?: boolean;
   /** The host's payload. */
   data?: T;
+  /** Sorts before its siblings, whatever its label (the *Favorites* node, M35.15). */
+  pinned?: boolean;
 }
 
 /** What a loader may return. */
@@ -480,7 +482,7 @@ export class SfTreeModel<T = unknown> {
   private setChildren(parentId: string | null, loaded: readonly SfTreeNode<T>[]): void {
     const list = [...loaded];
     if (this.options.sort() === 'name') {
-      list.sort((a, b) => COLLATOR.compare(a.label, b.label));
+      list.sort((a, b) => Number(!!b.pinned) - Number(!!a.pinned) || COLLATOR.compare(a.label, b.label));
     }
     this.structure.update(({ nodes, children, parents }) => {
       const nextNodes = new Map(nodes);

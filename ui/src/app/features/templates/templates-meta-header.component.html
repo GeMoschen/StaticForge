@@ -2,6 +2,7 @@
   <div class="detail__head">
     <div>
       <h3>{{ d.displayName ?? d.uid }}</h3>
+      <sf-asset-favorite type="d.type ?? 'PAGE_TEMPLATE'" [uuid]="d.uuid" [name]="d.displayName ?? d.uid" [folderPath]="d.folderPath" />
       <div class="detail__meta">{{ d.uid ?? '' }} · rev {{ d.revision ?? '' }}@if (d.abstract) { · abstract }</div>
       @if (store.breadcrumb().length > 0) {
         <nav class="inheritance__chain" aria-label="Inheritance chain">

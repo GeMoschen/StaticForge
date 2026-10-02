@@ -1,4 +1,5 @@
 import '@angular/compiler';
+import { provideFavoritesStub } from '../../core/assets/testing/favorites.testing';
 import { CUSTOM_ELEMENTS_SCHEMA, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
@@ -54,7 +55,7 @@ describe('folder detail panel', () => {
   async function open(api: ReturnType<typeof apiStub>, confirm = vi.fn().mockResolvedValue(true), counts = { pages: 1, folders: 1 }) {
     const view = await render(FolderDetailComponent, {
       componentInputs: { projectKey: 'proj', folder: FOLDER, pageCount: counts.pages, folderCount: counts.folders },
-      providers: [
+      providers: [provideFavoritesStub(), 
         { provide: ApiClient, useValue: api },
         { provide: ConfirmService, useValue: { confirm } },
       ],
@@ -147,7 +148,7 @@ describe('folder node paste (cut)', () => {
   async function open(api: ReturnType<typeof apiStub>) {
     const view = await render(FolderNodeComponent, {
       componentInputs: { projectKey: 'proj', node: TREE[0].children[1] },
-      providers: [
+      providers: [provideFavoritesStub(), 
         { provide: ApiClient, useValue: api },
         { provide: ConfirmService, useValue: { confirm: vi.fn().mockResolvedValue(true) } },
         { provide: ProjectContextStore, useValue: { pageFolderTree: signal(TREE) } },
@@ -223,7 +224,7 @@ describe('page sections', () => {
     };
     const view = await render(PageNavNodeComponent, {
       componentInputs: { projectKey: 'proj', summary: { uuid: 'page-1', uid: 'home', displayName: 'Home', revision: 9 } },
-      providers: [
+      providers: [provideFavoritesStub(), 
         { provide: ApiClient, useValue: api },
         { provide: ConfirmService, useValue: { confirm } },
         { provide: ProjectContextStore, useValue: store },
@@ -294,7 +295,7 @@ describe('page editor sections: remove', () => {
     };
     const project = { sectionTemplates: signal([{ uuid: 'tpl-hero', displayName: 'Hero' }]), notifyPageChanged: vi.fn() };
     TestBed.configureTestingModule({
-      providers: [
+      providers: [provideFavoritesStub(), 
         PageEditorSectionsService,
         { provide: ApiClient, useValue: api },
         { provide: ProjectContextStore, useValue: project },

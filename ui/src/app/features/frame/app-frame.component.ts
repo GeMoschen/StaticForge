@@ -12,6 +12,7 @@ import { HistoryDrawerStore } from '../history/history-drawer.store';
 import { TimeTravelBannerComponent } from '../revisions/time-travel-banner.component';
 import { TimeTravelStore } from '../revisions/time-travel.store';
 import { FrameRailComponent } from './frame-rail.component';
+import { useAssetTracking } from './asset-tracking';
 import { useFrameShortcuts } from './frame-shortcuts';
 import { FrameTopbarComponent } from './frame-topbar.component';
 
@@ -50,6 +51,7 @@ export class AppFrameComponent {
 
   constructor() {
     useFrameShortcuts();
+    useAssetTracking();
   }
 
   protected readonly hasRail = computed(

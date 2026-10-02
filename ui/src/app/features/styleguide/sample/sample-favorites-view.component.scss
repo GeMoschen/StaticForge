@@ -1,0 +1,49 @@
+:host {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sf-space-4);
+  height: 100%;
+  min-height: 0;
+  padding: var(--sf-space-4) var(--sf-space-6);
+}
+
+.view__table {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.cell-name {
+  display: flex;
+  align-items: center;
+  gap: var(--sf-space-2);
+  width: 100%;
+  min-width: 0;
+}
+
+.cell-name__icon {
+  flex-shrink: 0;
+  color: var(--sf-text-subtle);
+  font-size: var(--sf-fs-18);
+}
+
+.cell-name__text {
+  overflow: hidden;
+  color: var(--sf-text);
+  font-weight: var(--sf-weight-medium);
+  text-overflow: ellipsis;
+}
+
+.cell-muted {
+  color: var(--sf-text-muted);
+}
+
+.cell-fav {
+  margin-left: auto;
+  // The row's own hover tint is close to the ghost button's: tint with the text colour (stands out in both themes).
+  --sf-hover: color-mix(in srgb, var(--sf-text) 16%, transparent);
+}
+
+.cell-fav__icon {
+  color: var(--sf-warning);
+  font-size: var(--sf-fs-18);
+}

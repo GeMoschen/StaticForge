@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, computed, inject, input, output, signal } from '@angular/core';
+import { SfAssetFavoriteComponent } from '../../shared/components/sf-asset-favorite.component';
 import { ApiClient } from '../../core/api/api.client';
 import { tap } from 'rxjs';
 import { ToastService } from '../../core/ui/toast.service';
@@ -26,7 +27,7 @@ import { SfAssetUrlsComponent } from '../settings/asset-urls.component';
 @Component({
   selector: 'sf-folder-detail',
   standalone: true,
-  imports: [SfButtonComponent, SfFieldComponent, SfIconComponent, SfUidRenameComponent, ReleaseBarComponent, SfAssetUrlsComponent],
+  imports: [SfAssetFavoriteComponent, SfButtonComponent, SfFieldComponent, SfIconComponent, SfUidRenameComponent, ReleaseBarComponent, SfAssetUrlsComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './folder-detail.component.html',
   styleUrl: './folder-detail.component.scss',

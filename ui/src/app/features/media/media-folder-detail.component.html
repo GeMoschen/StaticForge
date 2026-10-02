@@ -19,6 +19,7 @@
       <h2 id="media-folder-drawer-title" class="folder-drawer__title">
         {{ folder().displayName ?? folder().uid }}
       </h2>
+      <sf-asset-favorite type="FOLDER" [uuid]="folder().uuid" [name]="folder().displayName ?? folder().uid" [folderPath]="folder().path" />
       <button type="button" class="folder-drawer__edit" [disabled]="readOnly()" (click)="startEditName()" aria-label="Rename folder">
         <sf-icon name="edit" />
       </button>

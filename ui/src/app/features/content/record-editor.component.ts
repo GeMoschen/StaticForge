@@ -13,6 +13,7 @@ import {
   signal,
   untracked,
 } from '@angular/core';
+import { SfAssetFavoriteComponent } from '../../shared/components/sf-asset-favorite.component';
 import { FormGroup } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { forkJoin, Subscription } from 'rxjs';
@@ -64,6 +65,7 @@ const EMPTY_DEF: ContentDefinition = { editors: [], bodies: [] };
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
+    SfAssetFavoriteComponent,
     SfSaveStatusComponent,
     RouterLink,
     SfButtonComponent,

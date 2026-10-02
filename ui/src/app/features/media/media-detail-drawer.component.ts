@@ -8,6 +8,7 @@ import {
   output,
   untracked,
 } from '@angular/core';
+import { SfAssetFavoriteComponent } from '../../shared/components/sf-asset-favorite.component';
 import { SfButtonComponent } from '../../shared/components/sf-button.component';
 import { SfFieldComponent } from '../../shared/components/sf-field.component';
 import { SfAssetImpactComponent } from '../generation/insight/sf-asset-impact.component';
@@ -43,6 +44,7 @@ export type { MediaDrawerTab } from './drawer/media-drawer.store';
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
+    SfAssetFavoriteComponent,
     SfFieldComponent,
     SfButtonComponent,
     ConflictDrawerComponent,

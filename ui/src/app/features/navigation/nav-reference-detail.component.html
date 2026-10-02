@@ -21,6 +21,7 @@
       <sf-button variant="ghost" (click)="cancelEditName()">Cancel</sf-button>
     } @else {
       <h2 class="nav-ref-detail__title">{{ reference().displayName ?? reference().uid ?? 'Reference' }}</h2>
+      <sf-asset-favorite type="PAGE_REFERENCE" [uuid]="reference().uuid" [name]="reference().displayName ?? reference().uid" [folderPath]="reference().folderPath" />
       <button type="button" class="nav-ref-detail__edit" [disabled]="readOnly()" (click)="startEditName()" aria-label="Rename reference">
         <sf-icon name="edit" />
       </button>

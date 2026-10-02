@@ -70,3 +70,13 @@ is already offset by `--sf-topbar-height`. Do not re-open that question here.
 - Grid card: thumbnail with the name (truncated at the end) and "JPG · 1.2 MB" below, checkbox top-left on
   hover/focus/selected, status icon when unreleased. A drop zone covers the whole area; the upload progress panel is
   per file. Bulk move, delete (undo) and download.
+
+## Notes (M35.15 favorites)
+
+- The media tree and the grid and list: add the pinned *Favorites* node (`pinned: true`, only while there are favorites; children from
+  `FavoritesService`, flat with an icon per kind, favorite folders as lazily loaded folder nodes, a click on the node opens
+  the Favorites list in the main pane) and *Add to / Remove from favorites* to the row context menu (and a hover/focus ☆
+  in table name cells). The design is in the sample (`/styleguide/sample`, gate round 5, decisions 57–58). Favorites are
+  not store-bound: the node lists them from every store.
+- Put the open item in the URL (`?asset=` / `?folder=`, or the route's UUID) so it is recorded as a recent.
+

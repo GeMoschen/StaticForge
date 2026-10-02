@@ -13,7 +13,8 @@
 }
 
 .cell-name {
-  display: inline-flex;
+  display: flex;
+  width: 100%;
   align-items: center;
   gap: var(--sf-space-2);
   min-width: 0;
@@ -34,6 +35,34 @@
   color: var(--sf-text);
   font-weight: var(--sf-weight-medium);
   text-overflow: ellipsis;
+}
+
+// The star shows on the name cell's hover and focus, and stays while the page is a favorite (M35.15).
+.cell-fav {
+  margin-left: auto;
+  opacity: 0;
+  color: var(--sf-text-muted);
+  // The row's own hover and selection tints are close to the ghost button's hover: tint with the text colour instead,
+  // which stands out from them in both themes.
+  --sf-hover: color-mix(in srgb, var(--sf-text) 16%, transparent);
+
+  &.is-on {
+    opacity: 1;
+
+    .cell-fav__icon {
+      color: var(--sf-warning);
+    }
+  }
+}
+
+.cell-fav__icon {
+  font-size: var(--sf-fs-18);
+}
+
+.cell-name:hover .cell-fav,
+.cell-name:focus-within .cell-fav,
+.cell-fav:focus-visible {
+  opacity: 1;
 }
 
 .cell-muted {

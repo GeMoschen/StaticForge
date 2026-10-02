@@ -234,6 +234,12 @@
     }
   },
   "shared": {
+    "favorite": {
+      "add": "Add “{name}” to favorites",
+      "remove": "Remove “{name}” from favorites",
+      "added": "“{name}” added to your favorites.",
+      "removed": "“{name}” removed from your favorites."
+    },
     "card": {
       "untitled": "Untitled",
       "collapse": "Collapse {type}",
@@ -810,6 +816,8 @@
         "createRecordSet": "New record set",
         "createMenuItem": "New menu item",
         "createGlobalSet": "New global set",
+        "favoriteAdd": "Add to favorites",
+        "favoriteRemove": "Remove from favorites",
         "releaseItem": "Release this item",
         "releaseSelected": "Release the selected changes",
         "themeDark": "Switch to dark theme",
@@ -2469,6 +2477,31 @@
           "apply": "Apply"
         }
       },
+      "favorites": {
+        "node": "Favorites",
+        "add": "Add to favorites",
+        "remove": "Remove from favorites",
+        "added": "“{name}” added to your favorites.",
+        "removed": "“{name}” removed from your favorites.",
+        "openedIn": "Opens “{name}” in {area} (not part of the sample).",
+        "table": "Favorites",
+        "search": "Filter favorites",
+        "empty": "No favorites yet. Star an item to find it here.",
+        "columns": {
+          "name": "Name",
+          "type": "Type",
+          "path": "Location"
+        },
+        "kinds": {
+          "page": "Page",
+          "folder": "Folder",
+          "recordset": "Record set",
+          "record": "Record",
+          "template": "Template",
+          "media": "Media file",
+          "global": "Global set"
+        }
+      },
       "keyboard": {
         "title": "Search and commands",
         "results": "Results",
@@ -2527,11 +2560,8 @@
         },
         "actions": {
           "createPage": "Create page here",
-        "createTemplate": "New template",
-        "createSchedule": "New schedule",
-        "createRecordSet": "New record set",
-        "createMenuItem": "New menu item",
-        "createGlobalSet": "New global set",
+          "favoriteAdd": "Add to favorites",
+          "favoriteRemove": "Remove from favorites",
           "releaseItem": "Release this item",
         "releaseSelected": "Release the selected changes",
           "releaseRecord": "Release this record",

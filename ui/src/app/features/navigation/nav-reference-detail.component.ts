@@ -12,6 +12,7 @@ import {
   signal,
   untracked,
 } from '@angular/core';
+import { SfAssetFavoriteComponent } from '../../shared/components/sf-asset-favorite.component';
 import { tap } from 'rxjs';
 import { ApiClient } from '../../core/api/api.client';
 import type { components } from '../../core/api/generated/schema.d.ts';
@@ -52,6 +53,7 @@ interface FlatFolderOption {
   selector: 'sf-nav-reference-detail',
   standalone: true,
   imports: [
+    SfAssetFavoriteComponent,
     SfAssetPickerDialogComponent,
     SfButtonComponent,
     SfFieldComponent,

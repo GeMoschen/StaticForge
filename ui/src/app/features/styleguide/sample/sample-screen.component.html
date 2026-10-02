@@ -66,6 +66,8 @@
                   [selection]="treeSelection()"
                   [multiselect]="false"
                   [actions]="treeActions"
+                  [menuItems]="treeMenuItems"
+                  [allowAction]="allowAction"
                   [expandActions]="false"
                   (open)="onOpen($event)"
                   (rename)="state.notice()"
@@ -78,6 +80,9 @@
         </div>
 
         <div sfSplitterEnd class="sample__content">
+          @if (state.favoritesOpen()) {
+            <sf-sample-favorites-view />
+          } @else {
           @switch (state.view()) {
             @case ('editor') {
               <sf-sample-page-editor />
@@ -100,6 +105,7 @@
             @default {
               <sf-sample-folder-view />
             }
+          }
           }
         </div>
       </sf-splitter>

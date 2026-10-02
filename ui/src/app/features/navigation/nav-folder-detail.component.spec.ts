@@ -1,4 +1,5 @@
 import '@angular/compiler';
+import { provideFavoritesStub } from '../../core/assets/testing/favorites.testing';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
@@ -29,7 +30,7 @@ describe('NavFolderDetailComponent (time travel read-only)', () => {
   beforeEach(() => {
     TestBed.configureTestingModule({
       imports: [NavFolderDetailComponent],
-      providers: [provideHttpClient(), provideHttpClientTesting()],
+      providers: [provideFavoritesStub(), provideHttpClient(), provideHttpClientTesting()],
     });
     fixture = TestBed.createComponent(NavFolderDetailComponent);
     component = fixture.componentInstance;
@@ -89,7 +90,7 @@ describe('NavFolderDetailComponent (undo)', () => {
     const confirms = { confirm: vi.fn().mockResolvedValue(true) };
     TestBed.configureTestingModule({
       imports: [NavFolderDetailComponent],
-      providers: [
+      providers: [provideFavoritesStub(), 
         { provide: NavigationService, useValue: nav },
         { provide: ApiClient, useValue: api },
         { provide: ConfirmService, useValue: confirms },

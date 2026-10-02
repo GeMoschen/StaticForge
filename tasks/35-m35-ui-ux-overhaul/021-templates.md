@@ -65,3 +65,13 @@ for their review and sign-off; record the decisions in `009-style-guide-gate.md`
     numbers and fold markers, active line, bracket matching, squiggles, a diagnostics list with jump to line, and a
     status line (Ln, Col, errors, warnings). The editor background follows the theme.
   - `sf-code-panel` with CDL/JSON formatting is already in the design system.
+
+## Notes (M35.15 favorites)
+
+- The templates tree: add the pinned *Favorites* node (`pinned: true`, only while there are favorites; children from
+  `FavoritesService`, flat with an icon per kind, favorite folders as lazily loaded folder nodes, a click on the node opens
+  the Favorites list in the main pane) and *Add to / Remove from favorites* to the row context menu (and a hover/focus ☆
+  in table name cells). The design is in the sample (`/styleguide/sample`, gate round 5, decisions 57–58). Favorites are
+  not store-bound: the node lists them from every store.
+- Put the open item in the URL (`?asset=` / `?folder=`, or the route's UUID) so it is recorded as a recent.
+

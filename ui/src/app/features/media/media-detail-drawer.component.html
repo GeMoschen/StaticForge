@@ -14,6 +14,7 @@
         <span class="cms-badge" title="CMS syntax is processed when the site is generated">CMS</span>
       }
     </h2>
+    <sf-asset-favorite type="MEDIA" [uuid]="media().uuid" [name]="media().displayName ?? media().uid" />
     <sf-button variant="ghost" (click)="closeDrawer()">Close</sf-button>
   </header>
 

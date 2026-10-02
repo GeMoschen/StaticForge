@@ -1,4 +1,5 @@
 import { FuzzyMatch, fuzzyMatch } from '../../../../core/ui/fuzzy-match.util';
+import { FAVORITE_ICONS, SampleFavorite } from '../sample-favorites';
 import { PROJECTS, SITE, SampleEntry, entryById, pathTo } from '../sample-data';
 import { SampleArea, SampleView } from '../sample-state';
 
@@ -20,6 +21,8 @@ export type PaletteRun =
   | { readonly kind: 'page'; readonly id: string }
   | { readonly kind: 'toggle'; readonly what: 'theme' | 'density' | 'dev' }
   | { readonly kind: 'history' }
+  | { readonly kind: 'favorite' }
+  | { readonly kind: 'favorite-open'; readonly favorite: SampleFavorite }
   | { readonly kind: 'switch-mode'; readonly prefix: string }
   | { readonly kind: 'notice'; readonly key: string; readonly params?: Readonly<Record<string, string>> };
 
@@ -45,6 +48,11 @@ export interface PaletteContext {
   readonly compact: boolean;
   /** The open folder or page, for "Create page here" / "Release this page". */
   readonly itemName: string | null;
+  /** The pages opened last and the favorite pages (ids), newest first. */
+  readonly recents: readonly string[];
+  readonly favorites: readonly SampleFavorite[];
+  /** The open page is a favorite (`null` when no page is open). */
+  readonly pageFavorite: boolean | null;
 }
 
 const EDITOR_VIEWS: readonly SampleView[] = ['editor', 'record', 'template'];
@@ -119,6 +127,16 @@ function actionEntries(ctx: PaletteContext): PaletteEntry[] {
       run: { kind: 'notice', key: 'keyboard.notice.release' },
     });
   }
+  if (ctx.pageFavorite !== null) {
+    entries.push({
+      id: 'favorite',
+      group: 'actions',
+      labelKey: ctx.pageFavorite ? 'keyboard.actions.favoriteRemove' : 'keyboard.actions.favoriteAdd',
+      icon: 'star',
+      context: ctx.itemName ?? undefined,
+      run: { kind: 'favorite' },
+    });
+  }
   entries.push(
     { id: 'build', group: 'actions', labelKey: 'keyboard.actions.build', icon: 'construction', shortcut: 'Alt+Shift+B', run: { kind: 'notice', key: 'keyboard.notice.build' } },
     { id: 'history', group: 'actions', labelKey: 'keyboard.actions.history', icon: 'history', shortcut: 'Alt+H', run: { kind: 'history' } },
@@ -131,8 +149,6 @@ function actionEntries(ctx: PaletteContext): PaletteEntry[] {
   return entries;
 }
 
-const RECENT_PAGES = ['p-spring-harvest', 'p-single-origins', 'p-home'];
-const FAVORITE_PAGES = ['p-espresso', 'p-barista-championship'];
 
 function pageEntry(group: 'recent' | 'favorites' | 'search', page: SampleEntry, dev: boolean): PaletteEntry {
   const folders = pathTo(page.id).slice(0, -1).map((entry) => entry.name).join(' › ');
@@ -144,6 +160,17 @@ function pageEntry(group: 'recent' | 'favorites' | 'search', page: SampleEntry, 
     context: dev && page.url ? page.url : folders || undefined,
     run: { kind: 'page', id: page.id },
   };
+}
+
+function favoriteEntries(favorites: readonly SampleFavorite[]): PaletteEntry[] {
+  return favorites.map((favorite) => ({
+    id: `favorites-${favorite.key}`,
+    group: 'favorites' as const,
+    text: favorite.name,
+    icon: FAVORITE_ICONS[favorite.kind],
+    context: favorite.path || undefined,
+    run: { kind: 'favorite-open', favorite } as const,
+  }));
 }
 
 function allPages(entries: readonly SampleEntry[] = SITE): SampleEntry[] {
@@ -223,8 +250,8 @@ export function buildSections(raw: string, ctx: PaletteContext, label: (entry: P
   if (rest === '') {
     return [
       ...section('actions', actionEntries(ctx), EMPTY_ACTION_CAP),
-      ...section('recent', pages(RECENT_PAGES, 'recent')),
-      ...section('favorites', pages(FAVORITE_PAGES, 'favorites')),
+      ...section('recent', pages(ctx.recents, 'recent')),
+      ...section('favorites', favoriteEntries(ctx.favorites)),
       ...section('navigate', navigateEntries(ctx)),
     ];
   }
@@ -234,8 +261,8 @@ export function buildSections(raw: string, ctx: PaletteContext, label: (entry: P
   return [
     ...section('actions', actionEntries(ctx)),
     ...section('navigate', [...navigateEntries(ctx), ...settingsEntries(ctx).map((e) => ({ ...e, group: 'navigate' as const }))], NAVIGATE_CAP),
-    ...section('recent', pages(RECENT_PAGES, 'recent')),
-    ...section('favorites', pages(FAVORITE_PAGES, 'favorites')),
+    ...section('recent', pages(ctx.recents, 'recent')),
+    ...section('favorites', favoriteEntries(ctx.favorites)),
     ...(rest.trim().length >= 2 ? section('search', found, SEARCH_CAP) : []),
   ];
 }

@@ -21,6 +21,7 @@
       <sf-button variant="ghost" (click)="cancelEditName()">Cancel</sf-button>
     } @else {
       <h2 class="nav-folder-detail__title">{{ folder().displayName ?? folder().uid }}</h2>
+      <sf-asset-favorite type="FOLDER" [uuid]="folder().uuid" [name]="folder().displayName ?? folder().uid" [folderPath]="folder().folderPath" />
       @if (!isProtected()) {
         <button type="button" class="nav-folder-detail__edit" [disabled]="readOnly()" (click)="startEditName()" aria-label="Rename folder">
           <sf-icon name="edit" />

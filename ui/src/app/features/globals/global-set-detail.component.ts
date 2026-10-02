@@ -13,6 +13,7 @@ import {
   signal,
   untracked,
 } from '@angular/core';
+import { SfAssetFavoriteComponent } from '../../shared/components/sf-asset-favorite.component';
 import { FormGroup } from '@angular/forms';
 import { ProjectPermissionsStore } from '../../core/project/project-permissions.store';
 import { ToastService } from '../../core/ui/toast.service';
@@ -84,7 +85,7 @@ interface ContentIssue {
   selector: 'sf-global-set-detail',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [SfCdlSectionsEditorComponent, SfButtonComponent, SfFieldComponent, SfIconComponent, SfContentFormComponent, ReleaseBarComponent],
+  imports: [SfAssetFavoriteComponent, SfCdlSectionsEditorComponent, SfButtonComponent, SfFieldComponent, SfIconComponent, SfContentFormComponent, ReleaseBarComponent],
   templateUrl: './global-set-detail.component.html',
   styleUrl: './global-set-detail.component.scss',
 })

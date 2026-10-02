@@ -20,6 +20,9 @@ import { areaNav } from '../../frame/area-nav';
 import { DeveloperModeService } from '../../frame/developer-mode.service';
 import { FrameContextStore } from '../../frame/frame-context.store';
 import { railGroups, SETTINGS_ITEM } from '../../frame/rail-model';
+import { assetIcon, assetLocation } from '../../assets/asset-ref';
+import { FavoritesService } from '../../assets/favorites.service';
+import { RecentsService } from '../../assets/recents.service';
 import { PreferencesService } from '../../preferences/preferences.service';
 import { EditingLocaleStore } from '../../project/editing-locale.store';
 import { ProjectPermissionsStore } from '../../project/project-permissions.store';
@@ -81,6 +84,8 @@ export class CommandPaletteComponent {
   private readonly developerMode = inject(DeveloperModeService);
   private readonly permissions = inject(ProjectPermissionsStore);
   private readonly preferences = inject(PreferencesService);
+  private readonly recentAssets = inject(RecentsService);
+  private readonly favoriteAssets = inject(FavoritesService);
   private readonly editingLocale = inject(EditingLocaleStore);
   private readonly transloco = inject(TranslocoService);
   private readonly overlays = inject(OverlayStack);
@@ -204,19 +209,22 @@ export class CommandPaletteComponent {
       }));
   });
 
-  private entryItems(group: 'recent' | 'favorites', entries: readonly { kind: string; uuid: string; title?: string }[]): PaletteItem[] {
+  private entryItems(
+    group: 'recent' | 'favorites',
+    entries: readonly { kind: string; uuid: string; title?: string; folderPath?: string }[],
+  ): PaletteItem[] {
     const key = this.projectKey();
     if (key === null) {
       return [];
     }
     return entries.map((entry) => {
-      const route = assetRoute(key, { type: entry.kind, uuid: entry.uuid });
+      const route = assetRoute(key, { type: entry.kind, uuid: entry.uuid, folderPath: entry.folderPath });
       return {
         id: `${group}-${entry.kind}-${entry.uuid}`,
         group,
         label: entry.title ?? entry.uuid,
-        icon: group === 'favorites' ? 'star' : 'history',
-        context: null,
+        icon: assetIcon(entry.kind),
+        context: assetLocation(entry.folderPath, entry.kind),
         keys: null,
         run: () => void this.router.navigate(route.commands, { queryParams: route.queryParams }),
       };
@@ -250,8 +258,8 @@ export class CommandPaletteComponent {
 
   protected readonly sections = computed<SectionView[]>(() => {
     const key = this.projectKey();
-    const recent = key ? this.preferences.recents(key) : [];
-    const favorites = key ? this.preferences.favorites(key) : [];
+    const recent = key ? this.recentAssets.list() : [];
+    const favorites = key ? this.favoriteAssets.list() : [];
     const search = this.searchItems();
     const sources: PaletteSources = {
       actions: this.actionItems(),
@@ -320,6 +328,11 @@ export class CommandPaletteComponent {
           }
           this.query.set(request?.seed ?? '');
           this.loadProjects();
+          // Deleted assets leave the lists before they show; renamed ones come with their new name (M35.15).
+          const key = this.projectKey();
+          if (key !== null) {
+            this.recentAssets.verify(key).subscribe();
+          }
         });
       }
     });

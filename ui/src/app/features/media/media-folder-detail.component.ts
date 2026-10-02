@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, computed, inject, input, output, signal } from '@angular/core';
+import { SfAssetFavoriteComponent } from '../../shared/components/sf-asset-favorite.component';
 import { MediaFolderActions } from './library/media-folder-actions';
 import { ToastService } from '../../core/ui/toast.service';
 import type { components } from '../../core/api/generated/schema.d.ts';
@@ -21,7 +22,7 @@ type FolderView = components['schemas']['FolderView'];
 @Component({
   selector: 'sf-media-folder-detail',
   standalone: true,
-  imports: [SfButtonComponent, SfIconComponent, SfUidRenameComponent, ReleaseBarComponent],
+  imports: [SfAssetFavoriteComponent, SfButtonComponent, SfIconComponent, SfUidRenameComponent, ReleaseBarComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './media-folder-detail.component.html',
   styleUrl: './media-folder-detail.component.scss',

@@ -1,0 +1,17 @@
+:host {
+  display: inline-flex;
+}
+
+.sf-asset-favorite {
+  // The row's and the header's own hover tints are close to the ghost button's: tint with the text colour instead,
+  // which stands out from them in both themes.
+  --sf-hover: color-mix(in srgb, var(--sf-text) 16%, transparent);
+}
+
+.sf-asset-favorite__icon {
+  font-size: var(--sf-fs-18);
+}
+
+.sf-asset-favorite.is-on .sf-asset-favorite__icon {
+  color: var(--sf-warning);
+}

@@ -55,6 +55,7 @@
         </div>
       }
     </div>
+    <sf-asset-favorite type="PAGE" [uuid]="editor.uuid()" [name]="p.displayName ?? p.uid" [folderPath]="p.folderPath" />
   }
   @if (editor.fields.translationSummary(); as summary) {
     <span class="page-editor__translation" aria-live="polite">{{ summary }}</span>
