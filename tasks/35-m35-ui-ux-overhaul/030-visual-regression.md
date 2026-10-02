@@ -27,7 +27,19 @@ User decision 25. Playwright is installed in `ui/node_modules`, and journeys are
 - A documented update procedure: update baselines only deliberately, and review the diff (like the quality golden
   fixture).
 
+## Design gate (M35.9)
+
+Before starting, read the signed-off design gate in `009-style-guide-gate.md` — the user decisions and every review
+round — and the sample screen at `/styleguide`. Build this task to match them; where this task and the signed-off gate
+differ, the gate wins. Note any deviation you need in this file and get it approved.
+
 ## Acceptance criteria
 
 - [ ] The suite passes twice in a row on this machine (no flakiness). Baselines committed.
 - [ ] `docs/` or `ui/e2e/README` describes how to run and update it.
+
+## Notes (M35.9)
+
+- The gate was reviewed from 198 headless-Chrome screenshots (exact widths, full page; theme × density × 1440/1024,
+  one collapsed-rail shot per theme). Reuse that capture approach and its screen list. The style guide and
+  `/styleguide/sample` use fake data and can be baselined first.

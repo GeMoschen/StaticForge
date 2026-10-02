@@ -38,7 +38,28 @@ there is no upload progress.
   - Delete moved to ⋮ with confirm and undo.
 - Selection in the URL (`?asset=` kept, not stripped).
 
+## Design gate (M35.9)
+
+Before starting, read the signed-off design gate in `009-style-guide-gate.md` — the user decisions and every review
+round — and the sample screen at `/styleguide`. Build this task to match them; where this task and the signed-off gate
+differ, the gate wins. Note any deviation you need in this file and get it approved.
+
 ## Acceptance criteria
 
 - [ ] Screen definition of done met (README).
 - [ ] Vitest specs updated. `npx vitest run` and `npx ng build` green.
+
+## Notes (M35.9)
+
+- Decide first (open from the gate): whether `sf-drawer` starts below the dark top bar. The media detail showed it
+  covering the bar.
+- The signed-off sample (decisions 19-22) is the reference. The detail is a resizable, non-modal `sf-drawer` on the
+  right, with ←/→ to step to the previous/next file. It **widens the tab list in Goals** (Details, Focal
+  point, Versions, Used by) with all tabs, shown only when they apply to the file: Details (large preview, alt text,
+  caption, file info, styled Replace, focal point set by clicking the preview, numbers in developer mode), Variants,
+  Languages (a file per language), Processing (the "Process CMS syntax" switch of text media with its diagnostics),
+  Rendered (served output of text media), Source (text media in the code panel), Used by, Versions. Check backend
+  support for Variants, Languages, Processing and Rendered before building each tab.
+- Grid card: thumbnail with the name (truncated at the end) and "JPG · 1.2 MB" below, checkbox top-left on
+  hover/focus/selected, status icon when unreleased. A drop zone covers the whole area; the upload progress panel is
+  per file. Bulk move, delete (undo) and download.

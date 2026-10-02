@@ -34,9 +34,22 @@ The revision spine (`project-shell`, 44 px column of revision numbers), `sf-time
   - Every screen is read-only with a distinct but calm frame accent.
   - Leaving the project ends time travel.
 
+## Design gate (M35.9)
+
+Before starting, read the signed-off design gate in `009-style-guide-gate.md` — the user decisions and every review
+round — and the sample screen at `/styleguide`. Build this task to match them; where this task and the signed-off gate
+differ, the gate wins. Note any deviation you need in this file and get it approved.
+
 ## Acceptance criteria
 
 - [ ] No spine markup or styles left.
 - [ ] Vitest: drawer per context (asset vs project), restore with undo, time-travel read-only and exit on project
       change.
 - [ ] Screenshots reviewed. `npx vitest run` and `npx ng build` green.
+
+## Notes (M35.9 / M35.10)
+
+- The top bar's *History* button already exists (M35.10); this task gives it the drawer and the full page. The revision
+  spine stays beside the screens until this task removes it.
+- Open question from the gate (decide before building the drawer, together with M35.19): `sf-drawer` currently covers
+  the dark top bar. Decide whether drawers start below it; History uses the same drawer.

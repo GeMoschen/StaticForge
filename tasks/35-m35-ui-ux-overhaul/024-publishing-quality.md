@@ -39,7 +39,24 @@ area: frontend
   - `sf-data-table`s with aligned filters.
   - Destructive actions (Reset all) are hidden in empty states and live in ⋮ with a typed confirmation.
 
+## Design gate (M35.9)
+
+Before starting, read the signed-off design gate in `009-style-guide-gate.md` — the user decisions and every review
+round — and the sample screen at `/styleguide`. Build this task to match them; where this task and the signed-off gate
+differ, the gate wins. Note any deviation you need in this file and get it approved.
+
 ## Acceptance criteria
 
 - [ ] Screen definition of done met (README).
 - [ ] Vitest specs updated. `npx vitest run` and `npx ng build` green.
+
+## Notes (M35.9)
+
+- Navigation inside Publishing is the `sf-side-nav` (Runs, Targets, Policy, Quality, Redirects, URLs; decisions 28-30).
+  Quality, Redirects and the URL registry belong here, not in Settings.
+- Sample (decision 27) is the reference: runs table; run detail (Summary | Rebuilt | Findings | Log, one run still
+  running with a live log tail); the Build now dialog (target preselected, Full/Incremental, dry-run plan, page scope
+  picker); targets (table, form in a drawer) and the publish policy form; quality (summary, rules by category with
+  Off/Warning/Error); redirects and the URL registry (tables with aligned filters, destructive actions in ⋮ with a
+  typed confirmation).
+- Drawers (the targets form): see the open question on drawers over the top bar (M35.19).

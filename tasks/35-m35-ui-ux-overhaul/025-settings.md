@@ -31,7 +31,22 @@ area: frontend
   - The export button sits beside the selection summary.
   - "/ ROOT" is replaced by the store name.
 
+## Design gate (M35.9)
+
+Before starting, read the signed-off design gate in `009-style-guide-gate.md` — the user decisions and every review
+round — and the sample screen at `/styleguide`. Build this task to match them; where this task and the signed-off gate
+differ, the gate wins. Note any deviation you need in this file and get it approved.
+
 ## Acceptance criteria
 
 - [ ] Screen definition of done met (README).
 - [ ] Vitest specs updated. `npx vitest run` and `npx ng build` green.
+
+## Notes (M35.9)
+
+- Quality, Redirects and the URL registry are **not** part of this task (M35.9 decision 30; they are in M35.24).
+- The side menu is grouped (decision 32): PROJECT (General, Languages, Channels, Media, Code highlighting),
+  MAINTENANCE (Compaction, Import / export), PEOPLE (Members). The sample built General (name, description, archive in
+  a danger zone), Languages (table, add/edit drawer, default and fallbacks), Channels (developer mode only; table,
+  drawer) and Import / export (steps: select with a checkbox tree, options, run, result; export button beside the
+  selection summary). Media, Code highlighting, Compaction and Members were not built in the sample.

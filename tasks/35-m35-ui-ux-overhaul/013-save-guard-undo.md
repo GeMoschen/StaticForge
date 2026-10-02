@@ -43,6 +43,12 @@ area: frontend
   screen tasks replace the `window.*` calls; this task provides the service wiring and replaces the calls in shared
   code.
 
+## Design gate (M35.9)
+
+Before starting, read the signed-off design gate in `009-style-guide-gate.md` — the user decisions and every review
+round — and the sample screen at `/styleguide`. Build this task to match them; where this task and the signed-off gate
+differ, the gate wins. Note any deviation you need in this file and get it approved.
+
 ## Acceptance criteria
 
 - [ ] Vitest: guard on route change and in-screen switch, `beforeunload` registration, `Ctrl+S` routing, undo for
@@ -53,3 +59,10 @@ area: frontend
 
 - A reload after a save must not take back newer edits (`tasks/lessons.md`, 2026-09-30).
 - Restoring a deleted asset may fail if its folder was deleted too. Undo the group in reverse order.
+
+## Notes (M35.9)
+
+- The sample shows the intended look: `sf-page-header` with the save status beside the actions, destructive actions in
+  the ⋮ menu with a typed confirmation for large ones, and undo through `sf-toast`. Reuse these; don't add new
+  patterns.
+- Release actions are a group of their own in the header (decision 34); `sf-save-status` sits before that group.

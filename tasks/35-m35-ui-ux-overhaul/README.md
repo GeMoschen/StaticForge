@@ -62,7 +62,8 @@ guards, dark mode, resizable panes, a shortcut sheet and skeleton loading.
     **on the server, per user**, so they follow the user across browsers.
 16. **UI language.** i18n-ready with **Transloco** (runtime JSON). Only English ships. Every string is extracted.
 17. **Trees.** One shared tree component. Siblings stay **sorted by name**; there is no manual ordering, and
-    Navigation keeps the order it already has.
+    Navigation keeps the order it already has. *(Widened at the M35.9 gate, decision 23: Navigation menu items can be
+    reordered among their siblings, via the tree's opt-in `reorderable`; see M35.22.)*
 18. **Folder views.** A selected folder (Pages, Content, Templates) shows a **table** of its children. The table is
     sortable and filterable and supports multi-select with bulk move, delete, release and duplicate. Media keeps its
     grid and gains a list view.

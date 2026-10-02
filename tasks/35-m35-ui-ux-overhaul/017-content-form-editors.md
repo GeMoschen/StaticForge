@@ -39,6 +39,12 @@ come from M33.
 - **Layout:** a form grid that follows density, with optional two-column layout for short fields at ≥ 1280 px. The
   editor order is kept.
 
+## Design gate (M35.9)
+
+Before starting, read the signed-off design gate in `009-style-guide-gate.md` — the user decisions and every review
+round — and the sample screen at `/styleguide`. Build this task to match them; where this task and the signed-off gate
+differ, the gate wins. Note any deviation you need in this file and get it approved.
+
 ## Acceptance criteria
 
 - [ ] Screen definition of done applies to the form in its host screens (page, section, record, global set).
@@ -53,3 +59,9 @@ come from M33.
 ## Notes (M35.9)
 
 - Editor forms span the full available width of their pane, with no centred max-width column (M35.9 decision 33).
+- **Catalog and card fields** use `sf-catalog` / `sf-card` (M35.9 decisions 7-11), framed like sections: a bordered
+  panel with a header bar (drag handle, type icon, "Type · summary", collapse, ⋮ menu); nested catalogs are indented
+  panels inside the body. The summary is the card type plus the value of its first text-like field, "Untitled" when
+  empty. Cards open expanded; collapse state is remembered per field for the browser session; the catalog header has
+  "Collapse all / Expand all". Add through an "Add card" menu button with the allowed types, plus a "+" between cards on
+  hover/focus to insert there. Reorder by drag and `Alt+↑/↓`.

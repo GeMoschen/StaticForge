@@ -51,6 +51,12 @@ area: frontend
 - **`?` shortcut sheet:** a dialog listing the shortcuts of the current context and the global ones, grouped, with a
   search field. Generated from the registry, so it never drifts.
 
+## Design gate (M35.9)
+
+Before starting, read the signed-off design gate in `009-style-guide-gate.md` — the user decisions and every review
+round — and the sample screen at `/styleguide`. Build this task to match them; where this task and the signed-off gate
+differ, the gate wins. Note any deviation you need in this file and get it approved.
+
 ## Acceptance criteria
 
 - [ ] Vitest: chord timing, input suppression, scope activation/deactivation on route change, palette action
@@ -62,3 +68,10 @@ area: frontend
 
 - Check browser-reserved combinations (`Ctrl+H` is history in some browsers, `Ctrl+Shift+B` is the bookmarks bar).
   Where the browser wins, pick an alternative and record it.
+
+## Notes (M35.9 / M35.10)
+
+- The `?` sheet and the `Ctrl+K` search field are already in the top bar (M35.10); the sheet lists only the two
+  shortcuts that exist today and is filled from the registry here.
+- Already built in the design system, to register rather than re-implement: `sf-tree` `Alt+↑/↓` sibling reordering
+  (M35.9 decision 23), the menu and card shortcuts, and the `sf-catalog` card actions.

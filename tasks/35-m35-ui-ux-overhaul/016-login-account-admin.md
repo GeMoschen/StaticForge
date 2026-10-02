@@ -37,7 +37,19 @@ Screenshots 01, 90–95, M0, M8 of the UX run. Screen definition of done in the 
   - Every `window.confirm` is replaced.
   - Roles appear as human labels ("Project admin"), never raw enums.
 
+## Design gate (M35.9)
+
+Before starting, read the signed-off design gate in `009-style-guide-gate.md` — the user decisions and every review
+round — and the sample screen at `/styleguide`. Build this task to match them; where this task and the signed-off gate
+differ, the gate wins. Note any deviation you need in this file and get it approved.
+
 ## Acceptance criteria
 
 - [ ] Screen definition of done (README) met for every screen listed.
 - [ ] Vitest specs updated. `npx vitest run` and `npx ng build` green.
+
+## Notes (M35.10)
+
+- Admin and Account already run inside the frame; admin lost its tabs and centering, and the account page lost its
+  back link and user menu. Account and dashboard keep their own content layout until this task and M35.28.
+- Admin sections are in the rail (Users, Projects, Jobs, Audit) - don't add a second sub-navigation.

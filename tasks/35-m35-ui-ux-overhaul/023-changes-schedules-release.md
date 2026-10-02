@@ -41,6 +41,12 @@ one row per language.
 - **Release bar:** removed as a separate strip. Its actions move into the page header of every releasable editor
   (M35.18, M35.20, M35.22); this task provides the shared `sf-release-actions` component.
 
+## Design gate (M35.9)
+
+Before starting, read the signed-off design gate in `009-style-guide-gate.md` — the user decisions and every review
+round — and the sample screen at `/styleguide`. Build this task to match them; where this task and the signed-off gate
+differ, the gate wins. Note any deviation you need in this file and get it approved.
+
 ## Acceptance criteria
 
 - [ ] Screen definition of done met (README).
@@ -53,3 +59,8 @@ one row per language.
   from the item's own ⋮ (M35.9 decision 34).
 - `.sf-sr-only` is pinned to its containing block's corner (`top: 0; left: 0`), so hidden labels can't stretch scroll
   areas; the local `position: relative` workarounds in the changes list and admin tables are no longer required.
+- Sample (decision 26) is the reference: the one-row-per-language list (compact filter bar, chips only when active,
+  selection, bulk Release / Discard / Schedule) with the diff pane open in an `sf-splitter`; the release dialog
+  (changed languages pre-ticked, warnings needing explicit confirmation, a blocking error with an Open link); the
+  schedules list (⋮ row actions, New schedule: release / unpublish / generation); the schedule dialog (explicit title,
+  kind switch).

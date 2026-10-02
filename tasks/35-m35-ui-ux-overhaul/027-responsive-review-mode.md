@@ -32,8 +32,20 @@ User decision 13. Today only 8 of 126 stylesheets have media queries. At 390 px 
 - **Cleanup:** remove the token aliases (M35.5), make the style lint's px warning an error for `src/app/features`, and
   make the `window.*` lint rule an error.
 
+## Design gate (M35.9)
+
+Before starting, read the signed-off design gate in `009-style-guide-gate.md` — the user decisions and every review
+round — and the sample screen at `/styleguide`. Build this task to match them; where this task and the signed-off gate
+differ, the gate wins. Note any deviation you need in this file and get it approved.
+
 ## Acceptance criteria
 
 - [ ] Screenshots at 1024 and 390 reviewed for every screen. No horizontal page scroll.
 - [ ] Style and `window.*` lint are errors and green.
 - [ ] `npx vitest run` and `npx ng build` green.
+
+## Notes (M35.9 / M35.10)
+
+- The gate's screenshots were taken at 1440 and 1024 (plus a collapsed rail); the 1024 shots of the sample are the
+  reference for what must not clip. M35.10 left the page editor's preview clipped at 1024, and `sf-side-nav` and
+  `sf-splitter` need their narrow behaviour defined here.

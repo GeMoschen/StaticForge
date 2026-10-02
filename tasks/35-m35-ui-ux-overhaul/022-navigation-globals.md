@@ -35,7 +35,20 @@ detail: Values | Schema). Screenshots 40–43 and 60–61. Neither screen has an
   - Close and switch go through the unsaved guard.
 - Both use selection in the URL, `ConfirmService` and undo.
 
+## Design gate (M35.9)
+
+Before starting, read the signed-off design gate in `009-style-guide-gate.md` — the user decisions and every review
+round — and the sample screen at `/styleguide`. Build this task to match them; where this task and the signed-off gate
+differ, the gate wins. Note any deviation you need in this file and get it approved.
+
 ## Acceptance criteria
 
 - [ ] Screen definition of done met (README).
 - [ ] Vitest specs updated. `npx vitest run` and `npx ng build` green.
+- **Navigation area (decision 24):** the tree in navigation order with labels "Company → /about-us/"; a selected menu
+  folder shows an `sf-data-table` of its items (label, target page, public URL, visible in menu); a menu item's detail
+  shows the target page as a picker card, and "Change target" opens the restyled page picker dialog.
+- **Globals area (decision 25):** a tree of global sets with a filter; "Site settings" (site name, contact e-mail,
+  opening hours as a list, social links as a catalog of cards, footer text localized with language chips) and "Shop
+  settings" (currency select, shipping threshold); `sf-page-header` with save status; the Schema tab (CDL in the code
+  panel) and the usage chip as `sf-copyable` in developer mode only. Forms span the full width (decision 33).

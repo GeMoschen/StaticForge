@@ -27,7 +27,18 @@ User decision 14. Stored in preferences (M35.3): `recents` and `favorites` per p
   - an optional "Favorites" node at the top of each tree (only when there are favorites)
 - Display names refresh when an asset is renamed. The item is resolved on open and removed if it no longer exists.
 
+## Design gate (M35.9)
+
+Before starting, read the signed-off design gate in `009-style-guide-gate.md` — the user decisions and every review
+round — and the sample screen at `/styleguide`. Build this task to match them; where this task and the signed-off gate
+differ, the gate wins. Note any deviation you need in this file and get it approved.
+
 ## Acceptance criteria
 
 - [ ] Vitest: record/dedupe/cap, favorite toggling, stale-entry removal, and persistence through preferences.
 - [ ] `npx vitest run` and `npx ng build` green.
+
+## Notes (M35.10)
+
+- Favorite projects and recent projects (cap 5) are already in the preferences and the project switcher (M35.10). This
+  task adds the per-project asset recents and favorites, following the same pattern.

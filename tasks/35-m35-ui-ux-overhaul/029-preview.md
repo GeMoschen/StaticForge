@@ -33,8 +33,19 @@ refresh, share link, and click-to-focus a section. It exists only in the page ed
     released, share tokens), with backend tests.
 - An incomplete or failing preview shows an explanatory state with the render diagnostics, not a blank frame.
 
+## Design gate (M35.9)
+
+Before starting, read the signed-off design gate in `009-style-guide-gate.md` — the user decisions and every review
+round — and the sample screen at `/styleguide`. Build this task to match them; where this task and the signed-off gate
+differ, the gate wins. Note any deviation you need in this file and get it approved.
+
 ## Acceptance criteria
 
 - [ ] Screen definition of done met for the preview in the page and record editors.
 - [ ] Backend tests for the record preview (if added). OpenAPI and `docs/api.md` updated.
 - [ ] `./gradlew test`, `npx vitest run` and `npx ng build` green.
+
+## Notes (M35.9 / M35.10)
+
+- The sample's page editor shows the preview in an `sf-splitter` with a realistic fake page; the toolbar must fit that
+  pane's width. The page editor's preview is still clipped at 1024 px (M35.10).

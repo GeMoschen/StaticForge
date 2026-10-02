@@ -26,6 +26,12 @@ self-seeding; m3–m15 hardcode `localhost:4200` and use outdated selectors). Kn
 - Add journeys for the new flows: undo delete, unsaved guard, developer mode off hides Develop, palette action "Build
   now", favorites persisting across sessions.
 
+## Design gate (M35.9)
+
+Before starting, read the signed-off design gate in `009-style-guide-gate.md` — the user decisions and every review
+round — and the sample screen at `/styleguide`. Build this task to match them; where this task and the signed-off gate
+differ, the gate wins. Note any deviation you need in this file and get it approved.
+
 ## Acceptance criteria
 
 - [ ] Every kept journey passes against a clean dev backend. List any remaining failure with its cause in

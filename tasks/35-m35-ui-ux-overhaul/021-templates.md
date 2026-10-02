@@ -36,7 +36,28 @@ in editor view).
   provides the rule).
 - **New template dialog:** the kind is chosen explicitly, never inferred from the selection.
 
+## Design gate (M35.9)
+
+Before starting, read the signed-off design gate in `009-style-guide-gate.md` — the user decisions and every review
+round — and the sample screen at `/styleguide`. Build this task to match them; where this task and the signed-off gate
+differ, the gate wins. Note any deviation you need in this file and get it approved.
+
 ## Acceptance criteria
 
 - [ ] Screen definition of done met (README).
 - [ ] Vitest specs updated (URL selection, guard on switch). `npx vitest run` and `npx ng build` green.
+
+## Notes (M35.9)
+
+- Decide first (open from the gate): the code highlighting palette - current M35.5 or Refined (decision 18). The
+  current one stays the default; Refined is available via `data-code-palette="refined"`.
+- The sample (decisions 14-17) is the reference:
+  - Datasets sit under Templates (developer mode): a header, an overview tab (fields table; record sets using it) and
+    the CDL / record-template tabs as code editors.
+  - Both the page template "Article" and the section template "Product teaser" (the catalog's card type) are
+    selectable. CDL (content, bodies, rules tabs) and the channel templates (html, rss) in OCTL sit in an
+    `sf-splitter`, with a settings section (output path, pagination) and one deliberate diagnostic.
+  - Editor chrome is IDE-style: a header strip per editor (file-like name, language, Format, Find), gutter with line
+    numbers and fold markers, active line, bracket matching, squiggles, a diagnostics list with jump to line, and a
+    status line (Ln, Col, errors, warnings). The editor background follows the theme.
+  - `sf-code-panel` with CDL/JSON formatting is already in the design system.

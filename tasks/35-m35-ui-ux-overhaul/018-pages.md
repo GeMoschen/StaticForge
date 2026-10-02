@@ -51,8 +51,24 @@ E1. User decisions 17 and 18. Spec §24.5 #3 (folder table).
   - Rename "Impact as of now" to something plain (for example "Pages affected by this change").
 - **Incomplete-page preview:** an explanatory empty state instead of a blank frame.
 
+## Design gate (M35.9)
+
+Before starting, read the signed-off design gate in `009-style-guide-gate.md` — the user decisions and every review
+round — and the sample screen at `/styleguide`. Build this task to match them; where this task and the signed-off gate
+differ, the gate wins. Note any deviation you need in this file and get it approved.
+
 ## Acceptance criteria
 
 - [ ] Screen definition of done met (README).
 - [ ] Bulk actions in the folder table, each with undo where decision 10 applies.
 - [ ] Vitest specs updated. `npx vitest run` and `npx ng build` green.
+
+## Notes (M35.9 / M35.10)
+
+- The signed-off sample (`/styleguide/sample`) is the visual reference for the tree, folder table and page editor:
+  outline, full-width form (decision 33), a catalog field with a nested catalog, and the preview in an `sf-splitter`.
+- Release actions are one group in the page header; a divider and spacing separate them from the page's own ⋮
+  (decision 34; shared `sf-release-actions`, M35.23).
+- M35.10 only reports the page name to the breadcrumb; folder segments need folder URLs - add them here. At 1024 px the
+  preview is still clipped (the splitter and M35.27 fix it).
+- The project *Home* rail item still redirects to Pages until M35.28.

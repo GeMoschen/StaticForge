@@ -22,6 +22,12 @@ area: frontend
 - The folder filter uses a folder picker, not a path placeholder.
 - *Rebuild index* appears only for project admins, in ⋮.
 
+## Design gate (M35.9)
+
+Before starting, read the signed-off design gate in `009-style-guide-gate.md` — the user decisions and every review
+round — and the sample screen at `/styleguide`. Build this task to match them; where this task and the signed-off gate
+differ, the gate wins. Note any deviation you need in this file and get it approved.
+
 ## Acceptance criteria
 
 - [ ] Screen definition of done met (README).

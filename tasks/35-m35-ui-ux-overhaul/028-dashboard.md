@@ -37,8 +37,19 @@ revision and the last activity.
 
   Each has an integration test and a query-count test.
 
+## Design gate (M35.9)
+
+Before starting, read the signed-off design gate in `009-style-guide-gate.md` — the user decisions and every review
+round — and the sample screen at `/styleguide`. Build this task to match them; where this task and the signed-off gate
+differ, the gate wins. Note any deviation you need in this file and get it approved.
+
 ## Acceptance criteria
 
 - [ ] Screen definition of done met (README).
 - [ ] Backend tests green, OpenAPI regenerated, `docs/api.md` updated.
 - [ ] `./gradlew test`, `npx vitest run` and `npx ng build` green.
+
+## Notes (M35.10)
+
+- The rail's *Home* item links to the project root, which still redirects to Pages; this task adds the project home.
+- Favorite and recent projects (cap 5) already exist in the preferences and the switcher; the dashboard reuses them.

@@ -25,8 +25,20 @@ record preview endpoints), `docs/user-guide.md`, `docs/architecture.md`, `docs/a
 - `docs/architecture.md`: frontend section; `docs/api.md`: the new endpoints.
 - `tasks/README.md` epic map row for M35 marked with its exit criterion.
 
+## Design gate (M35.9)
+
+Before starting, read the signed-off design gate in `009-style-guide-gate.md` — the user decisions and every review
+round — and the sample screen at `/styleguide`. Build this task to match them; where this task and the signed-off gate
+differ, the gate wins. Note any deviation you need in this file and get it approved.
+
 ## Acceptance criteria
 
 - [ ] No reference to removed UI (spine, Settings → Generation, release bar strip, `window.confirm`) left in the spec
       or docs.
 - [ ] `DocsGoldenSnippetsTest` green.
+
+## Notes (M35.9)
+
+- M35.9's decisions 1-34 (frame look, rail widths, product mark, cards and catalogs, trees with sibling reordering,
+  Publishing and Settings sub-navigation, full-width editors, release-action grouping) are the source for §23/§24;
+  carry them into the spec. The living style guide at `/styleguide` is part of the documented frontend.
