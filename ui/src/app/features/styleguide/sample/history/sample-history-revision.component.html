@@ -1,0 +1,45 @@
+@let r = revision();
+<header class="rev__head">
+  <div class="rev__title-row">
+    <sf-icon class="rev__kind" [name]="kindIcons[r.kind]" />
+    <h2 class="rev__title" id="sample-history-rev-title">{{ t('revision', { n: r.id }) }}</h2>
+    <sf-button variant="ghost" size="sm" icon="close" [label]="t('detail.close')" (click)="closed.emit()" />
+  </div>
+  <p class="rev__summary">{{ r.summary }}</p>
+  <div class="rev__meta">
+    <sf-avatar size="sm" [name]="r.by.name" />
+    <span>{{ r.by.name }} · {{ when() }} · {{ t('kinds.' + r.kind) }}</span>
+  </div>
+  <div class="rev__actions">
+    <sf-button variant="primary" size="sm" icon="visibility" (click)="view()">{{ t('detail.view') }}</sf-button>
+    <sf-button variant="danger-ghost" size="sm" icon="history" (click)="rollBack()">{{ t('detail.rollBack') }}</sf-button>
+  </div>
+</header>
+
+<div class="rev__body">
+  <h3 class="rev__section">{{ t('detail.changed', { count: r.assets.length }) }}</h3>
+  @for (asset of r.assets; track $index) {
+    <section class="rev__asset" [attr.aria-label]="asset.name">
+      <div class="rev__asset-head">
+        <sf-icon class="rev__asset-icon" [name]="typeIcons[asset.type]" />
+        <h4 class="rev__asset-name">{{ asset.name }}</h4>
+        <sf-status size="sm" [tone]="tones[asset.action]" [icon]="icons[asset.action]" [label]="t('actions.' + asset.action)" />
+        <span class="rev__langs">
+          @for (lang of asset.langs; track lang) {
+            <sf-tag [label]="lang.toUpperCase()" />
+          }
+        </span>
+        @if (asset.action !== 'deleted' && asset.action !== 'created') {
+          <sf-button class="rev__restore" variant="ghost" size="sm" icon="restore" (click)="restore($index)">{{ t('detail.restoreAsset') }}</sf-button>
+        } @else if (asset.action === 'deleted') {
+          <sf-button class="rev__restore" variant="ghost" size="sm" icon="restore_from_trash" (click)="restore($index)">{{ t('detail.undelete') }}</sf-button>
+        }
+      </div>
+      @if (asset.fields.length) {
+        <sf-sample-history-diff [fields]="asset.fields" />
+      } @else {
+        <p class="rev__none">{{ t('detail.noFields') }}</p>
+      }
+    </section>
+  }
+</div>

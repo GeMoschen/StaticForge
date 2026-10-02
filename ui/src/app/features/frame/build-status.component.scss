@@ -5,6 +5,13 @@
   gap: var(--sf-space-1);
 }
 
+// The button's label is inline: icon and text sit in one flex row, with a gap.
+.build__content {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sf-space-2);
+}
+
 .build__icon {
   font-size: var(--sf-fs-16);
 }

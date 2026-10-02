@@ -17,9 +17,7 @@ import { DensityService } from '../../../core/ui/density.service';
 import { ThemeService } from '../../../core/ui/theme.service';
 import { SfDrawerComponent } from '../../../shared/components/dialog/sf-drawer.component';
 import { SfDialogComponent } from '../../../shared/components/dialog/sf-dialog.component';
-import { SfAvatarComponent } from '../../../shared/components/display/sf-avatar.component';
 import { SfKbdComponent } from '../../../shared/components/display/sf-kbd.component';
-import { SfRelativeTimeComponent } from '../../../shared/components/display/sf-relative-time.component';
 import { SfMenuComponent, SfMenuItem } from '../../../shared/components/menu/sf-menu.component';
 import {
   SfTreeAction,
@@ -37,7 +35,7 @@ import { SamplePageEditorComponent } from './sample-page-editor.component';
 import { SampleRailComponent } from './sample-rail.component';
 import { SampleRecordEditorComponent } from './sample-record-editor.component';
 import { SampleRecordSetComponent } from './sample-record-set.component';
-import { REVISIONS, SampleEntry, childrenOf, parentOf, pathTo } from './sample-data';
+import { SampleEntry, childrenOf, parentOf, pathTo } from './sample-data';
 import {
   AREA_OF_VIEW,
   SAMPLE_AREAS,
@@ -66,6 +64,10 @@ import { SampleGlobalsAreaComponent } from './globals/sample-globals-area.compon
 import { SampleMediaAreaComponent } from './media/sample-media-area.component';
 import { SamplePublishingAreaComponent } from './publishing/sample-publishing-area.component';
 import { SampleSettingsAreaComponent } from './settings/sample-settings-area.component';
+import { SampleHistoryAreaComponent } from './history/sample-history-area.component';
+import { SampleHistoryDrawerComponent } from './history/sample-history-drawer.component';
+import { SampleTimeTravelBannerComponent } from './history/sample-time-travel-banner.component';
+import { revisionById } from './history/history-data';
 import { SampleNavigationAreaComponent } from './navigation/sample-navigation-area.component';
 
 const DARK_QUERY = '(prefers-color-scheme: dark)';
@@ -88,7 +90,7 @@ function oneOf<T extends string>(value: string | null, allowed: readonly T[]): T
 }
 
 /** The query parameters the screen owns; every other parameter belongs to an area and is kept as it is. */
-const OWN_PARAMS = ['area', 'view', 'template', 'tab', 'channel', 'focus', 'dev', 'rail', 'theme', 'density', 'palette'];
+const OWN_PARAMS = ['area', 'view', 'template', 'tab', 'channel', 'focus', 'dev', 'rail', 'theme', 'density', 'palette', 'hdrawer', 'travel'];
 
 /**
  * The M35.9 sample screen: a clickable prototype of the new frame (dark top bar, rail) around the working areas —
@@ -117,6 +119,8 @@ const OWN_PARAMS = ['area', 'view', 'template', 'tab', 'channel', 'focus', 'dev'
     SampleDatasetViewComponent,
     SampleFolderViewComponent,
     SampleGlobalsAreaComponent,
+    SampleHistoryAreaComponent,
+    SampleHistoryDrawerComponent,
     SampleMediaAreaComponent,
     SampleNavigationAreaComponent,
     SamplePageEditorComponent,
@@ -128,13 +132,12 @@ const OWN_PARAMS = ['area', 'view', 'template', 'tab', 'channel', 'focus', 'dev'
     SampleSchedulesAreaComponent,
     SampleTemplateViewComponent,
     SampleTemplatesTreeComponent,
+    SampleTimeTravelBannerComponent,
     SampleTopbarComponent,
-    SfAvatarComponent,
     SfDialogComponent,
     SfDrawerComponent,
     SfKbdComponent,
     SfMenuComponent,
-    SfRelativeTimeComponent,
     SfSplitterComponent,
     SfTreeComponent,
     TranslocoPipe,
@@ -155,9 +158,7 @@ export class SampleScreenComponent {
   protected readonly treeWidth =
     typeof matchMedia !== 'function' || matchMedia(WIDE_QUERY).matches ? TREE_WIDTH : TREE_WIDTH_NARROW;
   protected readonly shortcuts = SHORTCUTS;
-  protected readonly revisions = REVISIONS;
   protected readonly treeActions: readonly SfTreeAction[] = ['rename', 'delete', 'create'];
-  private readonly now = Date.now();
 
   /** Lazy children with status badges (only when not released) and, in developer mode, the UID. */
   protected readonly loader = computed<SfTreeLoader<SampleEntry>>(() => {
@@ -179,17 +180,6 @@ export class SampleScreenComponent {
     { id: 'page', label: this.state.t('tree.newPage'), icon: 'note_add', action: () => this.create('item') },
     { id: 'folder', label: this.state.t('tree.newFolder'), icon: 'create_new_folder', action: () => this.create('folder') },
   ]);
-
-  protected readonly historyTitle = computed(() => {
-    switch (this.state.history()) {
-      case 'page':
-        return this.state.t('history.pageTitle', { name: this.state.page().name });
-      case 'record':
-        return this.state.t('history.pageTitle', { name: this.state.recordName(this.state.record()) });
-      default:
-        return this.state.t('history.projectTitle');
-    }
-  });
 
   /** The open area when its own component fills the main region. */
   protected readonly selfContained = computed<SampleSelfContainedArea | null>(() => {
@@ -264,8 +254,11 @@ export class SampleScreenComponent {
     request.completed(() => this.state.notice('folder.restored'));
   }
 
-  protected minutesAgo(minutes: number): number {
-    return this.now - minutes * 60_000;
+  /** The drawer's *Open full history* / *Details*: the History page, with that revision open. */
+  protected openFullHistory(revision: number | null): void {
+    this.state.history.set(null);
+    this.state.historyRev.set(revision);
+    this.state.openArea('history');
   }
 
   private create(kind: SfTreeCreateKind): void {
@@ -340,6 +333,14 @@ export class SampleScreenComponent {
     if (palette) {
       this.state.palette.set(palette);
     }
+    const drawer = oneOf(params.get('hdrawer'), ['page', 'record', 'project'] as const);
+    if (drawer) {
+      this.state.history.set(drawer);
+    }
+    const travel = Number(params.get('travel'));
+    if (params.has('travel') && revisionById(travel)) {
+      this.state.travel.set(travel);
+    }
     const rail = oneOf<SampleRail>(params.get('rail'), ['expanded', 'collapsed']);
     if (rail) {
       this.state.rail.set(rail);
@@ -374,6 +375,12 @@ export class SampleScreenComponent {
       }
     } else if (view === 'dataset' && this.state.datasetTab() !== 'overview') {
       query.set('tab', this.state.datasetTab());
+    }
+    if (this.state.history()) {
+      query.set('hdrawer', this.state.history()!);
+    }
+    if (this.state.travel() !== null) {
+      query.set('travel', String(this.state.travel()));
     }
     query.set('dev', this.state.devMode() ? '1' : '0');
     query.set('rail', this.state.rail());

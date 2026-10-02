@@ -146,6 +146,49 @@ off this task.
 34. **Release actions vs. the page's ⋮:** the release actions are a group of their own in an editor header; spacing
     and a vertical divider separate their ⋮ (Unpublish, Discard changes) from the item's own ⋮ next to them.
 
+## Review round 2 (2026-10-02): history (signed off 2026-10-02)
+
+Added to the sample for M35.12 (`sample/history/`, `/styleguide/sample?area=history`, drawer `hdrawer=page|record|project`,
+time travel `travel=86`). **Signed off by the user on 2026-10-02**; M35.12 builds it in the app.
+
+35. **Drawers start below the top bar** (user, 2026-10-02): `sf-drawer` (non-modal) is offset by `--sf-topbar-height`; the
+    bar's search, Build now and History stay usable. Applies to every drawer (also media, M35.19). Modal drawers still
+    cover the viewport.
+36. **History drawer, per context:** in an editor (page, record) it lists that item's versions — current on top, each with
+    author name, relative time, a human summary, languages touched; actions *View* (time travel), *Compare with current*
+    (field diff under the entry), *Restore* (confirm, then toast with Undo; not on the current version). Elsewhere it is
+    the project timeline with author / type / date filters; entries name the changed items; actions *View*, *Details*.
+    Footer: **Open full history**.
+37. **Full history page** (`/p/:key/history`): `sf-data-table` timeline (revision, human summary, type, changed items by
+    name, author + time), search and filters in the URL (`hfilter`), a revision opens in a splitter pane: its changed
+    items by name with languages and field diffs (old −, new +), *Restore this item* per item, **View this state**,
+    **Roll back project…** (danger, typed project key, lists what changes).
+38. **Time-travel banner:** a calm strip under the top bar — "Viewing revision 86 · date · by Name", *Read-only* badge,
+    **Back to now**, **Restore this state** (the same typed roll-back) — plus an accent frame around every screen.
+    Screens are read-only meanwhile (the sample shows the frame; the app enforces it via `ProjectAccessStore`).
+39. **Backend (decided with M35.12):** revisions get author name, languages touched and item names in the response, and
+    `changeType` / from / to filters plus a total count; asset history gets author names and paging.
+
+Changes the user asked for during the review (all in the signed-off sample):
+
+40. **Date filter has a custom range:** presets Today / Last 7 days / Last 30 days and **Custom range…** (a dialog with
+    From and To, either may stay empty; `range:custom,from:…,to:…` in the URL). The History drawer and the full page
+    share one set of filter menus.
+41. **Type filter shows the type's icon** (Edit, Release, Restore, Created, Deleted, Import); the chosen entry is named in
+    the trigger and marked "Selected" in the list.
+42. **The open row is highlighted:** `sf-data-table` gets `currentKey` — a row whose item is open beside the table gets
+    the selection background (both themes), a leading accent bar and `aria-current` (not a selection). Reuse it for the
+    other list + detail screens (Changes, Schedules, runs) when they are built.
+43. **Filter-bar controls are as tall as the search field** (32 / 40 px by density): the shared `sf-data-table` toolbar
+    (Filters, Clear filters, Columns), its toolbar slot, the Changes bar and History use the normal button size, not
+    `sm`. Applies to every filter bar built from now on.
+44. **Dialog footers:** `<ng-container sfDialogFooter>` (never a wrapping `<div>`), so the buttons are the footer's flex
+    items and keep its gap. `sf-confirm` and the style guide demo were fixed.
+45. **Top-bar build status:** icon and text sit in one flex row with a gap (sample and app).
+46. **List + detail panes are bordered cards** of the same radius; the splitter's hairline is hidden
+    (`--sf-splitter-handle: transparent`) and its handle sits centred in an 8 px gap (`--sf-splitter-gap`). Language tags
+    in a detail pane sit close together.
+
 ## Notes / hazards
 
 - Sign-off: **signed off by the user on 2026-10-01** — gallery https://claude.ai/artifact/33yY26sd6H17UTP9sPPJid
@@ -156,5 +199,5 @@ off this task.
 - Open after sign-off (not decided at the gate, current behaviour stays until decided):
   - **Code highlighting palette** (decision 18): Current vs Refined was not picked. The current M35.5 palette stays the
     default; Refined stays available via `data-code-palette="refined"`. Decide before M35.21 (templates IDE).
-  - **Drawers over the top bar:** `sf-drawer` covers the dark top bar (seen on the media detail). Decide before M35.19
-    whether drawers start below the top bar.
+  - **Drawers over the top bar — decided 2026-10-02 (decision 35): drawers start below the top bar.** (`sf-drawer` used
+    to cover the dark top bar, seen on the media detail.)

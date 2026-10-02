@@ -47,7 +47,7 @@ import { SfDialogComponent, SfDialogFooterDirective } from './sf-dialog.componen
           </sf-field>
         }
       </form>
-      <div sfDialogFooter>
+      <ng-container sfDialogFooter>
         <sf-button variant="secondary" [attr.data-sf-autofocus]="focusCancel() ? '' : null" (click)="ref.close(false)">{{
           options.cancelLabel ?? ('shared.confirm.cancel' | transloco)
         }}</sf-button>
@@ -58,7 +58,7 @@ import { SfDialogComponent, SfDialogFooterDirective } from './sf-dialog.componen
           (click)="confirm()"
           >{{ options.confirmLabel ?? ('shared.confirm.confirm' | transloco) }}</sf-button
         >
-      </div>
+      </ng-container>
     </sf-dialog>
   `,
 })

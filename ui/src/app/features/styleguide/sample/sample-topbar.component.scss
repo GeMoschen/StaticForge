@@ -75,6 +75,13 @@
   width: 4.75rem;
 }
 
+// The button's label is inline: icon and text sit in one flex row, with a gap.
+.topbar__build-content {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sf-space-2);
+}
+
 .topbar__build-icon {
   color: var(--sf-success);
   font-size: var(--sf-fs-16);

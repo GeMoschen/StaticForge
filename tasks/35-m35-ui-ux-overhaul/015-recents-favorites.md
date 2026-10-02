@@ -33,6 +33,10 @@ Before starting, read the signed-off design gate in `009-style-guide-gate.md` â€
 round â€” and the sample screen at `/styleguide`. Build this task to match them; where this task and the signed-off gate
 differ, the gate wins. Note any deviation you need in this file and get it approved.
 
+**Sample first (user rule, 2026-10-02).** If this task needs a screen, state or decision that the sample at `/styleguide`
+does not cover (or covers differently), do **not** implement it. Add it to the sample first, tell the user, and wait
+for their review and sign-off; record the decisions in `009-style-guide-gate.md`. Only then build it in the app.
+
 ## Acceptance criteria
 
 - [ ] Vitest: record/dedupe/cap, favorite toggling, stale-entry removal, and persistence through preferences.

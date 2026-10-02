@@ -16,7 +16,7 @@
         [label]="'shared.dataTable.filters' | transloco"
         [text]="'shared.dataTable.filters' | transloco"
         variant="secondary"
-        size="sm"
+        size="md"
         align="start"
       />
     }
@@ -34,12 +34,12 @@
       </ul>
     }
     @if (filtered()) {
-      <sf-button variant="ghost" size="sm" (click)="clearFilters()">{{ 'shared.dataTable.clearFilters' | transloco }}</sf-button>
+      <sf-button variant="ghost" size="md" (click)="clearFilters()">{{ 'shared.dataTable.clearFilters' | transloco }}</sf-button>
     }
     <span class="sf-data-table__toolbar-end">
       <ng-content select="[sfDataTableToolbar]" />
       @if (chooserAvailable()) {
-        <sf-button variant="ghost" size="sm" icon="view_column" [sfPopoverTrigger]="chooser">{{
+        <sf-button variant="ghost" size="md" icon="view_column" [sfPopoverTrigger]="chooser">{{
           'shared.dataTable.columns' | transloco
         }}</sf-button>
         <sf-popover #chooser [label]="'shared.dataTable.columns' | transloco" align="end">
@@ -208,6 +208,8 @@
             class="sf-data-table__row"
             [class.is-selected]="selected"
             [class.is-active]="index === active()"
+            [class.is-current]="currentKey() !== null && rowKey()(row) === currentKey()"
+            [attr.aria-current]="currentKey() !== null && rowKey()(row) === currentKey() ? 'true' : null"
             [attr.data-row-index]="index"
             [attr.aria-rowindex]="offset() + index + 2"
             [attr.aria-selected]="selectable() ? selected : null"

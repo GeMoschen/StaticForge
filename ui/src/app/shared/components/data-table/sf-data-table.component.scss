@@ -290,6 +290,15 @@ td {
     background: var(--sf-selection);
   }
 
+  // The open item's row: the selection background (light and dark) and a leading accent bar.
+  &.is-current td {
+    background: var(--sf-selection);
+  }
+
+  &.is-current td:first-child {
+    box-shadow: inset 3px 0 0 var(--sf-accent);
+  }
+
   &:focus {
     outline: none;
   }

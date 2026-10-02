@@ -155,6 +155,12 @@ A code audit and a screenshot run found the following. The run used a seeded pro
 | record-editor | 934 |
 | dataset-schema-editor | 920 |
 
+## Sample first (user rule, 2026-10-02)
+
+After the M35.9 sign-off the sample stays the design authority: a screen, state or decision that a task needs and the
+sample does not show is **added to the sample first** (`/styleguide`), reviewed and signed off by the user, recorded in
+`009-style-guide-gate.md` — and only then implemented in the app. Every open task file repeats this in its design gate.
+
 ## Screen definition of done (applies to M35.16–M35.29)
 
 - Built only from the design-system components (M35.6–M35.8). No raw hex, rgba or px literals outside
@@ -186,7 +192,7 @@ A code audit and a screenshot run found the following. The run used a seeded pro
 | M35.9 | [Style guide and design gate](009-style-guide-gate.md) | 1 design system | frontend | M35.6, M35.7, M35.8 | done |
 | M35.10 | [App frame: top bar, rail, developer mode, titles](010-app-frame.md) | 2 frame | frontend | M35.2, M35.4, M35.9 | done |
 | M35.11 | [Information architecture: Publishing, Settings menu](011-information-architecture.md) | 2 frame | frontend | M35.10 | todo |
-| M35.12 | [History drawer, full history, time-travel banner](012-history.md) | 2 frame | frontend | M35.10 | todo |
+| M35.12 | [History drawer, full history, time-travel banner](012-history.md) | 2 frame | frontend | M35.10 | todo (design signed off 2026-10-02) |
 | M35.13 | [Save UX, unsaved guards, confirm and undo](013-save-guard-undo.md) | 2 frame | frontend | M35.10 | todo |
 | M35.14 | [Keyboard-first: shortcuts, palette actions, `?` sheet](014-keyboard-first.md) | 2 frame | frontend | M35.10 | todo |
 | M35.15 | [Recents and favorites](015-recents-favorites.md) | 2 frame | frontend | M35.3, M35.10 | todo |

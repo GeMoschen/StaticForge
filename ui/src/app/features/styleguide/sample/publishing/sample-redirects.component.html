@@ -18,7 +18,7 @@
   (rowOpen)="state.notice()"
 >
   @if (manualCount() > 0) {
-    <sf-menu sfDataTableToolbar variant="ghost" size="sm" [items]="moreActions()" [label]="t('redirects.more')" />
+    <sf-menu sfDataTableToolbar variant="ghost" size="md" [items]="moreActions()" [label]="t('redirects.more')" />
   }
   <ng-template sfDataTableCell="from" [sfDataTableCellRows]="rows()" let-row>
     <code class="cell-code">{{ row.from }}</code>

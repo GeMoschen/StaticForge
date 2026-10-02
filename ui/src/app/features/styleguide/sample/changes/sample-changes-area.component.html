@@ -11,12 +11,12 @@
     (valueChange)="search.set($event)"
   />
   @for (menu of filterMenus(); track menu.id) {
-    <sf-menu variant="secondary" size="sm" align="start" [text]="menu.text" [label]="menu.name" [items]="menu.items" />
+    <sf-menu variant="secondary" size="md" align="start" [text]="menu.text" [label]="menu.name" [items]="menu.items" />
   }
   <span class="area__bar-end">
     <sf-menu
       variant="ghost"
-      size="sm"
+      size="md"
       [text]="t('sort.pill', { sort: t('sort.' + sort()) })"
       [label]="'styleguide.sample.changes.sort.label' | transloco"
       [items]="sortItems()"
@@ -30,7 +30,7 @@
       <li><sf-tag removable [label]="chip.label" (removed)="setFilter(chip.id, null)" /></li>
     }
     <li>
-      <sf-button variant="ghost" size="sm" (click)="clearFilters()">{{ 'styleguide.sample.changes.clearFilters' | transloco }}</sf-button>
+      <sf-button variant="ghost" size="md" (click)="clearFilters()">{{ 'styleguide.sample.changes.clearFilters' | transloco }}</sf-button>
     </li>
   </ul>
 }

@@ -72,6 +72,10 @@
 
   // ── Layout ───────────────────────────────────────────────────────────────────
   --sf-topbar-height: 48px;
+  // A splitter's resting hairline; a host with bordered panes sets it to transparent.
+  --sf-splitter-handle: var(--sf-border);
+  // Space on each side of a splitter's handle, so the handle sits centred between its panes (0: panes touch it).
+  --sf-splitter-gap: 0px;
   --sf-rail-width-collapsed: 52px;
   --sf-rail-width-expanded: 232px;
   --sf-tree-width: 280px;

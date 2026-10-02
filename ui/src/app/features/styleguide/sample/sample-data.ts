@@ -338,19 +338,3 @@ export const SECTIONS: readonly SampleSection[] = [
   { id: 's-product', kind: 'product', name: 'Product teaser', icon: 'sell' },
   { id: 's-quote', kind: 'quote', name: 'Quote', icon: 'format_quote' },
 ];
-
-/** The History drawer's entries (fake revisions). */
-export interface SampleRevision {
-  readonly id: string;
-  readonly by: SamplePerson;
-  readonly minutes: number;
-  readonly summary: string;
-}
-
-export const REVISIONS: readonly SampleRevision[] = [
-  { id: 'rev-88', by: anna, minutes: 25, summary: 'Changed Teaser and Hero headline' },
-  { id: 'rev-87', by: anna, minutes: 50, summary: 'Added section Product teaser' },
-  { id: 'rev-86', by: mira, minutes: 3 * HOUR, summary: 'Changed Quote' },
-  { id: 'rev-85', by: jonas, minutes: 3 * DAY, summary: 'Released (de, en)' },
-  { id: 'rev-84', by: anna, minutes: 3 * DAY + HOUR, summary: 'Created page' },
-];

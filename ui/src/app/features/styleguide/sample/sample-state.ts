@@ -49,9 +49,10 @@ export type SampleArea =
   | 'changes'
   | 'schedules'
   | 'publishing'
-  | 'settings';
+  | 'settings'
+  | 'history';
 /** Areas whose own component fills the main region (with its own tree and query parameters); their view is the area. */
-export const SELF_CONTAINED_AREAS = ['media', 'navigation', 'globals', 'changes', 'schedules', 'publishing', 'settings'] as const;
+export const SELF_CONTAINED_AREAS = ['media', 'navigation', 'globals', 'changes', 'schedules', 'publishing', 'settings', 'history'] as const;
 export type SampleSelfContainedArea = (typeof SELF_CONTAINED_AREAS)[number];
 /** The areas the sample renders. */
 export const SAMPLE_AREAS: readonly SampleArea[] = [
@@ -65,6 +66,7 @@ export const SAMPLE_AREAS: readonly SampleArea[] = [
   'schedules',
   'publishing',
   'settings',
+  'history',
 ];
 
 /**
@@ -99,6 +101,7 @@ export const AREA_OF_VIEW: Readonly<Record<SampleView, SampleArea>> = {
   schedules: 'schedules',
   publishing: 'publishing',
   settings: 'settings',
+  history: 'history',
 };
 
 export type SampleRail = 'expanded' | 'collapsed';
@@ -141,6 +144,7 @@ const AREA_LABELS: Readonly<Record<SampleArea, string>> = {
   schedules: 'rail.schedules',
   publishing: 'rail.publishing',
   settings: 'rail.settings',
+  history: 'history.title',
 };
 
 function initialRecords(): ReadonlyMap<string, readonly SampleRecord[]> {
@@ -207,6 +211,10 @@ export class SampleState {
   readonly lang = signal<SampleLang>('en');
   /** The History drawer: the project's history (top bar) or the open item's (editor). */
   readonly history = signal<'project' | 'page' | 'record' | null>(null);
+  /** Time travel (M35.12): the revision the whole screen shows read-only, with the banner; `null` = now. */
+  readonly travel = signal<number | null>(null);
+  /** The revision the full History page opens (the drawer's *Details*). */
+  readonly historyRev = signal<number | null>(null);
   readonly shortcutsOpen = signal(false);
 
   readonly folder = computed<SampleEntry | null>(() => entryById(this.folderId()));

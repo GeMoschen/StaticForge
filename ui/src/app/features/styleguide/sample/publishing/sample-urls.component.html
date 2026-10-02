@@ -17,7 +17,7 @@
   (rowOpen)="state.notice()"
 >
   @if (rows().length > 0) {
-    <sf-menu sfDataTableToolbar variant="ghost" size="sm" [items]="moreActions()" [label]="t('urls.more')" />
+    <sf-menu sfDataTableToolbar variant="ghost" size="md" [items]="moreActions()" [label]="t('urls.more')" />
   }
   <ng-template sfDataTableCell="target" [sfDataTableCellRows]="rows()" let-row>
     <span class="cell-name">

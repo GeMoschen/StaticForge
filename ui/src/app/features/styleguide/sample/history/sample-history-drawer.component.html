@@ -1,0 +1,86 @@
+<sf-drawer [title]="title()" [width]="460" (closed)="closed.emit()">
+  @if (isProject()) {
+    <div class="hd__filters" role="group" [attr.aria-label]="t('filters.label')">
+      @for (menu of menus(); track menu.name) {
+        <sf-menu variant="secondary" size="sm" align="start" [text]="menu.text" [label]="menu.name" [items]="menu.items" />
+      }
+      @if (filtered()) {
+        <sf-button variant="ghost" size="sm" (click)="clear()">{{ t('filters.clear') }}</sf-button>
+      }
+    </div>
+  } @else {
+    <p class="hd__lead">{{ t('versionsLead') }}</p>
+  }
+
+  @if (entries().length === 0) {
+    <p class="hd__empty">{{ t('drawer.empty') }}</p>
+  } @else {
+    <ol class="hd__list" [attr.aria-label]="title()">
+      @for (rev of entries(); track rev.id) {
+        <li class="hd__item" [class.is-current]="rev.id === currentId()">
+          <sf-avatar class="hd__avatar" size="sm" [name]="rev.by.name" />
+          <div class="hd__main">
+            <div class="hd__head">
+              <span class="hd__summary">{{ rev.summary }}</span>
+              @if (rev.id === currentId()) {
+                <sf-badge tone="info" [label]="t('drawer.current')" />
+              }
+            </div>
+            <div class="hd__meta">
+              <span>{{ rev.by.name }}</span>
+              <span aria-hidden="true">·</span>
+              <sf-relative-time [value]="minutesAgo(rev.minutes)" />
+              <span aria-hidden="true">·</span>
+              <span class="hd__rev">{{ t('revision', { n: rev.id }) }}</span>
+            </div>
+            <div class="hd__tags">
+              <sf-icon class="hd__kind" [name]="kindIcons[rev.kind]" [attr.title]="t('kinds.' + rev.kind)" />
+              @for (lang of langsOf(rev); track lang) {
+                <sf-tag [label]="lang" />
+              }
+              @if (isProject()) {
+                @let names = assetNames(rev);
+                <span class="hd__assets">{{ names.names }}@if (names.more) { {{ t('moreAssets', { count: names.more }) }} }</span>
+              }
+            </div>
+            <div class="hd__actions">
+              <sf-button variant="ghost" size="sm" icon="visibility" (click)="view(rev)">{{ t('actions.view') }}</sf-button>
+              @if (isProject()) {
+                <sf-button variant="ghost" size="sm" icon="open_in_new" (click)="openFull.emit(rev.id)">{{ t('actions.details') }}</sf-button>
+              } @else if (rev.id !== currentId()) {
+                <sf-button
+                  variant="ghost"
+                  size="sm"
+                  icon="compare_arrows"
+                  [attr.aria-expanded]="comparing() === rev.id"
+                  (click)="toggleCompare(rev)"
+                  >{{ t('actions.compare') }}</sf-button
+                >
+                <sf-button variant="ghost" size="sm" icon="restore" (click)="restore(rev)">{{ t('actions.restore') }}</sf-button>
+              }
+            </div>
+            @if (comparing() === rev.id) {
+              <div class="hd__compare">
+                <p class="hd__compare-lead">{{ t('drawer.compareLead', { n: rev.id }) }}</p>
+                <sf-sample-history-diff [fields]="rev.assets[0].fields" mode="current" />
+              </div>
+            }
+          </div>
+        </li>
+      }
+    </ol>
+  }
+
+  @if (rangeDialog()) {
+    <sf-sample-history-range-dialog
+      [from]="date().from"
+      [to]="date().to"
+      (applied)="date.set({ range: 'custom', from: $event.from, to: $event.to }); rangeDialog.set(false)"
+      (closed)="rangeDialog.set(false)"
+    />
+  }
+
+  <div sfDrawerFooter class="hd__footer">
+    <sf-button variant="secondary" icon="history" (click)="openFull.emit(null)">{{ t('drawer.openFull') }}</sf-button>
+  </div>
+</sf-drawer>

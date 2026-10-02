@@ -52,15 +52,17 @@
       aria-haspopup="dialog"
       [sfPopoverTrigger]="runsPopover"
     >
-      @if (building()) {
-        <sf-spinner size="sm" inline />
-        <span class="topbar__build-text">{{ 'styleguide.sample.topbar.building' | transloco }}</span>
-      } @else {
-        <sf-icon class="topbar__build-icon" name="check_circle" />
-        <span class="topbar__build-text"
-          >{{ 'styleguide.sample.topbar.published' | transloco }} <sf-relative-time [value]="lastRun()"
-        /></span>
-      }
+      <span class="topbar__build-content">
+        @if (building()) {
+          <sf-spinner size="sm" inline />
+          <span class="topbar__build-text">{{ 'styleguide.sample.topbar.building' | transloco }}</span>
+        } @else {
+          <sf-icon class="topbar__build-icon" name="check_circle" />
+          <span class="topbar__build-text"
+            >{{ 'styleguide.sample.topbar.published' | transloco }} <sf-relative-time [value]="lastRun()"
+          /></span>
+        }
+      </span>
     </sf-button>
     <sf-popover #runsPopover [label]="'styleguide.sample.topbar.lastRuns' | transloco" align="end">
       <div class="runs">

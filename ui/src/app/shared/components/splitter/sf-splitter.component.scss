@@ -33,11 +33,12 @@
   }
 }
 
-// The handle: a hairline that widens its hit area with padding and shows the accent on hover and focus.
+// The handle: a hairline that widens its hit area with padding and shows the accent on hover and focus. A host whose
+// panes are bordered cards sets `--sf-splitter-handle: transparent` so the hairline doesn't double their border.
 .sf-splitter__handle {
   position: relative;
   flex: 0 0 auto;
-  background: var(--sf-border);
+  background: var(--sf-splitter-handle);
   touch-action: none;
 
   // The wider hit area grows across the drag axis only; growing along it would overflow the splitter.
@@ -55,6 +56,7 @@
 
 :host(.sf-splitter--horizontal) .sf-splitter__handle {
   width: 1px;
+  margin-inline: var(--sf-splitter-gap);
   cursor: col-resize;
 
   &::before {
@@ -64,6 +66,7 @@
 
 :host(.sf-splitter--vertical) .sf-splitter__handle {
   height: 1px;
+  margin-block: var(--sf-splitter-gap);
   cursor: row-resize;
 
   &::before {

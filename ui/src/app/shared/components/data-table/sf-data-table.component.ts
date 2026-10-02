@@ -177,6 +177,11 @@ export class SfDataTableComponent<T> implements OnInit, OnDestroy {
   readonly total = input<number | null>(null);
   /** A stable key per row (selection, tracking); default: the row's `id`. */
   readonly rowKey = input<(row: T) => string>(defaultRowKey);
+  /**
+   * The key of the row whose item is open beside the table (a detail pane, a drawer): the row gets a highlighted
+   * background, a leading accent bar and `aria-current`. Not a selection — it does not tick the row.
+   */
+  readonly currentKey = input<string | null>(null);
   /** The row's name in "Select {name}"; default: the first visible column's text. */
   readonly rowLabel = input<((row: T) => string) | null>(null);
   readonly loading = input(false, { transform: booleanAttribute });

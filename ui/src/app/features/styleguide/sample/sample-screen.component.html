@@ -1,7 +1,10 @@
 <sf-sample-topbar class="sample__topbar" />
+@if (state.travel() !== null) {
+  <sf-sample-time-travel-banner class="sample__banner" />
+}
 <sf-sample-rail class="sample__rail" />
 
-<main class="sample__main">
+<main class="sample__main" [class.is-time-travel]="state.travel() !== null">
   @switch (selfContained()) {
     @case ('media') {
       <sf-sample-media-area class="sample__area" />
@@ -23,6 +26,9 @@
     }
     @case ('schedules') {
       <sf-sample-schedules-area class="sample__area" />
+    }
+    @case ('history') {
+      <sf-sample-history-area class="sample__area" [open]="state.historyRev()" />
     }
     @default {
       <sf-splitter
@@ -101,20 +107,8 @@
   }
 </main>
 
-@if (state.history()) {
-  <sf-drawer [title]="historyTitle()" (closed)="state.history.set(null)">
-    <ol class="history">
-      @for (rev of revisions; track rev.id) {
-        <li class="history__item">
-          <sf-avatar size="sm" [name]="rev.by.name" />
-          <div class="history__text">
-            <span class="history__summary">{{ rev.summary }}</span>
-            <span class="history__meta">{{ rev.by.name }} · <sf-relative-time [value]="minutesAgo(rev.minutes)" /></span>
-          </div>
-        </li>
-      }
-    </ol>
-  </sf-drawer>
+@if (state.history(); as context) {
+  <sf-sample-history-drawer [context]="context" (closed)="state.history.set(null)" (openFull)="openFullHistory($event)" />
 }
 
 @if (state.shortcutsOpen()) {

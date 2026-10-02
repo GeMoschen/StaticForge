@@ -63,8 +63,8 @@ every screen. Screen migration starts only after the style guide (M35.9) is sign
   - [x] Review round 1: cards/catalogs, content + datasets, templates + code panel (two palettes), media, navigation
         (sibling reorder), globals, changes, schedules, publishing + settings (`sf-side-nav`); decisions 7–34
   - Review: signed off 2026-10-01 (gallery v4, 198 shots / 45 screens); 218 test files / 1,863 tests, build + lint
-    green; design-system review found 12 defects, all fixed with specs. Open: palette pick (before M35.21), drawers
-    over the top bar (before M35.19) — see 009 notes.
+    green; design-system review found 12 defects, all fixed with specs. Open: palette pick (before M35.21). Drawers over the
+    top bar: decided 2026-10-02 — below the top bar (009 decision 35).
 - [x] M35.10 app frame: top bar, rail, developer mode, titles
   - [x] Core (pure, specced): frame location from URL, breadcrumb builder (collapse middle), rail visibility matrix,
         document title composer + `TitleStrategy`, `DeveloperModeService` + `*sfDevOnly`, `FrameContextStore` (item trail)
@@ -83,6 +83,9 @@ every screen. Screen migration starts only after the style guide (M35.9) is sign
 - [x] M35.11 IA: Publishing area, Settings side menu + split
   - Review: see `35-m35-ui-ux-overhaul/011-information-architecture.md` (route table, redirects, area shell); 1,971 tests, build + lint green
 - [ ] M35.12 history drawer, full history, time-travel banner (spine removed)
+  - Design **signed off 2026-10-02** in the sample (gate round 2, decisions 35–46): drawers below the top bar, backend
+    extended (author names, languages, item names, type/date filters, total), asset history for pages, records, global
+    sets, templates. Sample-first rule for all open M35 tasks (README).
 - [ ] M35.13 save UX, unsaved guards, confirm + undo
 - [ ] M35.14 keyboard-first: shortcut registry, palette actions, `?` sheet
 - [ ] M35.15 recents and favorites

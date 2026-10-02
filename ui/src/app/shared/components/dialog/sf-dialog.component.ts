@@ -19,7 +19,10 @@ import { SfDialogRef } from './dialog-ref';
 
 export type SfDialogSize = 'sm' | 'md' | 'lg' | 'full';
 
-/** Marks the dialog's footer content (`<div sfDialogFooter>…</div>`): actions, primary on the right. */
+/**
+ * Marks the dialog's footer content: actions, primary on the right. Put it on an `<ng-container sfDialogFooter>` so the
+ * buttons are the footer's own flex items (and get its gap) — a wrapping `<div>` would sit them side by side without one.
+ */
 @Directive({ selector: '[sfDialogFooter]', standalone: true })
 export class SfDialogFooterDirective {}
 

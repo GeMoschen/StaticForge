@@ -99,10 +99,10 @@
     <sf-field [label]="o.dialog.field" required>
       <sf-input [(value)]="dialogValue" required />
     </sf-field>
-    <div sfDialogFooter>
+    <ng-container sfDialogFooter>
       <sf-button variant="secondary" (click)="dialogSize.set(null)">{{ o.dialog.cancel }}</sf-button>
       <sf-button (click)="dialogSize.set(null)">{{ o.dialog.confirm }}</sf-button>
-    </div>
+    </ng-container>
   </sf-dialog>
 }
 

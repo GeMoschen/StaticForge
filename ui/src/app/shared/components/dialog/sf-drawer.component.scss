@@ -1,7 +1,8 @@
-// Non-modal: the host is just the panel's positioning box on the right edge, the page beside it stays usable.
+// Non-modal: the host is just the panel's positioning box on the right edge, the page beside it stays usable. It starts
+// below the top bar (M35.9 review round 2), so the bar's search, Build now and History stay reachable.
 :host {
   position: fixed;
-  inset-block: 0;
+  inset-block: var(--sf-topbar-height, 0px) 0;
   inset-inline-end: 0;
   display: flex;
   justify-content: flex-end;

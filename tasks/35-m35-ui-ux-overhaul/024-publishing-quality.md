@@ -45,6 +45,15 @@ Before starting, read the signed-off design gate in `009-style-guide-gate.md` �
 round — and the sample screen at `/styleguide`. Build this task to match them; where this task and the signed-off gate
 differ, the gate wins. Note any deviation you need in this file and get it approved.
 
+**Sample first (user rule, 2026-10-02).** If this task needs a screen, state or decision that the sample at `/styleguide`
+does not cover (or covers differently), do **not** implement it. Add it to the sample first, tell the user, and wait
+for their review and sign-off; record the decisions in `009-style-guide-gate.md`. Only then build it in the app.
+
+**Signed off with M35.12 (gate decisions 41–46):** filter bars use the **normal control size** (as tall as the search
+field; the shared `sf-data-table` toolbar already does), type filters show the type's icon, an open list item's row uses
+`sf-data-table` `currentKey` (highlight + accent bar + `aria-current`), dialog footers use `<ng-container sfDialogFooter>`,
+and list + detail panes are bordered cards with the splitter handle centred in a gap (`--sf-splitter-gap`).
+
 ## Acceptance criteria
 
 - [ ] Screen definition of done met (README).

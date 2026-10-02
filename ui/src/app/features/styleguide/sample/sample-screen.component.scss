@@ -1,7 +1,7 @@
 // The frame fills the viewport: top bar across, rail and main below. Only the panes scroll.
 :host {
   display: grid;
-  grid-template-rows: var(--sf-topbar-height) minmax(0, 1fr);
+  grid-template-rows: var(--sf-topbar-height) auto minmax(0, 1fr);
   grid-template-columns: auto minmax(0, 1fr);
   height: 100%;
   overflow: hidden;
@@ -14,14 +14,32 @@
   grid-column: 1 / -1;
 }
 
+.sample__banner {
+  grid-column: 1 / -1;
+}
+
 .sample__rail {
+  grid-row: 3;
   min-height: 0;
 }
 
 .sample__main {
   display: flex;
+  grid-row: 3;
   min-width: 0;
   min-height: 0;
+
+  // Time travel (M35.12): a calm accent frame around every screen — they are read-only meanwhile.
+  position: relative;
+
+  &.is-time-travel::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: var(--sf-z-base);
+    border: 2px solid var(--sf-info);
+    pointer-events: none;
+  }
 }
 
 .sample__split {
@@ -33,42 +51,7 @@
   min-width: 0;
 }
 
-// ── History drawer and shortcut sheet ────────────────────────────────────────
-.history {
-  display: flex;
-  flex-direction: column;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.history__item {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--sf-space-3);
-  padding: var(--sf-space-3) 0;
-  border-bottom: 1px solid var(--sf-border);
-}
-
-.history__text {
-  display: flex;
-  flex-direction: column;
-  gap: var(--sf-space-1);
-  min-width: 0;
-}
-
-.history__summary {
-  color: var(--sf-text);
-  font-size: var(--sf-fs-13);
-  line-height: var(--sf-lh-13);
-}
-
-.history__meta {
-  color: var(--sf-text-muted);
-  font-size: var(--sf-fs-12);
-  line-height: var(--sf-lh-12);
-}
-
+// ── Shortcut sheet ───────────────────────────────────────────────────────────
 .shortcuts {
   display: flex;
   flex-direction: column;

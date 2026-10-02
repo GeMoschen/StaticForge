@@ -4,16 +4,18 @@
   size="sm"
   [sfPopoverTrigger]="recent"
 >
-  @if (running()) {
-    <sf-spinner size="sm" inline />
-  } @else {
-    <sf-icon [class]="'build__icon build__icon--' + status.state()" [name]="icon()" />
-  }
-  <span class="build__text">
-    {{ 'frame.build.' + status.state() | transloco }}
-    @if (when() && !running() && status.state() !== 'none') {
-      <sf-relative-time [value]="when()" />
+  <span class="build__content">
+    @if (running()) {
+      <sf-spinner size="sm" inline />
+    } @else {
+      <sf-icon [class]="'build__icon build__icon--' + status.state()" [name]="icon()" />
     }
+    <span class="build__text">
+      {{ 'frame.build.' + status.state() | transloco }}
+      @if (when() && !running() && status.state() !== 'none') {
+        <sf-relative-time [value]="when()" />
+      }
+    </span>
   </span>
 </sf-button>
 

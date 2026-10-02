@@ -44,6 +44,13 @@ Before starting, read the signed-off design gate in `009-style-guide-gate.md` â€
 round â€” and the sample screen at `/styleguide`. Build this task to match them; where this task and the signed-off gate
 differ, the gate wins. Note any deviation you need in this file and get it approved.
 
+**Sample first (user rule, 2026-10-02).** If this task needs a screen, state or decision that the sample at `/styleguide`
+does not cover (or covers differently), do **not** implement it. Add it to the sample first, tell the user, and wait
+for their review and sign-off; record the decisions in `009-style-guide-gate.md`. Only then build it in the app.
+
+**Signed off with M35.12 (gate decision 35):** drawers, the media detail included, start **below the top bar**; `sf-drawer`
+is already offset by `--sf-topbar-height`. Do not re-open that question here.
+
 ## Acceptance criteria
 
 - [ ] Screen definition of done met (README).

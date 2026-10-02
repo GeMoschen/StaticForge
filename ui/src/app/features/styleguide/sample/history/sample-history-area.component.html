@@ -1,0 +1,80 @@
+<sf-page-header class="area__header" [title]="t('title')" [subtitle]="t('subtitle')">
+  <sf-badge sfPageHeaderStatus [label]="t('count', { count: rows().length })" />
+</sf-page-header>
+
+<div class="area__bar" role="search" [attr.aria-label]="t('filters.label')">
+  <sf-search-input
+    class="area__search"
+    [value]="filters().q"
+    [placeholder]="t('search')"
+    [aria-label]="t('search')"
+    (valueChange)="setSearch($event)"
+  />
+  @for (menu of menus(); track menu.id) {
+    <sf-menu variant="secondary" size="md" align="start" [text]="menu.text" [label]="menu.name" [items]="menu.items" />
+  }
+  @if (filtered()) {
+    <sf-button variant="ghost" size="md" (click)="clear()">{{ t('filters.clear') }}</sf-button>
+  }
+</div>
+
+<div class="area__body">
+  @if (selected(); as rev) {
+    <sf-splitter class="area__split" sized="end" [defaultSize]="460" [min]="340" [max]="680" [minOther]="380" [label]="t('detail.resize')">
+      <div sfSplitterStart class="area__pane">
+        <ng-container *ngTemplateOutlet="tableTpl" />
+      </div>
+      <sf-sample-history-revision sfSplitterEnd class="area__detail" [revision]="rev" (closed)="revisionId.set(null)" />
+    </sf-splitter>
+  } @else {
+    <ng-container *ngTemplateOutlet="tableTpl" />
+  }
+</div>
+
+<ng-template #tableTpl>
+  <sf-data-table
+    class="area__table"
+    [columnChooser]="false"
+    [columns]="columns()"
+    [rows]="rows()"
+    [rowKey]="rowKey"
+    [rowLabel]="rowLabel"
+    [currentKey]="revisionId() === null ? null : '' + revisionId()"
+    [label]="t('table')"
+    [emptyTitle]="t('empty')"
+    [emptyDescription]="t('emptyHint')"
+    (rowOpen)="openRevision($event)"
+  >
+    <ng-template sfDataTableCell="rev" [sfDataTableCellRows]="rows()" let-row>
+      <span class="cell-rev" [class.is-open]="row.id === revisionId()">
+        <sf-icon class="cell-rev__icon" [name]="kindIcons[row.kind]" />
+        {{ row.id }}
+      </span>
+    </ng-template>
+    <ng-template sfDataTableCell="summary" [sfDataTableCellRows]="rows()" let-row>
+      <span class="cell-name__text">{{ row.summary }}</span>
+    </ng-template>
+    <ng-template sfDataTableCell="kind" [sfDataTableCellRows]="rows()" let-row>
+      <sf-tag [label]="t('kinds.' + row.kind)" />
+    </ng-template>
+    <ng-template sfDataTableCell="changed" [sfDataTableCellRows]="rows()" let-row>
+      @let names = assetNames(row);
+      <span class="cell-muted">{{ names.names }}@if (names.more) { {{ t('moreAssets', { count: names.more }) }} }</span>
+    </ng-template>
+    <ng-template sfDataTableCell="by" [sfDataTableCellRows]="rows()" let-row>
+      <span class="cell-changed">
+        <sf-avatar size="sm" [name]="row.by.name" />
+        <span class="cell-changed__text">{{ row.by.name }} · <sf-relative-time [value]="minutesAgo(row.minutes)" /></span>
+      </span>
+    </ng-template>
+  </sf-data-table>
+</ng-template>
+
+@if (rangeDialog()) {
+  <sf-sample-history-range-dialog
+    [from]="filters().date.from"
+    [to]="filters().date.to"
+    (applied)="applyRange($event)"
+    (closed)="rangeDialog.set(false)"
+  />
+}
