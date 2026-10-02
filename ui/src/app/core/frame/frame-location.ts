@@ -35,6 +35,7 @@ export const KNOWN_SUBS: Readonly<Record<string, readonly string[]>> = {
   publishing: ['runs', 'targets', 'policy', 'quality', 'redirects', 'urls'],
   settings: ['general', 'languages', 'channels', 'media', 'code-highlighting', 'compaction', 'import-export', 'members'],
   admin: ['users', 'projects', 'jobs', 'audit'],
+  account: ['profile', 'password', 'preferences', 'projects', 'sessions'],
 };
 
 const NONE: FrameLocation = { kind: 'other', projectKey: null, section: null, sub: null };
@@ -65,7 +66,7 @@ export function parseFrameLocation(url: string): FrameLocation {
     return { kind: 'admin', projectKey: null, section: 'admin', sub: second ?? null };
   }
   if (first === 'account') {
-    return { kind: 'account', projectKey: null, section: 'account', sub: null };
+    return { kind: 'account', projectKey: null, section: 'account', sub: second ?? null };
   }
   return NONE;
 }

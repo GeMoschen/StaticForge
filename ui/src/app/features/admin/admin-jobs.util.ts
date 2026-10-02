@@ -130,6 +130,23 @@ const OUTCOMES: Record<string, { label: string; chip: string }> = {
   SKIPPED: { label: 'Skipped', chip: 'chip' },
 };
 
+/** The tone and icon of a run's outcome in the lists (`sf-status`); a run without an outcome is still running. */
+export const OUTCOME_TONES: Readonly<Record<string, 'success' | 'warning' | 'danger' | 'neutral' | 'info'>> = {
+  SUCCEEDED: 'success',
+  PARTIAL: 'warning',
+  FAILED: 'danger',
+  SKIPPED: 'neutral',
+  '': 'info',
+};
+
+export const OUTCOME_ICONS: Readonly<Record<string, string>> = {
+  SUCCEEDED: 'check_circle',
+  PARTIAL: 'warning',
+  FAILED: 'error',
+  SKIPPED: 'skip_next',
+  '': 'autorenew',
+};
+
 export function outcomeLabel(outcome: string | null | undefined): string {
   return outcome ? (OUTCOMES[outcome]?.label ?? outcome) : 'Running';
 }

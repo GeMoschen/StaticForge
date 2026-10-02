@@ -35,6 +35,7 @@
   </div>
 
   <div class="rail__footer">
+    @if (!admin()) {
     @let settings = 'styleguide.sample.rail.settings' | transloco;
     <button
       type="button"
@@ -50,6 +51,7 @@
       <sf-icon class="rail__icon" name="settings" />
       <span class="rail__label">{{ settings }}</span>
     </button>
+    }
     <sf-button
       class="rail__collapse"
       variant="ghost"

@@ -72,6 +72,9 @@ import { SampleHistoryDrawerComponent } from './history/sample-history-drawer.co
 import { SampleTimeTravelBannerComponent } from './history/sample-time-travel-banner.component';
 import { revisionById } from './history/history-data';
 import { SampleNavigationAreaComponent } from './navigation/sample-navigation-area.component';
+import { SampleAccountAreaComponent } from './account/sample-account-area.component';
+import { SampleAdminAreaComponent } from './admin/sample-admin-area.component';
+import { SampleAuthAreaComponent } from './auth/sample-auth-area.component';
 import { SamplePaletteComponent } from './keyboard/sample-palette.component';
 import { SampleShortcutSheetComponent } from './keyboard/sample-shortcut-sheet.component';
 
@@ -109,6 +112,9 @@ const OWN_PARAMS = ['area', 'view', 'template', 'tab', 'channel', 'focus', 'dev'
   selector: 'sf-sample-screen',
   standalone: true,
   imports: [
+    SampleAccountAreaComponent,
+    SampleAdminAreaComponent,
+    SampleAuthAreaComponent,
     SampleChangesAreaComponent,
     SampleContentFolderComponent,
     SampleContentTreeComponent,

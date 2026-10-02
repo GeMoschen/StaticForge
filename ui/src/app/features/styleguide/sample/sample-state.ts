@@ -51,9 +51,31 @@ export type SampleArea =
   | 'schedules'
   | 'publishing'
   | 'settings'
-  | 'history';
+  | 'history'
+  | 'account'
+  | 'admin'
+  | 'login'
+  | 'setpassword';
 /** Areas whose own component fills the main region (with its own tree and query parameters); their view is the area. */
-export const SELF_CONTAINED_AREAS = ['media', 'navigation', 'globals', 'changes', 'schedules', 'publishing', 'settings', 'history'] as const;
+export const SELF_CONTAINED_AREAS = [
+  'media',
+  'navigation',
+  'globals',
+  'changes',
+  'schedules',
+  'publishing',
+  'settings',
+  'history',
+  'account',
+  'admin',
+  'login',
+  'setpassword',
+] as const;
+/** The screens outside the frame (M35.16): no top bar, no rail — a centred card on the page background. */
+export const BARE_AREAS: readonly SampleArea[] = ['login', 'setpassword'];
+/** The areas of Administration (M35.16): the rail lists them instead of the project's areas. */
+export type SampleAdminSection = 'users' | 'projects' | 'jobs' | 'audit';
+export const ADMIN_SECTIONS: readonly SampleAdminSection[] = ['users', 'projects', 'jobs', 'audit'];
 export type SampleSelfContainedArea = (typeof SELF_CONTAINED_AREAS)[number];
 /** The areas the sample renders. */
 export const SAMPLE_AREAS: readonly SampleArea[] = [
@@ -68,6 +90,10 @@ export const SAMPLE_AREAS: readonly SampleArea[] = [
   'publishing',
   'settings',
   'history',
+  'account',
+  'admin',
+  'login',
+  'setpassword',
 ];
 
 /**
@@ -103,6 +129,10 @@ export const AREA_OF_VIEW: Readonly<Record<SampleView, SampleArea>> = {
   publishing: 'publishing',
   settings: 'settings',
   history: 'history',
+  account: 'account',
+  admin: 'admin',
+  login: 'login',
+  setpassword: 'setpassword',
 };
 
 export type SampleRail = 'expanded' | 'collapsed';
@@ -146,6 +176,10 @@ const AREA_LABELS: Readonly<Record<SampleArea, string>> = {
   publishing: 'rail.publishing',
   settings: 'rail.settings',
   history: 'history.title',
+  account: 'rail.account',
+  admin: 'rail.admin',
+  login: 'rail.account',
+  setpassword: 'rail.account',
 };
 
 function initialRecords(): ReadonlyMap<string, readonly SampleRecord[]> {
@@ -166,6 +200,13 @@ export class SampleState {
 
   readonly view = signal<SampleView>('folder');
   readonly area = computed<SampleArea>(() => AREA_OF_VIEW[this.view()]);
+  /** Login and Set password sit outside the frame. */
+  readonly bare = computed(() => BARE_AREAS.includes(this.area()));
+
+  // ── Administration (M35.16): the rail's section and the open detail, mirrored in the URL by the admin area ──────
+  readonly adminSection = signal<SampleAdminSection>('users');
+  /** The open user (`auser`) or job (`ajob`) of the section; `null` = its list. */
+  readonly adminDetail = signal<string | null>(null);
 
   // ── Pages ──────────────────────────────────────────────────────────────────
   /** The folder of the folder view; `null` = the Pages root. */

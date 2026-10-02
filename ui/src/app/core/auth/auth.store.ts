@@ -6,7 +6,7 @@ import type { components } from '../api/generated/schema.d.ts';
 
 type LoginResponse = components['schemas']['LoginResponse'];
 type MeResponse = components['schemas']['MeResponse'];
-type Membership = components['schemas']['Membership'];
+export type Membership = components['schemas']['Membership'];
 
 /**
  * Base64url-decodes a JWT segment to a raw string.

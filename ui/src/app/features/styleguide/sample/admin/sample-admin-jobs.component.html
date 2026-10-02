@@ -1,0 +1,59 @@
+<sf-page-header [title]="t('jobs.title')" [subtitle]="t('jobs.subtitle')">
+  <sf-badge sfPageHeaderStatus [label]="t('jobs.count', { count: rows().length })" />
+</sf-page-header>
+
+<sf-data-table
+  class="screen__table"
+  twoLine
+  [columnChooser]="false"
+  [columns]="columns()"
+  [rows]="rows()"
+  [rowKey]="rowKey"
+  [rowLabel]="rowLabel"
+  [label]="t('jobs.table')"
+  [loading]="admin.review() === 'loading'"
+  [error]="error()"
+  [emptyTitle]="t('jobs.empty')"
+  (rowOpen)="open($event)"
+  (retry)="admin.review.set('live')"
+>
+  <ng-template sfDataTableCell="job" [sfDataTableCellRows]="rows()" let-row>
+    <sf-table-identity class="cell-identity" [class.is-orphaned]="row.orphaned" [name]="row.name" [sub]="row.orphaned ? t('jobs.orphanedHint') : row.description">
+      @if (row.orphaned) {
+        <sf-badge tone="neutral" icon="link_off" [label]="t('jobs.orphaned')" />
+      }
+    </sf-table-identity>
+  </ng-template>
+  <ng-template sfDataTableCell="actions" [sfDataTableCellRows]="rows()" let-row>
+    <sf-menu size="sm" [label]="t('jobs.menu.label', { name: row.name })" [items]="menuItems(row)" (itemSelected)="onMenu(row, $event)" />
+  </ng-template>
+  <ng-template sfDataTableCell="enabled" [sfDataTableCellRows]="rows()" let-row>
+    <label class="cell-switch">
+      <sf-switch [value]="row.enabled" [disabled]="row.orphaned" [aria-label]="t('jobs.enable', { name: row.name })" (valueChange)="toggle(row, $event)" />
+      <span class="cell-muted">{{ t(row.enabled ? 'jobs.on' : 'jobs.off') }}</span>
+    </label>
+  </ng-template>
+  <ng-template sfDataTableCell="schedule" [sfDataTableCellRows]="rows()" let-row>
+    <span class="cell-muted" [title]="t('jobs.cron', { cron: cron(row) })">{{ admin.scheduleText(row.schedule) }}</span>
+  </ng-template>
+  <ng-template sfDataTableCell="next" [sfDataTableCellRows]="rows()" let-row>
+    @if (row.enabled && !row.orphaned) {
+      <sf-relative-time [value]="ahead(row.nextMinutes)" />
+    } @else {
+      <span class="cell-muted">{{ t('jobs.notScheduled') }}</span>
+    }
+  </ng-template>
+  <ng-template sfDataTableCell="last" [sfDataTableCellRows]="rows()" let-row>
+    @if (row.lastRun; as last) {
+      <span class="cell-name">
+        <sf-status size="sm" [tone]="tones[last.outcome]" [icon]="icons[last.outcome]" [label]="t('outcomes.' + last.outcome)" />
+        @if (last.dryRun) {
+          <sf-badge tone="info" [label]="t('jobs.dryRun')" />
+        }
+        <span class="cell-muted"><sf-relative-time [value]="ago(last.minutes)" /></span>
+      </span>
+    } @else {
+      <span class="cell-muted">{{ t('jobs.neverRun') }}</span>
+    }
+  </ng-template>
+</sf-data-table>

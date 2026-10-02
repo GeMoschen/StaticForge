@@ -14,6 +14,19 @@
   grid-column: 1 / -1;
 }
 
+// Login and Set password: no frame, the card centred on the page background (M35.16).
+.sample__bare {
+  grid-column: 1 / -1;
+  grid-row: 1 / -1;
+  min-height: 0;
+  overflow: auto;
+}
+
+// My account has no rail: the main region takes the full width.
+:host:has(.sample__main.is-account) {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .sample__banner {
   grid-column: 1 / -1;
 }

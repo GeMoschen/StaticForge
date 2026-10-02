@@ -1,112 +1,85 @@
-@use 'admin';
-
-.filters {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--sf-3);
-  flex-wrap: wrap;
-  margin-bottom: var(--sf-3);
-}
-
-.filter {
-  position: relative;
+:host {
   display: flex;
   flex-direction: column;
-  gap: var(--sf-1);
-
-  .select,
-  .input {
-    width: auto;
-    min-width: 10rem;
-  }
+  gap: var(--sf-space-4);
+  min-width: 0;
+  min-height: 0;
 }
 
-.filter__label {
-  color: var(--sf-slate);
-  font-size: var(--sf-text-xs);
-}
-
-.filter--actions {
-  // Wide enough for the "CODE — label" options (the M29 labels are the longest), never wider than the page.
-  width: min(28rem, 100%);
-
-  .select {
-    width: 100%;
-  }
-}
-
-.filters > sf-button {
-  align-self: flex-end;
-}
-
-.chosen {
+.audit__bar {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--sf-1);
-
-  .chip {
-    margin-left: 0;
-  }
+  align-items: center;
+  gap: var(--sf-space-2);
 }
 
-.chip__clear {
-  margin-left: var(--sf-1);
-  padding: 0;
-  border: none;
-  background: transparent;
-  color: inherit;
-  cursor: pointer;
-  font-size: var(--sf-text-sm);
+// The filter controls are as tall as the search fields elsewhere (gate decision 43): the shared control height.
+.audit__actions {
+  flex: 1 1 14rem;
+  min-width: 12rem;
+  max-width: 22rem;
 }
 
-.hits {
-  position: absolute;
-  top: 100%;
-  left: 0;
-  z-index: 20;
-  min-width: 14rem;
-  margin: 4px 0 0;
-  padding: var(--sf-1);
-  list-style: none;
-  background: var(--sf-surface);
-  border: 1px solid var(--sf-line);
-  border-radius: var(--sf-radius-md);
-  box-shadow: var(--sf-shadow-2);
+.audit__user {
+  flex: 0 1 13rem;
+  min-width: 10rem;
 }
 
-.hit {
-  padding: var(--sf-2);
-  border-radius: var(--sf-radius-sm);
-  font-size: var(--sf-text-sm);
-  cursor: pointer;
-
-  &:hover {
-    background: color-mix(in srgb, var(--sf-ink) 6%, transparent);
-  }
+.audit__project {
+  flex: 0 1 11rem;
+  min-width: 9rem;
 }
 
-.nowrap {
+.audit__range {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sf-space-2);
+}
+
+.audit__range-label {
+  color: var(--sf-text-muted);
+  font-size: var(--sf-fs-13);
+  line-height: var(--sf-lh-13);
+}
+
+.audit__date {
+  width: 11rem;
+}
+
+.audit__range-error {
+  margin: 0;
+  color: var(--sf-danger-text);
+  font-size: var(--sf-fs-13);
+  line-height: var(--sf-lh-13);
+}
+
+.audit__table {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+}
+
+.cell-name {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sf-space-2);
+  min-width: 0;
+}
+
+.cell-name__text {
+  overflow: hidden;
+  color: var(--sf-text);
+  font-weight: var(--sf-weight-medium);
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.table__actions {
-  text-align: right;
+.cell-muted {
+  color: var(--sf-text-muted);
 }
 
-.detail-row td {
-  background: var(--sf-paper);
-}
-
-.detail {
-  margin: 0;
+.cell-mono {
   font-family: var(--sf-font-mono);
-  font-size: var(--sf-text-xs);
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-
-.action-label {
-  display: block;
-  color: var(--sf-slate);
-  font-size: var(--sf-text-xs);
+  font-size: var(--sf-fs-12);
 }

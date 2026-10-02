@@ -4,7 +4,8 @@ import { parseFrameLocation } from './frame-location';
 describe('parseFrameLocation', () => {
   it('reads the project list, account and administration', () => {
     expect(parseFrameLocation('/')).toEqual({ kind: 'dashboard', projectKey: null, section: null, sub: null });
-    expect(parseFrameLocation('/account')).toMatchObject({ kind: 'account', section: 'account' });
+    expect(parseFrameLocation('/account')).toMatchObject({ kind: 'account', section: 'account', sub: null });
+    expect(parseFrameLocation('/account/preferences')).toMatchObject({ kind: 'account', section: 'account', sub: 'preferences' });
     expect(parseFrameLocation('/admin/jobs/nightly')).toMatchObject({ kind: 'admin', section: 'admin', sub: 'jobs' });
     expect(parseFrameLocation('/admin')).toMatchObject({ kind: 'admin', sub: null });
   });

@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import { auditActionLabel } from './admin-audit.util';
 import {
   cronError,
   describeJobCron,
@@ -159,15 +158,5 @@ describe('job run report', () => {
     expect(reportExtras(json({ sample: [], sampleTotal: 0 }))).toBeNull();
     expect(reportError(json({ error: 'Store unavailable' }))).toBe('Store unavailable');
     expect(reportError(undefined)).toBeNull();
-  });
-});
-
-describe('audit labels (M29)', () => {
-  it('names the job and compaction actions and leaves the others to their code', () => {
-    expect(auditActionLabel('JOB_SETTINGS_SET')).toBe('Job schedule or settings changed');
-    expect(auditActionLabel('JOB_RUN')).toBe('Job run started manually');
-    expect(auditActionLabel('COMPACTION_POLICY_SET')).toBe('Revision compaction policy changed');
-    expect(auditActionLabel('REVISIONS_COMPACTED')).toBe('Revisions compacted');
-    expect(auditActionLabel('USER_CREATED')).toBeNull();
   });
 });

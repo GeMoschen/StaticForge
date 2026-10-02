@@ -1,0 +1,44 @@
+<sf-dialog size="md" [title]="title()" (closed)="closed.emit()">
+  @if (issuedPassword(); as issued) {
+    <div class="dialog__form">
+      <p class="dialog__lead">{{ t('password.issuedLead', { name: mode() === 'create' ? displayName() : (user()?.displayName ?? '') }) }}</p>
+      <sf-copyable class="dialog__otp" [value]="issued" [label]="t('password.issuedLabel')" />
+      <sf-banner tone="warning">{{ t('password.issuedOnce') }}</sf-banner>
+    </div>
+  } @else {
+    <form class="dialog__form" (submit)="$event.preventDefault(); submit()">
+      @if (mode() === 'create') {
+        <sf-field [label]="t('newUser.username')" [hint]="t('newUser.usernameHint')" required [error]="errors().username">
+          <sf-input [value]="username()" autocomplete="off" (valueChange)="username.set($event)" />
+        </sf-field>
+        <sf-field [label]="t('newUser.displayName')" required [error]="errors().displayName">
+          <sf-input [value]="displayName()" autocomplete="off" (valueChange)="displayName.set($event)" />
+        </sf-field>
+        <sf-field [label]="t('newUser.email')" required [error]="errors().email">
+          <sf-input type="email" [value]="email()" autocomplete="off" (valueChange)="email.set($event)" />
+        </sf-field>
+        <sf-field [label]="t('newUser.role')" [hint]="t('newUser.roleHint')">
+          <sf-select [options]="roleOptions" [value]="role()" (valueChange)="role.set($event ?? 'user')" />
+        </sf-field>
+      } @else {
+        <p class="dialog__lead">{{ t('reset.lead', { name: user()?.displayName ?? '' }) }}</p>
+      }
+      <sf-field [label]="t('password.label')">
+        <sf-radio-group [options]="choiceOptions()" [value]="choice()" (valueChange)="choice.set($event ?? 'generate')" />
+      </sf-field>
+      @if (choice() === 'set') {
+        <sf-field [label]="t('password.new')" required [error]="errors().password">
+          <sf-input type="password" [value]="password()" autocomplete="new-password" (valueChange)="password.set($event)" />
+        </sf-field>
+      }
+    </form>
+  }
+  <ng-container sfDialogFooter>
+    @if (issuedPassword() !== null) {
+      <sf-button (click)="closed.emit()">{{ t('password.done') }}</sf-button>
+    } @else {
+      <sf-button variant="ghost" (click)="closed.emit()">{{ t('cancel') }}</sf-button>
+      <sf-button (click)="submit()">{{ mode() === 'create' ? t('newUser.submit') : t('reset.submit') }}</sf-button>
+    }
+  </ng-container>
+</sf-dialog>

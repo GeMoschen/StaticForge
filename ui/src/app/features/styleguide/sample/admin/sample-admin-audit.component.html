@@ -1,0 +1,83 @@
+<sf-page-header [title]="t('audit.title')" [subtitle]="t('audit.subtitle')">
+  <sf-badge sfPageHeaderStatus [label]="t('audit.count', { count: rows().length })" />
+</sf-page-header>
+
+<div class="screen__bar" role="search" [attr.aria-label]="t('filters.label')">
+  <sf-combobox
+    class="audit__actions"
+    multiple
+    [options]="actionOptions()"
+    [value]="filters().actions.slice()"
+    [placeholder]="t('audit.actionsPlaceholder')"
+    [aria-label]="t('audit.actionsLabel')"
+    (valueChange)="setActions($any($event))"
+  />
+  <sf-combobox
+    class="audit__user"
+    [options]="userOptions()"
+    [value]="filters().by"
+    [placeholder]="t('audit.userPlaceholder')"
+    [aria-label]="t('audit.userLabel')"
+    (valueChange)="setUser($any($event))"
+  />
+  <sf-select
+    class="audit__project"
+    [options]="projectOptions()"
+    [value]="filters().project ?? ''"
+    [aria-label]="t('audit.projectLabel')"
+    (valueChange)="setProject($event)"
+  />
+  <span class="audit__range" role="group" [attr.aria-label]="t('audit.range')">
+    <span class="audit__range-label">{{ t('audit.from') }}</span>
+    <sf-date-input class="audit__date" [value]="filters().from" [max]="filters().to" [aria-label]="t('audit.from')" (valueChange)="setFrom($event)" />
+    <span class="audit__range-label">{{ t('audit.to') }}</span>
+    <sf-date-input class="audit__date" [value]="filters().to" [min]="filters().from" [aria-label]="t('audit.to')" (valueChange)="setTo($event)" />
+  </span>
+  @if (filtered()) {
+    <sf-button variant="ghost" size="md" (click)="clear()">{{ t('filters.clear') }}</sf-button>
+  }
+</div>
+
+<sf-data-table
+  [rowsOpenable]="false"
+  class="screen__table"
+  paging="pager"
+  [pageSize]="12"
+  [columnChooser]="false"
+  [columns]="columns()"
+  [rows]="rows()"
+  [rowKey]="rowKey"
+  [rowLabel]="rowLabel"
+  [label]="t('audit.table')"
+  [loading]="admin.review() === 'loading'"
+  [error]="error()"
+  [emptyTitle]="t('audit.empty')"
+  [emptyDescription]="t('audit.emptyHint')"
+  (retry)="admin.review.set('live')"
+>
+  <ng-template sfDataTableCell="time" [sfDataTableCellRows]="rows()" let-row>
+    <sf-relative-time [value]="ago(row.minutes)" />
+  </ng-template>
+  <ng-template sfDataTableCell="user" [sfDataTableCellRows]="rows()" let-row>
+    <span class="cell-name">
+      @if (row.by) {
+        <sf-avatar size="sm" [name]="userName(row)" />
+        <span class="cell-name__text">{{ userName(row) }}</span>
+      } @else {
+        <span class="cell-muted">{{ userName(row) }}</span>
+      }
+    </span>
+  </ng-template>
+  <ng-template sfDataTableCell="action" [sfDataTableCellRows]="rows()" let-row>
+    <span class="cell-name__text">{{ t('audit.actions.' + row.action) }}</span>
+  </ng-template>
+  <ng-template sfDataTableCell="target" [sfDataTableCellRows]="rows()" let-row>
+    <span class="cell-muted">{{ row.target }}</span>
+  </ng-template>
+  <ng-template sfDataTableCell="project" [sfDataTableCellRows]="rows()" let-row>
+    <span class="cell-muted">{{ projectName(row.project) ?? '—' }}</span>
+  </ng-template>
+  <ng-template sfDataTableCell="details" [sfDataTableCellRows]="rows()" let-row>
+    <span class="cell-muted">{{ row.details || '—' }}</span>
+  </ng-template>
+</sf-data-table>

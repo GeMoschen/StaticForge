@@ -135,6 +135,14 @@ export class SampleTopbarComponent {
     this.state.notice(key);
   }
 
+  /** Account, Administration and Sign out lead to the M35.16 screens of the sample. */
+  protected async goTo(area: 'account' | 'admin' | 'login'): Promise<void> {
+    this.userPopover().close(true);
+    if (await this.state.canLeave()) {
+      this.state.openArea(area);
+    }
+  }
+
   protected runLabel(outcome: 'published' | 'warnings'): string {
     return this.state.t(outcome === 'published' ? 'topbar.runPublished' : 'topbar.runWarnings');
   }

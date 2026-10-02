@@ -1,0 +1,48 @@
+:host {
+  display: block;
+  min-height: 100vh;
+  background: var(--sf-bg);
+}
+
+.page {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sf-space-4);
+  min-height: 100vh;
+  padding: var(--sf-space-8) var(--sf-space-4);
+  box-sizing: border-box;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sf-space-4);
+  inline-size: 100%;
+  max-inline-size: 24rem;
+  padding: var(--sf-space-8);
+  box-sizing: border-box;
+  border: 1px solid var(--sf-border);
+  border-radius: var(--sf-radius-lg);
+  background: var(--sf-surface);
+  box-shadow: var(--sf-elevation-2);
+  color: var(--sf-text);
+  font-family: var(--sf-font-ui);
+}
+
+.card__logo {
+  align-self: center;
+  margin-block-end: var(--sf-space-2);
+  color: var(--sf-text);
+}
+
+.page__footer {
+  max-inline-size: 24rem;
+  margin: 0;
+  color: var(--sf-text-muted);
+  font-family: var(--sf-font-ui);
+  font-size: var(--sf-fs-13);
+  line-height: var(--sf-lh-13);
+  text-align: center;
+}

@@ -206,6 +206,7 @@
           @let selected = isSelected(row);
           <tr
             class="sf-data-table__row"
+            [class.is-openable]="rowsOpenable()"
             [class.is-selected]="selected"
             [class.is-active]="index === active()"
             [class.is-current]="currentKey() !== null && rowKey()(row) === currentKey()"

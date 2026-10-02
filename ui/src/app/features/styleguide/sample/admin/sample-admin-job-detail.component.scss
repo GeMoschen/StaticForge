@@ -1,0 +1,32 @@
+@use 'admin-screen';
+
+.job__preview {
+  margin: 0;
+  color: var(--sf-text);
+  font-size: var(--sf-fs-13);
+  line-height: var(--sf-lh-13);
+}
+
+.job__preview-label {
+  margin-inline-end: var(--sf-space-2);
+  color: var(--sf-text-muted);
+}
+
+.job__cron {
+  margin-inline-start: var(--sf-space-2);
+  color: var(--sf-text-muted);
+  font-family: var(--sf-font-mono);
+  font-size: var(--sf-fs-12);
+}
+
+.job__save {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--sf-space-3);
+}
+
+.job__history {
+  max-height: 30rem;
+}

@@ -81,6 +81,7 @@
     }
     @case ('rebuilt') {
       <sf-data-table
+  [rowsOpenable]="false"
         class="detail__table"
         [columns]="rebuiltColumns()"
         [rows]="rebuiltRows()"

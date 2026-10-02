@@ -1,10 +1,15 @@
+@if (state.bare()) {
+  <sf-sample-auth-area class="sample__bare" />
+} @else {
 <sf-sample-topbar class="sample__topbar" />
 @if (state.travel() !== null) {
   <sf-sample-time-travel-banner class="sample__banner" />
 }
-<sf-sample-rail class="sample__rail" />
+@if (state.area() !== 'account') {
+  <sf-sample-rail class="sample__rail" />
+}
 
-<main class="sample__main" [class.is-time-travel]="state.travel() !== null">
+<main class="sample__main" [class.is-time-travel]="state.travel() !== null" [class.is-account]="state.area() === 'account'">
   @switch (selfContained()) {
     @case ('media') {
       <sf-sample-media-area class="sample__area" />
@@ -29,6 +34,12 @@
     }
     @case ('history') {
       <sf-sample-history-area class="sample__area" [open]="state.historyRev()" />
+    }
+    @case ('account') {
+      <sf-sample-account-area class="sample__area" />
+    }
+    @case ('admin') {
+      <sf-sample-admin-area class="sample__area" />
     }
     @default {
       <sf-splitter
@@ -123,4 +134,5 @@
 
 @if (state.paletteQuery() !== null) {
   <sf-sample-palette />
+}
 }

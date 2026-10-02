@@ -1,0 +1,37 @@
+{
+  "login": {
+    "title": "Sign in",
+    "lead": "Use your StaticForge account.",
+    "username": "Username",
+    "password": "Password",
+    "show": "Show password",
+    "hide": "Hide password",
+    "submit": "Sign in",
+    "busy": "Signing in…",
+    "needBoth": "Enter your username and password.",
+    "error": "The username or password is not right. Try again.",
+    "forgot": "Forgot your password? Ask a StaticForge administrator."
+  },
+  "setPassword": {
+    "title": "Choose a new password",
+    "lead": "An administrator asked you to choose a new password before you continue.",
+    "new": "New password",
+    "confirm": "Repeat the new password",
+    "submit": "Set password",
+    "needRules": "Meet every rule below first.",
+    "done": "Your password is set. Welcome back."
+  },
+  "rules": {
+    "label": "Password rules",
+    "length": "At least {min} characters",
+    "letter": "At least one letter",
+    "symbol": "At least one digit or symbol",
+    "match": "Both passwords match",
+    "over": "That is {count} characters; the limit is {max}.",
+    "state": {
+      "idle": "not checked yet",
+      "met": "met",
+      "unmet": "not met"
+    }
+  }
+}

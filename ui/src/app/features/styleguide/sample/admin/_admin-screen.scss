@@ -1,0 +1,100 @@
+// Shared parts of the Administration screens (M35.16). `@use`d by each screen, so the rules are scoped to it.
+
+:host {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sf-space-4);
+  min-width: 0;
+  min-height: 0;
+}
+
+.screen__bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sf-space-2);
+}
+
+.screen__search {
+  flex: 1 1 10rem;
+  min-width: 8rem;
+  max-width: 20rem;
+}
+
+.screen__switch {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sf-space-2);
+  color: var(--sf-text);
+  font-size: var(--sf-fs-13);
+  line-height: var(--sf-lh-13);
+}
+
+.screen__table {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+}
+
+.screen__scroll {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: var(--sf-space-6);
+  min-height: 0;
+  overflow-y: auto;
+  padding-block-end: var(--sf-space-4);
+}
+
+.screen__form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sf-space-4);
+  max-inline-size: 40rem;
+}
+
+.cell-name {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sf-space-2);
+  min-width: 0;
+}
+
+.cell-name__text {
+  overflow: hidden;
+  color: var(--sf-text);
+  font-weight: var(--sf-weight-medium);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cell-muted {
+  overflow: hidden;
+  color: var(--sf-text-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cell-mono {
+  color: var(--sf-text-muted);
+  font-family: var(--sf-font-mono);
+  font-size: var(--sf-fs-12);
+}
+
+.screen__facts {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: var(--sf-space-2) var(--sf-space-6);
+  margin: 0;
+  font-size: var(--sf-fs-13);
+  line-height: var(--sf-lh-13);
+
+  dt {
+    color: var(--sf-text-muted);
+  }
+
+  dd {
+    margin: 0;
+    color: var(--sf-text);
+  }
+}

@@ -279,6 +279,12 @@ td {
 
 .sf-data-table__row {
   cursor: default;
+
+  // A click opens the row (M35.16): say so with the pointer. Controls inside a cell keep their own cursor.
+  &.is-openable {
+    cursor: pointer;
+  }
+
   // Keyboard moves scroll the row into view below the sticky header.
   scroll-margin-top: var(--sf-table-row-height);
 
@@ -350,4 +356,9 @@ td {
 
 .sf-data-table__page {
   font-variant-numeric: tabular-nums;
+}
+
+// Two-line rows (an `sf-table-identity` cell): taller than the shared row height — the token the virtual window reads.
+:host(.sf-data-table--two-line) {
+  --sf-table-row-height: var(--sf-space-12);
 }

@@ -140,14 +140,14 @@
           <span class="user__email">{{ user.email }}</span>
         </div>
         <div class="user__actions">
-          <sf-button variant="secondary" size="sm" icon="person" (click)="userAction('topbar.accountNotice')">{{
+          <sf-button variant="secondary" size="sm" icon="person" (click)="goTo('account')">{{
             'styleguide.sample.topbar.account' | transloco
           }}</sf-button>
-          <sf-button variant="secondary" size="sm" icon="admin_panel_settings" (click)="userAction('topbar.adminNotice')">{{
+          <sf-button variant="secondary" size="sm" icon="admin_panel_settings" (click)="goTo('admin')">{{
             'styleguide.sample.topbar.administration' | transloco
           }}</sf-button>
         </div>
-        <sf-button class="user__signout" variant="ghost" icon="logout" (click)="userAction('topbar.signOutNotice')">{{
+        <sf-button class="user__signout" variant="ghost" icon="logout" (click)="goTo('login')">{{
           'styleguide.sample.topbar.signOut' | transloco
         }}</sf-button>
       </div>

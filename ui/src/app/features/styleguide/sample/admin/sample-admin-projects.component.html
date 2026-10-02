@@ -1,0 +1,82 @@
+<sf-page-header [title]="t('projects.title')" [subtitle]="t('projects.subtitle')">
+  <sf-badge sfPageHeaderStatus [label]="t('projects.count', { count: rows().length })" />
+  <ng-container sfPageHeaderActions>
+    <sf-button icon="add" (click)="creating.set(true)">{{ t('projects.new') }}</sf-button>
+  </ng-container>
+</sf-page-header>
+
+<div class="screen__bar" role="search" [attr.aria-label]="t('filters.label')">
+  <sf-search-input
+    class="screen__search"
+    [value]="filters().q"
+    [placeholder]="t('projects.search')"
+    [aria-label]="t('projects.search')"
+    (valueChange)="setSearch($event)"
+  />
+  <label class="screen__switch">
+    <sf-switch [value]="filters().archived" [aria-label]="t('projects.showArchived')" (valueChange)="setArchived($event)" />
+    {{ t('projects.showArchived') }}
+  </label>
+  @if (filtered()) {
+    <sf-button variant="ghost" size="md" (click)="clear()">{{ t('filters.clear') }}</sf-button>
+  }
+</div>
+
+<sf-data-table
+  class="screen__table"
+  twoLine
+  [columnChooser]="false"
+  [columns]="columns()"
+  [rows]="rows()"
+  [rowKey]="rowKey"
+  [rowLabel]="rowLabel"
+  [label]="t('projects.table')"
+  [loading]="admin.review() === 'loading'"
+  [error]="error()"
+  [emptyTitle]="t('projects.empty')"
+  [emptyDescription]="t('projects.emptyHint')"
+  (rowOpen)="open($event)"
+  (retry)="admin.review.set('live')"
+>
+  <ng-template sfDataTableCell="project" [sfDataTableCellRows]="rows()" let-row>
+    <sf-table-identity class="cell-identity" [class.is-archived]="admin.isArchived(row.key)" [name]="row.name" [sub]="row.key" mono>
+      @if (admin.isArchived(row.key)) {
+        <sf-badge tone="neutral" icon="archive" [label]="t('projects.status.archived')" />
+      }
+    </sf-table-identity>
+  </ng-template>
+  <ng-template sfDataTableCell="description" [sfDataTableCellRows]="rows()" let-row>
+    <span class="cell-muted" [class.is-archived]="admin.isArchived(row.key)">{{ row.description || '—' }}</span>
+  </ng-template>
+  <ng-template sfDataTableCell="members" [sfDataTableCellRows]="rows()" let-row>
+    <span class="cell-muted">{{ members(row) }}</span>
+  </ng-template>
+  <ng-template sfDataTableCell="lastChange" [sfDataTableCellRows]="rows()" let-row>
+    <span class="cell-muted">
+      @if (row.lastChangeMinutes !== null) {
+        <sf-relative-time [value]="ago(row.lastChangeMinutes)" />
+        · r{{ row.revision }}
+      } @else {
+        —
+      }
+    </span>
+  </ng-template>
+  <ng-template sfDataTableCell="status" [sfDataTableCellRows]="rows()" let-row>
+    @if (admin.isArchived(row.key)) {
+      <sf-status size="sm" tone="neutral" icon="archive" [label]="t('projects.status.archived')" />
+    } @else {
+      <sf-status size="sm" tone="success" icon="check_circle" [label]="t('projects.status.active')" />
+    }
+  </ng-template>
+  <ng-template sfDataTableCell="actions" [sfDataTableCellRows]="rows()" let-row>
+    <sf-menu size="sm" [label]="t('projects.menu.label', { name: row.name })" [items]="menuItems(row)" (itemSelected)="onMenu(row, $event)" />
+  </ng-template>
+</sf-data-table>
+
+@if (creating()) {
+  <sf-sample-admin-project-dialog (created)="created($event)" (closed)="creating.set(false)" />
+}
+
+@if (editing(); as project) {
+  <sf-sample-admin-project-dialog [project]="project" (edited)="edited($event)" (closed)="editing.set(null)" />
+}

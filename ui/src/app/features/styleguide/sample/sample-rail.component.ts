@@ -5,7 +5,7 @@ import { SfTooltipDirective } from '../../../shared/directives/sf-tooltip.direct
 import { SfButtonComponent } from '../../../shared/components/sf-button.component';
 import { SfIconComponent } from '../../../shared/components/sf-icon.component';
 import { CHANGES_COUNT } from './sample-data';
-import { SAMPLE_AREAS, SampleArea, SampleState } from './sample-state';
+import { SAMPLE_AREAS, SampleAdminSection, SampleArea, SampleState } from './sample-state';
 
 interface RailItem {
   readonly id: string;
@@ -43,6 +43,19 @@ const GROUPS: readonly RailGroup[] = [
   { id: 'develop', develop: true, items: [{ id: 'templates', icon: 'code_blocks' }] },
 ];
 
+/** The rail of Administration (M35.16): its sections replace the project's areas; there is no Settings footer. */
+const ADMIN_GROUPS: readonly RailGroup[] = [
+  {
+    id: 'admin',
+    items: [
+      { id: 'users', icon: 'group' },
+      { id: 'projects', icon: 'folder_managed' },
+      { id: 'jobs', icon: 'work_history' },
+      { id: 'audit', icon: 'fact_check' },
+    ],
+  },
+];
+
 /** The rail items that open an area of the sample (the others only say they are not part of it). */
 const AREA_OF_ITEM: Readonly<Record<string, SampleArea>> = {
   pages: 'pages',
@@ -74,17 +87,27 @@ const AREA_OF_ITEM: Readonly<Record<string, SampleArea>> = {
 export class SampleRailComponent {
   protected readonly state = inject(SampleState);
   protected readonly collapsed = computed(() => this.state.rail() === 'collapsed');
-  protected readonly groups = computed(() => GROUPS.filter((group) => !group.develop || this.state.devMode()));
+  protected readonly admin = computed(() => this.state.area() === 'admin');
+  protected readonly groups = computed(() =>
+    this.admin() ? ADMIN_GROUPS : GROUPS.filter((group) => !group.develop || this.state.devMode()),
+  );
 
   protected label(id: string): string {
     return this.state.t(`rail.${id}`);
   }
 
   protected isActive(id: string): boolean {
-    return AREA_OF_ITEM[id] === this.state.area();
+    return this.admin() ? id === this.state.adminSection() : AREA_OF_ITEM[id] === this.state.area();
   }
 
   protected async select(id: string): Promise<void> {
+    if (this.admin()) {
+      if (await this.state.canLeave()) {
+        this.state.adminSection.set(id as SampleAdminSection);
+        this.state.adminDetail.set(null);
+      }
+      return;
+    }
     const area = AREA_OF_ITEM[id];
     if (area && SAMPLE_AREAS.includes(area)) {
       if (await this.state.canLeave()) {

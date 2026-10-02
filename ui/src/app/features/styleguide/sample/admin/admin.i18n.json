@@ -1,0 +1,367 @@
+{
+  "sections": {
+    "users": "Users",
+    "projects": "Projects",
+    "jobs": "Jobs",
+    "audit": "Audit"
+  },
+  "cancel": "Cancel",
+  "filters": {
+    "label": "Filters",
+    "any": "Any",
+    "clear": "Clear filters",
+    "picked": "{filter}: {value}",
+    "status": "Status",
+    "role": "Role"
+  },
+  "status": {
+    "active": "Active",
+    "disabled": "Disabled",
+    "locked": "Locked",
+    "deleted": "Deleted"
+  },
+  "systemRoles": {
+    "admin": "Instance admin",
+    "user": "User"
+  },
+  "roles": {
+    "viewer": "Viewer",
+    "editor": "Editor",
+    "releaser": "Release manager",
+    "developer": "Developer",
+    "admin": "Project admin"
+  },
+  "outcomes": {
+    "succeeded": "Succeeded",
+    "partly": "Partly succeeded",
+    "failed": "Failed",
+    "skipped": "Skipped"
+  },
+  "weekdays": {
+    "mon": "Monday",
+    "tue": "Tuesday",
+    "wed": "Wednesday",
+    "thu": "Thursday",
+    "fri": "Friday",
+    "sat": "Saturday",
+    "sun": "Sunday"
+  },
+  "schedule": {
+    "hourly": "Every hour at :{minute} ({zone})",
+    "daily": "Every day at {time} ({zone})",
+    "weekly": "Every {day} at {time} ({zone})",
+    "monthly": "On the 1st of every month at {time} ({zone})"
+  },
+  "users": {
+    "title": "Users",
+    "subtitle": "Everyone who can sign in to this instance.",
+    "count": "{count, plural, one {# user} other {# users}}",
+    "new": "New user",
+    "search": "Search by name, username or email",
+    "showDeleted": "Show deleted",
+    "table": "Users",
+    "empty": "No users match.",
+    "emptyHint": "Try another name, or clear the filters.",
+    "error": "The users could not be loaded.",
+    "never": "Never",
+    "passwordPending": "Password change pending",
+    "columns": {
+      "user": "User",
+      "email": "Email",
+      "role": "Role",
+      "status": "Status",
+      "lastSignIn": "Last sign-in",
+      "projects": "Projects",
+      "actions": "Actions"
+    },
+    "menu": {
+      "label": "Actions for {name}",
+      "edit": "Edit user",
+      "signOut": "Sign out everywhere"
+    }
+  },
+  "newUser": {
+    "title": "New user",
+    "username": "Username",
+    "usernameHint": "Lower case letters, digits, dots, dashes and underscores. At least 3 characters.",
+    "usernameRequired": "Enter a username.",
+    "usernameFormat": "Use at least 3 lower case letters, digits, dots, dashes or underscores.",
+    "usernameTaken": "That username is taken.",
+    "displayName": "Display name",
+    "displayNameRequired": "Enter a display name.",
+    "email": "Email",
+    "emailInvalid": "Enter a valid email address.",
+    "role": "Role",
+    "roleHint": "Instance admins manage users, projects and jobs everywhere. Rights inside a project are set per project.",
+    "submit": "Create user",
+    "created": "“{name}” was created."
+  },
+  "password": {
+    "label": "Password",
+    "generate": "Generate a one-time password",
+    "generateHint": "You see it once and pass it on. They choose their own password when they sign in.",
+    "set": "Set a password",
+    "setHint": "At least {min} characters. Tell them in a safe way.",
+    "new": "New password",
+    "tooShort": "Use at least {min} characters.",
+    "issuedTitle": "One-time password",
+    "issuedLead": "Give this password to {name}. They must choose a new one when they first sign in.",
+    "issuedLabel": "One-time password",
+    "issuedOnce": "This is the only time it is shown. Copy it now.",
+    "done": "Done"
+  },
+  "reset": {
+    "title": "Reset the password of {name}",
+    "lead": "{name} is signed out everywhere and must choose a new password at the next sign-in.",
+    "submit": "Reset password",
+    "done": "The password of {name} was reset."
+  },
+  "detail": {
+    "profile": "Profile",
+    "account": "Account",
+    "save": "Save",
+    "discard": "Discard",
+    "saved": "The profile was saved.",
+    "notSaved": "The profile could not be saved.",
+    "displayNameRequired": "Enter a display name.",
+    "deletedBanner": "This user was deleted. They cannot sign in, and their name stays in the audit log.",
+    "menu": {
+      "reset": "Reset password…",
+      "signOut": "Sign out everywhere",
+      "makeAdmin": "Make instance admin",
+      "removeAdmin": "Remove instance admin",
+      "delete": "Delete user"
+    },
+    "status": {
+      "disable": "Disable",
+      "enable": "Enable",
+      "unlock": "Unlock",
+      "disableDone": "{name} was disabled and can no longer sign in.",
+      "enableDone": "{name} was enabled.",
+      "unlockDone": "{name} was unlocked."
+    },
+    "signOutTitle": "Sign {name} out everywhere?",
+    "signOutMessage": "Every session of this user ends. They can sign in again.",
+    "signedOut": "{name} was signed out everywhere.",
+    "makeAdminTitle": "Make {name} an instance admin?",
+    "makeAdminMessage": "Instance admins manage all users, projects and jobs.",
+    "madeAdmin": "{name} is now an instance admin.",
+    "removeAdminTitle": "Remove instance admin rights from {name}?",
+    "removeAdminMessage": "They keep their rights in their projects.",
+    "removedAdmin": "{name} is no longer an instance admin.",
+    "deleteTitle": "Delete {name}?",
+    "deleteMessage": "{name} can no longer sign in and loses all project memberships. Their name stays in the audit log.",
+    "deleted": "{name} was deleted.",
+    "facts": {
+      "role": "Role",
+      "created": "Created",
+      "createdAgo": "{count, plural, =0 {Today} one {# day ago} other {# days ago}}",
+      "password": "Password",
+      "passwordPending": "Must choose a new password at the next sign-in",
+      "passwordSet": "Set by the user"
+    },
+    "memberships": {
+      "title": "Project memberships",
+      "description": "What this user can do in each project.",
+      "table": "Project memberships",
+      "project": "Project",
+      "role": "Role",
+      "roleOf": "Role in {name}",
+      "remove": "Remove",
+      "removeFrom": "Remove from {name}",
+      "removed": "Removed from {name}.",
+      "added": "Added to {name}.",
+      "empty": "Not a member of any project.",
+      "add": "Add to a project",
+      "pick": "Add to project…",
+      "addButton": "Add"
+    }
+  },
+  "projects": {
+    "title": "Projects",
+    "subtitle": "Every project on this instance.",
+    "count": "{count, plural, one {# project} other {# projects}}",
+    "search": "Search by name, key or description",
+    "showArchived": "Show archived",
+    "table": "Projects",
+    "empty": "No projects match.",
+    "emptyHint": "Try another name, or clear the filters.",
+    "error": "The projects could not be loaded.",
+    "opens": "This opens “{name}”.",
+    "archiveTitle": "Archive {name}?",
+    "archiveMessage": "People can still read an archived project, but nobody can change it. You can unarchive it at any time.",
+    "archived": "{name} was archived.",
+    "unarchived": "{name} was unarchived.",
+    "columns": {
+      "project": "Project",
+      "members": "Members",
+      "lastChange": "Last change",
+      "status": "Status",
+      "actions": "Actions",
+      "description": "Description"
+    },
+    "status": {
+      "active": "Active",
+      "archived": "Archived"
+    },
+    "menu": {
+      "label": "Actions for {name}",
+      "open": "Open project",
+      "archive": "Archive",
+      "unarchive": "Unarchive",
+      "edit": "Edit project…"
+    },
+    "new": "New project"
+  },
+  "jobs": {
+    "title": "Jobs",
+    "subtitle": "Housekeeping jobs of the whole instance. Times are shown in your time zone.",
+    "count": "{count, plural, one {# job} other {# jobs}}",
+    "table": "Jobs",
+    "empty": "There are no jobs.",
+    "error": "The jobs could not be loaded.",
+    "orphaned": "No longer installed",
+    "orphanedHint": "Its code is gone: it is kept for its run history and cannot be changed or run.",
+    "on": "On",
+    "off": "Off",
+    "enable": "Run “{name}” on its schedule",
+    "enabled": "“{name}” will run on its schedule.",
+    "disabled": "“{name}” will not run until you turn it on.",
+    "cron": "Cron: {cron}",
+    "notScheduled": "Not scheduled",
+    "neverRun": "Never run",
+    "dryRun": "Dry run",
+    "columns": {
+      "job": "Job",
+      "enabled": "Enabled",
+      "schedule": "Schedule",
+      "next": "Next run",
+      "last": "Last run",
+      "actions": "Actions"
+    },
+    "menu": {
+      "label": "Actions for {name}",
+      "edit": "Edit schedule",
+      "run": "Run now"
+    },
+    "runStarted": "“{name}” started."
+  },
+  "job": {
+    "runNow": "Run now",
+    "dryRun": "Dry run",
+    "dryRunHint": "Shows what would change without changing anything.",
+    "runDone": "“{name}” ran.",
+    "dryRunDone": "Dry run of “{name}” finished. Nothing was changed.",
+    "settings": "Schedule",
+    "settingsHint": "When this job runs by itself.",
+    "enabled": "Run on this schedule",
+    "frequency": "How often",
+    "frequencies": {
+      "hourly": "Every hour",
+      "daily": "Every day",
+      "weekly": "Every week",
+      "monthly": "Every month"
+    },
+    "weekday": "Day of the week",
+    "time": "Time",
+    "minute": "Minute of the hour",
+    "minuteHint": "Only the minutes count, for example 15 runs at :15.",
+    "timeInvalid": "Enter a time, for example 03:00.",
+    "zone": "Time zone",
+    "zoneHint": "The schedule is read in this zone.",
+    "runs": "Runs:",
+    "saved": "The schedule was saved.",
+    "history": "History",
+    "historyHint": "The runs of this job, newest first. A row shows its report.",
+    "historyTable": "Runs of this job",
+    "historyEmpty": "This job has not run yet.",
+    "historyError": "The history could not be loaded.",
+    "runLabel": "Run: {outcome}",
+    "bySchedule": "Schedule",
+    "triggers": {
+      "schedule": "Scheduled",
+      "manual": "Manual"
+    },
+    "columns": {
+      "started": "Started",
+      "trigger": "Trigger",
+      "outcome": "Outcome",
+      "duration": "Duration",
+      "affected": "Affected",
+      "freed": "Freed",
+      "by": "Started by"
+    },
+    "seconds": "{s} s",
+    "minutes": "{m} min {s} s",
+    "mb": "{n} MB",
+    "report": {
+      "title": "Run report",
+      "checked": "Checked",
+      "changed": "Changed",
+      "problems": "Problems found",
+      "close": "Close"
+    }
+  },
+  "audit": {
+    "title": "Audit",
+    "subtitle": "Who did what, when. Entries cannot be changed.",
+    "count": "{count, plural, one {# entry} other {# entries}}",
+    "table": "Audit log",
+    "empty": "No entries match.",
+    "emptyHint": "Try other actions or a wider date range, or clear the filters.",
+    "error": "The audit log could not be loaded.",
+    "system": "System",
+    "actionsLabel": "Actions",
+    "actionsPlaceholder": "Any action",
+    "userLabel": "User",
+    "userPlaceholder": "Any user",
+    "projectLabel": "Project",
+    "allProjects": "All projects",
+    "range": "Date range",
+    "from": "From",
+    "to": "To",
+    "columns": {
+      "time": "When",
+      "user": "User",
+      "action": "Action",
+      "target": "Target",
+      "project": "Project",
+      "details": "Details"
+    },
+    "actions": {
+      "signedIn": "Signed in",
+      "signInFailed": "Sign-in failed",
+      "passwordChanged": "Changed password",
+      "userCreated": "Created user",
+      "userDisabled": "Disabled user",
+      "userEnabled": "Enabled user",
+      "passwordReset": "Reset password",
+      "memberAdded": "Added member",
+      "projectCreated": "Created project",
+      "projectArchived": "Archived project",
+      "pageReleased": "Released page",
+      "buildStarted": "Started build",
+      "jobRun": "Ran job"
+    }
+  },
+  "newProject": {
+    "title": "New project",
+    "key": "Project key",
+    "keyHint": "Lower case letters, digits and dashes, starting with a letter (2–32 characters). It is part of every address of the project and cannot be changed later.",
+    "keyPlaceholder": "lumen",
+    "keyLower": "Use lower case letters only.",
+    "keyFormat": "Start with a letter, then use lower case letters, digits or dashes (2–32 characters).",
+    "keyTaken": "That key is taken.",
+    "name": "Name",
+    "description": "Description",
+    "descriptionHint": "Optional. Shown in the project list.",
+    "submit": "Create project",
+    "created": "“{name}” was created."
+  },
+  "editProject": {
+    "title": "Edit {name}",
+    "keyHint": "The key is part of every address of the project and cannot be changed.",
+    "submit": "Save",
+    "saved": "“{name}” was saved."
+  }
+}

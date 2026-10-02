@@ -1,0 +1,17 @@
+<sf-dialog size="md" [title]="editing() ? t('editProject.title', { name: project()!.name }) : t('newProject.title')" (closed)="closed.emit()">
+  <form class="dialog__form" (submit)="$event.preventDefault(); submit()">
+    <sf-field [label]="t('newProject.key')" [hint]="editing() ? t('editProject.keyHint') : t('newProject.keyHint')" required [error]="keyError()">
+      <sf-input monospace autocomplete="off" [spellcheck]="false" [readonly]="editing()" [value]="key()" [placeholder]="t('newProject.keyPlaceholder')" (valueChange)="key.set($event)" />
+    </sf-field>
+    <sf-field [label]="t('newProject.name')" required>
+      <sf-input autocomplete="off" [value]="name()" (valueChange)="name.set($event)" />
+    </sf-field>
+    <sf-field [label]="t('newProject.description')" [hint]="t('newProject.descriptionHint')">
+      <sf-textarea [rows]="3" [value]="description()" (valueChange)="description.set($event)" />
+    </sf-field>
+  </form>
+  <ng-container sfDialogFooter>
+    <sf-button variant="ghost" (click)="closed.emit()">{{ t('cancel') }}</sf-button>
+    <sf-button [disabled]="!valid()" (click)="submit()">{{ editing() ? t('editProject.submit') : t('newProject.submit') }}</sf-button>
+  </ng-container>
+</sf-dialog>

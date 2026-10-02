@@ -97,7 +97,9 @@ every screen. Screen migration starts only after the style guide (M35.9) is sign
 - [x] M35.15 recents and favorites
   - Design signed off 2026-10-02 (gate round 5, decisions 57–60). Review: see `35-m35-ui-ux-overhaul/015-recents-favorites.md`
     (261 test files / 2,242 tests, build + lint green, checked in Chrome). Open: tree nodes and row menus come with the screen tasks.
-- [ ] M35.16 login, account, admin
+- [x] M35.16 login, account, admin
+  - Design signed off 2026-10-02 (gate round 6, decisions 61–71). Review: see `35-m35-ui-ux-overhaul/016-login-account-admin.md`
+    (269 test files / 2,368 tests, build + lint green). Open: job schedule phrases still English helpers.
 - [ ] M35.17 content form and editors
 - [ ] M35.18 pages
 - [ ] M35.19 media

@@ -1,0 +1,14 @@
+.dialog__form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sf-space-4);
+}
+
+.dialog__lead {
+  margin: 0;
+  color: var(--sf-text-muted);
+}
+
+.dialog__otp {
+  align-self: flex-start;
+}

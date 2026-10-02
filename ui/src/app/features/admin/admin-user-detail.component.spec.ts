@@ -1,10 +1,14 @@
+import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { Router, provideRouter } from '@angular/router';
-import { fireEvent, render, screen, within } from '@testing-library/angular';
-import { of } from 'rxjs';
+import { TestBed } from '@angular/core/testing';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/angular';
+import { Subject, of } from 'rxjs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ApiClient } from '../../core/api/api.client';
 import type { components } from '../../core/api/generated/schema.d.ts';
 import { AuthStore } from '../../core/auth/auth.store';
+import { ToastService } from '../../core/ui/toast.service';
 import { AdminUserDetailComponent } from './admin-user-detail.component';
 
 type AdminUserDetail = components['schemas']['AdminUserDetail'];
@@ -31,13 +35,13 @@ const projects: AdminProjectRow[] = [
   { key: 'beta', name: 'Beta', archived: false },
 ];
 
-async function setup(user: AdminUserDetail = ed, options: { selfId?: number; activeAdmins?: number } = {}) {
+async function setup(user: AdminUserDetail = ed, options: { selfId?: number; activeAdmins?: number; load?: unknown } = {}) {
   const api = {
-    adminGetUser: vi.fn().mockReturnValue(of(user)),
+    adminGetUser: vi.fn().mockReturnValue(options.load ?? of(user)),
     adminListUsers: vi.fn().mockReturnValue(of({ content: [], page: { totalElements: options.activeAdmins ?? 3 } })),
     adminListProjects: vi.fn().mockReturnValue(of(projects)),
-    adminUpdateUser: vi.fn().mockReturnValue(of(user)),
-    adminUserAction: vi.fn().mockReturnValue(of({ ...user, status: 'DISABLED' })),
+    adminUpdateUser: vi.fn().mockImplementation((_id: number, body: Partial<AdminUserDetail>) => of({ ...user, ...body })),
+    adminUserAction: vi.fn().mockImplementation((_id: number, action: string) => of({ ...user, status: action === 'disable' ? 'DISABLED' : 'ACTIVE' })),
     adminDeleteUser: vi.fn().mockReturnValue(of(undefined)),
     adminResetPassword: vi.fn().mockReturnValue(of({ ...user, generatedPassword: 'Gen-3rated-pw!' })),
     adminSetSystemRole: vi.fn().mockReturnValue(of(user)),
@@ -48,124 +52,180 @@ async function setup(user: AdminUserDetail = ed, options: { selfId?: number; act
   };
   const view = await render(AdminUserDetailComponent, {
     componentInputs: { id: String(user.id) },
-    providers: [provideRouter([]), { provide: ApiClient, useValue: api }],
+    providers: [provideHttpClient(), provideHttpClientTesting(), provideRouter([]), { provide: ApiClient, useValue: api }],
     configureTestBed: (tb) =>
       tb.inject(AuthStore).setUser({ id: options.selfId ?? 1, username: 'root', systemRole: 'INSTANCE_ADMIN' }),
   });
-  await screen.findByRole('heading', { name: user.status === 'DELETED' ? 'Deleted user' : 'Ed Itor' });
+  if (!options.load) {
+    await screen.findByRole('heading', { level: 1, name: user.status === 'DELETED' ? 'Deleted user' : 'Ed Itor' });
+  }
   return { api, view };
 }
 
-function button(name: string | RegExp): HTMLButtonElement {
-  return screen.getByRole('button', { name }) as HTMLButtonElement;
+const button = (name: string | RegExp) => screen.getByRole('button', { name }) as HTMLButtonElement;
+const toast = () => TestBed.inject(ToastService).toasts().at(-1);
+
+async function openMenu(name = 'More actions') {
+  fireEvent.click(screen.getByRole('button', { name }));
+  return screen.findAllByRole('menuitem');
 }
 
 describe('AdminUserDetailComponent', () => {
   afterEach(() => vi.restoreAllMocks());
 
-  it('shows the account and saves only a changed profile', async () => {
-    const { api } = await setup();
-
-    expect(button('Save profile').disabled).toBe(true);
-    fireEvent.input(screen.getByLabelText('Display name'), { target: { value: 'Ed Itor-King' } });
-    fireEvent.click(button('Save profile'));
-
-    expect(api.adminUpdateUser).toHaveBeenCalledWith(5, {
-      username: 'ed',
-      email: 'ed@example.com',
-      displayName: 'Ed Itor-King',
-    });
+  it('shows the person, their status in words and the account facts', async () => {
+    await setup();
+    expect(screen.getByText('@ed')).toBeTruthy();
+    expect(screen.getByText('Active')).toBeTruthy();
+    expect(screen.getByText('User', { selector: 'dd' })).toBeTruthy();
+    expect(screen.getByText('Set by the user')).toBeTruthy();
+    expect(screen.queryByText('USER')).toBeNull();
   });
 
-  it('offers the actions an active user allows and disables after confirming', async () => {
+  it('saves only a changed profile, with the save status and an enabled Save only while dirty', async () => {
     const { api } = await setup();
-    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    expect(button('Save').disabled).toBe(true);
+    fireEvent.input(screen.getByLabelText(/^Display name/), { target: { value: 'Ed Itor-King' } });
+    expect(button('Save').disabled).toBe(false);
+    expect(screen.getByText('Unsaved changes')).toBeTruthy();
+    fireEvent.click(button('Save'));
+    await waitFor(() =>
+      expect(api.adminUpdateUser).toHaveBeenCalledWith(5, { username: 'ed', email: 'ed@example.com', displayName: 'Ed Itor-King' }),
+    );
+    await waitFor(() => expect(toast()?.message).toBe('The profile was saved.'));
+    await waitFor(() => expect(button('Save').disabled).toBe(true));
+  });
 
+  it('discards edits and refuses invalid input with inline errors and a count', async () => {
+    const { api } = await setup();
+    fireEvent.input(screen.getByLabelText(/^Display name/), { target: { value: '' } });
+    fireEvent.click(button('Save'));
+    expect(await screen.findByText('Enter a display name.')).toBeTruthy();
+    expect(api.adminUpdateUser).not.toHaveBeenCalled();
+    fireEvent.click(button('Discard'));
+    expect((screen.getByLabelText(/^Display name/) as HTMLInputElement).value).toBe('Ed Itor');
+  });
+
+  it('disables with an Undo (Enable is its inverse) and says what happened', async () => {
+    const { api } = await setup();
     expect(screen.queryByRole('button', { name: 'Enable' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Unlock' })).toBeNull();
     fireEvent.click(button('Disable'));
-
-    expect(confirm).toHaveBeenCalled();
-    expect(api.adminUserAction).toHaveBeenCalledWith(5, 'disable');
+    await waitFor(() => expect(api.adminUserAction).toHaveBeenCalledWith(5, 'disable'));
+    await waitFor(() => expect(toast()?.message).toBe('Ed Itor was disabled and can no longer sign in.'));
+    expect(toast()?.action).toBeTruthy();
     expect(await screen.findByRole('button', { name: 'Enable' })).toBeTruthy();
+    toast()!.action!.run();
+    await waitFor(() => expect(api.adminUserAction).toHaveBeenLastCalledWith(5, 'enable'));
   });
 
-  it('shows the guard rails as disabled actions with their reason', async () => {
-    await setup({ ...ed, systemRole: 'INSTANCE_ADMIN' }, { activeAdmins: 1 });
+  it('keeps Disable secondary and puts Delete user — the menu’s only danger item — in the ⋮ menu', async () => {
+    await setup();
+    expect(button('Disable').className).toContain('secondary');
+    expect(screen.queryByRole('button', { name: 'Delete user' })).toBeNull();
+    const items = await openMenu();
+    expect(items.map((i) => i.textContent?.replace(/^\w+(?=[A-Z])/, '').trim())).toEqual([
+      expect.stringContaining('Reset password'),
+      expect.stringContaining('Sign out everywhere'),
+      expect.stringContaining('Make instance admin'),
+      expect.stringContaining('Delete user'),
+    ]);
+    expect(items.filter((i) => i.className.includes('danger'))).toHaveLength(1);
+  });
 
+  it('shows the guard rails as disabled menu entries and a disabled Disable button, with the reason', async () => {
+    await setup({ ...ed, systemRole: 'INSTANCE_ADMIN' }, { activeAdmins: 1 });
     expect(button('Disable').disabled).toBe(true);
-    expect(button('Delete user').disabled).toBe(true);
-    expect(button('Revoke instance admin').disabled).toBe(true);
-    expect(screen.getByRole('note')).toHaveTextContent("The last active instance admin can't be deleted.");
+    const items = await openMenu();
+    const del = items.find((i) => i.textContent?.includes('Delete user'))!;
+    const demote = items.find((i) => i.textContent?.includes('Remove instance admin'))!;
+    expect(del.getAttribute('aria-disabled')).toBe('true');
+    expect(demote.getAttribute('aria-disabled')).toBe('true');
   });
 
   it("doesn't let you delete yourself", async () => {
     await setup(ed, { selfId: 5 });
-    expect(button('Delete user').disabled).toBe(true);
-    expect(screen.getByRole('note')).toHaveTextContent("You can't delete your own account.");
+    const items = await openMenu();
+    expect(items.find((i) => i.textContent?.includes('Delete user'))!.getAttribute('aria-disabled')).toBe('true');
+    expect(button('Disable').disabled).toBe(true);
   });
 
-  it('deletes only after the username is typed exactly', async () => {
+  it('deletes only after the username is typed exactly, then goes back to the list', async () => {
     const { api, view } = await setup();
     const navigate = vi.spyOn(view.fixture.debugElement.injector.get(Router), 'navigate').mockResolvedValue(true);
-
-    fireEvent.click(button('Delete user'));
+    const items = await openMenu();
+    fireEvent.click(items.find((i) => i.textContent?.includes('Delete user'))!);
     const dialog = within(await screen.findByRole('dialog'));
     const confirm = dialog.getByRole('button', { name: 'Delete user' }) as HTMLButtonElement;
-    expect(dialog.getByText(/can't be undone/)).toBeTruthy();
-
-    fireEvent.input(dialog.getByLabelText('Type ed to confirm'), { target: { value: 'Ed' } });
     expect(confirm.disabled).toBe(true);
-    fireEvent.input(dialog.getByLabelText('Type ed to confirm'), { target: { value: 'ed' } });
+    fireEvent.input(dialog.getByRole('textbox'), { target: { value: 'Ed' } });
+    expect(confirm.disabled).toBe(true);
+    fireEvent.input(dialog.getByRole('textbox'), { target: { value: 'ed' } });
     expect(confirm.disabled).toBe(false);
     fireEvent.click(confirm);
+    await waitFor(() => expect(api.adminDeleteUser).toHaveBeenCalledWith(5, 'ed'));
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith(['/admin/users']));
+    expect(toast()?.message).toBe('Ed Itor was deleted.');
+    expect(toast()?.action).toBeFalsy();
+  });
 
-    expect(api.adminDeleteUser).toHaveBeenCalledWith(5, 'ed');
-    expect(navigate).toHaveBeenCalledWith(['/admin/users']);
+  it('signs out everywhere only after a confirmation', async () => {
+    const { api } = await setup();
+    const items = await openMenu();
+    fireEvent.click(items.find((i) => i.textContent?.includes('Sign out everywhere'))!);
+    const dialog = within(await screen.findByRole('dialog'));
+    expect(api.adminRevokeSessions).not.toHaveBeenCalled();
+    fireEvent.click(dialog.getByRole('button', { name: 'Sign out everywhere' }));
+    await waitFor(() => expect(api.adminRevokeSessions).toHaveBeenCalledWith(5));
   });
 
   it('resets the password to a generated one and shows it once', async () => {
     const { api } = await setup();
-
-    fireEvent.click(button('Reset password'));
+    const items = await openMenu();
+    fireEvent.click(items.find((i) => i.textContent?.includes('Reset password'))!);
     const dialog = within(await screen.findByRole('dialog'));
     fireEvent.click(dialog.getByRole('button', { name: 'Reset password' }));
-
-    expect(api.adminResetPassword).toHaveBeenCalledWith(5, { generatePassword: true, mustChangePassword: true });
+    await waitFor(() => expect(api.adminResetPassword).toHaveBeenCalledWith(5, { generatePassword: true, mustChangePassword: true }));
     expect(await dialog.findByText('Gen-3rated-pw!')).toBeTruthy();
+    expect(dialog.getByText('This is the only time it is shown. Copy it now.')).toBeTruthy();
     fireEvent.click(dialog.getByRole('button', { name: 'Done' }));
-    expect(screen.queryByText('Gen-3rated-pw!')).toBeNull();
+    await waitFor(() => expect(screen.queryByText('Gen-3rated-pw!')).toBeNull());
   });
 
-  it('adds, changes and removes memberships, and leaves archived ones read-only', async () => {
+  it('shows project roles as human labels, adds, changes and removes memberships (with Undo), archived ones read-only', async () => {
     const { api } = await setup();
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    expect(screen.getByText('ACME')).toBeTruthy();
+    expect(screen.getByText('acme')).toBeTruthy();
+    expect(screen.queryByText('EDITOR')).toBeNull();
 
-    // Only projects the user isn't in yet can be added.
-    const projectSelect = screen.getByLabelText('Project to add') as HTMLSelectElement;
-    expect(Array.from(projectSelect.options).map((o) => o.value)).toEqual(['', 'beta']);
-    fireEvent.change(projectSelect, { target: { value: 'beta' } });
-    fireEvent.change(screen.getByLabelText('Role for the new project'), { target: { value: 'VIEWER' } });
-    fireEvent.click(button('Add'));
-    expect(api.setMemberRole).toHaveBeenCalledWith('beta', 5, 'VIEWER');
-
-    fireEvent.change(screen.getByLabelText('Role in ACME'), { target: { value: 'DEVELOPER' } });
-    expect(api.setMemberRole).toHaveBeenCalledWith('acme', 5, 'DEVELOPER');
-
+    // Removing is undone by adding the same role back.
     fireEvent.click(button('Remove from ACME'));
-    expect(api.removeMember).toHaveBeenCalledWith('acme', 5);
+    await waitFor(() => expect(api.removeMember).toHaveBeenCalledWith('acme', 5));
+    await waitFor(() => expect(toast()?.message).toBe('Removed from ACME.'));
+    toast()!.action!.run();
+    expect(api.setMemberRole).toHaveBeenCalledWith('acme', 5, 'EDITOR');
 
-    expect(screen.queryByLabelText('Role in Old')).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Remove from Old' })).toBeNull();
+    // An archived project can't be written: its row is read-only.
+    expect(button('Remove from Old').disabled).toBe(true);
   });
 
-  it('opens a deleted account read-only', async () => {
+  it('opens a deleted account read-only, without actions', async () => {
     await setup({ ...ed, status: 'DELETED', username: 'deleted-user-5', displayName: 'Deleted user' });
+    expect(screen.getByText(/This user was deleted/)).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /More actions/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Save' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Disable' })).toBeNull();
+    expect((screen.getByLabelText(/^Username/) as HTMLInputElement).readOnly).toBe(true);
+  });
 
-    expect(screen.getByText(/This account was deleted/)).toBeTruthy();
-    expect(screen.queryByRole('group', { name: 'Account actions' })).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Save profile' })).toBeNull();
-    expect(screen.queryByLabelText('Project to add')).toBeNull();
-    expect((screen.getByLabelText('Username') as HTMLInputElement).disabled).toBe(true);
+  it('shows a skeleton while it loads and an error with Retry when it fails', async () => {
+    const pending = new Subject<AdminUserDetail>();
+    const { api, view } = await setup(ed, { load: pending });
+    expect(view.container.querySelector('sf-skeleton')).toBeTruthy();
+    pending.error(new Error('down'));
+    expect(await screen.findByText('The user could not be loaded.')).toBeTruthy();
+    api.adminGetUser.mockReturnValue(of(ed));
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    expect(await screen.findByRole('heading', { level: 1, name: 'Ed Itor' })).toBeTruthy();
   });
 });

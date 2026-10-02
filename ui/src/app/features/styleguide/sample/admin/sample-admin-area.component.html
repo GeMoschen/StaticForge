@@ -1,0 +1,22 @@
+@switch (sample.adminSection()) {
+  @case ('users') {
+    @if (userId(); as id) {
+      <sf-sample-admin-user-detail class="admin__screen" [userId]="id" />
+    } @else {
+      <sf-sample-admin-users class="admin__screen" />
+    }
+  }
+  @case ('projects') {
+    <sf-sample-admin-projects class="admin__screen" />
+  }
+  @case ('jobs') {
+    @if (jobKey(); as key) {
+      <sf-sample-admin-job-detail class="admin__screen" [jobKey]="key" />
+    } @else {
+      <sf-sample-admin-jobs class="admin__screen" />
+    }
+  }
+  @case ('audit') {
+    <sf-sample-admin-audit class="admin__screen" />
+  }
+}

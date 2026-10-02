@@ -1,0 +1,29 @@
+@use 'admin-screen';
+
+.detail__save {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--sf-space-3);
+}
+
+.detail__members {
+  max-height: 22rem;
+}
+
+.detail__role {
+  min-width: 11rem;
+}
+
+.detail__add {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sf-space-2);
+  margin-block-start: var(--sf-space-3);
+}
+
+.detail__add-project {
+  min-width: 14rem;
+}

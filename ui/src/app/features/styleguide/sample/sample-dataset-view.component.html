@@ -37,6 +37,7 @@
       <section class="overview__fields" aria-labelledby="sample-ds-fields">
         <h2 class="overview__title" id="sample-ds-fields">{{ 'styleguide.sample.dataset.fields' | transloco }}</h2>
         <sf-data-table
+  [rowsOpenable]="false"
           class="overview__table"
           [columns]="columns()"
           [rows]="ds.fields"

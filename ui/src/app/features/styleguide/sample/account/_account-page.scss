@@ -1,0 +1,21 @@
+// Shared frame of an account page (M35.16): the page header at the top, the rest scrolls. `@use`d by each page.
+@use '../settings/settings-page';
+
+.page__note {
+  max-inline-size: 40rem;
+  margin: 0;
+  color: var(--sf-text-muted);
+  font-size: var(--sf-fs-13);
+  line-height: var(--sf-lh-13);
+}
+
+.password {
+  display: flex;
+  align-items: center;
+  gap: var(--sf-space-1);
+}
+
+.password__input {
+  flex: 1 1 auto;
+  min-width: 0;
+}

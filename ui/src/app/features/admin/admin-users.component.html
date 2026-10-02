@@ -1,82 +1,91 @@
-<div class="toolbar">
-  <input
-    class="input"
-    type="search"
-    placeholder="Search username, name or email…"
-    aria-label="Search users"
-    (input)="onSearch($any($event.target).value)"
+<sf-page-header [title]="'admin.users.title' | transloco" [subtitle]="'admin.users.subtitle' | transloco">
+  <sf-badge sfPageHeaderStatus [label]="'admin.users.count' | transloco: { count: total() }" />
+  <ng-container sfPageHeaderActions>
+    <sf-button icon="person_add" (click)="creating.set(true)">{{ 'admin.users.new' | transloco }}</sf-button>
+  </ng-container>
+</sf-page-header>
+
+<div class="screen__bar" role="search" [attr.aria-label]="'admin.users.filters.label' | transloco">
+  <sf-search-input
+    class="screen__search"
+    [value]="filter().q"
+    [placeholder]="'admin.users.search' | transloco"
+    [aria-label]="'admin.users.search' | transloco"
+    (valueChange)="setSearch($event)"
   />
-  <select class="select" aria-label="Status" (change)="setStatus($any($event.target).value)">
-    <option value="" [selected]="status() === ''">Any status</option>
-    @for (s of statuses; track s.value) {
-      <option [value]="s.value" [selected]="status() === s.value">{{ s.label }}</option>
-    }
-  </select>
-  <select class="select" aria-label="Role" (change)="setRole($any($event.target).value)">
-    <option value="" [selected]="systemRole() === ''">Any role</option>
-    <option value="INSTANCE_ADMIN" [selected]="systemRole() === 'INSTANCE_ADMIN'">Instance admins</option>
-    <option value="USER" [selected]="systemRole() === 'USER'">Users</option>
-  </select>
-  <label class="checkbox-label">
-    <input type="checkbox" [checked]="includeDeleted()" (change)="setIncludeDeleted($any($event.target).checked)" />
-    Show deleted
+  @for (menu of menus(); track menu.id) {
+    <sf-menu variant="secondary" size="md" align="start" [text]="menu.text" [label]="menu.name" [items]="menu.items" />
+  }
+  <label class="screen__switch">
+    <sf-switch [value]="filter().deleted" [aria-label]="'admin.users.showDeleted' | transloco" (valueChange)="setDeleted($event)" />
+    {{ 'admin.users.showDeleted' | transloco }}
   </label>
-  <span class="toolbar__spacer"></span>
-  <sf-button variant="primary" (click)="creating.set(true)">New user</sf-button>
+  @if (filtered()) {
+    <sf-button variant="ghost" size="md" (click)="clear()">{{ 'admin.users.filters.clear' | transloco }}</sf-button>
+  }
 </div>
 
-@if (loading() && rows().length === 0) {
-  <sf-spinner label="Loading users…" />
-} @else {
-  <div class="table sf-table-wrap">
-    <table>
-      <thead>
-        <tr>
-          <th scope="col">User</th>
-          <th scope="col">Email</th>
-          <th scope="col">Status</th>
-          <th scope="col">Last login</th>
-          <th scope="col">Projects</th>
-        </tr>
-      </thead>
-      <tbody>
-        @for (row of rows(); track row.id) {
-          <tr class="row--link" [class.row--muted]="row.status === 'DELETED'" (click)="open(row)">
-            <td>
-              <a class="user-link" [routerLink]="['/admin/users', row.id]" (click)="$event.stopPropagation()">
-                {{ row.displayName || row.username }}
-              </a>
-              <span class="muted">&#64;{{ row.username }}</span>
-              @if (row.systemRole === 'INSTANCE_ADMIN') {
-                <span class="chip chip--signal">Instance admin</span>
-              }
-              @if (row.mustChangePassword) {
-                <span class="chip chip--warn" title="Must set a new password at the next sign-in">Password change pending</span>
-              }
-            </td>
-            <td>{{ row.email }}</td>
-            <td><span [class]="statusChipClass(row.status)">{{ statusLabel(row.status) }}</span></td>
-            <td>{{ row.lastLoginAt ? (row.lastLoginAt | date: 'medium') : 'Never' }}</td>
-            <td>{{ row.projectCount ?? 0 }}</td>
-          </tr>
-        } @empty {
-          <tr>
-            <td colspan="5" class="muted">No users match.</td>
-          </tr>
-        }
-      </tbody>
-    </table>
-  </div>
-
-  @if (meta(); as m) {
-    <div class="pager">
-      <span>{{ m.totalElements ?? 0 }} user(s) · page {{ (m.number ?? 0) + 1 }} of {{ m.totalPages || 1 }}</span>
-      <sf-button variant="ghost" [disabled]="(m.number ?? 0) === 0" (click)="goTo((m.number ?? 0) - 1)">Previous</sf-button>
-      <sf-button variant="ghost" [disabled]="(m.number ?? 0) + 1 >= (m.totalPages ?? 1)" (click)="goTo((m.number ?? 0) + 1)">Next</sf-button>
-    </div>
-  }
-}
+<sf-data-table
+  class="screen__table"
+  twoLine
+  mode="server"
+  paging="infinite"
+  [pageSize]="50"
+  [total]="total()"
+  [loading]="loading()"
+  [error]="failed() ? ('admin.users.error' | transloco) : null"
+  [columnChooser]="false"
+  [columns]="columns()"
+  [rows]="rows()"
+  [rowKey]="rowKey"
+  [rowLabel]="rowLabel"
+  [label]="'admin.users.table' | transloco"
+  [emptyTitle]="'admin.users.empty' | transloco"
+  [emptyDescription]="'admin.users.emptyHint' | transloco"
+  (rowOpen)="open($event)"
+  (loadMore)="loadMore()"
+  (retry)="reload()"
+>
+  <ng-template sfDataTableCell="user" [sfDataTableCellRows]="rows()" let-row>
+    <sf-table-identity [name]="nameOf(row)" [sub]="'@' + row.username" [avatar]="nameOf(row)">
+      @if (row.mustChangePassword) {
+        <sf-badge tone="warning" icon="key" [label]="'admin.users.passwordPending' | transloco" />
+      }
+    </sf-table-identity>
+  </ng-template>
+  <ng-template sfDataTableCell="email" [sfDataTableCellRows]="rows()" let-row>
+    <span class="cell-muted">{{ row.email }}</span>
+  </ng-template>
+  <ng-template sfDataTableCell="role" [sfDataTableCellRows]="rows()" let-row>
+    @if (row.systemRole === 'INSTANCE_ADMIN') {
+      <sf-badge tone="accent" icon="shield_person" [label]="'enum.systemRole.INSTANCE_ADMIN' | transloco" />
+    } @else {
+      <span class="cell-muted">{{ 'enum.systemRole.USER' | transloco }}</span>
+    }
+  </ng-template>
+  <ng-template sfDataTableCell="status" [sfDataTableCellRows]="rows()" let-row>
+    <sf-status size="sm" [tone]="tone(row.status)" [icon]="icon(row.status)" [label]="'enum.userStatus.' + row.status | transloco" />
+  </ng-template>
+  <ng-template sfDataTableCell="lastSignIn" [sfDataTableCellRows]="rows()" let-row>
+    @if (row.lastLoginAt) {
+      <sf-relative-time [value]="row.lastLoginAt" />
+    } @else {
+      <span class="cell-muted">{{ 'admin.users.never' | transloco }}</span>
+    }
+  </ng-template>
+  <ng-template sfDataTableCell="projects" [sfDataTableCellRows]="rows()" let-row>
+    <span class="cell-muted">{{ row.projectCount ?? 0 }}</span>
+  </ng-template>
+  <ng-template sfDataTableCell="actions" [sfDataTableCellRows]="rows()" let-row>
+    <sf-menu
+      size="sm"
+      [label]="'admin.users.menu.label' | transloco: { name: nameOf(row) }"
+      [items]="menuItems()"
+      (itemSelected)="onMenu(row, $event)"
+    />
+  </ng-template>
+</sf-data-table>
 
 @if (creating()) {
-  <sf-admin-create-user-dialog (created)="created($event)" (closed)="creating.set(false)" />
+  <sf-admin-user-dialog mode="create" (created)="created($event)" (closed)="creating.set(false)" />
 }

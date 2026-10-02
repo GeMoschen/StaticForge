@@ -1,283 +1,200 @@
-<a class="back" routerLink="/admin/jobs"><sf-icon name="arrow_back" /> All jobs</a>
-
-@if (loadError()) {
-  <p class="error" role="alert">{{ loadError() }}</p>
+@if (loadError(); as message) {
+  <sf-page-header [title]="t('title')" />
+  <sf-banner tone="danger" live="assertive">
+    {{ message }}
+    <sf-button sfBannerActions variant="secondary" size="sm" (click)="retry()">{{ t('detail.retry') }}</sf-button>
+  </sf-banner>
 } @else if (!job()) {
-  <sf-spinner label="Loading job…" />
+  <sf-skeleton shape="form" [label]="t('detail.loading')" />
 } @else {
   @let j = job()!;
-  <header class="head">
-    <h2 class="head__title">{{ j.name ?? j.key }}</h2>
-    <span class="mono muted">{{ j.key }}</span>
-    <span [class]="j.enabled ? 'chip chip--ok' : 'chip'">{{ j.enabled ? 'Enabled' : 'Disabled' }}</span>
-    @if (j.running) {
-      <span class="chip chip--signal">Running</span>
+  <sf-page-header [title]="j.name ?? j.key ?? ''" [subtitle]="j.description ?? null" [secondaryActions]="moreActions()" (secondaryAction)="onMenu($event)">
+    @if (j.orphaned) {
+      <sf-badge sfPageHeaderStatus tone="neutral" icon="link_off" [label]="t('orphaned')" />
+    } @else if (j.running) {
+      <sf-status sfPageHeaderStatus tone="info" icon="autorenew" [label]="t('running')" />
+    } @else if (j.enabled) {
+      <sf-status sfPageHeaderStatus tone="success" icon="check_circle" [label]="t('on')" />
+    } @else {
+      <sf-status sfPageHeaderStatus tone="neutral" icon="pause_circle" [label]="t('off')" />
     }
-  </header>
-  @if (j.description) {
-    <p class="description">{{ j.description }}</p>
-  }
-  @if (orphaned()) {
-    <p class="notice" role="note">
-      This job is no longer installed: its code is gone. It stays listed for its run history and can't be changed or
-      run.
-    </p>
+    @if (!j.orphaned) {
+      <ng-container sfPageHeaderActions>
+        @if (j.supportsDryRun) {
+          <sf-button variant="secondary" icon="science" [disabled]="!canRun()" [sfTooltip]="t('detail.dryRunHint')" (click)="runNow(true)">
+            {{ t('detail.dryRun') }}
+          </sf-button>
+        }
+        <sf-button variant="secondary" icon="play_arrow" [disabled]="!canRun()" (click)="runNow(false)">{{ t('detail.runNow') }}</sf-button>
+      </ng-container>
+    }
+  </sf-page-header>
+
+  @if (j.orphaned) {
+    <sf-banner tone="info">{{ t('orphanedHint') }}</sf-banner>
   }
 
-  <div class="columns">
-    <section class="panel" aria-labelledby="job-settings-title">
-      <h3 id="job-settings-title" class="panel__title">Schedule and settings</h3>
-      <form class="form" novalidate (submit)="$event.preventDefault(); save()">
+  <div class="screen__scroll">
+    <sf-section [heading]="t('detail.settings')" [description]="t('detail.settingsHint')">
+      <form class="screen__form" novalidate (submit)="$event.preventDefault(); save()">
         @if (conflict()) {
-          <p class="error" role="alert">
-            Someone else changed this job in the meantime. It was reloaded with their changes; make your edits again.
-          </p>
+          <sf-banner tone="warning" live="assertive">{{ t('detail.conflict') }}</sf-banner>
         }
         @if (serverErrors().general.length > 0) {
-          <div role="alert">
-            <ul class="error" aria-label="Problems">
-              @for (message of serverErrors().general; track message) {
-                <li>{{ message }}</li>
-              }
-            </ul>
-          </div>
+          <sf-banner tone="danger" live="assertive" [title]="t('detail.problems')">
+            @for (message of serverErrors().general; track message) {
+              <div>{{ message }}</div>
+            }
+          </sf-banner>
         }
 
-        <label class="checkbox-label">
-          <input
-            type="checkbox"
-            role="switch"
-            [checked]="enabled()"
-            [disabled]="orphaned()"
-            (change)="setEnabled($any($event.target).checked)"
-          />
-          Enabled
-        </label>
-
-        <sf-field label="Schedule (cron)" hint="minute hour day-of-month month day-of-week">
-          <input
-            class="input mono"
-            type="text"
-            autocomplete="off"
-            spellcheck="false"
-            aria-describedby="job-cron-preview job-cron-errors"
-            [attr.aria-invalid]="cronProblem() || serverErrors().cron.length > 0 ? true : null"
-            [disabled]="orphaned()"
-            [value]="cron()"
-            (input)="setCron($any($event.target).value)"
-          />
+        <sf-field [label]="t('detail.enabled')">
+          <sf-switch [value]="enabled()" [disabled]="orphaned()" [aria-label]="t('detail.enabled')" (valueChange)="enabled.set($event)" />
         </sf-field>
-        <div id="job-cron-errors">
-          @if (cronProblem(); as problem) {
-            <p class="field-error">{{ problem }}</p>
-          }
-          @for (message of serverErrors().cron; track message) {
-            <p class="field-error" role="alert">{{ message }}</p>
-          }
-        </div>
-        <p id="job-cron-preview" class="preview" aria-live="polite">{{ cronPreview() }}</p>
 
-        <sf-field label="Time zone of the schedule">
-          <select
-            class="select"
-            aria-describedby="job-zone-errors"
-            [attr.aria-invalid]="zoneProblem() || serverErrors().zone.length > 0 ? true : null"
-            [disabled]="orphaned()"
-            (change)="setZone($any($event.target).value)"
-          >
-            @for (z of zones(); track z) {
-              <option [value]="z" [selected]="z === zone()">{{ z }}</option>
-            }
-          </select>
+        <sf-field [label]="t('detail.cron')" [hint]="t('detail.cronHint')" [error]="cronError()">
+          <sf-input monospace autocomplete="off" [spellcheck]="false" [disabled]="orphaned()" [value]="cron()" (valueChange)="setCron($event)" />
         </sf-field>
-        <div id="job-zone-errors">
-          @if (zoneProblem(); as problem) {
-            <p class="field-error">{{ problem }}</p>
-          }
-          @for (message of serverErrors().zone; track message) {
-            <p class="field-error" role="alert">{{ message }}</p>
-          }
-        </div>
+        <p class="job__preview" aria-live="polite">
+          <span class="job__preview-label">{{ t('detail.preview') }}</span>
+          {{ cronPreview() }}
+        </p>
 
-        <p class="facts">
-          <span class="facts__label">Next run</span>
+        <sf-field [label]="t('detail.zone')" [hint]="t('detail.zoneHint')" [error]="zoneError()">
+          <sf-combobox [options]="zoneChoices()" [disabled]="orphaned()" [value]="zone()" (valueChange)="setZone($event)" />
+        </sf-field>
+
+        <p class="screen__facts job__next">
+          <span class="job__preview-label">{{ t('detail.nextRun') }}</span>
           @if (!j.enabled) {
-            <span>— (disabled)</span>
+            {{ t('detail.nextDisabled') }}
           } @else if (j.nextRunAt) {
             @let next = jobInstant(j.nextRunAt, j.zone);
-            <span>{{ next.viewer }}@if (next.job) { · {{ next.job }}}</span>
+            {{ next.viewer }}@if (next.job) { · {{ next.job }}}
           } @else {
-            <span>—</span>
+            —
           }
           @if (dirty()) {
-            <span class="muted">(as saved; recomputed by the server when you save)</span>
+            <span class="job__preview-label">{{ t('detail.nextAsSaved') }}</span>
           }
         </p>
 
         @if (fields().length > 0) {
-          <fieldset class="settings" [disabled]="orphaned()">
-            <legend class="settings__legend">Job settings</legend>
+          <fieldset class="job__settings" [disabled]="orphaned()">
+            <legend class="job__legend">{{ t('detail.jobSettings') }}</legend>
             @for (field of fields(); track field.key) {
-              @let fieldId = 'job-setting-' + field.key;
               @if (field.kind === 'boolean') {
-                <label class="checkbox-label">
-                  <input
-                    type="checkbox"
-                    [attr.aria-describedby]="fieldId + '-errors'"
-                    [checked]="settings()[field.key] === true"
-                    (change)="setSetting(field.key, $any($event.target).checked)"
+                <sf-field [label]="field.label" [hint]="defaultNote(field) ?? undefined">
+                  <sf-switch
+                    [value]="settings()[field.key] === true"
+                    [aria-label]="field.label"
+                    (valueChange)="setSetting(field.key, $event)"
                   />
-                  {{ field.label }}
-                  @if (field.defaultText !== null) {
-                    <span class="muted">(default: {{ field.defaultText === 'true' ? 'on' : 'off' }})</span>
-                  }
-                </label>
+                </sf-field>
               } @else {
-                <sf-field
-                  [label]="field.label"
-                  [hint]="
-                    (field.kind === 'duration' ? 'ISO-8601 duration (PT24H, PT30M) or 30m, 24h, 365d. ' : '') +
-                    (field.defaultText !== null ? 'Default: ' + field.defaultText + '.' : '')
-                  "
-                >
-                  <input
-                    class="input"
-                    [class.mono]="field.kind === 'duration'"
-                    [type]="field.kind === 'integer' || field.kind === 'number' ? 'number' : 'text'"
-                    [attr.step]="field.kind === 'integer' ? 1 : null"
-                    [attr.inputmode]="field.kind === 'integer' ? 'numeric' : null"
+                <sf-field [label]="field.label" [hint]="fieldHint(field)" [error]="fieldError(field)">
+                  <sf-input
                     autocomplete="off"
-                    spellcheck="false"
-                    [attr.data-setting]="field.key"
-                    [attr.aria-describedby]="fieldId + '-errors'"
-                    [attr.aria-invalid]="settingProblems()[field.key] || settingServerErrors(field.key).length > 0 ? true : null"
-                    [value]="settings()[field.key]"
-                    (input)="setSetting(field.key, $any($event.target).value)"
+                    [spellcheck]="false"
+                    [monospace]="field.kind === 'duration'"
+                    [value]="'' + settings()[field.key]"
+                    (valueChange)="setSetting(field.key, $event)"
                   />
                 </sf-field>
                 @if (field.kind === 'duration' && durationText($any(settings()[field.key]))) {
-                  <p class="muted field-note">= {{ durationText($any(settings()[field.key])) }}</p>
+                  <p class="job__preview">{{ t('detail.durationIs', { text: durationText($any(settings()[field.key])) }) }}</p>
                 }
               }
-              <div [id]="fieldId + '-errors'">
-                @if (settingProblems()[field.key]; as problem) {
-                  <p class="field-error">{{ problem }}</p>
-                }
-                @for (message of settingServerErrors(field.key); track message) {
-                  <p class="field-error" role="alert">{{ message }}</p>
-                }
-              </div>
             }
           </fieldset>
         }
 
         @if (!orphaned()) {
-          <div class="form__actions">
-            <sf-button variant="ghost" [disabled]="resetting() || saving()" (click)="resetToDefaults()">
-              Reset to defaults
-            </sf-button>
-            <span class="form__spacer"></span>
-            <sf-button variant="ghost" [disabled]="!dirty() || saving()" (click)="discard()">Discard</sf-button>
-            <sf-button type="submit" variant="primary" [disabled]="!dirty() || !valid() || saving()">
-              {{ saving() ? 'Saving…' : 'Save' }}
-            </sf-button>
+          <div class="job__save">
+            <sf-save-status [state]="saveState()" [savedAt]="savedAt()" [errorCount]="problemCount()" />
+            <sf-button variant="ghost" [disabled]="!dirty() || saving()" (click)="discard()">{{ t('detail.discard') }}</sf-button>
+            <sf-button type="submit" [disabled]="!dirty() || saving()">{{ t('detail.save') }}</sf-button>
           </div>
         }
       </form>
-    </section>
+    </sf-section>
 
-    <section class="panel" aria-labelledby="job-run-title">
-      <h3 id="job-run-title" class="panel__title">Run</h3>
-      @if (!orphaned()) {
-        <p class="muted">
-          @if (j.supportsDryRun) {
-            A dry run reports what a run would remove and changes nothing.
-          } @else {
-            This job has no dry run.
-          }
-        </p>
-        <div class="actions" role="group" aria-label="Run the job">
-          <sf-button variant="secondary" [disabled]="!canRun()" (click)="runNow(false)">Run now</sf-button>
-          @if (j.supportsDryRun) {
-            <sf-button variant="secondary" [disabled]="!canRun()" (click)="runNow(true)">Dry run</sf-button>
-          }
-        </div>
-      }
-      @if (activeRun(); as run) {
-        <div class="current" aria-live="polite">
+    @if (activeRun(); as run) {
+      <sf-section [heading]="t('detail.current')">
+        <div class="job__current" aria-live="polite">
           @if (!run.finishedAt) {
-            <sf-spinner [label]="(run.dryRun ? 'Dry run' : 'Run') + ' in progress' + (j.progress ? ': ' + j.progress : '…')" />
-            <p class="muted">Started {{ viewerTime(run.startedAt) }}</p>
+            <sf-spinner [label]="(run.dryRun ? t('detail.dryRunInProgress') : t('detail.runInProgress')) + (j.progress ? ': ' + j.progress : '…')" />
+            <p class="cell-muted">{{ t('detail.startedAt', { time: viewerTime(run.startedAt) }) }}</p>
           } @else {
-            <h4 class="current__title">{{ run.dryRun ? 'Dry run' : 'Run' }} finished {{ viewerTime(run.finishedAt) }}</h4>
+            <p class="job__preview">
+              {{ t('detail.finishedAt', { kind: t(run.dryRun ? 'detail.kindDryRun' : 'detail.kindRun'), time: viewerTime(run.finishedAt) }) }}
+            </p>
             <sf-admin-job-run-report [run]="run" />
           }
         </div>
-      } @else if (j.running) {
-        <sf-spinner [label]="'Running' + (j.progress ? ': ' + j.progress : '…')" />
-      }
-    </section>
-  </div>
-
-  <section class="panel" aria-labelledby="job-history-title">
-    <h3 id="job-history-title" class="panel__title">History</h3>
-    @if (runsLoading() && runs().length === 0) {
-      <sf-spinner label="Loading the run history…" />
-    } @else {
-      <div class="table sf-table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th scope="col">Started ({{ viewerZone }})</th>
-              <th scope="col">Trigger</th>
-              <th scope="col">Dry run</th>
-              <th scope="col">Outcome</th>
-              <th scope="col">Duration</th>
-              <th scope="col">Affected</th>
-              <th scope="col">Freed</th>
-              <th scope="col">Started by</th>
-              <th scope="col"><span class="sf-sr-only">Report</span></th>
-            </tr>
-          </thead>
-          <tbody>
-            @for (run of runs(); track run.id) {
-              <tr [attr.data-run]="run.id">
-                <td class="nowrap">{{ viewerTime(run.startedAt) }}</td>
-                <td>{{ triggerLabel(run.trigger) }}</td>
-                <td>{{ run.dryRun ? 'Yes' : 'No' }}</td>
-                <td><span [class]="outcomeChipClass(run.outcome)">{{ outcomeLabel(run.outcome) }}</span></td>
-                <td>{{ runDuration(run.durationMs) }}</td>
-                <td>{{ run.itemsAffected ?? 0 }}</td>
-                <td>{{ (run.bytesFreed ?? 0) | sfFileSize }}</td>
-                <td>{{ run.startedBy ? (run.startedBy.username ?? 'User #' + run.startedBy.id) : 'System' }}</td>
-                <td class="table__actions">
-                  <sf-button variant="ghost" (click)="toggle(run.id)">
-                    {{ expanded().has(run.id!) ? 'Hide report' : 'Report' }}
-                  </sf-button>
-                </td>
-              </tr>
-              @if (expanded().has(run.id!)) {
-                <tr class="detail-row">
-                  <td colspan="9"><sf-admin-job-run-report [run]="run" /></td>
-                </tr>
-              }
-            } @empty {
-              <tr>
-                <td colspan="9" class="muted">No runs yet.</td>
-              </tr>
-            }
-          </tbody>
-        </table>
-      </div>
-      @if (runsMeta(); as m) {
-        @if ((m.totalPages ?? 0) > 1) {
-          <div class="pager">
-            <span>{{ m.totalElements ?? 0 }} runs · page {{ (m.number ?? 0) + 1 }} of {{ m.totalPages || 1 }}</span>
-            <sf-button variant="ghost" [disabled]="(m.number ?? 0) === 0" (click)="goTo((m.number ?? 0) - 1)">Newer</sf-button>
-            <sf-button variant="ghost" [disabled]="(m.number ?? 0) + 1 >= (m.totalPages ?? 1)" (click)="goTo((m.number ?? 0) + 1)">Older</sf-button>
-          </div>
-        }
-      }
+      </sf-section>
+    } @else if (j.running) {
+      <sf-section [heading]="t('detail.current')">
+        <sf-spinner [label]="t('running') + (j.progress ? ': ' + j.progress : '…')" />
+      </sf-section>
     }
-  </section>
+
+    <sf-section [heading]="t('detail.history')" [description]="t('detail.historyHint')">
+      <sf-data-table
+        class="job__history"
+        mode="server"
+        paging="pager"
+        [pageSize]="20"
+        [total]="runsMeta()?.totalElements ?? 0"
+        [columnChooser]="false"
+        [columns]="historyColumns()"
+        [rows]="runs()"
+        [rowKey]="runKey"
+        [rowLabel]="runLabel"
+        [label]="t('detail.historyTable')"
+        [loading]="runsLoading()"
+        [error]="runsFailed() ? t('detail.historyError') : null"
+        [emptyTitle]="t('detail.historyEmpty')"
+        (rowOpen)="report.set($event)"
+        (pageChange)="goTo($event)"
+        (retry)="retryRuns()"
+      >
+        <ng-template sfDataTableCell="started" [sfDataTableCellRows]="runs()" let-row>
+          <span [title]="viewerTime(row.startedAt)"><sf-relative-time [value]="row.startedAt" /></span>
+        </ng-template>
+        <ng-template sfDataTableCell="trigger" [sfDataTableCellRows]="runs()" let-row>
+          <span class="cell-muted">{{ trigger(row.trigger) }}</span>
+        </ng-template>
+        <ng-template sfDataTableCell="outcome" [sfDataTableCellRows]="runs()" let-row>
+          <span class="cell-name">
+            <sf-status size="sm" [tone]="tones[row.outcome ?? '']" [icon]="icons[row.outcome ?? '']" [label]="outcome(row.outcome)" />
+            @if (row.dryRun) {
+              <sf-badge tone="info" [label]="t('dryRun')" />
+            }
+          </span>
+        </ng-template>
+        <ng-template sfDataTableCell="duration" [sfDataTableCellRows]="runs()" let-row>
+          <span class="cell-muted">{{ runDuration(row.durationMs) }}</span>
+        </ng-template>
+        <ng-template sfDataTableCell="affected" [sfDataTableCellRows]="runs()" let-row>
+          <span class="cell-muted">{{ row.itemsAffected ?? 0 }}</span>
+        </ng-template>
+        <ng-template sfDataTableCell="freed" [sfDataTableCellRows]="runs()" let-row>
+          <span class="cell-muted">{{ (row.bytesFreed ?? 0) > 0 ? (row.bytesFreed | sfFileSize) : '—' }}</span>
+        </ng-template>
+        <ng-template sfDataTableCell="by" [sfDataTableCellRows]="runs()" let-row>
+          <span class="cell-muted">{{ who(row) }}</span>
+        </ng-template>
+      </sf-data-table>
+    </sf-section>
+  </div>
+}
+
+@if (report(); as run) {
+  <sf-dialog size="lg" [title]="t('report.title')" (closed)="report.set(null)">
+    <sf-admin-job-run-report [run]="run" />
+    <ng-container sfDialogFooter>
+      <sf-button (click)="report.set(null)">{{ t('report.close') }}</sf-button>
+    </ng-container>
+  </sf-dialog>
 }

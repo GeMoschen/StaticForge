@@ -1,0 +1,124 @@
+@let j = job();
+<sf-page-header [title]="j.name" [subtitle]="j.description">
+  @if (j.orphaned) {
+    <sf-badge sfPageHeaderStatus tone="neutral" icon="link_off" [label]="t('jobs.orphaned')" />
+  } @else if (j.enabled) {
+    <sf-status sfPageHeaderStatus tone="success" icon="check_circle" [label]="t('jobs.on')" />
+  } @else {
+    <sf-status sfPageHeaderStatus tone="neutral" icon="pause_circle" [label]="t('jobs.off')" />
+  }
+  <ng-container sfPageHeaderActions>
+    <sf-button variant="secondary" icon="science" [disabled]="j.orphaned" [tooltip]="t('job.dryRunHint')" (click)="run(true)">{{ t('job.dryRun') }}</sf-button>
+    <sf-button variant="secondary" icon="play_arrow" [disabled]="j.orphaned" (click)="run(false)">{{ t('job.runNow') }}</sf-button>
+  </ng-container>
+</sf-page-header>
+
+@if (j.orphaned) {
+  <sf-banner tone="info">{{ t('jobs.orphanedHint') }}</sf-banner>
+}
+
+<div class="screen__scroll">
+  <sf-section [heading]="t('job.settings')" [description]="t('job.settingsHint')">
+    <form class="screen__form" (submit)="$event.preventDefault(); save()">
+      <sf-field [label]="t('job.enabled')">
+        <sf-switch [value]="enabled()" [disabled]="j.orphaned" [aria-label]="t('job.enabled')" (valueChange)="enabled.set($event)" />
+      </sf-field>
+      <sf-field [label]="t('job.frequency')">
+        <sf-select [options]="frequencyOptions()" [value]="frequency()" [disabled]="j.orphaned" (valueChange)="frequency.set($event ?? 'daily')" />
+      </sf-field>
+      @if (frequency() === 'weekly') {
+        <sf-field [label]="t('job.weekday')">
+          <sf-select [options]="weekdayOptions()" [value]="weekday()" [disabled]="j.orphaned" (valueChange)="weekday.set($event ?? 'mon')" />
+        </sf-field>
+      }
+      <sf-field [label]="frequency() === 'hourly' ? t('job.minute') : t('job.time')" [hint]="frequency() === 'hourly' ? t('job.minuteHint') : undefined" [error]="timeError()">
+        <sf-date-input mode="time" [minuteStep]="15" [value]="time()" [disabled]="j.orphaned" (valueChange)="time.set($event)" />
+      </sf-field>
+      <sf-field [label]="t('job.zone')" [hint]="t('job.zoneHint')">
+        <sf-select [options]="zoneOptions" [value]="zone()" [disabled]="j.orphaned" (valueChange)="zone.set($event ?? 'UTC')" />
+      </sf-field>
+      <p class="job__preview">
+        <span class="job__preview-label">{{ t('job.runs') }}</span>
+        {{ preview() }}
+        @if (dev()) {
+          <code class="job__cron">{{ cron() }}</code>
+        }
+      </p>
+      @if (!j.orphaned) {
+        <div class="job__save">
+          <sf-save-status [state]="saveState()" [errorCount]="timeError() ? 1 : 0" />
+          <sf-button variant="ghost" [disabled]="!dirty()" (click)="discard()">{{ t('detail.discard') }}</sf-button>
+          <sf-button [disabled]="!dirty()" (click)="save()">{{ t('detail.save') }}</sf-button>
+        </div>
+      }
+    </form>
+  </sf-section>
+
+  <sf-section [heading]="t('job.history')" [description]="t('job.historyHint')">
+    <sf-data-table
+      class="job__history"
+      paging="pager"
+      [pageSize]="8"
+      [columnChooser]="false"
+      [columns]="columns()"
+      [rows]="runs()"
+      [rowKey]="rowKey"
+      [rowLabel]="rowLabel"
+      [label]="t('job.historyTable')"
+      [loading]="admin.review() === 'loading'"
+      [error]="error()"
+      [emptyTitle]="t('job.historyEmpty')"
+      (rowOpen)="report.set($event)"
+      (retry)="admin.review.set('live')"
+    >
+      <ng-template sfDataTableCell="started" [sfDataTableCellRows]="runs()" let-row>
+        <sf-relative-time [value]="ago(row.minutes)" />
+      </ng-template>
+      <ng-template sfDataTableCell="trigger" [sfDataTableCellRows]="runs()" let-row>
+        <span class="cell-muted">{{ t('job.triggers.' + row.trigger) }}</span>
+      </ng-template>
+      <ng-template sfDataTableCell="outcome" [sfDataTableCellRows]="runs()" let-row>
+        <span class="cell-name">
+          <sf-status size="sm" [tone]="tones[row.outcome]" [icon]="icons[row.outcome]" [label]="t('outcomes.' + row.outcome)" />
+          @if (row.dryRun) {
+            <sf-badge tone="info" [label]="t('jobs.dryRun')" />
+          }
+        </span>
+      </ng-template>
+      <ng-template sfDataTableCell="duration" [sfDataTableCellRows]="runs()" let-row>
+        <span class="cell-muted">{{ duration(row.durationSeconds) }}</span>
+      </ng-template>
+      <ng-template sfDataTableCell="affected" [sfDataTableCellRows]="runs()" let-row>
+        <span class="cell-muted">{{ row.affected }}</span>
+      </ng-template>
+      <ng-template sfDataTableCell="freed" [sfDataTableCellRows]="runs()" let-row>
+        <span class="cell-muted">{{ row.freedMb > 0 ? t('job.mb', { n: row.freedMb }) : '—' }}</span>
+      </ng-template>
+      <ng-template sfDataTableCell="by" [sfDataTableCellRows]="runs()" let-row>
+        <span class="cell-muted">{{ row.by ?? t('job.bySchedule') }}</span>
+      </ng-template>
+    </sf-data-table>
+  </sf-section>
+</div>
+
+@if (report(); as run) {
+  <sf-dialog size="sm" [title]="t('job.report.title')" (closed)="report.set(null)">
+    <dl class="screen__facts">
+      <dt>{{ t('job.columns.started') }}</dt>
+      <dd><sf-relative-time [value]="ago(run.minutes)" /></dd>
+      <dt>{{ t('job.columns.outcome') }}</dt>
+      <dd>{{ t('outcomes.' + run.outcome) }}@if (run.dryRun) { · {{ t('jobs.dryRun') }} }</dd>
+      <dt>{{ t('job.columns.trigger') }}</dt>
+      <dd>{{ t('job.triggers.' + run.trigger) }}@if (run.by) { · {{ run.by }} }</dd>
+      <dt>{{ t('job.columns.duration') }}</dt>
+      <dd>{{ duration(run.durationSeconds) }}</dd>
+      @for (line of run.summary; track line.key) {
+        <dt>{{ t('job.report.' + line.key) }}</dt>
+        <dd>{{ line.count }}</dd>
+      }
+    </dl>
+    <ng-container sfDialogFooter>
+      <sf-button (click)="report.set(null)">{{ t('job.report.close') }}</sf-button>
+    </ng-container>
+  </sf-dialog>
+}

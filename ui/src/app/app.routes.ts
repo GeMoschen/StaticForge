@@ -1,5 +1,4 @@
-import { inject } from '@angular/core';
-import { Router, Routes } from '@angular/router';
+import { Routes } from '@angular/router';
 import { authGuard, instanceAdminGuard, loginGuard, projectMemberGuard } from './core/auth/auth.guard';
 import { passwordChangeGuard, setPasswordGuard } from './core/auth/password-change.guard';
 import { styleguideGuard } from './features/styleguide/styleguide.guard';
@@ -8,7 +7,7 @@ import { developerModeGuard } from './core/frame/developer-mode.guard';
 import { routeTitle } from './core/frame/route-title';
 import { projectResolver } from './core/project/project.resolver';
 import { LoginComponent } from './features/auth/login.component';
-import { AccountComponent } from './features/account/account.component';
+import { ACCOUNT_ROUTES } from './features/account/account.routes';
 import { SetPasswordComponent } from './features/account/set-password.component';
 import { DashboardComponent } from './features/dashboard/dashboard.component';
 import { ProjectShellComponent } from './features/dashboard/project-shell.component';
@@ -79,22 +78,13 @@ export const routes: Routes = [
     component: SetPasswordComponent,
     title: routeTitle('frame.title.setPassword'),
   },
-  // The old standalone password page is a section of My account now (M26).
-  {
-    path: 'account/password',
-    redirectTo: () => inject(Router).createUrlTree(['/account'], { fragment: 'password' }),
-  },
   {
     // The app frame (M35.10): top bar, rail and banners around every authenticated screen.
     path: '',
     canMatch: [authGuard, passwordChangeGuard],
     component: AppFrameComponent,
     children: [
-      {
-        path: 'account',
-        component: AccountComponent,
-        title: routeTitle('frame.section.account'),
-      },
+      ...ACCOUNT_ROUTES,
       {
         path: '',
         pathMatch: 'full',

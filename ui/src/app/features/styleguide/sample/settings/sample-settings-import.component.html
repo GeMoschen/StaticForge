@@ -17,6 +17,8 @@
   </div>
 
   <sf-data-table
+    [rowsOpenable]="false"
+    twoLine
     class="import__table"
     [columns]="columns()"
     [rows]="conflicts()"
@@ -27,12 +29,7 @@
     [columnChooser]="false"
   >
     <ng-template sfDataTableCell="name" [sfDataTableCellRows]="conflicts()" let-row>
-      <span class="cell-stack">
-        <span class="cell-name__text">{{ row.name }}</span>
-        @if (row.path) {
-          <span class="cell-muted">{{ row.path }}</span>
-        }
-      </span>
+      <sf-table-identity [name]="row.name" [sub]="row.path" mono />
     </ng-template>
     <ng-template sfDataTableCell="reason" [sfDataTableCellRows]="conflicts()" let-row>
       <span class="cell-muted">{{ t('import.reasons.' + row.reason) }}</span>

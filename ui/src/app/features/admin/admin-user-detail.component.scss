@@ -1,126 +1,74 @@
-@use '../../design/dialog-shell';
-@use 'admin';
+// One user (M35.16): the page header, then the sections scroll in the rest of the height.
 
-.back {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--sf-1);
-  margin-bottom: var(--sf-3);
-  color: var(--sf-slate);
-  font-size: var(--sf-text-sm);
-  text-decoration: none;
-
-  &:hover {
-    color: var(--sf-ink);
-  }
-}
-
-.head {
-  display: flex;
-  align-items: center;
-  gap: var(--sf-2);
-  flex-wrap: wrap;
-  margin-bottom: var(--sf-4);
-}
-
-.head__title {
-  margin: 0 var(--sf-2) 0 0;
-  font-family: var(--sf-font-display);
-  font-size: var(--sf-text-xl);
-  color: var(--sf-ink);
-}
-
-.notice {
-  margin: 0 0 var(--sf-4);
-  padding: var(--sf-3);
-  border-radius: var(--sf-radius-md);
-  background: color-mix(in srgb, var(--sf-slate) 10%, transparent);
-  color: var(--sf-ink);
-  font-size: var(--sf-text-sm);
-}
-
-.columns {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(20rem, 1fr));
-  gap: var(--sf-4);
-}
-
-.form {
+:host {
   display: flex;
   flex-direction: column;
-  gap: var(--sf-3);
+  gap: var(--sf-space-4);
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  padding: var(--sf-space-4) var(--sf-space-6);
 }
 
-.form__actions {
+.screen__scroll {
   display: flex;
-  justify-content: flex-end;
-  gap: var(--sf-2);
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: var(--sf-space-6);
+  min-height: 0;
+  overflow-y: auto;
+  padding-block-end: var(--sf-space-4);
 }
 
-.facts {
+.screen__form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sf-space-4);
+  max-inline-size: 40rem;
+}
+
+.screen__facts {
   display: grid;
-  grid-template-columns: max-content 1fr;
-  gap: var(--sf-1) var(--sf-4);
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: var(--sf-space-2) var(--sf-space-6);
   margin: 0;
-  font-size: var(--sf-text-sm);
+  font-size: var(--sf-fs-13);
+  line-height: var(--sf-lh-13);
 
   dt {
-    color: var(--sf-slate);
+    color: var(--sf-text-muted);
   }
 
   dd {
     margin: 0;
-    color: var(--sf-ink);
+    color: var(--sf-text);
   }
 }
 
-.actions {
+.detail__save {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--sf-2);
-}
-
-.add {
-  display: flex;
   align-items: center;
-  gap: var(--sf-2);
-  flex-wrap: wrap;
-
-  .select {
-    width: auto;
-  }
-}
-
-.table .select {
-  width: auto;
-  padding: var(--sf-1) var(--sf-2);
-}
-
-.table__actions {
-  text-align: right;
-}
-
-.dialog__body {
-  display: flex;
-  flex-direction: column;
-  gap: var(--sf-3);
-  padding: var(--sf-4);
-  overflow: auto;
-  font-size: var(--sf-text-sm);
-
-  p {
-    margin: 0;
-  }
-}
-
-.dialog__footer {
-  display: flex;
   justify-content: flex-end;
-  gap: var(--sf-2);
-  padding: var(--sf-3) var(--sf-4);
-  border-top: 1px solid var(--sf-line);
+  gap: var(--sf-space-3);
 }
 
-ul.error {
-  padding-left: var(--sf-5);
+.detail__members {
+  max-height: 22rem;
+}
+
+.detail__role {
+  min-width: 11rem;
+}
+
+.detail__add {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sf-space-2);
+  margin-block-start: var(--sf-space-3);
+}
+
+.detail__add-project {
+  min-width: 14rem;
 }

@@ -1,0 +1,81 @@
+<sf-page-header [title]="t('users.title')" [subtitle]="t('users.subtitle')">
+  <sf-badge sfPageHeaderStatus [label]="t('users.count', { count: rows().length })" />
+  <ng-container sfPageHeaderActions>
+    <sf-button icon="person_add" (click)="creating.set(true)">{{ t('users.new') }}</sf-button>
+  </ng-container>
+</sf-page-header>
+
+<div class="screen__bar" role="search" [attr.aria-label]="t('filters.label')">
+  <sf-search-input
+    class="screen__search"
+    [value]="filters().q"
+    [placeholder]="t('users.search')"
+    [aria-label]="t('users.search')"
+    (valueChange)="setSearch($event)"
+  />
+  @for (menu of menus(); track menu.id) {
+    <sf-menu variant="secondary" size="md" align="start" [text]="menu.text" [label]="menu.name" [items]="menu.items" />
+  }
+  <label class="screen__switch">
+    <sf-switch [value]="filters().deleted" [aria-label]="t('users.showDeleted')" (valueChange)="setDeleted($event)" />
+    {{ t('users.showDeleted') }}
+  </label>
+  @if (filtered()) {
+    <sf-button variant="ghost" size="md" (click)="clear()">{{ t('filters.clear') }}</sf-button>
+  }
+</div>
+
+<sf-data-table
+  class="screen__table"
+  twoLine
+  [columnChooser]="false"
+  [columns]="columns()"
+  [rows]="rows()"
+  [rowKey]="rowKey"
+  [rowLabel]="rowLabel"
+  [label]="t('users.table')"
+  [loading]="admin.review() === 'loading'"
+  [error]="error()"
+  [emptyTitle]="t('users.empty')"
+  [emptyDescription]="t('users.emptyHint')"
+  (rowOpen)="open($event)"
+  (retry)="admin.review.set('live')"
+>
+  <ng-template sfDataTableCell="user" [sfDataTableCellRows]="rows()" let-row>
+    <sf-table-identity [name]="row.displayName" [sub]="'@' + row.username" [avatar]="row.displayName">
+      @if (row.passwordPending) {
+        <sf-badge tone="warning" icon="key" [label]="t('users.passwordPending')" />
+      }
+    </sf-table-identity>
+  </ng-template>
+  <ng-template sfDataTableCell="actions" [sfDataTableCellRows]="rows()" let-row>
+    <sf-menu size="sm" [label]="t('users.menu.label', { name: row.displayName })" [items]="menuItems()" (itemSelected)="onMenu(row, $event)" />
+  </ng-template>
+  <ng-template sfDataTableCell="email" [sfDataTableCellRows]="rows()" let-row>
+    <span class="cell-muted">{{ row.email }}</span>
+  </ng-template>
+  <ng-template sfDataTableCell="role" [sfDataTableCellRows]="rows()" let-row>
+    @if (row.role === 'admin') {
+      <sf-badge tone="accent" icon="shield_person" [label]="t('systemRoles.admin')" />
+    } @else {
+      <span class="cell-muted">{{ t('systemRoles.user') }}</span>
+    }
+  </ng-template>
+  <ng-template sfDataTableCell="status" [sfDataTableCellRows]="rows()" let-row>
+    <sf-status size="sm" [tone]="tones[row.status]" [icon]="icons[row.status]" [label]="t('status.' + row.status)" />
+  </ng-template>
+  <ng-template sfDataTableCell="lastSignIn" [sfDataTableCellRows]="rows()" let-row>
+    @if (row.lastSignInMinutes !== null) {
+      <sf-relative-time [value]="ago(row.lastSignInMinutes)" />
+    } @else {
+      <span class="cell-muted">{{ t('users.never') }}</span>
+    }
+  </ng-template>
+  <ng-template sfDataTableCell="projects" [sfDataTableCellRows]="rows()" let-row>
+    <span class="cell-muted">{{ row.memberships.length }}</span>
+  </ng-template>
+</sf-data-table>
+
+@if (creating()) {
+  <sf-sample-admin-user-dialog mode="create" (created)="created($event)" (closed)="creating.set(false)" />
+}

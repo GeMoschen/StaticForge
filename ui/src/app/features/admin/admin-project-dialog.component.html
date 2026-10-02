@@ -1,0 +1,28 @@
+<sf-dialog size="md" [title]="editing() ? t('editTitle', { name: project()!.name }) : t('newTitle')" (closed)="closed.emit()">
+  <form class="dialog__form" (submit)="$event.preventDefault(); submit()">
+    <sf-field [label]="t('key')" [hint]="editing() ? t('keyHintEdit') : t('keyHint')" required [error]="keyError()">
+      <sf-input
+        monospace
+        autocomplete="off"
+        [spellcheck]="false"
+        [readonly]="editing()"
+        [value]="key()"
+        [placeholder]="t('keyPlaceholder')"
+        (valueChange)="setKey($event)"
+      />
+    </sf-field>
+    <sf-field [label]="t('name')" required>
+      <sf-input autocomplete="off" [value]="name()" (valueChange)="name.set($event)" />
+    </sf-field>
+    <sf-field [label]="t('description')" [hint]="t('descriptionHint')">
+      <sf-textarea [rows]="3" [value]="description()" (valueChange)="description.set($event)" />
+    </sf-field>
+    @if (failure(); as message) {
+      <p class="dialog__error" role="alert">{{ message }}</p>
+    }
+  </form>
+  <ng-container sfDialogFooter>
+    <sf-button variant="ghost" (click)="closed.emit()">{{ t('cancel') }}</sf-button>
+    <sf-button [disabled]="!valid() || busy()" (click)="submit()">{{ editing() ? t('save') : t('create') }}</sf-button>
+  </ng-container>
+</sf-dialog>

@@ -1,61 +1,66 @@
 import { JsonPipe } from '@angular/common';
-import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, input } from '@angular/core';
+import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
+import { SfBadgeComponent } from '../../shared/components/display/sf-badge.component';
+import { SfStatusComponent } from '../../shared/components/display/sf-status.component';
+import { SfBannerComponent } from '../../shared/components/layout/sf-banner.component';
 import { SfFileSizePipe } from '../../shared/pipes/sf-file-size.pipe';
 import {
   AdminJobRunView,
-  outcomeChipClass,
-  outcomeLabel,
+  OUTCOME_ICONS,
+  OUTCOME_TONES,
   reportError,
   reportExtras,
   runDuration,
   sampleTable,
-  triggerLabel,
 } from './admin-jobs.util';
 
 /**
- * A system job run's report (M29.5.1): outcome, counters, bytes and the bounded sample as a table. A dry run says what
- * a real run *would* remove. Used for the run the page started and for an expanded history row.
+ * A system job run's report (M29.5.1, M35.16): outcome, counters, bytes and the bounded sample as a table. A dry run says
+ * what a real run *would* remove. Used for the run the page started and inside the history row's report dialog.
  */
 @Component({
   selector: 'sf-admin-job-run-report',
   standalone: true,
-  imports: [JsonPipe, SfFileSizePipe],
+  imports: [JsonPipe, SfBadgeComponent, SfBannerComponent, SfFileSizePipe, SfStatusComponent, TranslocoPipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
+  styleUrl: './admin-job-run-report.component.scss',
   template: `
     @let r = run();
     <div class="report">
       <p class="report__head">
-        <span [class]="outcomeChipClass(r.outcome)">{{ outcomeLabel(r.outcome) }}</span>
+        <sf-status size="sm" [tone]="tones[r.outcome ?? '']" [icon]="icons[r.outcome ?? '']" [label]="outcome()" />
         @if (r.dryRun) {
-          <span class="chip chip--signal">Dry run — nothing was changed</span>
+          <sf-badge tone="info" [label]="'admin.jobs.report.dryRunNote' | transloco" />
         }
-        <span class="muted">{{ triggerLabel(r.trigger) }} · took {{ runDuration(r.durationMs) }}</span>
+        <span>{{ trigger() }} · {{ 'admin.jobs.report.took' | transloco: { duration: runDuration(r.durationMs) } }}</span>
       </p>
       @if (r.message) {
         <p class="report__message">{{ r.message }}</p>
       }
       @if (error(); as e) {
-        <p class="error">{{ e }}</p>
+        <sf-banner tone="danger">{{ e }}</sf-banner>
       }
       <dl class="report__counts">
         <div>
-          <dt>Examined</dt>
+          <dt>{{ 'admin.jobs.report.examined' | transloco }}</dt>
           <dd>{{ r.itemsExamined ?? 0 }}</dd>
         </div>
         <div>
-          <dt>{{ r.dryRun ? 'Would affect' : 'Affected' }}</dt>
+          <dt>{{ (r.dryRun ? 'admin.jobs.report.wouldAffect' : 'admin.jobs.report.affected') | transloco }}</dt>
           <dd>{{ r.itemsAffected ?? 0 }}</dd>
         </div>
         <div>
-          <dt>{{ r.dryRun ? 'Would free' : 'Freed' }}</dt>
-          <dd>{{ (r.bytesFreed ?? 0) | sfFileSize }}</dd>
+          <dt>{{ (r.dryRun ? 'admin.jobs.report.wouldFree' : 'admin.jobs.report.freed') | transloco }}</dt>
+          <dd>{{ r.bytesFreed ?? 0 | sfFileSize }}</dd>
         </div>
       </dl>
       @if (table().rows.length > 0) {
-        <div class="table sf-table-wrap">
-          <table>
+        <div class="report__scroll">
+          <table class="report__table">
             <caption class="report__caption">
-              {{ r.dryRun ? 'Would remove' : 'Sample' }} — showing {{ table().rows.length }} of {{ r.sampleTotal ?? table().rows.length }}
+              {{ (r.dryRun ? 'admin.jobs.report.wouldRemove' : 'admin.jobs.report.sample') | transloco }} —
+              {{ 'admin.jobs.report.showing' | transloco: { shown: table().rows.length, total: r.sampleTotal ?? table().rows.length } }}
             </caption>
             <thead>
               <tr>
@@ -68,7 +73,7 @@ import {
               @for (row of table().rows; track $index) {
                 <tr>
                   @for (cell of row; track $index) {
-                    <td class="mono">{{ cell }}</td>
+                    <td>{{ cell }}</td>
                   }
                 </tr>
               }
@@ -76,27 +81,32 @@ import {
           </table>
         </div>
       } @else if (r.finishedAt) {
-        <p class="muted">No items in the sample.</p>
+        <p class="report__head">{{ 'admin.jobs.report.noSample' | transloco }}</p>
       }
       @if (extras(); as x) {
         <details class="report__extras">
-          <summary>Report details</summary>
+          <summary>{{ 'admin.jobs.report.details' | transloco }}</summary>
           <pre>{{ x | json }}</pre>
         </details>
       }
     </div>
   `,
-  styleUrl: './admin-job-run-report.component.scss',
 })
 export class AdminJobRunReportComponent {
   readonly run = input.required<AdminJobRunView>();
 
-  protected readonly outcomeLabel = outcomeLabel;
-  protected readonly outcomeChipClass = outcomeChipClass;
-  protected readonly triggerLabel = triggerLabel;
+  private readonly transloco = inject(TranslocoService);
+
+  protected readonly tones = OUTCOME_TONES;
+  protected readonly icons = OUTCOME_ICONS;
   protected readonly runDuration = runDuration;
 
   protected readonly table = computed(() => sampleTable(this.run().sample));
   protected readonly extras = computed(() => reportExtras(this.run().report));
   protected readonly error = computed(() => reportError(this.run().report));
+  protected readonly outcome = computed(() => this.transloco.translate(`enum.jobState.${this.run().outcome ?? 'RUNNING'}`));
+  protected readonly trigger = computed(() => {
+    const trigger = this.run().trigger;
+    return trigger ? this.transloco.translate(`enum.jobTrigger.${trigger}`) : '';
+  });
 }

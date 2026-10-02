@@ -50,6 +50,11 @@ describe('buildBreadcrumb', () => {
   it('names the project list and the account page', () => {
     expect(build('/')).toEqual([{ id: 'dashboard', label: 'dashboard' }]);
     expect(build('/account')).toEqual([{ id: 'account', label: 'account' }]);
+    // A section of My account: the area links back, the section is the current place.
+    expect(build('/account/password')).toEqual([
+      { id: 'account', label: 'account', link: ['/account'] },
+      { id: 'account.sub', label: 'password' },
+    ]);
   });
 
   it('has nothing for a location outside the frame', () => {

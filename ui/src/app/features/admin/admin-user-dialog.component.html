@@ -1,0 +1,49 @@
+<sf-dialog size="md" [title]="title()" (closed)="issuedPassword() !== null ? finish() : closed.emit()">
+  @if (issuedPassword(); as issued) {
+    <div class="dialog__form">
+      <p class="dialog__lead">{{ issuedLead() }}</p>
+      <sf-copyable class="dialog__otp" [value]="issued" [label]="'admin.userdialog.password.issuedLabel' | transloco" />
+      <sf-banner tone="warning">{{ 'admin.userdialog.password.issuedOnce' | transloco }}</sf-banner>
+    </div>
+  } @else {
+    <form class="dialog__form" (submit)="$event.preventDefault(); submit()">
+      @if (mode() === 'create') {
+        <sf-field [label]="'admin.userdialog.username' | transloco" [hint]="'admin.userdialog.usernameHint' | transloco" required [error]="errors().username">
+          <sf-input [value]="username()" autocomplete="off" (valueChange)="username.set($event)" />
+        </sf-field>
+        <sf-field [label]="'admin.userdialog.displayName' | transloco" required [error]="errors().displayName">
+          <sf-input [value]="displayName()" autocomplete="off" (valueChange)="displayName.set($event)" />
+        </sf-field>
+        <sf-field [label]="'admin.userdialog.email' | transloco" required [error]="errors().email">
+          <sf-input type="email" [value]="email()" autocomplete="off" (valueChange)="email.set($event)" />
+        </sf-field>
+        <sf-field [label]="'admin.userdialog.role' | transloco" [hint]="'admin.userdialog.roleHint' | transloco">
+          <sf-select [options]="roleOptions()" [value]="role()" (valueChange)="role.set($event ?? 'USER')" />
+        </sf-field>
+      } @else {
+        <p class="dialog__lead">{{ resetLead() }}</p>
+      }
+      <sf-field [label]="'admin.userdialog.password.label' | transloco">
+        <sf-radio-group [options]="choiceOptions()" [value]="choice()" (valueChange)="choice.set($event ?? 'generate')" />
+      </sf-field>
+      @if (choice() === 'set') {
+        <sf-field [label]="'admin.userdialog.password.new' | transloco" required [error]="errors().password">
+          <sf-input type="password" [value]="password()" autocomplete="new-password" (valueChange)="password.set($event)" />
+        </sf-field>
+      }
+      @if (failure(); as message) {
+        <sf-banner tone="danger" live="assertive">{{ message }}</sf-banner>
+      }
+    </form>
+  }
+  <ng-container sfDialogFooter>
+    @if (issuedPassword() !== null) {
+      <sf-button (click)="finish()">{{ 'admin.userdialog.password.done' | transloco }}</sf-button>
+    } @else {
+      <sf-button variant="ghost" (click)="closed.emit()">{{ 'common.cancel' | transloco }}</sf-button>
+      <sf-button [disabled]="submitting()" (click)="submit()">{{
+        (mode() === 'create' ? 'admin.userdialog.createSubmit' : 'admin.userdialog.resetSubmit') | transloco
+      }}</sf-button>
+    }
+  </ng-container>
+</sf-dialog>

@@ -1,101 +1,74 @@
-<p class="intro">
-  Housekeeping jobs of the whole instance. Times are shown in your time zone; a job's own zone is added where it differs.
-</p>
+<sf-page-header [title]="t('title')" [subtitle]="t('subtitle')">
+  <sf-badge sfPageHeaderStatus [label]="t('count', { count: rows().length })" />
+</sf-page-header>
 
-@if (loadError()) {
-  <p class="error" role="alert">{{ loadError() }}</p>
-} @else if (jobs() === null) {
-  <sf-spinner label="Loading jobs…" />
-} @else {
-  <div class="table sf-table-wrap">
-    <table>
-      <thead>
-        <tr>
-          <th scope="col">Job</th>
-          <th scope="col">Enabled</th>
-          <th scope="col">Schedule</th>
-          <th scope="col">Next run</th>
-          <th scope="col">Last run</th>
-          <th scope="col">Status</th>
-        </tr>
-      </thead>
-      <tbody>
-        @for (job of jobs(); track job.key) {
-          <tr [class.row--muted]="job.orphaned" [attr.data-job]="job.key">
-            <td class="job">
-              <a class="job__name" [routerLink]="['/admin/jobs', job.key]">{{ label(job) }}</a>
-              <span class="mono muted">{{ job.key }}</span>
-              @if (job.orphaned) {
-                <span class="chip">No longer installed</span>
-                <p class="job__note">Its code is gone: kept for its run history, it can't be changed or run.</p>
-              } @else if (job.description) {
-                <p class="job__description">{{ job.description }}</p>
-              }
-            </td>
-            <td>
-              <label class="switch">
-                <input
-                  type="checkbox"
-                  role="switch"
-                  [checked]="job.enabled"
-                  [disabled]="job.orphaned || saving().has(job.key!)"
-                  [attr.aria-label]="'Enable ' + label(job)"
-                  (change)="toggle(job, $event)"
-                />
-                <span aria-hidden="true">{{ job.enabled ? 'On' : 'Off' }}</span>
-              </label>
-            </td>
-            <td>
-              <span [title]="'Cron: ' + job.cron">{{ scheduleText(job.cron, job.zone) }}</span>
-              <span class="sf-sr-only">, cron {{ job.cron }}</span>
-            </td>
-            <td class="nowrap">
-              @if (!job.enabled) {
-                <span class="muted">Disabled</span>
-              } @else if (job.nextRunAt) {
-                @let next = jobInstant(job.nextRunAt, job.zone);
-                {{ next.viewer }}
-                @if (next.job) {
-                  <span class="muted when-job">{{ next.job }}</span>
-                }
-              } @else {
-                <span class="muted">—</span>
-              }
-            </td>
-            <td>
-              @if (job.lastRun; as last) {
-                <span [class]="outcomeChipClass(last.outcome)">{{ outcomeLabel(last.outcome) }}</span>
-                @if (last.dryRun) {
-                  <span class="chip chip--signal">Dry run</span>
-                }
-                <span class="last">
-                  {{ viewerTime(last.finishedAt ?? last.startedAt) }} · {{ runDuration(last.durationMs) }} ·
-                  {{ last.itemsAffected ?? 0 }} affected
-                  @if ((last.bytesFreed ?? 0) > 0) {
-                    · {{ last.bytesFreed | sfFileSize }} freed
-                  }
-                </span>
-              } @else {
-                <span class="muted">Never run</span>
-              }
-            </td>
-            <td>
-              @if (job.running) {
-                <span class="running" role="status">
-                  <span class="running__dot" aria-hidden="true"></span>
-                  Running{{ job.progress ? ': ' + job.progress : '…' }}
-                </span>
-              } @else {
-                <span class="muted">Idle</span>
-              }
-            </td>
-          </tr>
-        } @empty {
-          <tr>
-            <td colspan="6" class="muted">No jobs.</td>
-          </tr>
+<sf-data-table
+  class="screen__table"
+  twoLine
+  [columnChooser]="false"
+  [columns]="columns()"
+  [rows]="rows()"
+  [rowKey]="rowKey"
+  [rowLabel]="rowLabel"
+  [label]="t('table')"
+  [loading]="loading()"
+  [error]="loadError()"
+  [emptyTitle]="t('empty')"
+  (rowOpen)="open($event)"
+  (retry)="load()"
+>
+  <ng-template sfDataTableCell="job" [sfDataTableCellRows]="rows()" let-row>
+    <sf-table-identity
+      class="cell-identity"
+      [class.is-orphaned]="row.orphaned"
+      [name]="label(row)"
+      [sub]="row.orphaned ? t('orphanedHint') : (row.description ?? null)"
+    >
+      @if (row.orphaned) {
+        <sf-badge tone="neutral" icon="link_off" [label]="t('orphaned')" />
+      }
+    </sf-table-identity>
+  </ng-template>
+  <ng-template sfDataTableCell="enabled" [sfDataTableCellRows]="rows()" let-row>
+    <span class="cell-switch" (click)="$event.stopPropagation()" (keydown)="$event.stopPropagation()">
+      <sf-switch
+        [value]="row.enabled === true"
+        [disabled]="row.orphaned || saving().has(row.key ?? '')"
+        [aria-label]="t('enable', { name: label(row) })"
+        (valueChange)="toggle(row, $event)"
+      />
+      <span class="cell-muted">{{ t(row.enabled ? 'on' : 'off') }}</span>
+    </span>
+  </ng-template>
+  <ng-template sfDataTableCell="schedule" [sfDataTableCellRows]="rows()" let-row>
+    <span class="cell-muted" [title]="t('cron', { cron: row.cron })">{{ scheduleText(row.cron, row.zone) }}</span>
+  </ng-template>
+  <ng-template sfDataTableCell="next" [sfDataTableCellRows]="rows()" let-row>
+    @if (row.enabled && !row.orphaned && row.nextRunAt) {
+      <span [title]="nextTitle(row)"><sf-relative-time [value]="row.nextRunAt" /></span>
+    } @else {
+      <span class="cell-muted">{{ t('notScheduled') }}</span>
+    }
+  </ng-template>
+  <ng-template sfDataTableCell="last" [sfDataTableCellRows]="rows()" let-row>
+    @if (row.running) {
+      <span class="cell-name" role="status">
+        <sf-status size="sm" tone="info" icon="autorenew" [label]="row.progress ? t('runningProgress', { progress: row.progress }) : t('running')" />
+      </span>
+    } @else if (row.lastRun) {
+      @let last = row.lastRun;
+      <span class="cell-name">
+        <sf-status size="sm" [tone]="tones[last.outcome ?? '']" [icon]="icons[last.outcome ?? '']" [label]="outcome(last.outcome)" />
+        @if (last.dryRun) {
+          <sf-badge tone="info" [label]="t('dryRun')" />
         }
-      </tbody>
-    </table>
-  </div>
-}
+        <span class="cell-muted"><sf-relative-time [value]="last.finishedAt ?? last.startedAt" /></span>
+      </span>
+    } @else {
+      <span class="cell-muted">{{ t('neverRun') }}</span>
+    }
+  </ng-template>
+  <ng-template sfDataTableCell="actions" [sfDataTableCellRows]="rows()" let-row>
+    <sf-menu size="sm" [label]="t('menu.label', { name: label(row) })" [items]="menuItems(row)" (itemSelected)="onMenu(row, $event)" />
+  </ng-template>
+</sf-data-table>

@@ -39,7 +39,13 @@ export function buildBreadcrumb({ location, label, item }: CrumbInput): Crumb[] 
     return [{ id: 'dashboard', label: label('frame.section.dashboard') }];
   }
   if (kind === 'account') {
-    return [{ id: 'account', label: label('frame.section.account') }];
+    const known = sub !== null && KNOWN_SUBS['account']?.includes(sub);
+    return known
+      ? [
+          { id: 'account', label: label('frame.section.account'), link: ['/account'] },
+          { id: 'account.sub', label: label(`frame.sub.account.${sub}`) },
+        ]
+      : [{ id: 'account', label: label('frame.section.account') }];
   }
   if (kind === 'admin') {
     crumbs.push({ id: 'admin', label: label('frame.section.admin'), link: ['/admin'] });

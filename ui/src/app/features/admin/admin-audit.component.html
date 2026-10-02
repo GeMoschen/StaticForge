@@ -1,139 +1,112 @@
-<div class="filters" role="group" aria-label="Audit filters">
-  <div class="filter filter--actions">
-    <span class="filter__label">Actions</span>
-    <select class="select select--multi" multiple size="4" aria-label="Actions" (change)="setActions($any($event.target))">
-      @for (action of actions(); track action) {
-        <option [value]="action" [selected]="filter().actions.includes(action)">{{ action }}{{ actionLabel(action) ? ' — ' + actionLabel(action) : '' }}</option>
-      }
-    </select>
-    @if (filter().actions.length > 0) {
-      <span class="chosen" aria-label="Chosen actions">
-        @for (action of filter().actions; track action) {
-          <span class="chip chip--signal">
-            {{ action }}
-            <button type="button" class="chip__clear" (click)="removeAction(action)" [attr.aria-label]="'Remove ' + action">×</button>
-          </span>
-        }
-      </span>
-    } @else {
-      <span class="muted">Ctrl/⌘-click to choose several</span>
-    }
-  </div>
+<sf-page-header class="audit__header" [title]="'admin.audit.title' | transloco" [subtitle]="'admin.audit.subtitle' | transloco">
+  <sf-badge sfPageHeaderStatus [label]="'admin.audit.count' | transloco: { count: total() }" />
+</sf-page-header>
 
-  <div class="filter filter--actor">
-    <span class="filter__label" id="actor-label">User</span>
-    @if (filter().userId !== null) {
-      <span class="chip chip--signal">
-        {{ actorLabel() ?? 'User #' + filter().userId }}
-        <button type="button" class="chip__clear" (click)="clearActor()" aria-label="Clear the user filter">×</button>
-      </span>
-    } @else {
-      <input
-        class="input"
-        type="search"
-        placeholder="Username…"
-        aria-labelledby="actor-label"
-        [value]="actorQuery()"
-        (input)="onActorQuery($any($event.target).value)"
-      />
-      @if (actorHits().length > 0) {
-        <ul class="hits" role="listbox" aria-label="Matching users">
-          @for (hit of actorHits(); track hit.id) {
-            <li class="hit" role="option" [attr.aria-selected]="false" (click)="pickActor(hit)">
-              {{ hit.username }} <span class="muted">{{ hit.displayName }}</span>
-            </li>
-          }
-        </ul>
-      }
-    }
-  </div>
-
-  <label class="filter">
-    <span class="filter__label">Project</span>
-    <select class="select" aria-label="Project" (change)="setProject($any($event.target).value)">
-      <option value="" [selected]="filter().project === null">Any</option>
-      <option [value]="instanceOnly" [selected]="filter().project === instanceOnly">Instance only</option>
-      @for (p of projects(); track p.key) {
-        <option [value]="p.key" [selected]="filter().project === p.key">{{ p.name }} ({{ p.key }})</option>
-      }
-    </select>
-  </label>
-
-  <label class="filter">
-    <span class="filter__label">From</span>
-    <input class="input" type="date" aria-label="From" [value]="filter().from ?? ''" (change)="setFrom($any($event.target).value)" />
-  </label>
-  <label class="filter">
-    <span class="filter__label">To</span>
-    <input class="input" type="date" aria-label="To" [value]="filter().to ?? ''" (change)="setTo($any($event.target).value)" />
-  </label>
-
-  @if (hasFilters()) {
-    <sf-button variant="ghost" (click)="clearFilters()">Clear filters</sf-button>
+<div class="audit__bar" role="search" [attr.aria-label]="'admin.audit.filters' | transloco">
+  <sf-combobox
+    class="audit__actions"
+    multiple
+    [options]="actionOptions()"
+    [value]="filter().actions.slice()"
+    [placeholder]="'admin.audit.actionsPlaceholder' | transloco"
+    [aria-label]="'admin.audit.actionsLabel' | transloco"
+    (valueChange)="setActions($any($event))"
+  />
+  <sf-combobox
+    class="audit__user"
+    filter="none"
+    [options]="userOptions()"
+    [value]="filter().userId"
+    [loading]="userSearching()"
+    [placeholder]="'admin.audit.userPlaceholder' | transloco"
+    [aria-label]="'admin.audit.userLabel' | transloco"
+    (query)="onUserQuery($event)"
+    (valueChange)="setUser($any($event))"
+  />
+  <sf-select
+    class="audit__project"
+    [options]="projectOptions()"
+    [value]="filter().project ?? ''"
+    [aria-label]="'admin.audit.projectLabel' | transloco"
+    (valueChange)="setProject($event)"
+  />
+  <span class="audit__range" role="group" [attr.aria-label]="'admin.audit.range' | transloco">
+    <span class="audit__range-label">{{ 'admin.audit.from' | transloco }}</span>
+    <sf-date-input
+      class="audit__date"
+      [value]="filter().from"
+      [max]="filter().to"
+      [aria-label]="'admin.audit.from' | transloco"
+      (valueChange)="setFrom($event)"
+    />
+    <span class="audit__range-label">{{ 'admin.audit.to' | transloco }}</span>
+    <sf-date-input
+      class="audit__date"
+      [value]="filter().to"
+      [min]="filter().from"
+      [aria-label]="'admin.audit.to' | transloco"
+      (valueChange)="setTo($event)"
+    />
+  </span>
+  @if (filtered()) {
+    <sf-button variant="ghost" size="md" (click)="clearFilters()">{{ 'admin.audit.clear' | transloco }}</sf-button>
   }
 </div>
-
-@if (loading() && entries().length === 0) {
-  <sf-spinner label="Loading the audit trail…" />
-} @else {
-  <div class="table sf-table-wrap">
-    <table>
-      <thead>
-        <tr>
-          <th scope="col">Time</th>
-          <th scope="col">Action</th>
-          <th scope="col">User</th>
-          <th scope="col">Project</th>
-          <th scope="col">Target</th>
-          <th scope="col"><span class="sf-sr-only">Detail</span></th>
-        </tr>
-      </thead>
-      <tbody>
-        @for (entry of entries(); track entry.id) {
-          <tr>
-            <td class="nowrap">{{ entry.timestamp | date: 'medium' }}</td>
-            <td>
-              <span class="mono">{{ entry.action }}</span>
-              @if (actionLabel(entry.action); as label) {
-                <span class="action-label">{{ label }}</span>
-              }
-            </td>
-            <td>{{ entry.actor?.username ?? (entry.actor ? 'User #' + entry.actor.id : '—') }}</td>
-            <td>
-              @if (entry.projectKey) {
-                {{ projectLabel(entry.projectKey) }}
-              } @else {
-                <span class="muted">Instance</span>
-              }
-            </td>
-            <td class="mono">{{ entry.target ?? '—' }}</td>
-            <td class="table__actions">
-              @if (entry.detail) {
-                <sf-button variant="ghost" (click)="toggle(entry.id)">
-                  {{ expanded().has(entry.id!) ? 'Hide' : 'Detail' }}
-                </sf-button>
-              }
-            </td>
-          </tr>
-          @if (entry.detail && expanded().has(entry.id!)) {
-            <tr class="detail-row">
-              <td colspan="6"><pre class="detail">{{ entry.detail | json }}</pre></td>
-            </tr>
-          }
-        } @empty {
-          <tr>
-            <td colspan="6" class="muted">No audit entries match.</td>
-          </tr>
-        }
-      </tbody>
-    </table>
-  </div>
-
-  @if (meta(); as m) {
-    <div class="pager">
-      <span>{{ m.totalElements ?? 0 }} entries · page {{ (m.number ?? 0) + 1 }} of {{ m.totalPages || 1 }}</span>
-      <sf-button variant="ghost" [disabled]="(m.number ?? 0) === 0" (click)="goTo((m.number ?? 0) - 1)">Newer</sf-button>
-      <sf-button variant="ghost" [disabled]="(m.number ?? 0) + 1 >= (m.totalPages ?? 1)" (click)="goTo((m.number ?? 0) + 1)">Older</sf-button>
-    </div>
-  }
+@if (rangeInvalid()) {
+  <p class="audit__range-error" role="alert">{{ 'admin.audit.rangeInvalid' | transloco }}</p>
 }
+
+<sf-data-table
+  class="audit__table"
+  mode="server"
+  paging="pager"
+  [rowsOpenable]="false"
+  [pageSize]="pageSize"
+  [total]="total()"
+  [loading]="loading()"
+  [error]="error()"
+  [columnChooser]="false"
+  [columns]="columns()"
+  [rows]="entries()"
+  [rowKey]="rowKey"
+  [rowLabel]="rowLabel"
+  [label]="'admin.audit.table' | transloco"
+  [emptyTitle]="'admin.audit.empty' | transloco"
+  [emptyDescription]="'admin.audit.emptyHint' | transloco"
+  (pageChange)="onPage($event)"
+  (retry)="retry()"
+>
+  <ng-template sfDataTableCell="time" [sfDataTableCellRows]="entries()" let-row>
+    <sf-relative-time [value]="row.timestamp" />
+  </ng-template>
+  <ng-template sfDataTableCell="user" [sfDataTableCellRows]="entries()" let-row>
+    <span class="cell-name">
+      @if (row.actor) {
+        <sf-avatar size="sm" [name]="userName(row)" />
+        <span class="cell-name__text">{{ userName(row) }}</span>
+      } @else {
+        <span class="cell-muted">{{ userName(row) }}</span>
+      }
+    </span>
+  </ng-template>
+  <ng-template sfDataTableCell="action" [sfDataTableCellRows]="entries()" let-row>
+    <span class="cell-name__text" [sfTooltip]="row.action">{{ actionLabel(row.action) }}</span>
+  </ng-template>
+  <ng-template sfDataTableCell="target" [sfDataTableCellRows]="entries()" let-row>
+    <span class="cell-muted cell-mono">{{ row.target || '—' }}</span>
+  </ng-template>
+  <ng-template sfDataTableCell="project" [sfDataTableCellRows]="entries()" let-row>
+    @if (row.projectKey) {
+      <span class="cell-muted">{{ projectName(row.projectKey) }}</span>
+    } @else {
+      <span class="cell-muted">{{ 'admin.audit.instance' | transloco }}</span>
+    }
+  </ng-template>
+  <ng-template sfDataTableCell="details" [sfDataTableCellRows]="entries()" let-row>
+    @if (summary(row)) {
+      <span class="cell-muted" [sfTooltip]="detailJson(row)">{{ summary(row) }}</span>
+    } @else {
+      <span class="cell-muted">—</span>
+    }
+  </ng-template>
+</sf-data-table>

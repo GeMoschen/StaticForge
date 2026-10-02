@@ -255,6 +255,56 @@ signed off yet** — the app is built only after the user approves.
 60. **Scope (user, 2026-10-02):** assets only (no settings pages); stale entries are dropped when a list shows (resolved
     through the API), and again on open; the project home and dashboard blocks stay with M35.28.
 
+## Review round 6 (2026-10-02): login, account and administration (signed off 2026-10-02)
+
+Added to the sample for M35.16 (`/styleguide/sample?area=login|setpassword|account|admin`; `lstate`, `pstate`, `acsec`, `acstate`,
+`asec`, `adetail`, `astate`, `ufilter`, `pfilter`, `afilter` for review states). **Signed off by the user on 2026-10-02**; M35.16 builds it in the app.
+
+61. **Login and Set password** (outside the frame): one centred 24 rem card on the page background — mark and wordmark, `h1`,
+    a muted lead, the form, small print below the card. The primary button spans the card and stays disabled until the
+    fields are filled (the tooltip says why); while signing in it shows a spinner and "Signing in…". A refused sign-in is an
+    inline assertive danger banner above the fields, cleared on the next edit. Show/hide password is a ghost icon button with
+    `aria-pressed`. No implementation text ("tokens are kept in memory only" is gone).
+62. **Password rules:** a live plain-language checklist (12 characters, a letter, a digit or symbol, both match) that is
+    neutral while its field is empty, ✓ when met and ✗ only after typing. The length limit is counted in **characters** (72),
+    never bytes, and appears as a line only when exceeded ("That is 90 characters; the limit is 72."). Set password stays
+    disabled until every rule is met.
+63. **My account** (no rail, top bar stays): `sf-side-nav` with Profile, Password, Preferences, My projects, Sessions — one section
+    per page, `acsec` in the URL; a section with unsaved edits shows an *Unsaved* badge and leaving it goes through the leave
+    guard. Profile and Password use the explicit-save area (status, Discard, primary Save enabled only while dirty); changing
+    username or email reveals *Current password*. Preferences (theme, density, developer mode, read-only language "English")
+    apply immediately, no Save. My projects: a table with the person's **human role label** (Viewer, Editor, Release manager,
+    Developer, Project admin) and an Open button, with skeleton, error (Try again) and empty states. Sessions: only *Sign out
+    of all sessions* (secondary, confirmation, toast) — the backend cannot list sessions.
+64. **Administration:** the rail is the only navigation (Users, Projects, Jobs, Audit; no Settings footer). Breadcrumb
+    Administration › Section › Item. Every list has the shared skeleton, empty ("No users match." + Clear filters) and error
+    (Retry) states; filters live in the URL.
+65. **Users:** search, Status and Role menus, *Show deleted* (off by default); roles and statuses in words (Instance admin / User;
+    Active, Disabled, Locked, Deleted); last sign-in as relative time; *Password change pending* as a warning badge. *New user*
+    dialog (username, name, email, role; generate a one-time password or set one) shows a generated password once, with a copy
+    button. A row opens the user. **Row ⋮ menu (user, 2026-10-02): Edit user** (opens the detail) and Sign out everywhere
+    (confirmation + toast); no danger item in the list's menu — Delete user stays in the detail.
+66. **User detail:** **Disable** (Enable / Unlock) is a secondary button with a toast and Undo; the header ⋮ menu holds Reset
+    password…, Sign out everywhere, Make / Remove instance admin and **Delete user** — the menu's only danger item, which asks
+    for the typed username and offers Undo. Profile (explicit save + guard), Account facts, Project memberships (role select
+    with human labels, remove with Undo, *Add to project*). A deleted user is read-only.
+67. **Projects:** search and *Show archived*; **New project** (primary, dialog: key validated as you type, name, description);
+    row ⋮ menu: **Edit project…** first (name and description; the key is read-only), Open project, Archive (confirmation + Undo) or
+    Unarchive. Archived rows are muted and the status says it in words.
+68. **Jobs:** the schedule in words ("Every day at 03:00 (Europe/Berlin)"), cron only as a tooltip (developer mode in the form); an
+    enabled switch per row; last run with a human outcome (Succeeded / Partly succeeded / Failed / Skipped) and a *Dry run* badge;
+    a job whose code is gone is muted ("No longer installed"). **Row ⋮ menu: Edit schedule** (opens the detail) and Run now (disabled for a job that is gone). **Job detail:** *Run now* and *Dry run* (secondary), the schedule
+    form (explicit save + guard) and a paged run history; a run opens a report.
+69. **Audit:** a **multi-select combobox** for human action labels, a user combobox, a project select and an **inline From / To
+    date range**; the controls are as tall as the search field (decision 43); filters in `afilter`; time as relative time with the
+    absolute time in the tooltip; paged.
+70. **Two-line cells (user, 2026-10-02):** a name over an identifier or description is the new design-system cell
+    **`sf-table-identity`** (name in medium weight with its badges set apart, the muted line below, optional avatar, `mono` for
+    keys) and the table gets **`twoLine`**, which gives those rows the height they need. Used for Users, Projects, a user's project
+    memberships, Jobs and the import conflicts; every future multi-line cell uses it.
+71. **Clickable rows show the pointer (user, 2026-10-02):** `sf-data-table` rows get `cursor: pointer` by default (`rowsOpenable`,
+    off with `[rowsOpenable]="false"` where a click does nothing) — in every table, in the app and the sample.
+
 ## Notes / hazards
 
 - Sign-off: **signed off by the user on 2026-10-01** — gallery https://claude.ai/artifact/33yY26sd6H17UTP9sPPJid

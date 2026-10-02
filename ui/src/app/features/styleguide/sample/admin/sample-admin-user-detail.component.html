@@ -1,0 +1,111 @@
+@let u = user();
+<sf-page-header [title]="u.displayName" [subtitle]="'@' + u.username" [secondaryActions]="menuItems()" (secondaryAction)="onMenu($event)">
+  <sf-status sfPageHeaderStatus [tone]="tones[u.status]" [icon]="icons[u.status]" [label]="t('status.' + u.status)" />
+  <ng-container sfPageHeaderActions>
+    @if (u.role === 'admin') {
+      <sf-badge tone="accent" icon="shield_person" [label]="t('systemRoles.admin')" />
+    }
+    @if (statusAction(); as action) {
+      <sf-button variant="secondary" [icon]="action === 'disable' ? 'block' : action === 'unlock' ? 'lock_open' : 'check_circle'" (click)="changeStatus()">{{
+        t('detail.status.' + action)
+      }}</sf-button>
+    }
+  </ng-container>
+</sf-page-header>
+
+@if (deleted()) {
+  <sf-banner tone="info">{{ t('detail.deletedBanner') }}</sf-banner>
+}
+
+<div class="screen__scroll">
+  <sf-section [heading]="t('detail.profile')">
+    <form class="screen__form" (submit)="$event.preventDefault(); save()">
+      <sf-field [label]="t('newUser.displayName')" required [error]="errors().displayName">
+        <sf-input [value]="displayName()" [readonly]="deleted()" (valueChange)="displayName.set($event)" />
+      </sf-field>
+      <sf-field [label]="t('newUser.username')" [hint]="t('newUser.usernameHint')" required [error]="errors().username">
+        <sf-input [value]="username()" [readonly]="deleted()" (valueChange)="username.set($event)" />
+      </sf-field>
+      <sf-field [label]="t('newUser.email')" required [error]="errors().email">
+        <sf-input type="email" [value]="email()" [readonly]="deleted()" (valueChange)="email.set($event)" />
+      </sf-field>
+      @if (!deleted()) {
+        <div class="detail__save">
+          <sf-save-status [state]="saveState()" [errorCount]="errorCount()" />
+          <sf-button variant="ghost" [disabled]="!dirty()" (click)="discard()">{{ t('detail.discard') }}</sf-button>
+          <sf-button [disabled]="!dirty()" (click)="save()">{{ t('detail.save') }}</sf-button>
+        </div>
+      }
+    </form>
+  </sf-section>
+
+  <sf-section [heading]="t('detail.account')">
+    <dl class="screen__facts">
+      <dt>{{ t('detail.facts.role') }}</dt>
+      <dd>{{ t('systemRoles.' + u.role) }}</dd>
+      <dt>{{ t('detail.facts.created') }}</dt>
+      <dd>{{ t('detail.facts.createdAgo', { count: u.createdDays }) }}</dd>
+      <dt>{{ t('users.columns.lastSignIn') }}</dt>
+      <dd>
+        @if (u.lastSignInMinutes !== null) {
+          <sf-relative-time [value]="ago(u.lastSignInMinutes)" />
+        } @else {
+          {{ t('users.never') }}
+        }
+      </dd>
+      <dt>{{ t('detail.facts.password') }}</dt>
+      <dd>{{ t(u.passwordPending ? 'detail.facts.passwordPending' : 'detail.facts.passwordSet') }}</dd>
+    </dl>
+  </sf-section>
+
+  <sf-section [heading]="t('detail.memberships.title')" [description]="t('detail.memberships.description')">
+    <sf-data-table
+      [rowsOpenable]="false"
+      twoLine
+      class="detail__members"
+      [columnChooser]="false"
+      [columns]="columns()"
+      [rows]="u.memberships"
+      [rowKey]="rowKey"
+      [rowLabel]="rowLabel"
+      [label]="t('detail.memberships.table')"
+      [emptyTitle]="t('detail.memberships.empty')"
+    >
+      <ng-template sfDataTableCell="project" [sfDataTableCellRows]="u.memberships" let-row>
+        <sf-table-identity [name]="rowLabel(row)" [sub]="row.project" mono />
+      </ng-template>
+      <ng-template sfDataTableCell="role" [sfDataTableCellRows]="u.memberships" let-row>
+        <sf-select
+          class="detail__role"
+          [options]="roleOptions()"
+          [value]="row.role"
+          [disabled]="deleted()"
+          [aria-label]="t('detail.memberships.roleOf', { name: rowLabel(row) })"
+          (valueChange)="setRole(row.project, $event)"
+        />
+      </ng-template>
+      <ng-template sfDataTableCell="remove" [sfDataTableCellRows]="u.memberships" let-row>
+        <sf-button variant="ghost" size="sm" icon="person_remove" [disabled]="deleted()" [label]="t('detail.memberships.removeFrom', { name: rowLabel(row) })" (click)="removeMembership(row)" />
+      </ng-template>
+    </sf-data-table>
+
+    @if (!deleted()) {
+      <div class="detail__add" role="group" [attr.aria-label]="t('detail.memberships.add')">
+        <sf-select
+          class="detail__add-project"
+          [options]="addable()"
+          [value]="newProject()"
+          [placeholder]="t('detail.memberships.pick')"
+          [aria-label]="t('detail.memberships.pick')"
+          (valueChange)="newProject.set($event)"
+        />
+        <sf-select class="detail__role" [options]="roleOptions()" [value]="newRole()" [aria-label]="t('detail.memberships.role')" (valueChange)="newRole.set($event ?? 'editor')" />
+        <sf-button variant="secondary" icon="add" [disabled]="newProject() === null" (click)="addMembership()">{{ t('detail.memberships.addButton') }}</sf-button>
+      </div>
+    }
+  </sf-section>
+</div>
+
+@if (resetting()) {
+  <sf-sample-admin-user-dialog mode="reset" [user]="u" (closed)="resetting.set(false)" />
+}

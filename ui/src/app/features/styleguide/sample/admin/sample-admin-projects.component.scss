@@ -1,0 +1,6 @@
+@use 'admin-screen';
+
+// An archived project is muted (the Status column says so in words too).
+.is-archived {
+  opacity: 0.65;
+}

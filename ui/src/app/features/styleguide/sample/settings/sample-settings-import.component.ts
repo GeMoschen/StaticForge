@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import { SfTableIdentityComponent } from '../../../../shared/components/data-table/sf-table-identity.component';
 import { SfDataTableColumn } from '../../../../shared/components/data-table/data-table.types';
 import { SfDataTableCellDirective } from '../../../../shared/components/data-table/sf-data-table-templates.directive';
 import { SfDataTableComponent } from '../../../../shared/components/data-table/sf-data-table.component';
@@ -32,6 +33,7 @@ function sampleArchive(): File {
   selector: 'sf-sample-settings-import',
   standalone: true,
   imports: [
+    SfTableIdentityComponent,
     SfButtonComponent,
     SfDataTableCellDirective,
     SfDataTableComponent,

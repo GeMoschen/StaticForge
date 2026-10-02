@@ -1,69 +1,84 @@
-<div class="toolbar">
-  <input
-    class="input"
-    type="search"
-    placeholder="Search key, name or description…"
-    aria-label="Search projects"
-    [value]="query()"
-    (input)="query.set($any($event.target).value)"
+<sf-page-header [title]="t('title')" [subtitle]="t('subtitle')">
+  <sf-badge sfPageHeaderStatus [label]="t('count', { count: rows().length })" />
+  <ng-container sfPageHeaderActions>
+    <sf-button icon="add" (click)="creating.set(true)">{{ t('new') }}</sf-button>
+  </ng-container>
+</sf-page-header>
+
+<div class="screen__bar" role="search" [attr.aria-label]="t('filters')">
+  <sf-search-input
+    class="screen__search"
+    [value]="filters().q"
+    [placeholder]="t('search')"
+    [aria-label]="t('search')"
+    (valueChange)="setSearch($event)"
   />
-  <label class="checkbox-label">
-    <input type="checkbox" [checked]="showArchived()" (change)="showArchived.set($any($event.target).checked)" />
-    Show archived
+  <label class="screen__switch">
+    <sf-switch [value]="filters().archived" [aria-label]="t('showArchived')" (valueChange)="setArchived($event)" />
+    {{ t('showArchived') }}
   </label>
+  @if (filtered()) {
+    <sf-button variant="ghost" size="md" (click)="clear()">{{ t('clearFilters') }}</sf-button>
+  }
 </div>
 
-@if (loading() && projects().length === 0) {
-  <sf-spinner label="Loading projects…" />
-} @else {
-  <div class="table sf-table-wrap">
-    <table>
-      <thead>
-        <tr>
-          <th scope="col">Project</th>
-          <th scope="col">Members</th>
-          <th scope="col">Last change</th>
-          <th scope="col"><span class="sf-sr-only">Actions</span></th>
-        </tr>
-      </thead>
-      <tbody>
-        @for (p of visible(); track p.key) {
-          <tr [class.row--muted]="p.archived">
-            <td>
-              <span class="project-name">{{ p.name }}</span>
-              <span class="muted mono">{{ p.key }}</span>
-              @if (p.archived) {
-                <span class="chip">Archived</span>
-              }
-            </td>
-            <td>{{ p.memberCount ?? 0 }}</td>
-            <td>
-              {{ p.lastChangeAt ? (p.lastChangeAt | date: 'medium') : '—' }}
-              @if (p.headRevision != null) {
-                <span class="muted">· r{{ p.headRevision }}</span>
-              }
-            </td>
-            <td>
-              <div class="row-actions">
-                <a class="open-link" [routerLink]="['/p', p.key, 'pages']">Open<span class="sf-sr-only"> {{ p.name }}</span></a>
-                @if (p.archived) {
-                  <sf-button variant="secondary" [disabled]="busyKey() !== null" (click)="unarchive(p)">
-                    Unarchive<span class="sf-sr-only"> {{ p.name }}</span>
-                  </sf-button>
-                } @else {
-                  <sf-button variant="ghost" [disabled]="busyKey() !== null" (click)="archive(p)">
-                    Archive<span class="sf-sr-only"> {{ p.name }}</span>
-                  </sf-button>
-                }
-              </div>
-            </td>
-          </tr>
-        } @empty {
-          <tr>
-            <td colspan="4" class="muted">No projects match.</td>
-          </tr>
+<sf-data-table
+  class="screen__table"
+  twoLine
+  [columnChooser]="false"
+  [columns]="columns()"
+  [rows]="rows()"
+  [rowKey]="rowKey"
+  [rowLabel]="rowLabel"
+  [label]="t('table')"
+  [loading]="loading()"
+  [error]="error()"
+  [emptyTitle]="t('empty')"
+  [emptyDescription]="t('emptyHint')"
+  (rowOpen)="open($event)"
+  (retry)="load()"
+>
+  <ng-template sfDataTableCell="project" [sfDataTableCellRows]="rows()" let-row>
+    <sf-table-identity class="cell-identity" [class.is-archived]="row.archived" [name]="row.name ?? row.key ?? ''" [sub]="row.key" mono>
+      @if (row.archived) {
+        <sf-badge tone="neutral" icon="archive" [label]="t('status.archived')" />
+      }
+    </sf-table-identity>
+  </ng-template>
+  <ng-template sfDataTableCell="description" [sfDataTableCellRows]="rows()" let-row>
+    <span class="cell-muted" [class.is-archived]="row.archived">{{ row.description || '—' }}</span>
+  </ng-template>
+  <ng-template sfDataTableCell="members" [sfDataTableCellRows]="rows()" let-row>
+    <span class="cell-muted">{{ row.memberCount ?? 0 }}</span>
+  </ng-template>
+  <ng-template sfDataTableCell="lastChange" [sfDataTableCellRows]="rows()" let-row>
+    <span class="cell-muted">
+      @if (row.lastChangeAt) {
+        <sf-relative-time [value]="row.lastChangeAt" />
+        @if (row.headRevision != null) {
+          · r{{ row.headRevision }}
         }
-      </tbody>
-    </table>
-  </div>
+      } @else {
+        —
+      }
+    </span>
+  </ng-template>
+  <ng-template sfDataTableCell="status" [sfDataTableCellRows]="rows()" let-row>
+    @if (row.archived) {
+      <sf-status size="sm" tone="neutral" icon="archive" [label]="t('status.archived')" />
+    } @else {
+      <sf-status size="sm" tone="success" icon="check_circle" [label]="t('status.active')" />
+    }
+  </ng-template>
+  <ng-template sfDataTableCell="actions" [sfDataTableCellRows]="rows()" let-row>
+    <sf-menu size="sm" [label]="t('menu.label', { name: row.name ?? row.key })" [items]="menuItems(row)" (itemSelected)="onMenu(row, $event)" />
+  </ng-template>
+</sf-data-table>
+
+@if (creating()) {
+  <sf-admin-project-dialog [takenKeys]="takenKeys()" (done)="saved($event, true)" (closed)="creating.set(false)" />
+}
+
+@if (editing(); as project) {
+  <sf-admin-project-dialog [project]="project" (done)="saved($event, false)" (closed)="editing.set(null)" />
 }

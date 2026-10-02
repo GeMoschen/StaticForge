@@ -146,6 +146,7 @@ interface Resize {
 @Component({
   selector: 'sf-data-table',
   standalone: true,
+  host: { '[class.sf-data-table--two-line]': 'twoLine()' },
   imports: [
     NgTemplateOutlet,
     TranslocoPipe,
@@ -192,6 +193,16 @@ export class SfDataTableComponent<T> implements OnInit, OnDestroy {
   readonly emptyDescription = input<string | undefined>(undefined);
 
   // ── Features ──────────────────────────────────────────────────────────────
+  /**
+   * Whether a click on a row opens it (`rowOpen`): the rows then show the pointer cursor. On by default, because
+   * almost every table opens its rows; turn it off (`[rowsOpenable]="false"`) where a click does nothing.
+   */
+  /**
+   * The rows hold two lines (an `sf-table-identity` cell): they get the height those need, with comfortable spacing
+   * between the lines. Tables whose rows are one line keep the compact height.
+   */
+  readonly twoLine = input(false, { transform: booleanAttribute });
+  readonly rowsOpenable = input(true, { transform: booleanAttribute });
   readonly selectable = input(false, { transform: booleanAttribute });
   readonly bulkActions = input<readonly SfDataTableBulkAction<T>[]>([]);
   readonly searchable = input(false, { transform: booleanAttribute });

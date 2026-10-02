@@ -1,0 +1,5 @@
+// The screen fills the sample's page, so the card can sit in the middle of it.
+:host {
+  display: block;
+  height: 100%;
+}

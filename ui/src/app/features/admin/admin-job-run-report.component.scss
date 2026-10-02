@@ -1,62 +1,101 @@
-@use 'admin';
+:host {
+  display: block;
+}
 
 .report {
   display: flex;
   flex-direction: column;
-  gap: var(--sf-2);
+  gap: var(--sf-space-3);
 }
 
 .report__head {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: var(--sf-2);
+  gap: var(--sf-space-2);
   margin: 0;
-
-  .chip {
-    margin-left: 0;
-  }
+  color: var(--sf-text-muted);
+  font-size: var(--sf-fs-13);
+  line-height: var(--sf-lh-13);
 }
 
 .report__message {
   margin: 0;
-  color: var(--sf-ink);
-  font-size: var(--sf-text-sm);
+  color: var(--sf-text);
+  font-size: var(--sf-fs-14);
+  line-height: var(--sf-lh-14);
 }
 
 .report__counts {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--sf-5);
+  gap: var(--sf-space-6);
   margin: 0;
 
   dt {
-    color: var(--sf-slate);
-    font-size: var(--sf-text-xs);
+    color: var(--sf-text-muted);
+    font-size: var(--sf-fs-12);
+    line-height: var(--sf-lh-12);
   }
 
   dd {
     margin: 0;
-    color: var(--sf-ink);
-    font-size: var(--sf-text-lg);
+    color: var(--sf-text);
+    font-size: var(--sf-fs-18);
+    line-height: var(--sf-lh-18);
     font-variant-numeric: tabular-nums;
   }
 }
 
 .report__caption {
-  padding: var(--sf-1) 0;
+  padding: var(--sf-space-1) 0;
   caption-side: top;
-  text-align: left;
-  color: var(--sf-slate);
-  font-size: var(--sf-text-xs);
+  text-align: start;
+  color: var(--sf-text-muted);
+  font-size: var(--sf-fs-12);
 }
 
-.report__extras pre {
-  margin: var(--sf-2) 0 0;
-  padding: var(--sf-2);
+.report__table {
+  inline-size: 100%;
+  border-collapse: collapse;
+  font-size: var(--sf-fs-13);
+  line-height: var(--sf-lh-13);
+
+  th,
+  td {
+    padding: var(--sf-space-1) var(--sf-space-2);
+    border-block-end: 1px solid var(--sf-border);
+    text-align: start;
+  }
+
+  th {
+    color: var(--sf-text-muted);
+    font-weight: var(--sf-weight-medium);
+  }
+
+  td {
+    font-family: var(--sf-font-mono);
+    font-size: var(--sf-fs-12);
+  }
+}
+
+.report__scroll {
+  max-block-size: 18rem;
   overflow: auto;
-  border-radius: var(--sf-radius-md);
-  background: color-mix(in srgb, var(--sf-slate) 8%, transparent);
-  font-family: var(--sf-font-mono);
-  font-size: var(--sf-text-xs);
+}
+
+.report__extras {
+  color: var(--sf-text-muted);
+  font-size: var(--sf-fs-13);
+
+  pre {
+    margin: var(--sf-space-2) 0 0;
+    padding: var(--sf-space-2);
+    overflow: auto;
+    border-radius: var(--sf-radius-md);
+    background: var(--sf-surface-muted);
+    color: var(--sf-text);
+    font-family: var(--sf-font-mono);
+    font-size: var(--sf-fs-12);
+  }
 }

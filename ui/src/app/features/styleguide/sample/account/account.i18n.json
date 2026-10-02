@@ -1,0 +1,90 @@
+{
+  "title": "My account",
+  "nav": {
+    "label": "Account sections",
+    "unsaved": "Unsaved"
+  },
+  "sections": {
+    "profile": "Profile",
+    "password": "Password",
+    "preferences": "Preferences",
+    "projects": "My projects",
+    "sessions": "Sessions"
+  },
+  "save": {
+    "save": "Save",
+    "discard": "Discard",
+    "nothing": "Nothing to save."
+  },
+  "profile": {
+    "displayName": "Display name",
+    "username": "Username",
+    "email": "Email",
+    "current": "Current password",
+    "currentHint": "Needed to change your username or email.",
+    "nameRequired": "Enter a name.",
+    "emailInvalid": "Enter a valid email address.",
+    "currentRequired": "Enter your current password to change your username or email.",
+    "notSaved": "Not saved — fix the highlighted fields.",
+    "saved": "Profile saved."
+  },
+  "password": {
+    "note": "Changing your password signs you out of every other session.",
+    "current": "Current password",
+    "new": "New password",
+    "confirm": "Repeat the new password",
+    "show": "Show passwords",
+    "hide": "Hide passwords",
+    "notSaved": "Not saved — the password does not meet the rules yet.",
+    "saved": "Password changed. Your other sessions were signed out."
+  },
+  "preferences": {
+    "note": "Changes here apply immediately.",
+    "theme": "Theme",
+    "themeHint": "System follows your device.",
+    "light": "Light",
+    "dark": "Dark",
+    "system": "System",
+    "density": "Density",
+    "densityHint": "Compact fits more on the screen; comfortable gives it room.",
+    "compact": "Compact",
+    "comfortable": "Comfortable",
+    "developer": "Developer mode",
+    "developerSwitch": "Show developer details",
+    "developerHint": "Shows identifiers, paths and the Templates area. Only people with developer rights can turn it on.",
+    "language": "Language",
+    "languageHint": "English is the only language for now."
+  },
+  "projects": {
+    "note": "The projects you belong to and what you may do in each.",
+    "table": "My projects",
+    "columns": {
+      "project": "Project",
+      "role": "Your role",
+      "open": "Open"
+    },
+    "open": "Open",
+    "loading": "Loading your projects",
+    "errorTitle": "Your projects could not be loaded",
+    "error": "Check your connection and try again.",
+    "retry": "Try again",
+    "emptyTitle": "You are not a member of any project yet",
+    "emptyText": "Ask an administrator to add you to a project."
+  },
+  "roles": {
+    "VIEWER": "Viewer",
+    "EDITOR": "Editor",
+    "RELEASE_MANAGER": "Release manager",
+    "DEVELOPER": "Developer",
+    "PROJECT_ADMIN": "Project admin"
+  },
+  "sessions": {
+    "heading": "Sign out everywhere",
+    "text": "Signs you out of every browser and device you are signed in on, this one included. You can sign in again at any time.",
+    "button": "Sign out of all sessions",
+    "confirmTitle": "Sign out of all sessions?",
+    "confirmMessage": "You will be signed out here too and have to sign in again.",
+    "confirm": "Sign out everywhere",
+    "done": "Signed out of all sessions."
+  }
+}

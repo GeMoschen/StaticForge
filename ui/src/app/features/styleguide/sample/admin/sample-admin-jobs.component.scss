@@ -1,0 +1,12 @@
+@use 'admin-screen';
+
+// A job whose code is gone is muted (the badge and the hint say so in words too).
+.is-orphaned {
+  opacity: 0.65;
+}
+
+.cell-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sf-space-2);
+}

@@ -1,12 +1,4 @@
 {
-  "src/app/features/admin/admin-audit.component.scss": {
-    "colors": 0,
-    "zIndex": 1
-  },
-  "src/app/features/auth/login.component.scss": {
-    "colors": 1,
-    "zIndex": 0
-  },
   "src/app/features/changes/changes-list.component.scss": {
     "colors": 0,
     "zIndex": 1
