@@ -1,14 +1,6 @@
-<sf-field [label]="definition().label" [hint]="definition().help">
-  <input
-    type="text"
-    [formControl]="control()"
-    [maxlength]="definition().maxLength ?? null"
-    [attr.readonly]="definition().readOnly ? '' : null"
-  />
+<sf-field [label]="definition().label" [hint]="definition().help" [required]="fieldRequired()" [empty]="fieldEmpty()" [tags]="fieldTags()" [findings]="fieldFindings()">
+  <sf-input [formControl]="control()" [readonly]="!!definition().readOnly" [maxlength]="definition().maxLength ?? null" />
   @if (definition().maxLength) {
-    <span class="sf-editor__count">{{ count() }}/{{ definition().maxLength }}</span>
-  }
-  @if (message()) {
-    <span class="sf-editor__error">{{ message() }}</span>
+    <sf-editor-count [count]="count()" [max]="definition().maxLength!" />
   }
 </sf-field>

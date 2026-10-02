@@ -1,12 +1,6 @@
-<sf-field [label]="definition().label" [hint]="definition().help">
-  <textarea
-    [formControl]="control()"
-    [maxlength]="definition().maxLength ?? null"
-    [attr.readonly]="definition().readOnly ? '' : null"
-    rows="3"
-    class="sf-textarea"
-  ></textarea>
-  @if (message()) {
-    <span class="sf-editor__error">{{ message() }}</span>
+<sf-field [label]="definition().label" [hint]="definition().help" [required]="fieldRequired()" [empty]="fieldEmpty()" [tags]="fieldTags()" [findings]="fieldFindings()">
+  <sf-textarea [formControl]="control()" [rows]="3" [readonly]="!!definition().readOnly" [maxlength]="definition().maxLength ?? null" />
+  @if (definition().maxLength) {
+    <sf-editor-count [count]="count()" [max]="definition().maxLength!" />
   }
 </sf-field>

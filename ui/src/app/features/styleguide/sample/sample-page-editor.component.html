@@ -128,30 +128,64 @@
   <div class="form">
     <sf-section [id]="cardId('fields')" [class.is-selected]="selected() === 'fields'" [heading]="'styleguide.sample.editor.pageFields' | transloco">
       <div class="form__grid">
-        <sf-field class="form__wide" required [label]="fields.title">
+        <sf-field required [empty]="!v.title" [label]="fields.title"
+        [tags]="chip() | fieldTags">
           <sf-input required [value]="v.title" (valueChange)="setText('title', $event)" />
         </sf-field>
-        <sf-field class="form__wide" [label]="fields.teaser" [hint]="'styleguide.sample.editor.teaserHint' | transloco">
+        <sf-field [label]="fields.teaser" [hint]="'styleguide.sample.editor.teaserHint' | transloco" [findings]="teaserFindings()"
+        [tags]="chip() | fieldTags">
           <sf-textarea [rows]="3" [value]="v.teaser" (valueChange)="setText('teaser', $event)" />
         </sf-field>
-        <sf-field [label]="fields.date">
+        <sf-field [label]="forms('intro')"
+        [tags]="chip() | fieldTags">
+          <sf-sample-rich-text [label]="forms('intro')" [value]="intro()" (valueChange)="intro.set($event)" />
+        </sf-field>
+        <sf-field class="form__half" [label]="fields.date"
+        [tags]="all() | fieldTags">
           <sf-date-input [value]="date()" (valueChange)="date.set($event)" />
         </sf-field>
-        <sf-field [label]="fields.category">
+        <sf-field class="form__half" [label]="fields.category"
+        [tags]="all() | fieldTags">
           <sf-select [options]="categories" [value]="category()" (valueChange)="category.set($event)" />
         </sf-field>
-        <sf-field class="form__wide" [label]="fields.tags">
+        <sf-field [label]="fields.tags"
+        [tags]="all() | fieldTags">
           <sf-combobox multiple [options]="tagOptions" [value]="tags()" (valueChange)="tags.set($event)" />
         </sf-field>
-        <sf-field class="form__wide" [label]="fields.metaDescription" [error]="metaError()">
+        <sf-field [label]="fields.metaDescription" [findings]="metaFindings()"
+        [tags]="chip() | fieldTags">
           <sf-textarea [rows]="3" [invalid]="!!metaError()" [value]="metaDescription()" (valueChange)="metaDescription.set($event)" />
         </sf-field>
-        <sf-field [label]="fields.author" [hint]="'styleguide.sample.editor.authorHint' | transloco">
+        <sf-field class="form__half" [label]="fields.author" [hint]="'styleguide.sample.editor.authorHint' | transloco" computed
+        [tags]="all() | fieldTags: true">
           <sf-input readonly [value]="shared.author" />
         </sf-field>
-        <sf-field [label]="fields.inNavigation">
+        <sf-field class="form__half" [label]="fields.inNavigation"
+        [tags]="all() | fieldTags">
           <sf-switch [value]="inNavigation()" (valueChange)="inNavigation.set($event)" />
         </sf-field>
+        <sf-field [label]="forms('related')" [hint]="forms('relatedHint')"
+        [tags]="all() | fieldTags">
+          <sf-sample-reference-field kind="page" [reference]="related()" (referenceChange)="related.set($event)" />
+        </sf-field>
+        <sf-field [label]="forms('moreLink')"
+        [tags]="chip() | fieldTags">
+          <sf-sample-reference-field link [linkValue]="moreLink()" (linkValueChange)="moreLink.set($event)" />
+        </sf-field>
+        <sf-field [label]="forms('highlights')"
+        [tags]="chip() | fieldTags">
+          <sf-sample-list-field [label]="forms('highlights')" [items]="highlights()" (itemsChange)="highlights.set($event)" />
+        </sf-field>
+        <sf-sample-group-field [name]="forms('seo')" [summary]="seoSummary()" [(expanded)]="seoOpen">
+          <sf-field [label]="forms('seoTitle')"
+        [tags]="chip() | fieldTags">
+            <sf-input [value]="seoTitle()" (valueChange)="seoTitle.set($event)" />
+          </sf-field>
+          <sf-field [label]="forms('canonical')"
+        [tags]="all() | fieldTags">
+            <sf-input [value]="canonical()" (valueChange)="canonical.set($event)" />
+          </sf-field>
+        </sf-sample-group-field>
       </div>
     </sf-section>
 
@@ -179,32 +213,14 @@
               <sf-field class="form__wide" [label]="fields.headline">
                 <sf-input [value]="v.headline" (valueChange)="setText('headline', $event)" />
               </sf-field>
-              <sf-field class="form__wide" [label]="fields.image">
-                <div class="media">
-                  <img class="media__thumb" alt="" [src]="heroImage" />
-                  <div class="media__info">
-                    <span class="media__name">{{ shared.image.name }}</span>
-                    <span class="media__dims">{{ shared.image.dimensions }}</span>
-                  </div>
-                  <sf-button variant="secondary" size="sm" icon="swap_horiz" (click)="state.notice()">{{
-                    'styleguide.sample.editor.replace' | transloco
-                  }}</sf-button>
-                  <sf-button
-                    variant="ghost"
-                    size="sm"
-                    icon="delete"
-                    [label]="'styleguide.sample.editor.remove' | transloco"
-                    (click)="state.notice()"
-                  />
-                </div>
+              <sf-field [label]="fields.image"
+        [tags]="all() | fieldTags">
+                <sf-sample-media-field [value]="heroMedia()" (valueChange)="heroMedia.set($event)" />
               </sf-field>
-              <sf-field class="form__wide" [label]="fields.alt">
-                <sf-input [value]="alt()" (valueChange)="alt.set($event)" />
-              </sf-field>
-              <sf-field [label]="fields.cta">
+              <sf-field class="form__half" [label]="fields.cta">
                 <sf-input [value]="v.cta" (valueChange)="setText('cta', $event)" />
               </sf-field>
-              <sf-field [label]="fields.ctaLink">
+              <sf-field class="form__half" [label]="fields.ctaLink">
                 <sf-input icon="link" [value]="ctaLink()" (valueChange)="ctaLink.set($event)" />
               </sf-field>
             </div>
@@ -216,10 +232,10 @@
           }
           @case ('product') {
             <div class="form__grid">
-              <sf-field [label]="fields.product">
+              <sf-field class="form__half" [label]="fields.product">
                 <sf-select [options]="products" [value]="product()" (valueChange)="product.set($event)" />
               </sf-field>
-              <sf-field [label]="fields.showPrice">
+              <sf-field class="form__half" [label]="fields.showPrice">
                 <sf-switch [value]="showPrice()" (valueChange)="showPrice.set($event)" />
               </sf-field>
             </div>

@@ -1,10 +1,31 @@
-<details class="sf-group" [open]="true">
-  <summary class="sf-group__summary">
-    {{ definition().label ?? definition().name }}
-  </summary>
-  <div class="sf-group__items">
+<section class="sf-group" [class.is-collapsed]="!expanded()">
+  <h3 class="sf-group__title">
+    <button
+      type="button"
+      class="sf-group__toggle"
+      [attr.aria-expanded]="expanded()"
+      [attr.aria-controls]="bodyId"
+      (click)="toggle()"
+    >
+      <sf-icon class="sf-group__chevron" [name]="expanded() ? 'expand_more' : 'chevron_right'" />
+      <span class="sf-group__name">{{ definition().label ?? definition().name }}</span>
+      @for (tag of fieldTags(); track tag.label) {
+        <sf-badge [tone]="tag.tone ?? 'neutral'" [icon]="tag.icon ?? null" [label]="tag.label" />
+      }
+      @if (!expanded() && summary()) {
+        <span class="sf-group__summary">{{ summary() }}</span>
+      }
+    </button>
+  </h3>
+  <div class="sf-group__body" [id]="bodyId" [hidden]="!expanded()">
+    @if (definition().help) {
+      <p class="sf-group__hint">{{ definition().help }}</p>
+    }
+    @for (finding of findings(); track $index) {
+      <sf-finding [level]="finding.level" [message]="finding.message" [levelLabel]="('shared.finding.' + finding.level) | transloco" />
+    }
     @for (item of definition().items ?? []; track item.name) {
       <sf-editor-outlet [definition]="item" [control]="controlFor(item)" />
     }
   </div>
-</details>
+</section>

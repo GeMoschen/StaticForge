@@ -1,88 +1,174 @@
-<div class="scrim" (click)="close()"></div>
-<div class="dialog" role="dialog" aria-modal="true" [attr.aria-label]="titleKey() | transloco">
-  <header class="dialog__header">
-    <h2 class="dialog__title">{{ titleKey() | transloco }}</h2>
-    <button type="button" class="dialog__close" [attr.aria-label]="'common.close' | transloco" (click)="close()">
-      <sf-icon name="close" />
-    </button>
-  </header>
-
-  <div class="dialog__toolbar">
-    @if (typeOptions().length > 1) {
-      <select class="dialog__type" [value]="type()" (change)="onTypeChange($event)" [attr.aria-label]="(picksSources() ? 'shared.assetPicker.sourceType' : 'shared.assetPicker.assetType') | transloco">
-        @for (option of typeOptions(); track option.value) {
-          <option [value]="option.value">{{ option.labelKey | transloco }}</option>
-        }
-      </select>
-    }
-    @if (type() === 'RECORD' && datasets().length > 1) {
-      <select class="dialog__type" [value]="datasetUuid()" (change)="onDatasetChange($event)" [attr.aria-label]="'shared.assetPicker.dataset' | transloco">
-        @for (ds of datasets(); track ds.uuid) {
-          <option [value]="ds.uuid">{{ ds.displayName ?? ds.uid }}</option>
-        }
-      </select>
-    }
-    <input
-      type="search"
-      class="dialog__search"
-      [placeholder]="'common.searchPlaceholder' | transloco"
-      (input)="onSearchInput($event)"
-    />
-  </div>
-
-  <div class="dialog__body">
-    @if (hasFolders()) {
-      <aside class="dialog__tree">
-        <button
-          type="button"
-          class="dialog__tree-root"
-          [class.dialog__tree-root--active]="!folderUuid()"
-          (click)="selectFolder(null)"
-        >
-          <sf-icon name="home" />
-          {{ 'shared.assetPicker.allRoot' | transloco }}
-        </button>
-        @for (folder of tree(); track folder.uuid) {
-          <sf-asset-picker-folder-node
-            [node]="folder"
-            [depth]="0"
-            [selectedUuid]="folderUuid()"
-            (select)="selectFolder($event)"
+<sf-dialog size="lg" [title]="title()" (closed)="close()">
+  <div class="picker">
+    <div class="picker__toolbar">
+      @if (showSwitch()) {
+        @if (segmented()) {
+          <sf-segmented
+            class="picker__switch"
+            size="sm"
+            [options]="typeSegments()"
+            [value]="type()"
+            [aria-label]="(picksSources() ? 'forms.picker.sourceType' : 'forms.picker.assetType') | transloco"
+            (valueChange)="setType($event)"
+          />
+        } @else {
+          <sf-select
+            class="picker__switch"
+            [options]="typeSelectOptions()"
+            [value]="type()"
+            [aria-label]="(picksSources() ? 'forms.picker.sourceType' : 'forms.picker.assetType') | transloco"
+            (valueChange)="setType($event)"
           />
         }
-      </aside>
-    }
-
-    <div class="dialog__results">
-      @if (loading()) {
-        <sf-spinner />
-      } @else if (items().length === 0) {
-        <sf-empty-state
-          [title]="emptyTitleKey() | transloco"
-          [description]="emptyDescriptionKey() | transloco"
-        />
-      } @else {
-        <ul class="dialog__list">
-          @for (item of items(); track item.uuid) {
-            <li>
-              <button
-                type="button"
-                class="dialog__item"
-                [style.padding-left]="item.depth ? 'calc(var(--sf-2) + ' + item.depth * 14 + 'px)' : null"
-                (click)="pick(item)"
-              >
-                <span class="dialog__item-head">
-                  <span class="dialog__item-name">{{ item.displayName ?? item.uid }}</span>
-                  @if (item.dataset) {
-                    <span class="dialog__item-badge">{{ item.dataset }}</span>
-                  }
-                </span>
-                <span class="dialog__item-meta">{{ item.meta ?? item.uid }}</span>
-              </button>
-            </li>
-          }
-        </ul>
       }
+      @if (showDatasets()) {
+        <sf-select
+          class="picker__dataset"
+          [options]="datasetOptions()"
+          [value]="activeDataset()"
+          [aria-label]="'forms.picker.dataset' | transloco"
+          (valueChange)="setDataset($event)"
+        />
+      }
+      @if (hasFolders()) {
+        <sf-select
+          class="picker__folder-select"
+          [options]="folderSelectOptions()"
+          [value]="folderUuid()"
+          [aria-label]="'forms.picker.folder' | transloco"
+          (valueChange)="selectFolderByUuid($event)"
+        />
+      }
+      <sf-search-input
+        class="picker__search"
+        [value]="typed()"
+        [placeholder]="'forms.picker.search' | transloco"
+        [aria-label]="'forms.picker.search' | transloco"
+        (valueChange)="onSearch($event)"
+        (keydown)="onSearchKeydown($event)"
+      />
+      <span class="picker__count" aria-live="polite">{{
+        (loading() ? 'forms.picker.loading' : 'forms.picker.count') | transloco: { count: items().length }
+      }}</span>
+    </div>
+
+    <div class="picker__body" [class.picker__body--flat]="!hasFolders()">
+      @if (hasFolders()) {
+        <aside class="picker__tree" [attr.aria-label]="'forms.picker.folders' | transloco">
+          <button type="button" class="picker__root" [class.is-active]="!folderUuid()" [attr.aria-current]="!folderUuid() ? 'true' : null" (click)="selectFolder(null)">
+            <sf-icon name="home" />
+            {{ 'forms.picker.all.' + type() | transloco }}
+          </button>
+          <sf-tree
+            class="picker__folders"
+            [label]="'forms.picker.folders' | transloco"
+            [loadChildren]="loader()"
+            [selection]="folderUuid() ? [folderUuid()] : []"
+            [multiselect]="false"
+            [filterable]="false"
+            [expandActions]="false"
+            (open)="onTreeOpen($event)"
+          />
+        </aside>
+      }
+
+      <div class="picker__results">
+        @if (hasFolders()) {
+          <nav class="picker__crumbs" [attr.aria-label]="'forms.picker.location' | transloco">
+            @if (search()) {
+              <span class="picker__crumb is-current">{{ 'forms.picker.searchAll' | transloco }}</span>
+            } @else {
+              <button type="button" class="picker__crumb" [attr.aria-current]="trail().length === 0 ? 'location' : null" (click)="selectFolder(null)">
+                {{ 'forms.picker.all.' + type() | transloco }}
+              </button>
+              @for (folder of trail(); track folder.uuid; let last = $last) {
+                <sf-icon class="picker__crumb-sep" name="chevron_right" />
+                <button type="button" class="picker__crumb" [attr.aria-current]="last ? 'location' : null" (click)="selectFolder(folder)">
+                  {{ folder.displayName ?? folder.uid }}
+                </button>
+              }
+            }
+          </nav>
+        }
+
+        <div class="picker__list-wrap">
+          @if (loading()) {
+            <sf-skeleton shape="row" [rows]="7" [label]="'forms.picker.loadingList' | transloco" />
+          } @else if (failed()) {
+            <sf-banner tone="danger" live="assertive">
+              {{ 'forms.picker.error' | transloco }}
+              <sf-button sfBannerActions variant="secondary" size="sm" icon="refresh" (click)="retry()">{{ 'forms.picker.retry' | transloco }}</sf-button>
+            </sf-banner>
+          } @else if (items().length === 0) {
+            <sf-empty-state
+              icon="search_off"
+              [level]="3"
+              [title]="(search() ? 'forms.picker.emptyMatch.' + type() : 'forms.picker.empty.' + type()) | transloco: { query: search() }"
+              [description]="'forms.picker.hint.' + emptyKind() | transloco"
+              [primaryLabel]="search() ? ('forms.picker.clearSearch' | transloco) : null"
+              (primary)="clearSearch()"
+            />
+          } @else {
+            <ul class="picker__list" role="listbox" [attr.aria-label]="title()" (keydown)="onListKeydown($event)">
+              @for (item of items(); track item.uuid) {
+                <li
+                  class="picker__row"
+                  role="option"
+                  tabindex="0"
+                  [class.is-selected]="item.uuid === selectedId()"
+                  [attr.aria-selected]="item.uuid === selectedId()"
+                  [attr.data-picker-id]="item.uuid"
+                  [style.--picker-depth]="indent(item)"
+                  (click)="select(item)"
+                  (dblclick)="pick(item)"
+                >
+                  @if (item.type === 'MEDIA') {
+                    <sf-media-thumb class="picker__thumb" [projectKey]="projectKey()" [uuid]="item.uuid!" />
+                  } @else {
+                    <span class="picker__icon"><sf-icon [name]="iconOf(item)" /></span>
+                  }
+                  <span class="picker__text">
+                    <span class="picker__head">
+                      <span class="picker__name">{{ nameOf(item) }}</span>
+                      @if (item.dataset) {
+                        <sf-badge tone="neutral" [label]="item.dataset" />
+                      }
+                      @if (item.recordCount !== undefined) {
+                        <span class="picker__count-chip">{{ recordCountText(item.recordCount) }}</span>
+                      }
+                    </span>
+                    @if (metaOf(item); as meta) {
+                      <span class="picker__meta" [class.is-mono]="developer()">{{ meta }}</span>
+                    }
+                  </span>
+                  @if (item.status && item.status !== 'PUBLISHED') {
+                    <sf-badge [tone]="statusTone(item.status)" [label]="'forms.picker.status.' + item.status | transloco" />
+                  }
+                  @if (item.uuid === selectedId()) {
+                    <sf-icon class="picker__check" name="check" />
+                  }
+                </li>
+              }
+            </ul>
+          }
+        </div>
+      </div>
     </div>
   </div>
-</div>
+
+  <ng-container sfDialogFooter>
+    <span class="picker__selected" aria-live="polite">
+      @if (selected(); as item) {
+        {{ 'forms.picker.selected' | transloco }}
+        <strong>{{ nameOf(item) }}</strong>
+        @if (selectedMeta()) {
+          <span class="picker__selected-meta"> · {{ selectedMeta() }}</span>
+        }
+      } @else {
+        {{ 'forms.picker.nothing' | transloco }}
+      }
+    </span>
+    <sf-button variant="ghost" (click)="close()">{{ 'forms.picker.cancel' | transloco }}</sf-button>
+    <sf-button variant="primary" [disabled]="!selected()" (click)="pick(selected())">{{ 'forms.picker.choose' | transloco }}</sf-button>
+  </ng-container>
+</sf-dialog>

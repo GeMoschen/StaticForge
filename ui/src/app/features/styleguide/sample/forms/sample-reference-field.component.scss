@@ -1,0 +1,60 @@
+:host {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sf-space-2);
+}
+
+.ref__mode {
+  align-self: flex-start;
+}
+
+.ref__card,
+.ref__empty {
+  display: flex;
+  align-items: center;
+  gap: var(--sf-space-2);
+  padding: var(--sf-space-2) var(--sf-space-3);
+  border-radius: var(--sf-radius-md);
+}
+
+.ref__card {
+  border: 1px solid var(--sf-border);
+  background: var(--sf-surface);
+}
+
+.ref__empty {
+  justify-content: space-between;
+  border: 1px dashed var(--sf-border-strong);
+  color: var(--sf-text-muted);
+}
+
+.ref__icon {
+  flex-shrink: 0;
+  color: var(--sf-text-subtle);
+}
+
+.ref__text {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: var(--sf-space-1);
+  min-width: 0;
+}
+
+.ref__name {
+  overflow: hidden;
+  color: var(--sf-text);
+  font-weight: var(--sf-weight-medium);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ref__path {
+  overflow: hidden;
+  color: var(--sf-text-muted);
+  font-family: var(--sf-font-mono);
+  font-size: var(--sf-fs-12);
+  line-height: var(--sf-lh-12);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

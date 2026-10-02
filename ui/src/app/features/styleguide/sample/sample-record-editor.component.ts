@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, DestroyRef, computed, inject, signal } from '@angular/core';
+import { SampleFieldTagsPipe } from './forms/sample-field-tags.pipe';
 import { TranslocoPipe } from '@jsverse/transloco';
 import { ToastService } from '../../../core/ui/toast.service';
 import { ConfirmService } from '../../../shared/components/dialog/confirm.service';
@@ -14,11 +15,16 @@ import { SfMenuItem } from '../../../shared/components/menu/sf-menu.component';
 import { SfButtonComponent } from '../../../shared/components/sf-button.component';
 import { SfFieldComponent } from '../../../shared/components/sf-field.component';
 import { SfIconComponent } from '../../../shared/components/sf-icon.component';
+import { PICKER_MEDIA, PICKER_PAGES, PickerItem, SAMPLE_HIGHLIGHTS } from './forms/forms-data';
+import { SampleListFieldComponent } from './forms/sample-list-field.component';
+import { SampleMediaFieldComponent, SampleMediaValue } from './forms/sample-media-field.component';
+import { SampleReferenceFieldComponent } from './forms/sample-reference-field.component';
+import { RichTextCommand, SampleRichTextComponent } from './forms/sample-rich-text.component';
 import { SampleBreadcrumbComponent } from './sample-breadcrumb.component';
 import { SampleCard } from './sample-catalog';
 import { SampleCatalogFieldComponent } from './sample-catalog-field.component';
 import { SampleDataset, SampleDatasetField, SampleRecord, SampleValue, datasetById } from './sample-content-data';
-import { SAMPLE_LANGS } from './sample-data';
+import { LANGUAGE_NAMES, SAMPLE_LANGS } from './sample-data';
 import { STATUS_ICONS, STATUS_TONES, SampleState } from './sample-state';
 import { SfSaveStatusComponent } from '../../../shared/components/layout/sf-save-status.component';
 
@@ -41,9 +47,14 @@ interface RecordField {
   selector: 'sf-sample-record-editor',
   standalone: true,
   imports: [
+    SampleFieldTagsPipe,
     SfSaveStatusComponent,
     SampleBreadcrumbComponent,
     SampleCatalogFieldComponent,
+    SampleListFieldComponent,
+    SampleMediaFieldComponent,
+    SampleReferenceFieldComponent,
+    SampleRichTextComponent,
     SfButtonComponent,
     SfCopyableComponent,
     SfFieldComponent,
@@ -63,6 +74,20 @@ interface RecordField {
 })
 export class SampleRecordEditorComponent {
   protected readonly state = inject(SampleState);
+
+  // The richer content form (M35.17): a rich-text field with a reduced toolbar, a reference, a list, a media field.
+  protected readonly description = signal('<p>Washed Yirgacheffe with notes of <strong>jasmine</strong> and bergamot.</p>');
+  protected readonly origin = signal<PickerItem | null>(PICKER_PAGES[10]);
+  protected readonly notes = signal<readonly string[]>(SAMPLE_HIGHLIGHTS.slice(0, 2));
+  protected readonly media = signal<SampleMediaValue | null>({ item: PICKER_MEDIA[0], alt: '' });
+  protected readonly richFeatures: readonly RichTextCommand[] = ['bold', 'italic', 'ul', 'link', 'clear'];
+  protected readonly chip = computed(() => LANGUAGE_NAMES[this.state.lang()]);
+  protected forms(key: string): string {
+    return this.state.t(`forms.record.${key}`);
+  }
+  protected isEmpty(value: unknown): boolean {
+    return value === null || value === undefined || value === '';
+  }
   private readonly confirms = inject(ConfirmService);
   private readonly toasts = inject(ToastService);
 

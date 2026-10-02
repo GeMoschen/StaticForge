@@ -1,43 +1,105 @@
+:host {
+  display: block;
+}
+
 .sf-richtext {
   display: flex;
   flex-direction: column;
-  gap: var(--sf-1);
+  border: 1px solid var(--sf-border-strong);
+  border-radius: var(--sf-radius-md);
+  background: var(--sf-surface);
+  overflow: hidden;
+
+  &:focus-within {
+    border-color: var(--sf-accent);
+    box-shadow: 0 0 0 2px var(--sf-focus-ring);
+  }
+
+  &.is-invalid {
+    border-color: var(--sf-danger);
+  }
+
+  // Read-only stays readable: a dashed frame says it is locked, the text keeps its colour.
+  &.is-readonly {
+    border-style: dashed;
+    background: var(--sf-surface-muted);
+  }
 }
+
 .sf-richtext__toolbar {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--sf-1);
-  padding: var(--sf-1);
-  border: 1px solid var(--sf-line);
-  border-radius: var(--sf-radius-sm);
+  gap: var(--sf-space-1);
+  padding: var(--sf-space-1) var(--sf-space-2);
+  border-bottom: 1px solid var(--sf-border);
+  background: var(--sf-surface-muted);
 }
-.sf-richtext__toolbar button {
-  min-width: 28px;
-  height: 28px;
-  border: 1px solid transparent;
+
+// The toolbar's icon buttons: ghost look; a pressed one reads as on (accent tint), not just a darker hover.
+.sf-richtext__button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--sf-control-height-sm, 1.75rem);
+  height: var(--sf-control-height-sm, 1.75rem);
+  padding: 0;
+  border: 0;
+  border-radius: var(--sf-radius-sm);
   background: transparent;
-  border-radius: var(--sf-radius-sm);
+  color: var(--sf-text-muted);
   cursor: pointer;
+
+  &:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--sf-text) 12%, transparent);
+    color: var(--sf-text);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--sf-focus-ring);
+    outline-offset: -2px;
+  }
+
+  &[aria-pressed='true'] {
+    background: var(--sf-accent-subtle);
+    color: var(--sf-accent);
+  }
+
+  &:disabled {
+    cursor: default;
+    opacity: 0.5;
+  }
 }
-.sf-richtext__toolbar button:hover {
-  background: var(--sf-paper);
-  border-color: var(--sf-line);
-}
+
 .sf-richtext__body {
-  min-height: 96px;
-  padding: var(--sf-2);
-  border: 1px solid var(--sf-line);
-  border-radius: var(--sf-radius-sm);
+  min-height: 9rem;
+  padding: var(--sf-space-3);
+  color: var(--sf-text);
+  font-size: var(--sf-fs-14);
+  line-height: var(--sf-lh-14);
   outline: none;
+
+  :where(h2, h3) {
+    margin: var(--sf-space-3) 0 var(--sf-space-1);
+    font-weight: var(--sf-weight-semibold);
+  }
+
+  :where(p, ul, ol, blockquote) {
+    margin: 0 0 var(--sf-space-2);
+  }
+
+  :where(a) {
+    color: var(--sf-accent);
+  }
+
+  :where(blockquote) {
+    padding-inline-start: var(--sf-space-3);
+    border-inline-start: 3px solid var(--sf-border-strong);
+    color: var(--sf-text-muted);
+  }
 }
-.sf-richtext__body:focus {
-  border-color: var(--sf-signal);
-}
-.sf-editor__count {
-  font-size: var(--sf-text-xs);
-  color: var(--sf-slate);
-}
-.sf-editor__error {
-  font-size: var(--sf-text-xs);
-  color: var(--sf-rust);
+
+.sf-richtext__count {
+  color: var(--sf-text-muted);
+  font-size: var(--sf-fs-12);
+  line-height: var(--sf-lh-12);
 }

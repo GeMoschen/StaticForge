@@ -1,9 +1,10 @@
-import { ChangeDetectionStrategy, Component, computed, effect, input, signal, untracked } from '@angular/core';
-import { FormControl, ValidationErrors } from '@angular/forms';
+import { ChangeDetectionStrategy, Component, effect, signal, untracked } from '@angular/core';
+import { FormControl } from '@angular/forms';
 import { SfCodeEditorComponent } from '../../../shared/code-editor/code-editor.component';
 import { SfFieldComponent } from '../../../shared/components/sf-field.component';
-import { EditorDefinition } from '../form.model';
+import { SfEditorBase } from '../editor-base';
 
+/** The JSON editor (M35.17): the code panel in an `sf-field`; "Must be valid JSON" is the field's own finding. */
 @Component({
   selector: 'sf-json-editor',
   standalone: true,
@@ -12,28 +13,14 @@ import { EditorDefinition } from '../form.model';
   templateUrl: './json-editor.component.html',
   styleUrl: './json-editor.component.scss',
 })
-export class SfJsonEditor {
-  readonly definition = input.required<EditorDefinition>();
-  readonly control = input.required<FormControl>();
-
+export class SfJsonEditor extends SfEditorBase<FormControl> {
   /** The control's text, kept in step with changes from outside (a rebuilt form, a live fill). */
   protected readonly text = signal('');
   /** Read-only by definition, or disabled by a rule (M33). */
   protected readonly readOnly = signal(false);
-  private readonly errors = signal<ValidationErrors | null>(null);
-
-  readonly message = computed(() => {
-    const errors = this.errors();
-    if (errors?.['json']) {
-      return 'Must be valid JSON';
-    }
-    if (errors?.['required']) {
-      return 'This field is required';
-    }
-    return null;
-  });
 
   constructor() {
+    super();
     effect((onCleanup) => {
       const control = this.control();
       const readOnlyDefinition = !!this.definition().readOnly;
@@ -41,7 +28,6 @@ export class SfJsonEditor {
         untracked(() => {
           this.text.set(control.value == null ? '' : String(control.value));
           this.readOnly.set(readOnlyDefinition || control.disabled);
-          this.errors.set(control.errors);
         });
       sync();
       const values = control.valueChanges.subscribe(sync);

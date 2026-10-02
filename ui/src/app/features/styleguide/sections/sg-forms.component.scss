@@ -1,0 +1,66 @@
+@use './styleguide-common' as *;
+
+.sg-forms__findings {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr));
+  gap: var(--sf-gap) var(--sf-space-4);
+}
+
+// The form grid of the content form: one column, and two for the fields marked `width: half` from 1280 px up.
+// The grid reads its own container's width (the form's), not the screen's: two columns from 46 rem (about 1280 px of screen).
+.sg-forms__layout {
+  container: layout / inline-size;
+  max-width: 60rem;
+}
+
+.sg-forms__grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sf-gap) var(--sf-space-4);
+  padding: var(--sf-space-4);
+  border: 1px solid var(--sf-border);
+  border-radius: var(--sf-radius-lg);
+  background: var(--sf-surface);
+
+  @container layout (min-width: 46rem) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+
+    > * {
+      grid-column: 1 / -1;
+    }
+
+    > .is-half {
+      grid-column: auto;
+    }
+  }
+}
+
+.sg-editor {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sf-space-2);
+  padding: var(--sf-space-4);
+  border: 1px solid var(--sf-border);
+  border-radius: var(--sf-radius-lg);
+  background: var(--sf-surface);
+}
+
+.sg-editor__title {
+  margin: 0;
+  color: var(--sf-text);
+  font-size: var(--sf-fs-16);
+  line-height: var(--sf-lh-16);
+  font-weight: var(--sf-weight-semibold);
+}
+
+.sg-editor__states {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(20rem, 1fr));
+  gap: var(--sf-space-4);
+}
+
+.sg-forms__pickers {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
+  gap: var(--sf-space-4);
+}

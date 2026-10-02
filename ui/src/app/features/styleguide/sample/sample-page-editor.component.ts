@@ -11,6 +11,7 @@ import {
   signal,
   untracked,
 } from '@angular/core';
+import { SampleFieldTagsPipe } from './forms/sample-field-tags.pipe';
 import { DomSanitizer } from '@angular/platform-browser';
 import { TranslocoPipe } from '@jsverse/transloco';
 import { ToastService } from '../../../core/ui/toast.service';
@@ -40,6 +41,12 @@ import {
   SampleReleaseActionsComponent,
 } from './changes/sample-release-actions.component';
 import { SampleCatalogFieldComponent } from './sample-catalog-field.component';
+import { PICKER_MEDIA, PICKER_PAGES, PickerItem, SAMPLE_HIGHLIGHTS, SAMPLE_INTRO_HTML, SAMPLE_SEO } from './forms/forms-data';
+import { SampleGroupFieldComponent } from './forms/sample-group-field.component';
+import { SampleListFieldComponent } from './forms/sample-list-field.component';
+import { SampleMediaFieldComponent, SampleMediaValue } from './forms/sample-media-field.component';
+import { SampleLinkValue, SampleReferenceFieldComponent } from './forms/sample-reference-field.component';
+import { SampleRichTextComponent } from './forms/sample-rich-text.component';
 import { SampleCard, TEASERS_FIELD, initialTeasers } from './sample-catalog';
 import {
   ARTICLE,
@@ -49,6 +56,7 @@ import {
   CATEGORY_OPTIONS,
   FIXED_PAGE,
   PRODUCT_OPTIONS,
+  LANGUAGE_NAMES,
   SAMPLE_LANGS,
   SECTIONS,
   SampleLang,
@@ -118,11 +126,17 @@ function localizedFor(pageId: string): Record<SampleLang, LocalizedValues> {
   selector: 'sf-sample-page-editor',
   standalone: true,
   imports: [
+    SampleFieldTagsPipe,
     SfSaveStatusComponent,
     NgTemplateOutlet,
     SampleBreadcrumbComponent,
     SampleCatalogFieldComponent,
+    SampleGroupFieldComponent,
+    SampleListFieldComponent,
+    SampleMediaFieldComponent,
+    SampleReferenceFieldComponent,
     SampleReleaseActionsComponent,
+    SampleRichTextComponent,
     SfButtonComponent,
     SfComboboxComponent,
     SfCopyableComponent,
@@ -179,6 +193,33 @@ export class SamplePageEditorComponent {
   /** The "Product teasers" catalog field (decision 12): cards in order, one teaser with nested badges. */
   protected readonly teasers = signal<readonly SampleCard[]>(initialTeasers());
   protected readonly teasersField = TEASERS_FIELD;
+
+  // The richer content form (M35.17): rich text, a reference, a link, a list, a group, a media field with alt text.
+  protected readonly intro = signal(SAMPLE_INTRO_HTML);
+  protected readonly related = signal<PickerItem | null>(PICKER_PAGES[4]);
+  protected readonly moreLink = signal<SampleLinkValue>({ mode: 'page', page: PICKER_PAGES[3], url: '' });
+  protected readonly highlights = signal<readonly string[]>(SAMPLE_HIGHLIGHTS);
+  protected readonly seoTitle = signal(SAMPLE_SEO.title);
+  protected readonly canonical = signal(SAMPLE_SEO.canonical);
+  protected readonly seoOpen = signal(false);
+  protected readonly heroMedia = signal<SampleMediaValue | null>({ item: PICKER_MEDIA[1], alt: ARTICLE_SHARED.alt });
+  /** The template is localized: a localized field shows the editing language, a shared one "All languages". */
+  protected readonly chip = computed(() => LANGUAGE_NAMES[this.state.lang()]);
+  protected readonly all = computed(() => 'all');
+  protected readonly seoSummary = computed(() => `${this.seoTitle()} · ${this.canonical()}`);
+  protected forms(key: string): string {
+    return this.state.t(`forms.page.${key}`);
+  }
+  protected readonly teaserFindings = computed(() =>
+    this.values().teaser.length > 140 ? [{ level: 'warning' as const, message: this.state.t('forms.page.teaserLong') }] : [],
+  );
+  protected readonly metaFindings = computed(() => {
+    const error = this.metaError();
+    return [
+      ...(error ? [{ level: 'error' as const, message: error }] : []),
+      { level: 'info' as const, message: this.state.t('forms.page.metaInfo', { count: this.metaDescription().length, max: ARTICLE_SHARED.metaLimit }) },
+    ];
+  });
 
   protected readonly metaError = computed(() => {
     const length = this.metaDescription().length;

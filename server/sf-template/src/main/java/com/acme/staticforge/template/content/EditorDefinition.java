@@ -1,6 +1,7 @@
 package com.acme.staticforge.template.content;
 
 import com.acme.staticforge.template.rules.BuiltinRule;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.JsonNode;
 import java.util.List;
 import java.util.Map;
@@ -50,7 +51,45 @@ public record EditorDefinition(
          * ({@link BuiltinRule#NAMES}) → level, scopes, {@code onGeneration} and messages. Absent names keep the
          * built-in's defaults.
          */
-        Map<String, BuiltinRule> builtinRules) {
+        Map<String, BuiltinRule> builtinRules,
+        /**
+         * Layout hint for the content form (M35.17): {@code "half"} lets the field share a row with the next half-width
+         * field when the form is wide; {@code null} (omitted from the JSON) means the default, {@code "full"}.
+         */
+        @JsonInclude(JsonInclude.Include.NON_NULL) String width) {
+
+    /** An editor without a width. */
+    public EditorDefinition(
+            String name,
+            EditorType type,
+            String label,
+            String help,
+            boolean required,
+            boolean readOnly,
+            boolean hidden,
+            JsonNode defaultValue,
+            Integer min,
+            Integer max,
+            Integer maxLength,
+            Integer maxChars,
+            String pattern,
+            String patternMessage,
+            List<String> mimeTypes,
+            List<String> assetTypes,
+            List<SelectOption> options,
+            List<String> features,
+            List<String> allow,
+            String visibleWhen,
+            String renamedFrom,
+            boolean localizable,
+            List<EditorDefinition> items,
+            String dataset,
+            PaginationOptions pagination,
+            Map<String, BuiltinRule> builtinRules) {
+        this(name, type, label, help, required, readOnly, hidden, defaultValue, min, max, maxLength, maxChars, pattern,
+                patternMessage, mimeTypes, assetTypes, options, features, allow, visibleWhen, renamedFrom, localizable,
+                items, dataset, pagination, builtinRules, null);
+    }
 
     /** An editor without built-in overrides. */
     public EditorDefinition(
@@ -81,7 +120,7 @@ public record EditorDefinition(
             PaginationOptions pagination) {
         this(name, type, label, help, required, readOnly, hidden, defaultValue, min, max, maxLength, maxChars, pattern,
                 patternMessage, mimeTypes, assetTypes, options, features, allow, visibleWhen, renamedFrom, localizable,
-                items, dataset, pagination, Map.of());
+                items, dataset, pagination, Map.of(), null);
     }
 
     public EditorDefinition {

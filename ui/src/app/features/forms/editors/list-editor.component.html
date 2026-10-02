@@ -1,36 +1,66 @@
-<sf-field [label]="definition().label" [hint]="definition().help">
-  <div class="sf-list">
-    @for (row of control().controls; track $index; let i = $index) {
-      <div class="sf-list__row">
+<sf-field
+  [label]="definition().label"
+  [hint]="definition().help"
+  [required]="fieldRequired()"
+  [empty]="fieldEmpty()"
+  [tags]="fieldTags()"
+  [findings]="fieldFindings()"
+>
+  <div class="sf-list" role="list" [attr.aria-label]="definition().label ?? definition().name">
+    @for (row of control().controls; track row; let i = $index) {
+      <div
+        class="sf-list__row"
+        role="listitem"
+        [class.is-dragging]="dragFrom() === i"
+        [class.is-over]="overAt() === i && dragFrom() !== i"
+        (dragover)="onDragOver($event, i)"
+        (drop)="onDrop($event, i)"
+      >
+        @if (!readOnly()) {
+          <button
+            type="button"
+            class="sf-list__handle"
+            draggable="true"
+            [attr.data-sf-list-handle]="i"
+            [attr.aria-label]="'forms.list.handle' | transloco: { n: i + 1 }"
+            [attr.aria-describedby]="helpId"
+            (dragstart)="dragFrom.set(i)"
+            (dragend)="endDrag()"
+            (keydown)="onHandleKeydown($event, i)"
+          >
+            <sf-icon name="drag_indicator" />
+          </button>
+        }
+        <span class="sf-list__index" aria-hidden="true">{{ i + 1 }}</span>
         <div class="sf-list__items">
           @for (item of definition().items ?? []; track item.name) {
             <sf-editor-outlet [definition]="item" [control]="rowControl(row, item)" />
           }
         </div>
-        <div class="sf-list__actions">
-          <sf-button variant="ghost" (click)="move(i, -1)" [disabled]="i === 0">
-            <sf-icon name="arrow_upward" />
-          </sf-button>
+        @if (!readOnly()) {
           <sf-button
             variant="ghost"
-            (click)="move(i, 1)"
-            [disabled]="i === control().controls.length - 1"
-          >
-            <sf-icon name="arrow_downward" />
-          </sf-button>
-          <sf-button variant="danger" (click)="removeRow(i)" [disabled]="!canRemove()">
-            <sf-icon name="delete" />
-          </sf-button>
-        </div>
+            size="sm"
+            icon="delete"
+            [label]="'forms.list.remove' | transloco: { n: i + 1 }"
+            [disabled]="!canRemove()"
+            (click)="removeRow(i)"
+          />
+        }
       </div>
+    } @empty {
+      <p class="sf-list__empty">{{ 'forms.list.empty' | transloco }}</p>
     }
 
     @if (canAdd()) {
-      <sf-button variant="secondary" (click)="addRow()">Add row</sf-button>
+      <div class="sf-list__footer">
+        <sf-button variant="secondary" size="sm" icon="add" (click)="addRow()">{{ 'forms.list.add' | transloco }}</sf-button>
+        <span class="sf-list__count">{{ 'forms.list.count' | transloco: { count: count() } }}</span>
+      </div>
     }
-
-    @if (message()) {
-      <span class="sf-editor__error">{{ message() }}</span>
+    @if (!readOnly()) {
+      <span class="sf-sr-only" [id]="helpId">{{ 'forms.list.help' | transloco }}</span>
     }
+    <span class="sf-sr-only" aria-live="polite">{{ announcement() }}</span>
   </div>
 </sf-field>

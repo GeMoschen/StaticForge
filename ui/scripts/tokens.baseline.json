@@ -27,18 +27,6 @@
     "colors": 1,
     "zIndex": 0
   },
-  "src/app/features/forms/editors/boolean-editor.component.scss": {
-    "colors": 1,
-    "zIndex": 0
-  },
-  "src/app/features/forms/editors/catalog-editor.component.scss": {
-    "colors": 2,
-    "zIndex": 1
-  },
-  "src/app/features/forms/sf-content-form.component.scss": {
-    "colors": 1,
-    "zIndex": 0
-  },
   "src/app/features/generation/findings/sf-run-findings.component.scss": {
     "colors": 0,
     "zIndex": 1
@@ -154,14 +142,6 @@
   "src/app/features/templates/templates.component.scss": {
     "colors": 4,
     "zIndex": 3
-  },
-  "src/app/shared/components/sf-asset-picker-dialog.component.scss": {
-    "colors": 3,
-    "zIndex": 2
-  },
-  "src/app/shared/components/sf-asset-picker-folder-node.component.ts": {
-    "colors": 1,
-    "zIndex": 0
   },
   "src/app/shared/components/sf-octl-editor.component.scss": {
     "colors": 1,

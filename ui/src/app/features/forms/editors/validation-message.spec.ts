@@ -10,7 +10,7 @@ import { SfRichTextEditor } from './rich-text-editor.component';
 import { SfTextEditor } from './text-editor.component';
 import { SfTextareaEditor } from './textarea-editor.component';
 
-const REQUIRED = 'This field is required';
+const REQUIRED = 'This field is required.';
 
 /**
  * Form controls are not signals: the editors' messages were `computed`s over `control.errors` alone, evaluated once, so

@@ -67,40 +67,71 @@ export function sfJson(): ValidatorFn {
   };
 }
 
-/** Returns a user-facing validation message for a control (i18n fallback text). */
+/** Translates a message key with parameters (Transloco's `translate`, or {@link englishMessage} without one). */
+export type MessageTranslator = (key: string, params?: Record<string, unknown>) => string;
+
+/** The English texts of the validation messages (M35.17), used where no Transloco is at hand. Same keys as `en.json`. */
+const ENGLISH_MESSAGES: Readonly<Record<string, string>> = {
+  'forms.editors.errors.required': 'This field is required',
+  'forms.editors.errors.maxlength': 'Must be at most {max} characters',
+  'forms.editors.errors.pattern': 'Invalid format',
+  'forms.editors.errors.maxchars': 'Must be at most {max} characters',
+  'forms.editors.errors.min': 'Must be at least {min}',
+  'forms.editors.errors.max': 'Must be at most {max}',
+  'forms.editors.errors.listmin': 'At least {required} rows required',
+  'forms.editors.errors.listmax': 'At most {required} rows allowed',
+  'forms.editors.errors.json': 'Must be valid JSON',
+  'forms.editors.errors.invalid': 'Invalid value',
+};
+
+/** The English message for `key`, its `{name}` placeholders filled from `params`. */
+export function englishMessage(key: string, params: Record<string, unknown> = {}): string {
+  return (ENGLISH_MESSAGES[key] ?? key).replace(/\{(\w+)\}/g, (_, name: string) => String(params[name] ?? ''));
+}
+
+/**
+ * Returns a user-facing validation message for a control (M35.17: the texts live in `forms.editors.errors.*`; pass
+ * Transloco's `translate`, or leave it out for the English default). The required message is the field's own
+ * ("This field is required", shown once by `sf-field`), so editors built on `SfEditorBase` do not ask for it here.
+ */
 export function errorMessageFor(
   definition: EditorDefinition,
   control: AbstractControl,
+  translate: MessageTranslator = englishMessage,
 ): string | null {
   const errors = control?.errors;
   if (!errors) {
     return null;
   }
+  const t = (key: string, params?: Record<string, unknown>) => translate(`forms.editors.errors.${key}`, params);
   if (errors['required']) {
-    return 'This field is required';
+    return t('required');
+  }
+  if (errors['json']) {
+    return t('json');
   }
   if (errors['maxlength']) {
-    return `Must be at most ${errors['maxlength'].requiredLength} characters`;
+    return t('maxlength', { max: errors['maxlength'].requiredLength });
   }
   if (errors['pattern']) {
-    return definition.patternMessage ?? 'Invalid format';
+    return definition.patternMessage ?? t('pattern');
   }
   if (errors['maxchars']) {
-    return `Must be at most ${errors['maxchars'].max} characters`;
+    return t('maxchars', { max: errors['maxchars'].max });
   }
   if (errors['min']) {
-    return `Must be at least ${errors['min'].min}`;
+    return t('min', { min: errors['min'].min });
   }
   if (errors['max']) {
-    return `Must be at most ${errors['max'].max}`;
+    return t('max', { max: errors['max'].max });
   }
   if (errors['listMin']) {
-    return `At least ${errors['listMin'].required} rows required`;
+    return t('listmin', { required: errors['listMin'].required });
   }
   if (errors['listMax']) {
-    return `At most ${errors['listMax'].required} rows allowed`;
+    return t('listmax', { required: errors['listMax'].required });
   }
-  return 'Invalid value';
+  return t('invalid');
 }
 
 function seedFor(editor: EditorDefinition, seed: unknown): unknown {

@@ -1,15 +1,17 @@
 .sf-markdown {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--sf-3);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--sf-space-3);
 }
-.sf-markdown__source {
-  font-family: var(--sf-font-mono);
-  font-size: var(--sf-text-sm);
-}
+
 .sf-markdown__preview {
-  border: 1px solid var(--sf-line);
-  border-radius: var(--sf-radius-sm);
-  padding: var(--sf-2);
+  min-width: 0;
+  padding: var(--sf-space-2) var(--sf-space-3);
   overflow: auto;
+  border: 1px solid var(--sf-border);
+  border-radius: var(--sf-radius-md);
+  background: var(--sf-surface-muted);
+  color: var(--sf-text);
+  font-size: var(--sf-fs-14);
+  line-height: var(--sf-lh-14);
 }

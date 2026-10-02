@@ -1,12 +1,18 @@
 <div class="sf-field" [class.sf-field--inline]="labelPosition() === 'inline'">
   @if (label()) {
-    @if (labelFor(); as target) {
-      <label class="sf-field__label" [id]="labelId" [for]="target">
-        {{ label() }}<ng-container *ngTemplateOutlet="marker" />
-      </label>
-    } @else {
-      <span class="sf-field__label" [id]="labelId">{{ label() }}<ng-container *ngTemplateOutlet="marker" /></span>
-    }
+    <div class="sf-field__head">
+      @if (labelFor(); as target) {
+        <label class="sf-field__label" [id]="labelId" [for]="target">
+          {{ label() }}<ng-container *ngTemplateOutlet="marker" />
+        </label>
+      } @else {
+        <span class="sf-field__label" [id]="labelId">{{ label() }}<ng-container *ngTemplateOutlet="marker" /></span>
+      }
+      @for (tag of tags(); track tag.label) {
+        <sf-badge class="sf-field__tag" [tone]="tag.tone ?? 'neutral'" [icon]="tag.icon ?? null" [label]="tag.label" />
+      }
+      <ng-content select="[sfFieldLabelAddon]" />
+    </div>
   }
   <div class="sf-field__body">
     <div
@@ -21,10 +27,17 @@
     @if (hint()) {
       <p class="sf-field__hint" [id]="hintId">{{ hint() }}</p>
     }
-    <p class="sf-field__error" [id]="errorId" [hidden]="!hasError()">
+    <p class="sf-field__error" [id]="errorId" [hidden]="!hasErrorText()">
       <sf-icon class="sf-field__error-icon" name="error" />
       <span>{{ error() }}<ng-content select="[sfFieldError]" /></span>
     </p>
+    @if (shownFindings().length > 0) {
+      <div class="sf-field__findings" [id]="findingsId">
+        @for (finding of shownFindings(); track $index) {
+          <sf-finding [level]="finding.level" [message]="finding.message" [levelLabel]="findingLevelWord(finding.level)" />
+        }
+      </div>
+    }
   </div>
 </div>
 

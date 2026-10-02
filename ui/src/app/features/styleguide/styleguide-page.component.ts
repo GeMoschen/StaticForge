@@ -28,6 +28,7 @@ import { SgCodeComponent } from './sections/sg-code.component';
 import { SgControlsComponent } from './sections/sg-controls.component';
 import { SgDataComponent } from './sections/sg-data.component';
 import { SgDisplayComponent } from './sections/sg-display.component';
+import { SgFormsComponent } from './sections/sg-forms.component';
 import { SgOverlaysComponent } from './sections/sg-overlays.component';
 import { SgTokensComponent } from './sections/sg-tokens.component';
 import { STYLEGUIDE_GROUPS, STYLEGUIDE_SECTIONS } from './styleguide.sections';
@@ -66,6 +67,7 @@ function allowed<T extends string>(value: string | null, values: readonly T[]): 
     SgControlsComponent,
     SgDataComponent,
     SgDisplayComponent,
+    SgFormsComponent,
     SgOverlaysComponent,
     SgTokensComponent,
     TranslocoPipe,

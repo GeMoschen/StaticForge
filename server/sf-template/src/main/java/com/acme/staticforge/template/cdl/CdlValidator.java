@@ -117,6 +117,7 @@ final class CdlValidator {
         checkExpression(node, diagnostics);
         checkDataset(node, type, diagnostics);
         boolean localizable = checkLocalizable(node, type, diagnostics);
+        String width = checkWidth(node, type, diagnostics);
         PaginationOptions pagination = paginationOptions(node, type, diagnostics);
         List<EditorDefinition> items = buildEditors(node.items, diagnostics);
         String name = node.groupWrapper ? syntheticGroupName() : node.name;
@@ -146,7 +147,38 @@ final class CdlValidator {
                 items,
                 node.dataset,
                 pagination,
-                RulesCompiler.builtins(node, diagnostics));
+                RulesCompiler.builtins(node, diagnostics),
+                width);
+    }
+
+    /**
+     * {@code width half | full} lays a leaf editor out in the content form's two-column grid (M35.17); {@code full} is
+     * the default and is not stored. A structural editor ({@code group}, {@code list}, {@code catalog},
+     * {@code pagination}) spans the form, so a width there is meaningless and rejected.
+     */
+    private static String checkWidth(EditorNode node, EditorType type, List<Diagnostic> diagnostics) {
+        if (node.width == null) {
+            return null;
+        }
+        boolean container = type == EditorType.GROUP
+                || type == EditorType.LIST
+                || type == EditorType.CATALOG
+                || type == EditorType.PAGINATION;
+        if (container) {
+            diagnostics.add(Diagnostic.error(
+                    DiagnosticCodes.CDL_INVALID_WIDTH,
+                    "A " + node.typeKeyword + " editor cannot have a width: it always spans the form. Set the width on "
+                            + "the leaf editors inside it instead.",
+                    node.widthLine, node.widthCol));
+            return null;
+        }
+        if (!"half".equals(node.width) && !"full".equals(node.width)) {
+            diagnostics.add(Diagnostic.error(
+                    DiagnosticCodes.CDL_INVALID_WIDTH,
+                    "Invalid width '" + node.width + "': use 'half' or 'full'.", node.widthLine, node.widthCol));
+            return null;
+        }
+        return "half".equals(node.width) ? "half" : null;
     }
 
     /**

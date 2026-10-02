@@ -170,6 +170,8 @@
 
 // ── Form ─────────────────────────────────────────────────────────────────────
 .form {
+  // The two-column rule reads the form's own width, not the screen's: beside the preview the form is narrow (decision 72).
+  container: form / inline-size;
   display: flex;
   flex-direction: column;
   gap: var(--sf-space-4);
@@ -184,9 +186,22 @@
 
 .form__grid {
   display: grid;
-  // At most two equal columns across the full width; one column when two wouldn't fit 14rem each (decision 33).
-  grid-template-columns: repeat(auto-fit, minmax(max(14rem, calc((100% - var(--sf-space-4)) / 2)), 1fr));
+  // The form spans the full width of its pane (decision 33). One column; from 1280 px two, but only the fields the
+  // template marks `width: half` pair up (decision 72) — everything else spans the row, in the original order.
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--sf-gap) var(--sf-space-4);
+
+  @container form (min-width: 46rem) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+
+    > * {
+      grid-column: 1 / -1;
+    }
+
+    > .form__half {
+      grid-column: auto;
+    }
+  }
 }
 
 .form__wide {

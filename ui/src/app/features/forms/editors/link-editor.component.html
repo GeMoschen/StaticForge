@@ -1,48 +1,119 @@
-<sf-field [label]="definition().label" [hint]="definition().help">
-  <div class="sf-link">
-    <div class="sf-link__summary">
-      <span class="sf-link__kind">{{ kind().toLowerCase() }}</span>
-      <span class="sf-link__target">{{ summary() }}</span>
-      @if (!definition().readOnly) {
-        <sf-button variant="secondary" (click)="open.set(!open())">
-          {{ open() ? 'Close' : 'Edit' }}
-        </sf-button>
-      }
+<sf-field
+  [label]="definition().label"
+  [hint]="definition().help"
+  [required]="fieldRequired()"
+  [empty]="fieldEmpty()"
+  [tags]="fieldTags()"
+  [findings]="fieldFindings()"
+>
+  <div class="link">
+    <div class="link__card" [class.is-empty]="!hasTarget()" [class.is-broken]="missing()">
+      <sf-icon class="link__icon" [name]="missing() ? 'link_off' : iconFor()" />
+      <span class="link__text">
+        @if (!hasTarget()) {
+          <span class="link__none">{{ 'forms.link.none' | transloco }}</span>
+        } @else if (missing()) {
+          <span class="link__name is-broken">{{ 'forms.link.missing' | transloco }}</span>
+        } @else if (loading()) {
+          <span class="link__name is-loading">{{ 'forms.link.loading' | transloco }}</span>
+        } @else {
+          <span class="link__name">{{ name() }}</span>
+          @if (detail()) {
+            <span class="link__meta">{{ detail() }}</span>
+          }
+        }
+        @if (developer() && uuid()) {
+          <sf-copyable class="link__uuid" [value]="uuid()!" [label]="'forms.link.uuid' | transloco" />
+        }
+      </span>
+      <span class="link__actions">
+        @let href = external();
+        @let internal = route();
+        @if (href) {
+          <a class="link__open" [href]="href" target="_blank" rel="noopener">
+            <sf-icon name="open_in_new" />
+            {{ 'forms.link.open' | transloco }}
+          </a>
+        } @else if (internal) {
+          <a class="link__open" [routerLink]="internal.commands" [queryParams]="internal.queryParams" target="_blank" rel="noopener">
+            <sf-icon name="open_in_new" />
+            {{ 'forms.link.open' | transloco }}
+          </a>
+        }
+        @if (!readOnly()) {
+          <sf-button variant="secondary" size="sm" icon="edit" [aria-expanded]="open()" (click)="open.set(!open())">
+            {{ (open() ? 'forms.link.close' : hasTarget() ? 'forms.link.change' : 'forms.link.choose') | transloco }}
+          </sf-button>
+          @if (hasTarget()) {
+            <sf-button variant="ghost" size="sm" icon="close" [label]="'forms.link.remove' | transloco" (click)="remove()" />
+          }
+        }
+      </span>
     </div>
 
-    @if (open()) {
-      <div class="sf-link__dialog">
-        <select
-          [disabled]="definition().readOnly"
-          (change)="selectKind($any($event.target).value)"
-        >
-          @for (k of kinds; track k) {
-            <option [value]="k" [selected]="k === kind()">{{ k.toLowerCase() }}</option>
-          }
-        </select>
+    @if (open() && !readOnly()) {
+      <div class="link__panel">
+        <sf-segmented
+          class="link__kinds"
+          size="sm"
+          [options]="kindOptions()"
+          [value]="kind()"
+          [aria-label]="'forms.link.kind' | transloco"
+          (valueChange)="selectKind($event!)"
+        />
 
         @switch (kind()) {
           @case ('INTERNAL') {
-            <input type="text" placeholder="Target UUID" [formControl]="field('uuid')" />
+            <div class="link__choose">
+              <sf-button variant="secondary" size="sm" icon="search" (click)="pickerOpen.set(true)">{{ 'forms.link.choosePage' | transloco }}</sf-button>
+            </div>
           }
           @case ('MEDIA') {
-            <input type="text" placeholder="Media UUID" [formControl]="field('uuid')" />
+            <div class="link__choose">
+              <sf-button variant="secondary" size="sm" icon="photo_library" (click)="pickerOpen.set(true)">{{ 'forms.link.chooseFile' | transloco }}</sf-button>
+            </div>
           }
           @case ('EXTERNAL') {
-            <input type="url" placeholder="https://…" [formControl]="field('url')" />
-            <input type="text" placeholder="Target" [formControl]="field('target')" />
-            <input type="text" placeholder="Title" [formControl]="field('title')" />
+            <sf-field [label]="'forms.link.url' | transloco">
+              <sf-input type="url" [placeholder]="'forms.link.urlPlaceholder' | transloco" [value]="url()" (valueChange)="setText('url', $event)" />
+            </sf-field>
+            <sf-field [label]="'forms.link.titleLabel' | transloco">
+              <sf-input [value]="title()" (valueChange)="setText('title', $event)" />
+            </sf-field>
+            <label class="link__tab">
+              <sf-switch [value]="newTab()" [aria-label]="'forms.link.newTab' | transloco" (valueChange)="setNewTab($event)" />
+              {{ 'forms.link.newTab' | transloco }}
+            </label>
           }
           @case ('ANCHOR') {
-            <input type="text" placeholder="#anchor" [formControl]="field('anchor')" />
-            <input type="text" placeholder="Target" [formControl]="field('target')" />
+            <sf-field [label]="'forms.link.anchor' | transloco">
+              <sf-input [placeholder]="'forms.link.anchorPlaceholder' | transloco" [value]="anchor()" (valueChange)="setText('anchor', $event)" />
+            </sf-field>
+            <label class="link__tab">
+              <sf-switch [value]="newTab()" [aria-label]="'forms.link.newTab' | transloco" (valueChange)="setNewTab($event)" />
+              {{ 'forms.link.newTab' | transloco }}
+            </label>
           }
           @case ('MAIL') {
-            <input type="email" placeholder="name@example.com" [formControl]="field('url')" />
-            <input type="text" placeholder="Title" [formControl]="field('title')" />
+            <sf-field [label]="'forms.link.mail' | transloco">
+              <sf-input type="email" [placeholder]="'forms.link.mailPlaceholder' | transloco" [value]="url()" (valueChange)="setText('url', $event)" />
+            </sf-field>
+            <sf-field [label]="'forms.link.titleLabel' | transloco">
+              <sf-input [value]="title()" (valueChange)="setText('title', $event)" />
+            </sf-field>
           }
         }
       </div>
     }
   </div>
 </sf-field>
+
+@if (pickerOpen() && project()) {
+  <sf-asset-picker-dialog
+    [projectKey]="project()!"
+    [initialType]="pickerType()"
+    [allowedTypes]="[pickerType()]"
+    (picked)="onPicked($event)"
+    (closed)="pickerOpen.set(false)"
+  />
+}

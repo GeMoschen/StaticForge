@@ -2,15 +2,21 @@ import {
   ChangeDetectionStrategy,
   Component,
   effect,
+  computed,
   forwardRef,
   inject,
   input,
   output,
   signal,
 } from '@angular/core';
+import { toSignal } from '@angular/core/rxjs-interop';
+import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
 import { FormArray, FormControl, FormGroup } from '@angular/forms';
 import { ContentDefinition, EditorDefinition } from './form.model';
+import type { EditorChrome } from './editor-base';
 import { SfEditorOutlet } from './editor-outlet.component';
+import type { SfFinding, SfFindingLevel } from '../../shared/components/forms/sf-finding.component';
+import type { SfFieldTag } from '../../shared/components/sf-field.component';
 import { SF_FORM_CONTEXT, SfFormContext } from './form.context';
 import { EditingLocale, resolve, resolvedLocale } from './l10n.util';
 import { FindingLevel, byLevel, levelOf } from './rules/rule-form.util';
@@ -46,7 +52,7 @@ export interface FormFieldState {
   selector: 'sf-content-form',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [SfEditorOutlet],
+  imports: [SfEditorOutlet, TranslocoPipe],
   providers: [
     {
       provide: SF_FORM_CONTEXT,
@@ -106,6 +112,47 @@ export class SfContentFormComponent {
   readonly localeLabels = input<Record<string, string>>({});
 
   readonly formValue = signal<Record<string, unknown>>({});
+
+  private readonly transloco = inject(TranslocoService);
+  private readonly language = toSignal(this.transloco.langChanges$, { initialValue: this.transloco.getActiveLang() });
+
+  /**
+   * What each top-level editor shows inside its field (M35.17): the language chip, a *Computed* cue, and the rule and server
+   * findings — computed once per change of the inputs, so an editor's field does not re-render for nothing.
+   */
+  protected readonly chromes = computed(() => {
+    this.language();
+    return new Map(this.definition().editors.map((editor) => [editor.name, this.chromeOf(editor)] as const));
+  });
+
+  private chromeOf(editor: EditorDefinition): EditorChrome {
+    const t = (key: string, params?: Record<string, unknown>) => this.transloco.translate(key, params);
+    const states = this.statesFor(editor);
+    const tags: SfFieldTag[] = [];
+    if (this.localized()) {
+      tags.push(
+        editor.localizable
+          ? { label: this.labelOf(this.editingLocale()!.locale), icon: 'translate' }
+          : { label: t('forms.field.allLanguages'), icon: 'public' },
+      );
+    }
+    if (states.computed) {
+      tags.push({ label: t('forms.field.computed'), icon: 'functions', tone: 'info' });
+    }
+    const findings: SfFinding[] = this.findingsFor(editor).map((finding) => ({
+      level: finding.level.toLowerCase() as SfFindingLevel,
+      message: finding.message,
+    }));
+    if (states.computed) {
+      findings.push({ level: 'hint', message: t('forms.field.computedHint') });
+    } else if (states.readOnly) {
+      findings.push({ level: 'hint', message: t('forms.field.readOnlyHint') });
+    }
+    if (this.localized() && editor.localizable && editor.required && !this.isDefaultLocale()) {
+      findings.push({ level: 'hint', message: t('forms.field.requiredInDefault', { language: this.labelOf(this.defaultLocale()) }) });
+    }
+    return { tags, findings, required: states.required };
+  }
 
   constructor() {
     effect(

@@ -1,0 +1,99 @@
+<section class="sg-section" [id]="s.id" [attr.aria-labelledby]="s.id + '-title'">
+  <h2 class="sg-section__title" [id]="s.id + '-title'" tabindex="-1">{{ s.key | transloco }}</h2>
+  <p class="sg-intro">{{ 'styleguide.forms.intro' | transloco }}</p>
+
+  <div class="sg-sub">
+    <h3 class="sg-sub__title">{{ 'styleguide.forms.findingsTitle' | transloco }}</h3>
+    <p class="sg-note">{{ 'styleguide.forms.findingsNote' | transloco }}</p>
+    <div class="sg-forms__findings">
+      <sf-field [label]="'styleguide.forms.price' | transloco" [hint]="'styleguide.forms.priceHint' | transloco" [findings]="levels()"
+        [tags]="language() | fieldTags">
+        <sf-number-input unit="€" [min]="0" [step]="0.1" [value]="price()" (valueChange)="price.set($event)" />
+      </sf-field>
+      <sf-field required [label]="'styleguide.forms.requiredServer' | transloco" [hint]="'styleguide.forms.requiredServerHint' | transloco" [empty]="true" [findings]="serverRule()"
+        [tags]="language() | fieldTags">
+        <sf-input value="" />
+      </sf-field>
+      <sf-field required [label]="'styleguide.forms.requiredClient' | transloco" [hint]="'styleguide.forms.requiredClientHint' | transloco" [empty]="true"
+        [tags]="language() | fieldTags">
+        <sf-input value="" />
+      </sf-field>
+    </div>
+  </div>
+
+  <div class="sg-sub">
+    <h3 class="sg-sub__title">{{ 'styleguide.forms.chipTitle' | transloco }}</h3>
+    <p class="sg-note">{{ 'styleguide.forms.chipNote' | transloco }}</p>
+    <sf-segmented [options]="chipOptions()" [value]="chip()" [aria-label]="'styleguide.forms.chipTitle' | transloco" (valueChange)="$event && chip.set($event)" />
+  </div>
+
+  <div class="sg-sub">
+    <h3 class="sg-sub__title">{{ 'styleguide.forms.layoutTitle' | transloco }}</h3>
+    <p class="sg-note">{{ 'styleguide.forms.layoutNote' | transloco }}</p>
+    <div class="sg-forms__layout"><div class="sg-forms__grid">
+      <sf-field class="is-half" [label]="'styleguide.forms.layout.number' | transloco"
+        [tags]="language() | fieldTags">
+        <sf-number-input unit="€" [value]="14.9" />
+      </sf-field>
+      <sf-field class="is-half" [label]="'styleguide.forms.layout.date' | transloco"
+        [tags]="language() | fieldTags">
+        <sf-date-input value="2026-09-14" />
+      </sf-field>
+      <sf-field class="is-half" [label]="'styleguide.forms.layout.category' | transloco">
+        <sf-select [options]="[{ value: 'news', label: 'News' }, { value: 'guides', label: 'Guides' }]" value="news" />
+      </sf-field>
+      <sf-field class="is-half" [label]="'styleguide.forms.layout.author' | transloco"
+        [tags]="shared() | fieldTags">
+        <sf-input readonly value="Anna Berger" />
+      </sf-field>
+      <sf-field [label]="'styleguide.forms.layout.teaser' | transloco"
+        [tags]="language() | fieldTags">
+        <sf-textarea [rows]="2" value="Always full width: long fields never pair up." />
+      </sf-field>
+    </div></div>
+  </div>
+
+  <div class="sg-sub">
+    <h3 class="sg-sub__title">{{ 'styleguide.forms.pickerTitle' | transloco }}</h3>
+    <p class="sg-note">{{ 'styleguide.forms.pickerNote' | transloco }}</p>
+    <div class="sg-forms__pickers">
+      @for (p of pickers; track p.key) {
+        <div class="sg-cell">
+          <p class="sg-caption">{{ 'styleguide.forms.pickers.' + p.key | transloco }}</p>
+          <sf-button variant="secondary" icon="open_in_new" (click)="openPicker.set(p.key)">{{ 'styleguide.forms.pickerOpen' | transloco }}</sf-button>
+          @if (openPicker() === p.key) {
+            <sf-sample-asset-picker
+              [allowedTypes]="p.types"
+              [dataset]="p.dataset"
+              [initialType]="p.initial"
+              [review]="p.review"
+              (choose)="choose($event)"
+              (cancelled)="openPicker.set(null)"
+            />
+          }
+        </div>
+      }
+    </div>
+    @if (picked(); as item) {
+      <p class="sg-note" role="status">{{ 'styleguide.forms.pickerPicked' | transloco: { name: item.name } }}</p>
+    }
+  </div>
+
+  <div class="sg-sub">
+    <h3 class="sg-sub__title">{{ 'styleguide.forms.editorsTitle' | transloco }}</h3>
+    <p class="sg-note">{{ 'styleguide.forms.editorsNote' | transloco }}</p>
+    @for (type of types; track type) {
+      <article class="sg-editor" [attr.aria-labelledby]="'sg-editor-' + type">
+        <h4 class="sg-editor__title" [id]="'sg-editor-' + type">{{ 'styleguide.sample.forms.editors.' + type | transloco }}</h4>
+        <div class="sg-editor__states">
+          @for (state of states; track state) {
+            <div class="sg-cell">
+              <p class="sg-caption">{{ 'styleguide.forms.states.' + state | transloco }}</p>
+              <sf-sample-editor-demo [type]="type" [state]="state" [language]="language()" />
+            </div>
+          }
+        </div>
+      </article>
+    }
+  </div>
+</section>

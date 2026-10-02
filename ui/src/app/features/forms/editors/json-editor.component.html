@@ -1,4 +1,4 @@
-<sf-field [label]="definition().label" [hint]="definition().help">
+<sf-field [label]="definition().label" [hint]="definition().help" [required]="fieldRequired()" [empty]="fieldEmpty()" [tags]="fieldTags()" [findings]="fieldFindings()">
   <sf-code-editor
     class="sf-json"
     language="json"
@@ -8,7 +8,4 @@
     [compact]="false"
     (valueChange)="onInput($event)"
   />
-  @if (message()) {
-    <span class="sf-editor__error">{{ message() }}</span>
-  }
 </sf-field>

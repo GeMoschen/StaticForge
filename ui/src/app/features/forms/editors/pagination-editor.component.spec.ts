@@ -4,6 +4,8 @@ import { TestBed } from '@angular/core/testing';
 import { FormControl } from '@angular/forms';
 import { of } from 'rxjs';
 import { describe, expect, it } from 'vitest';
+import { provideTranslocoTesting } from '../../../core/i18n/transloco-testing';
+import type { EditorChrome } from '../editor-base';
 import { ApiClient } from '../../../core/api/api.client';
 import { ProjectContextStore } from '../../../core/project/project-context.store';
 import { ContentService } from '../../content/content.service';
@@ -17,10 +19,11 @@ const definition: EditorDefinition = {
   pagination: { sources: ['nav', 'dataset'], pageSize: 10, maxPageSize: 20, sort: ['navigation', 'date', 'title'] },
 };
 
-function render(control: FormControl) {
+function render(control: FormControl, chrome: EditorChrome | null = null) {
   TestBed.configureTestingModule({
     imports: [SfPaginationEditor],
     providers: [
+      provideTranslocoTesting(),
       { provide: ProjectContextStore, useValue: { navigationFolderTree: signal([]) } },
       {
         provide: ApiClient,
@@ -36,6 +39,7 @@ function render(control: FormControl) {
   fixture.componentRef.setInput('definition', definition);
   fixture.componentRef.setInput('control', control);
   fixture.componentRef.setInput('projectKey', 'p1');
+  fixture.componentRef.setInput('chrome', chrome);
   // Twice: the first pass creates the view and only then flushes the constructor effects that read
   // the control (value, disabled state) into the component's signals; the second renders those.
   fixture.detectChanges();
@@ -75,5 +79,21 @@ describe('SfPaginationEditor', () => {
 
     expect(root.querySelector('select')).toBeNull();
     expect(root.querySelector('.sf-pagination__summary')?.textContent).toContain('Source: Blog · 10 per page · Date ↓');
+  });
+
+  it('is an sf-field: the label, the language chip and the findings of the form sit in it', () => {
+    const control = new FormControl<unknown>(null);
+    const fixture = render(control, {
+      tags: [{ label: 'English' }],
+      findings: [{ level: 'warning', message: 'Pick a source with at least one item.' }],
+      required: false,
+    });
+    const root: HTMLElement = fixture.nativeElement;
+
+    expect(root.querySelector('.sf-field__head')?.textContent).toContain('Posts');
+    expect(root.querySelector('.sf-field__head')?.textContent).toContain('English');
+    expect(root.querySelector('.sf-field__findings')?.textContent).toContain('Pick a source with at least one item.');
+    expect(root.querySelector('.sf-pagination__empty')?.textContent).toContain('Not paginated');
+    expect(Array.from(root.querySelectorAll('button')).map((b) => b.textContent?.trim())).toContain('Choose source…');
   });
 });

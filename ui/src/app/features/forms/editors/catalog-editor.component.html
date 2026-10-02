@@ -1,62 +1,40 @@
-<sf-field [label]="definition().label" [hint]="definition().help">
-  <div class="sf-catalog">
-    @for (card of cards(); track card.instanceId; let i = $index) {
-      <div
-        class="sf-catalog__card"
-        (dragover)="$event.preventDefault()"
-        (drop)="onDropOn(i)"
-      >
-        @if (isLoaded(card.templateRef)) {
-          <sf-section-editor
-            [contentDefinition]="contentDefFor(card.templateRef)"
-            [section]="asSection(card)"
+<sf-field
+  [hint]="definition().help"
+  [required]="fieldRequired()"
+  [empty]="fieldEmpty()"
+  [findings]="fieldFindings()"
+>
+  <sf-catalog
+    [items]="items()"
+    [types]="types()"
+    [label]="definition().label ?? definition().name"
+    [catalogId]="catalogId()"
+    [summaryOf]="summaryOf"
+    [readonly]="readOnly()"
+    [level]="level"
+    (add)="onAdd($event)"
+    (move)="onMove($event)"
+    (duplicate)="onDuplicate($event)"
+    (remove)="onRemove($event)"
+  >
+    <ng-template sfCatalogCard [sfCatalogCardItems]="items()" let-item let-index="index">
+      <div class="sf-catalog-card" [attr.data-sf-section]="item.id">
+        @if (isLoaded(item.type)) {
+          <sf-catalog-card-form
+            [contentDefinition]="contentDefFor(item.type)"
+            [content]="item.card.content"
             [projectKey]="projectKey()"
-            [bodyName]="'catalog'"
-            [templateUid]="uidFor(card.templateRef)"
-            [title]="titleFor(card.templateRef)"
-            [index]="i"
-            [count]="cards().length"
-            [readOnly]="definition().readOnly ?? false"
+            [readOnly]="readOnly()"
             [rules]="ruleHub()"
-            [rulePrefix]="cardPrefix(i)"
-            [issues]="cardPrefix(i) === null ? [] : findings()"
-            (valueChange)="onCardValueChange(card.instanceId, $event)"
-            (filled)="onCardFilled(card.instanceId, $event)"
-            (remove)="removeCard(card.instanceId)"
-            (moveUp)="moveCard(i, -1)"
-            (moveDown)="moveCard(i, 1)"
-            (dragStarted)="onDragStarted(i)"
-            (dropOn)="onDropOn($event)"
-            (dragEnd)="onDragEnd()"
+            [rulePrefix]="cardPrefix(index)"
+            [issues]="cardPrefix(index) === null ? [] : issues()"
+            (valueChange)="onCardValueChange(item.id, $event)"
+            (filled)="onCardFilled(item.id, $event)"
           />
         } @else {
-          <div class="sf-catalog__loading">{{ titleFor(card.templateRef) }} — loading…</div>
+          <sf-spinner [label]="'forms.catalog.loading' | transloco" />
         }
       </div>
-    }
-
-    @if (!definition().readOnly) {
-      <div class="sf-catalog__add">
-        <sf-button variant="secondary" (click)="togglePalette()">
-          <sf-icon name="add" />
-          Add card
-        </sf-button>
-
-        @if (paletteOpen()) {
-          <ul class="sf-catalog__palette">
-            @for (tpl of allowedTemplates(); track tpl.uuid) {
-              <li>
-                <button type="button" (click)="addCard(tpl.uuid ?? '')">
-                  <span>{{ tpl.displayName ?? tpl.uid }}</span>
-                  <span class="sf-catalog__mono">{{ tpl.uid }}</span>
-                </button>
-              </li>
-            } @empty {
-              <li class="sf-catalog__empty">No allowed card types configured.</li>
-            }
-          </ul>
-        }
-      </div>
-    }
-  </div>
+    </ng-template>
+  </sf-catalog>
 </sf-field>

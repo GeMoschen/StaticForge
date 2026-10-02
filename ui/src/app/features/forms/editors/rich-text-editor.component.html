@@ -1,45 +1,72 @@
-<sf-field [label]="definition().label" [hint]="definition().help">
-  <div class="sf-richtext">
-    <div class="sf-richtext__toolbar">
-      @if (enabled('bold')) {
-        <button type="button" (click)="exec('bold')" title="Bold"><b>B</b></button>
-      }
-      @if (enabled('italic')) {
-        <button type="button" (click)="exec('italic')" title="Italic"><i>I</i></button>
-      }
-      @if (enabled('h2')) {
-        <button type="button" (click)="execBlock('h2')" title="Heading 2">H2</button>
-      }
-      @if (enabled('h3')) {
-        <button type="button" (click)="execBlock('h3')" title="Heading 3">H3</button>
-      }
-      @if (enabled('list')) {
-        <button type="button" (click)="exec('insertUnorderedList')" title="List">
-          <sf-icon name="format_list_bulleted" />
-        </button>
-      }
-      @if (enabled('quote')) {
-        <button type="button" (click)="execBlock('blockquote')" title="Quote">
-          <sf-icon name="format_quote" />
-        </button>
-      }
-      @if (enabled('link')) {
-        <button type="button" (click)="insertLink()" title="Link">
-          <sf-icon name="link" />
+<sf-field
+  [label]="definition().label"
+  [hint]="definition().help"
+  [required]="fieldRequired()"
+  [empty]="fieldEmpty()"
+  [tags]="fieldTags()"
+  [findings]="findings()"
+>
+  <div class="sf-richtext" [class.is-readonly]="readonly()" [class.is-invalid]="field()?.invalid()">
+    <div
+      class="sf-richtext__toolbar"
+      role="toolbar"
+      [attr.aria-label]="'forms.rich.toolbar' | transloco"
+      [attr.aria-controls]="field()?.controlId"
+      (keydown)="onToolbarKeydown($event)"
+    >
+      @for (cmd of commands(); track cmd.id; let i = $index) {
+        <button
+          type="button"
+          class="sf-richtext__button"
+          [attr.aria-label]="'forms.rich.' + cmd.id | transloco"
+          [sfTooltip]="tooltip(cmd)"
+          [sfTooltipDescribes]="false"
+          [attr.aria-pressed]="pressed().has(cmd.id)"
+          [attr.aria-keyshortcuts]="cmd.shortcut?.replace('Ctrl', 'Control') ?? null"
+          [disabled]="readonly()"
+          [attr.data-tool]="cmd.id"
+          [attr.tabindex]="i === tab() ? 0 : -1"
+          (mousedown)="$event.preventDefault()"
+          (focus)="onToolbarFocus(i)"
+          (click)="run(cmd.id)"
+        >
+          <sf-icon [name]="cmd.icon" />
         </button>
       }
     </div>
     <div
-      #editor
+      #body
       class="sf-richtext__body"
-      [attr.contenteditable]="definition().readOnly ? 'false' : 'true'"
-      (input)="onInput($event)"
+      role="textbox"
+      aria-multiline="true"
+      [id]="field()?.controlId ?? null"
+      [attr.aria-labelledby]="field()?.labelId ?? null"
+      [attr.aria-describedby]="field()?.describedBy() ?? null"
+      [attr.aria-invalid]="field()?.invalid() ? 'true' : null"
+      [attr.aria-required]="fieldRequired() ? 'true' : null"
+      [attr.aria-readonly]="readonly() ? 'true' : null"
+      [attr.contenteditable]="readonly() ? 'false' : 'true'"
+      data-sf-richtext-body
+      (input)="onInput()"
+      (keyup)="syncState()"
+      (mouseup)="syncState()"
+      (focus)="syncState()"
+      (blur)="rememberSelection()"
     ></div>
-    @if (definition().maxChars) {
-      <span class="sf-editor__count">{{ count() }}/{{ definition().maxChars }}</span>
-    }
-    @if (message()) {
-      <span class="sf-editor__error">{{ message() }}</span>
-    }
   </div>
+  @if (definition().maxChars) {
+    <span class="sf-richtext__count">{{ count() }}/{{ definition().maxChars }}</span>
+  }
 </sf-field>
+
+@if (linkOpen()) {
+  <sf-rich-text-link-dialog
+    [initialAddress]="linkAddress()"
+    [initialNewTab]="linkNewTab()"
+    [editing]="linkEditing()"
+    [projectKey]="projectKey()"
+    (applied)="applyLink($event)"
+    (removed)="removeLink()"
+    (closed)="closeLink()"
+  />
+}

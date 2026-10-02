@@ -1,11 +1,6 @@
-<sf-field [label]="definition().label" [hint]="definition().help">
+<sf-field [label]="definition().label" [hint]="definition().help" [required]="fieldRequired()" [empty]="fieldEmpty()" [tags]="fieldTags()" [findings]="fieldFindings()">
   <div class="sf-markdown">
-    <textarea
-      [formControl]="control()"
-      rows="8"
-      [attr.readonly]="definition().readOnly ? '' : null"
-      class="sf-markdown__source"
-    ></textarea>
+    <sf-textarea [formControl]="control()" [rows]="8" monospace [readonly]="!!definition().readOnly" />
     @if (preview) {
       <div class="sf-markdown__preview" [innerHTML]="previewHtml()"></div>
     }

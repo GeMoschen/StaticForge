@@ -38,7 +38,7 @@ All 19 are `EditorType` enum constants (`template/content/EditorType.java`); the
 
 ## Attributes common to every editor type
 
-`label`, `help`, `required`, `default`, `readOnly`, `hidden`, `visibleWhen`, `renamedFrom`, `localizable`.
+`label`, `help`, `required`, `default`, `readOnly`, `hidden`, `visibleWhen`, `renamedFrom`, `localizable`, `width`.
 
 ```
 editor text ctaLabel {
@@ -93,6 +93,23 @@ discards the other translations, the save is refused with a `409` listing what w
 with `confirmDiscard=true`. Enabling or disabling the project's languages migrates the same way.
 
 **In a project without languages** `localizable` is inert: values stay bare, exactly as before M24.
+
+### `width` — two columns in the content form (M35.17)
+
+`width half` lets a field share a row with the next half-width field when the content form is wide (from about 46 rem
+of the form's own width, i.e. roughly 1280 px with no side pane); `width full` is the default and is not stored. The
+fields keep their declared order; everything not marked `half` spans the row, and below the threshold every field does.
+
+```
+editor number price { label "Price" width half }
+editor number tax   { label "Tax"   width half }
+editor richtext body { label "Body" }
+```
+
+It is a layout hint only (no effect on validation or stored values) and applies to **leaf editors** — also inside a
+`group` or a `list` item. A structural editor itself (`group`, `list`, `catalog`, `pagination`) always spans the form,
+so `width` on one is rejected, like any value other than `half` or `full`, with `SF-CDL-0120`. An inherited editor keeps
+the width its template declared. The compiled definition carries `"width": "half"` (omitted otherwise).
 
 **Accepted but not currently enforced:** the parser also accepts `group`, `order`, `pattern`, and
 `message` as bare top-level attributes on any editor (no `SF-CDL-0104` error) — but their values

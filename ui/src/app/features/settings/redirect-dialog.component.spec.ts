@@ -7,6 +7,12 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { components } from '../../core/api/generated/schema.d.ts';
 import { RedirectDialogComponent } from './redirect-dialog.component';
 
+/** Chooses a row of the asset picker (it lives in the page body, as a dialog does) by double click. */
+function pickRow(name: string): void {
+  const row = Array.from(document.querySelectorAll('.picker__row')).find((r) => r.textContent?.includes(name)) as HTMLElement;
+  row.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+}
+
 type ChannelView = components['schemas']['ChannelView'];
 type ProjectLocaleView = components['schemas']['ProjectLocaleView'];
 type RedirectView = components['schemas']['RedirectView'];
@@ -117,8 +123,7 @@ describe('RedirectDialogComponent', () => {
     fixture.detectChanges();
     http.expectOne((r) => r.url === `${BASE}/assets` && r.params.get('type') === 'PAGE').flush(PAGES);
     fixture.detectChanges();
-    const item = Array.from(el().querySelectorAll('.dialog__item')).find((b) => b.textContent?.includes(name)) as HTMLButtonElement;
-    item.click();
+    pickRow(name);
     fixture.detectChanges();
   }
 

@@ -1,9 +1,15 @@
-import { TranslocoService } from '@jsverse/transloco';
 import { HttpErrorResponse } from '@angular/common/http';
 import { ChangeDetectionStrategy, Component, effect, inject, input, signal, untracked } from '@angular/core';
 import { ReactiveFormsModule, FormControl, FormGroup } from '@angular/forms';
+import { TranslocoPipe } from '@jsverse/transloco';
 import { RouterLink } from '@angular/router';
 import { ApiClient } from '../../../core/api/api.client';
+import { assetIcon, assetLocation } from '../../../core/assets/asset-ref';
+import { DeveloperModeService } from '../../../core/frame/developer-mode.service';
+import { assetRoute } from '../../../shared/asset-route.util';
+import { SfBadgeComponent } from '../../../shared/components/display/sf-badge.component';
+import { SfCopyableComponent } from '../../../shared/components/display/sf-copyable.component';
+import { SfEditorBase } from '../editor-base';
 import { ContentService } from '../../content/content.service';
 import { recordCountLabel } from '../../../shared/components/asset-picker.util';
 import { SfFieldComponent } from '../../../shared/components/sf-field.component';
@@ -13,24 +19,6 @@ import { SfDropTargetDirective } from '../../../shared/directives/sf-drop-target
 import { SfAssetPickerDialogComponent, AssetPicked } from '../../../shared/components/sf-asset-picker-dialog.component';
 import { EditorDefinition } from '../form.model';
 
-/** Feature areas that have their own route — used to link a resolved reference open in a new tab. Types without a per-item route (templates) link to their list page; MEDIA has no dedicated route today. */
-function linkFor(projectKey: string, assetType: string | null, uuid: string): string[] | null {
-  switch (assetType) {
-    case 'PAGE':
-      return ['/p', projectKey, 'pages', uuid];
-    case 'PAGE_TEMPLATE':
-    case 'SECTION_TEMPLATE':
-    case 'DATASET':
-      return ['/p', projectKey, 'templates'];
-    case 'RECORD':
-      return ['/p', projectKey, 'content', 'records', uuid];
-    case 'RECORD_SET':
-      return ['/p', projectKey, 'content', 'sets', uuid];
-    default:
-      return null;
-  }
-}
-
 /** What the editor knows about the referenced asset beyond its uuid. */
 export interface ResolvedReference {
   label: string;
@@ -39,6 +27,10 @@ export interface ResolvedReference {
   /** Record sets (M25.5.3): the dataset's name and the live record count. */
   dataset?: string;
   recordCount?: number;
+  /** Where it lives (`/pages_root/news/`). */
+  folderPath?: string;
+  /** The lookup failed for a reason that says nothing about the target (offline, a server error). */
+  unreachable?: boolean;
   /** The target is gone (`missing`: no such asset) or in the trash (`deleted`) — a broken reference. */
   broken?: 'missing' | 'deleted';
 }
@@ -51,17 +43,18 @@ export interface ResolvedReference {
     ReactiveFormsModule,
     RouterLink,
     SfFieldComponent,
+    SfBadgeComponent,
     SfButtonComponent,
+    SfCopyableComponent,
     SfIconComponent,
     SfDropTargetDirective,
     SfAssetPickerDialogComponent,
+    TranslocoPipe,
   ],
   templateUrl: './reference-editor.component.html',
   styleUrl: './reference-editor.component.scss',
 })
-export class SfReferenceEditor {
-  readonly definition = input.required<EditorDefinition>();
-  readonly control = input.required<FormGroup>();
+export class SfReferenceEditor extends SfEditorBase<FormGroup> {
   readonly projectKey = input<string>();
 
   private readonly api = inject(ApiClient);
@@ -69,27 +62,32 @@ export class SfReferenceEditor {
 
   protected readonly pickerOpen = signal(false);
   protected readonly resolved = signal<ResolvedReference | null>(null);
-  private readonly transloco = inject(TranslocoService);
+  protected readonly developer = inject(DeveloperModeService).enabled;
   protected recordCountLabel(count: number | null | undefined): string {
     return recordCountLabel(count, (key, params) => this.transloco.translate(key, params));
   }
   private lastResolvedUuid: string | null = null;
 
-  /**
-   * Route to the referenced asset (opened in a new tab so editing here isn't
-   * interrupted), or `null` when this asset type has no per-item route to
-   * link to (e.g. media). Deliberately a plain method, not a `computed()` —
-   * `uuid()`/`assetType()` read a plain `FormControl.value`, not a signal, so
-   * a `computed()` here would never see `select()`/`reset()` updates; this
-   * gets freshly re-evaluated on each CD pass like `uuid()`/`assetType()` do.
-   */
-  protected link(): string[] | null {
+  /** Where the target opens (in a new tab, so editing here is not interrupted); `null` for a target that is gone. */
+  protected link(): { commands: string[]; queryParams: Record<string, string> } | null {
     const key = this.projectKey();
     const uuid = this.uuid();
-    if (!key || !uuid) {
+    const type = this.targetType();
+    if (!key || !uuid || !type || this.resolved()?.broken === 'missing') {
       return null;
     }
-    return linkFor(key, this.targetType(), uuid);
+    const route = assetRoute(key, { type, uuid, folderPath: this.resolved()?.folderPath });
+    return { commands: route.commands, queryParams: route.queryParams };
+  }
+
+  protected icon(): string {
+    return this.resolved()?.broken ? 'link_off' : assetIcon(this.targetType() ?? '');
+  }
+
+  /** Where the target lives, as a muted line (the folder path; nothing at the root). */
+  protected location(): string | null {
+    const resolved = this.resolved();
+    return resolved?.folderPath ? assetLocation(resolved.folderPath, this.targetType() ?? '') : null;
   }
 
   /** The value's asset type, or — for a value without one (a raw drag-drop payload) — the resolved target's. */
@@ -97,7 +95,14 @@ export class SfReferenceEditor {
     return this.assetType() ?? this.resolved()?.assetType ?? null;
   }
 
+  /** A reference is filled when it has a target; a value without one is empty. */
+  protected override isEmpty(value: unknown): boolean {
+    const uuid = (value as { uuid?: string | null } | null)?.uuid;
+    return !uuid || String(uuid).trim() === '';
+  }
+
   constructor() {
+    super();
     effect(
       () => {
         const key = this.projectKey();
@@ -209,7 +214,7 @@ export class SfReferenceEditor {
   private resolve(projectKey: string, uuid: string, assetType: string | null): void {
     const failed = (error: unknown) =>
       this.resolved.set(
-        error instanceof HttpErrorResponse && error.status === 404 ? { label: uuid, broken: 'missing' } : null,
+        error instanceof HttpErrorResponse && error.status === 404 ? { label: uuid, broken: 'missing' } : { label: '', unreachable: true },
       );
     if (assetType === 'RECORD_SET') {
       this.content.getRecordSet(projectKey, uuid).subscribe({
@@ -235,6 +240,7 @@ export class SfReferenceEditor {
         this.resolved.set({
           label: detail.displayName ?? detail.uid ?? uuid,
           assetType: detail.type,
+          folderPath: detail.folderPath,
           broken: detail.deleted ? 'deleted' : undefined,
         });
       },

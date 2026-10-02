@@ -2,6 +2,7 @@ import { Component, signal } from '@angular/core';
 import { FormControl, ReactiveFormsModule } from '@angular/forms';
 import { render, screen } from '@testing-library/angular';
 import { describe, expect, it } from 'vitest';
+import { provideTranslocoTesting } from '../../core/i18n/transloco-testing';
 import { SfButtonComponent } from './sf-button.component';
 import { SfFieldComponent, SfFieldErrorDirective } from './sf-field.component';
 
@@ -141,5 +142,79 @@ describe('SfFieldComponent', () => {
     await render(Host);
 
     expect(screen.getByRole('textbox', { name: 'Title' })).toHaveValue('Home');
+  });
+
+  describe('findings and the label addon (M35.17)', () => {
+    it('lists the findings under the field and describes the control by them', async () => {
+      await render(
+        `<sf-field label="Price" [findings]="[{ level: 'info', message: 'Net price' }, { level: 'warning', message: 'Unusually high' }]"><input /></sf-field>`,
+        { imports: [SfFieldComponent], providers: [provideTranslocoTesting()] },
+      );
+
+      const input = screen.getByRole('textbox', { name: 'Price' });
+      expect(input).toHaveAccessibleDescription('Warning: Unusually high Information: Net price');
+      expect(input).not.toHaveAttribute('aria-invalid');
+      expect(screen.getAllByRole('status')).toHaveLength(2);
+    });
+
+    it('treats an error-level finding as invalid and announces it assertively', async () => {
+      await render(`<sf-field label="Price" [findings]="[{ level: 'error', message: 'Must be positive' }]"><input /></sf-field>`, {
+        imports: [SfFieldComponent],
+        providers: [provideTranslocoTesting()],
+      });
+
+      expect(screen.getByRole('textbox', { name: 'Price' })).toHaveAttribute('aria-invalid', 'true');
+      expect(screen.getByRole('alert')).toHaveTextContent('Must be positive');
+    });
+
+    it('puts projected label addon content on the label line, outside the label', async () => {
+      await render(`<sf-field label="Title"><span sfFieldLabelAddon class="chip">English</span><input /></sf-field>`, {
+        imports: [SfFieldComponent],
+      });
+
+      const chip = screen.getByText('English');
+      expect(chip.closest('.sf-field__head')).toBe(document.querySelector('.sf-field__head'));
+      expect(chip.closest('label')).toBeNull();
+      expect(screen.getByRole('textbox', { name: 'Title' })).toBeTruthy();
+    });
+
+    it('puts tags (the language chip, a Computed cue) on the label line', async () => {
+      await render(`<sf-field label="Title" [tags]="[{ label: 'English', icon: 'translate' }, { label: 'Computed', tone: 'info' }]"><input /></sf-field>`, {
+        imports: [SfFieldComponent],
+        providers: [provideTranslocoTesting()],
+      });
+      const head = document.querySelector('.sf-field__head')!;
+      expect(head.querySelectorAll('.sf-field__tag')).toHaveLength(2);
+      expect(head.querySelector('label')?.textContent).not.toContain('English');
+    });
+
+    it('shows the required error once: its own when nothing else reports, and none when a rule already does', async () => {
+      const own = await render(`<sf-field label="Title" required empty><input /></sf-field>`, { imports: [SfFieldComponent], providers: [provideTranslocoTesting()] });
+      expect(screen.getByRole('alert')).toHaveTextContent('This field is required.');
+      expect(screen.getByRole('textbox', { name: /Title/ })).toHaveAttribute('aria-invalid', 'true');
+      own.fixture.destroy();
+    });
+
+    it('leaves its own required message out when a rule already reports an error', async () => {
+      await render(
+        `<sf-field label="Title" required empty [findings]="[{ level: 'error', message: 'A title is required before release.' }]"><input /></sf-field>`,
+        { imports: [SfFieldComponent], providers: [provideTranslocoTesting()] },
+      );
+      expect(screen.getAllByRole('alert')).toHaveLength(1);
+      expect(screen.queryByText('This field is required.')).toBeNull();
+    });
+
+    it('orders findings by seriousness and names each level for screen readers', async () => {
+      await render(
+        `<sf-field label="Price" [findings]="[{ level: 'hint', message: 'h' }, { level: 'error', message: 'e' }, { level: 'info', message: 'i' }, { level: 'warning', message: 'w' }]"><input /></sf-field>`,
+        { imports: [SfFieldComponent], providers: [provideTranslocoTesting()] },
+      );
+      expect(Array.from(document.querySelectorAll('sf-finding > span')).map((el) => el.textContent?.replace(/\s+/g, ' ').trim())).toEqual([
+        'Error: e',
+        'Warning: w',
+        'Information: i',
+        'Hint: h',
+      ]);
+    });
   });
 });

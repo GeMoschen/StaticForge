@@ -20,7 +20,7 @@ export const STYLEGUIDE_GROUPS: readonly StyleguideSectionGroup[] = [
   },
   {
     key: 'styleguide.page.index.components',
-    sections: ['buttons', 'forms', 'display', 'layout', 'overlays', 'data', 'cards', 'code'].map(section),
+    sections: ['buttons', 'forms', 'contentForm', 'display', 'layout', 'overlays', 'data', 'cards', 'code'].map(section),
   },
 ];
 

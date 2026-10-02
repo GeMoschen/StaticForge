@@ -1,7 +1,8 @@
 import '@angular/compiler';
 import { describe, expect, it } from 'vitest';
-import { FormBuilderService } from './form-builder.service';
-import { ContentDefinition } from './form.model';
+import { FormControl, Validators } from '@angular/forms';
+import { FormBuilderService, englishMessage, errorMessageFor } from './form-builder.service';
+import { ContentDefinition, EditorDefinition } from './form.model';
 
 const definition = {
   editors: [
@@ -66,5 +67,28 @@ describe('FormBuilderService GROUP editors', () => {
 
     expect(form.get('links.0._group_2.label')!.value).toBe('First');
     expect(fb.valueOf(definition, form)['links']).toEqual([{ label: 'First' }]);
+  });
+});
+
+describe('errorMessageFor (M35.17: texts under forms.editors.errors.*)', () => {
+  const text = { name: 'x', type: 'TEXT' } as EditorDefinition;
+
+  it('asks the translator for a key per error, with its numbers as parameters', () => {
+    const asked: [string, unknown][] = [];
+    const translate = (key: string, params?: Record<string, unknown>) => (asked.push([key, params]), key);
+    const control = new FormControl('abcdef', Validators.maxLength(3));
+    expect(errorMessageFor(text, control, translate)).toBe('forms.editors.errors.maxlength');
+    expect(asked).toEqual([['forms.editors.errors.maxlength', { max: 3 }]]);
+    expect(errorMessageFor(text, new FormControl('{', () => ({ json: true })), translate)).toBe('forms.editors.errors.json');
+    expect(errorMessageFor(text, new FormControl(null, () => ({ listMin: { required: 2 } })), translate)).toBe('forms.editors.errors.listmin');
+  });
+
+  it('falls back to English when no translator is given, and prefers the pattern message of the template', () => {
+    expect(errorMessageFor(text, new FormControl('abcdef', Validators.maxLength(3)))).toBe('Must be at most 3 characters');
+    expect(errorMessageFor(text, new FormControl('abcdef', Validators.maxLength(3)))).toBe('Must be at most 3 characters');
+    expect(errorMessageFor(text, new FormControl('x', () => ({ min: { min: 4 } })))).toBe('Must be at least 4');
+    expect(errorMessageFor({ ...text, patternMessage: 'Use letters only' }, new FormControl('1', () => ({ pattern: {} })))).toBe('Use letters only');
+    expect(errorMessageFor(text, new FormControl('ok'))).toBeNull();
+    expect(englishMessage('forms.editors.errors.listmax', { required: 3 })).toBe('At most 3 rows allowed');
   });
 });

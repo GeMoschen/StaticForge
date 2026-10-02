@@ -1,48 +1,15 @@
-import { ChangeDetectionStrategy, Component, input } from '@angular/core';
-import { ReactiveFormsModule, FormControl } from '@angular/forms';
+import { ChangeDetectionStrategy, Component } from '@angular/core';
+import { FormControl, ReactiveFormsModule } from '@angular/forms';
+import { SfColorInputComponent } from '../../../shared/components/forms/sf-color-input.component';
 import { SfFieldComponent } from '../../../shared/components/sf-field.component';
-import { EditorDefinition } from '../form.model';
+import { SfEditorBase } from '../editor-base';
 
-const PALETTE = [
-  '#101418',
-  '#5A6472',
-  '#DFE3E8',
-  '#FFFFFF',
-  '#2B44E8',
-  '#6E82FF',
-  '#C77A0A',
-  '#E0A040',
-  '#0E7A5F',
-  '#35A585',
-  '#B3261E',
-  '#E5675E',
-];
-
+/** The COLOR editor (M35.17): an `sf-color-input` (swatch + hex) in an `sf-field`. */
 @Component({
   selector: 'sf-color-editor',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [ReactiveFormsModule, SfFieldComponent],
+  imports: [ReactiveFormsModule, SfColorInputComponent, SfFieldComponent],
   templateUrl: './color-editor.component.html',
-  styleUrl: './color-editor.component.scss',
 })
-export class SfColorEditor {
-  readonly definition = input.required<EditorDefinition>();
-  readonly control = input.required<FormControl>();
-
-  readonly palette = PALETTE;
-
-  isActive(color: string): boolean {
-    return color === this.control().value;
-  }
-
-  pick(color: string): void {
-    this.control().setValue(color);
-    this.control().markAsDirty();
-  }
-
-  pickFrom(event: Event): void {
-    const input = event.target as HTMLInputElement;
-    this.pick(input.value);
-  }
-}
+export class SfColorEditor extends SfEditorBase<FormControl> {}

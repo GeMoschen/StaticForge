@@ -1,6 +1,6 @@
 ---
 id: M35.17
-status: todo
+status: done
 depends: [M35.10, M35.13]
 epic: m35-ui-ux-overhaul
 feature: screens
@@ -51,10 +51,10 @@ for their review and sign-off; record the decisions in `009-style-guide-gate.md`
 
 ## Acceptance criteria
 
-- [ ] Screen definition of done applies to the form in its host screens (page, section, record, global set).
-- [ ] Vitest specs for every editor updated: labels, `aria-describedby`, findings placement, read-only/computed state,
+- [x] Screen definition of done applies to the form in its host screens (page, section, record, global set).
+- [x] Vitest specs for every editor updated: labels, `aria-describedby`, findings placement, read-only/computed state,
       reorder by keyboard.
-- [ ] `npx vitest run` and `npx ng build` green.
+- [x] `npx vitest run` and `npx ng build` green.
 
 ## Notes / hazards
 
@@ -69,3 +69,25 @@ for their review and sign-off; record the decisions in `009-style-guide-gate.md`
   empty. Cards open expanded; collapse state is remembered per field for the browser session; the catalog header has
   "Collapse all / Expand all". Add through an "Add card" menu button with the allowed types, plus a "+" between cards on
   hover/focus to insert there. Reorder by drag and `Alt+↑/↓`.
+
+## Review (2026-10-02)
+
+Design signed off in the sample first (gate round 7, decisions 72–81). Built as signed off.
+
+- **Engine** (`features/forms/`): `editor-base.ts` (`SfEditorBase`, `EditorChrome`) — every one of the 19 editors extends it and renders one
+  `sf-field` with the required marker, the required error shown **once** (`empty`), the language chip on the label line, the form's
+  rule/server findings at four levels and the control's own validation message; `editor-outlet` hands the chrome to the editor;
+  `sf-content-form` computes it per editor (chip, Computed cue, findings, read-only/computed hints) and lays out the grid. Design
+  system: `sf-finding`, `sf-field` inputs `findings`, `empty`, `tags`; `sf-number-input`, `sf-color-input`, `sf-media-thumb`.
+- **Two columns, opt-in:** CDL `width: half | full` (backend: lexer, parser, validator, compiled definition, docs, `SF-CDL-0120`,
+  `WidthCdlTest`); the form switches to two columns from 46 rem of its own width and only `half` fields pair up.
+- **Editors:** simple editors on the M35.6 controls; rich text with `role="toolbar"`, Alt+F10, Ctrl+B/I/K and the link dialog (no more
+  `window.prompt`); media (drop zone, thumbnail card, alt text, UUID only in developer mode), reference and link (name + place + Open,
+  no UUIDs); list/group/catalog (add, remove with Undo, Alt+↑/↓, collapsible groups, `sf-catalog` / `sf-card`).
+- **Asset picker** rebuilt with every function of the old one in the new design (type switch incl. Navigation entries, dataset select,
+  folder tree, rich rows, footer, keyboard, states); public API unchanged for its other callers.
+- **Checks:** 280 test files / 2,584 tests, `ng build`, `npm run lint` and the backend CDL tests green (lint baselines updated).
+- **Deviations / open:** the rich-text page link address is derived from the folder path and uid (the API has no public page URL); the
+  catalog has no language chip (no label row); the picker folder tree covers pages, media and navigation only (templates and records stay
+  flat lists); a catalog card whose type is no longer in `allow` shows its template UUID; real-browser checks of the rebuilt editors were
+  not done in this session — screens that host the form (page, record, global set) get their visual pass in M35.18/20/22.

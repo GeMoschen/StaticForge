@@ -1,0 +1,22 @@
+.link {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sf-space-3);
+}
+
+.link__pick {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sf-space-2);
+}
+
+.link__picked {
+  color: var(--sf-text-muted);
+  font-size: var(--sf-fs-12);
+}
+
+// *Remove link* sits at the start of the footer, apart from Cancel and Apply.
+.link__remove {
+  margin-inline-end: auto;
+}

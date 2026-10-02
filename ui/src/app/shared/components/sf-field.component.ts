@@ -1,3 +1,5 @@
+import { SfBadgeComponent, SfBadgeTone } from './display/sf-badge.component';
+import { SfFinding, SfFindingComponent, SfFindingLevel } from './forms/sf-finding.component';
 import {
   AfterViewInit,
   ChangeDetectionStrategy,
@@ -15,10 +17,17 @@ import {
   viewChild,
 } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
-import { TranslocoPipe } from '@jsverse/transloco';
+import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
 import { SfIconComponent } from './sf-icon.component';
 import { SF_FIELD, SfFieldContext, sfUniqueId } from './forms/sf-field-context';
 import { joinIds } from './forms/sf-control';
+
+/** A badge on a field's label line (M35.17). */
+export interface SfFieldTag {
+  readonly label: string;
+  readonly icon?: string;
+  readonly tone?: SfBadgeTone;
+}
 
 /** Marks projected error content (`<span sfFieldError>…</span>`); it shows in the field's error slot. */
 @Directive({ selector: '[sfFieldError]', standalone: true })
@@ -39,7 +48,7 @@ const NATIVE_TEXT_CONTROL =
 @Component({
   selector: 'sf-field',
   standalone: true,
-  imports: [NgTemplateOutlet, SfIconComponent, TranslocoPipe],
+  imports: [NgTemplateOutlet, SfBadgeComponent, SfFindingComponent, SfIconComponent, TranslocoPipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './sf-field.component.html',
   styleUrl: './sf-field.component.scss',
@@ -54,11 +63,38 @@ export class SfFieldComponent implements SfFieldContext, AfterViewInit {
   /** Shows "(optional)" after the label; for forms where most fields are required. */
   readonly optional = input(false, { transform: booleanAttribute });
   readonly labelPosition = input<'top' | 'inline'>('top');
+  /**
+   * Findings under the field (M35.17): what rules and checks say about the value, at four levels (hint, info, warning,
+   * error). An error-level finding marks the control invalid, like `error` does. Project a `[sfFieldLabelAddon]`
+   * (the language chip) to sit inline right of the label.
+   */
+  readonly findings = input<readonly SfFinding[]>([]);
+  /**
+   * The field is required and has no value yet (M35.17): it then shows the form's own "This field is required" — **once**.
+   * It is left out when an error is already reported (`error`, a projected error or an error-level finding), so a rule
+   * that says the same thing is not repeated.
+   */
+  readonly empty = input(false, { transform: booleanAttribute });
+  /** Small badges on the label line, right of the label: the language chip, a "Computed" cue. */
+  readonly tags = input<readonly SfFieldTag[]>([]);
+  private readonly transloco = inject(TranslocoService);
+
+  /** The findings as shown: the required error added when due, ordered error, warning, info, hint. */
+  protected readonly shownFindings = computed<readonly SfFinding[]>(() => {
+    const list = [...this.findings()];
+    const reported = !!this.error() || this.projectedErrors().length > 0 || list.some((finding) => finding.level === 'error');
+    if (this.required() && this.empty() && !reported) {
+      list.unshift({ level: 'error', message: this.transloco.translate('shared.field.required') });
+    }
+    return list.sort((a, b) => FINDING_RANK[a.level] - FINDING_RANK[b.level]);
+  });
+  protected readonly findingLevelWord = (level: SfFindingLevel): string => this.transloco.translate(`shared.finding.${level}`);
 
   readonly controlId = sfUniqueId('sf-field');
   readonly labelId = `${this.controlId}-label`;
   readonly hintId = `${this.controlId}-hint`;
   readonly errorId = `${this.controlId}-error`;
+  readonly findingsId = `${this.controlId}-findings`;
 
   private readonly projectedErrors = contentChildren(SfFieldErrorDirective, { descendants: true });
   private readonly slot = viewChild.required<ElementRef<HTMLElement>>('slot');
@@ -74,9 +110,14 @@ export class SfFieldComponent implements SfFieldContext, AfterViewInit {
   /** The id of the projected native control when it brought its own. */
   private readonly nativeId = signal<string | null>(null);
 
-  protected readonly hasError = computed(() => !!this.error() || this.projectedErrors().length > 0);
+  /** The error text slot is in use (`error` or projected content). */
+  protected readonly hasErrorText = computed(() => !!this.error() || this.projectedErrors().length > 0);
+  /** The control is invalid: an error text, or a finding at error level. */
+  protected readonly hasError = computed(() => this.hasErrorText() || this.shownFindings().some((finding) => finding.level === 'error'));
   readonly invalid = this.hasError;
-  readonly describedBy = computed(() => joinIds(this.hint() ? this.hintId : null, this.hasError() ? this.errorId : null));
+  readonly describedBy = computed(() =>
+    joinIds(this.hint() ? this.hintId : null, this.hasErrorText() ? this.errorId : null, this.shownFindings().length > 0 ? this.findingsId : null),
+  );
 
   private readonly isGroup = computed(() => (this.registered() ?? this.nativeKind()) === 'group');
   /** The `<label for>` target; `null` renders the label as plain text (group controls). */
@@ -140,6 +181,7 @@ export class SfFieldComponent implements SfFieldContext, AfterViewInit {
 }
 
 const FIELD_FLAG = 'data-sf-field-flags';
+const FINDING_RANK: Readonly<Record<SfFindingLevel, number>> = { error: 0, warning: 1, info: 2, hint: 3 };
 
 function update<V>(target: { (): V; set(value: V): void }, value: V): void {
   if (target() !== value) {

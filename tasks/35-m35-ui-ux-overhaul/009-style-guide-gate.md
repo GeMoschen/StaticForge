@@ -305,6 +305,46 @@ Added to the sample for M35.16 (`/styleguide/sample?area=login|setpassword|accou
 71. **Clickable rows show the pointer (user, 2026-10-02):** `sf-data-table` rows get `cursor: pointer` by default (`rowsOpenable`,
     off with `[rowsOpenable]="false"` where a click does nothing) — in every table, in the app and the sample.
 
+## Review round 7 (2026-10-02): content form and editors (signed off 2026-10-02)
+
+Added for M35.17: a **Content form** section in the style guide (`/styleguide#sg-contentForm`: findings, language chip switch, the
+two-column demo and all 19 editors in four states each) and richer sample editors (`/styleguide/sample?area=pages&view=editor` —
+*Preview* off shows the two columns — and `?area=content&view=record`). **Signed off by the user on 2026-10-02**; M35.17 builds it in the app. Added at the
+review: the picker's type switch includes **Navigation entries** (the Navigation store) and types without a folder tree use the full dialog width.
+
+72. **Field shell:** every editor sits in `sf-field` — label, required marker, hint, findings under the control, optional tags on
+    the label line. Findings come at four levels (error, warning, info, hint; this order); an error-level finding marks the control
+    invalid. New design-system pieces: `sf-finding` (icon, message, spoken level word; `role="alert"` for errors) and `sf-field`
+    inputs `findings`, `empty`, `tags` and a label addon slot.
+73. **A required error shows once:** the client "required" message is left out when a rule already reports an error for the field.
+74. **Language chip** (user, 2026-10-02): inline right of the label; the editing language ("English") or "All languages" for a shared
+    field; nothing when the template or dataset is not localized.
+75. **Read-only and computed:** computed fields are read-only with an info *Computed* tag and a hint that the CMS fills them in;
+    plain read-only fields use a dashed border and a "locked" hint — both readable, never greyed out.
+76. **Rich text** (user: current set + numbered list + clear formatting): `role="toolbar"` with Bold, Italic, H2, H3, bullet list,
+    numbered list, quote, Link, Clear formatting (each switchable per field), `aria-pressed`, tooltips naming the shortcut, one tab
+    stop with arrows / Home / End; **Alt+F10** focuses the toolbar, Escape returns to the text; Ctrl+B / Ctrl+I / Ctrl+K.
+77. **Link dialog** replaces `window.prompt`: address, *Choose a page…* through the picker, *Open in a new tab*; Apply disabled
+    until the address is valid.
+78. **Media editor:** a drop zone while empty; filled, a thumbnail card (name, dimensions, Replace, Remove) and the alt-text field with
+    a warning while empty. The UUID only in developer mode, copyable.
+79. **Reference and link editors** show the target's name and URL with Open, Change, Remove (a link is a page or a web address); no
+    UUIDs. They, the media field and the rich-text link dialog pick through the **asset picker** — the current picker's functions
+    and layout in the new design (user, 2026-10-02): one large dialog with a toolbar (type switch — only the types the field
+    allows, hidden for a single type; dataset select for records; debounced search with a result count), a **folder tree** on the
+    left ("All …" root, lazily opened folders, a breadcrumb; searching ignores the folder filter) and the results on the right (icon
+    or thumbnail, name, dataset badge, record count for record sets, status badge, format and size for media, folder path — the uid
+    only in developer mode —, indented Navigation folders); pagination sources (navigation folder / dataset) only when the field names
+    them; a footer naming the selection with **Cancel** and **Choose** (disabled until a row is selected); ↑/↓/Home/End, Enter or
+    double click to choose, loading skeleton, per-type empty state and an error state with Retry; narrow, the tree becomes a folder
+    select.
+80. **Lists and groups:** add, remove with an Undo toast, drag by handle and **Alt+↑/↓** (focus stays on the moved handle, polite
+    announcement); groups are collapsible with a summary line while closed.
+81. **Two columns are opt-in per field in the template** (user, 2026-10-02): a new CDL attribute `width: half` (full is the default);
+    fields marked half flow two per row in the original order, everything else spans the row. The rule follows the form's own
+    width (two columns from 46 rem — about 1280 px with no side pane), so beside the preview pane the form stays one column.
+    Backend: the CDL lexer/parser/validator and the compiled definition get `width`.
+
 ## Notes / hazards
 
 - Sign-off: **signed off by the user on 2026-10-01** — gallery https://claude.ai/artifact/33yY26sd6H17UTP9sPPJid

@@ -1,25 +1,55 @@
-<sf-field [label]="definition().label" [hint]="definition().help">
-  <div class="sf-media">
-    <div class="sf-media__drop" sfDropTarget (drop)="onDrop($event)">
-      Drag media here
-    </div>
-
-    @if (projectKey()) {
-      <sf-button variant="secondary" (click)="choose()">Choose</sf-button>
+<sf-field
+  [label]="definition().label"
+  [hint]="definition().help"
+  [required]="fieldRequired()"
+  [empty]="fieldEmpty()"
+  [tags]="fieldTags()"
+  [findings]="fieldFindings()"
+>
+  <div class="media">
+    @if (uuid(); as id) {
+      <div class="media__card" data-sf-media-card>
+        <sf-media-thumb class="media__thumb" [projectKey]="projectKey() ?? ''" [uuid]="id" />
+        <div class="media__info">
+          @if (missing()) {
+            <span class="media__name">{{ 'forms.media.missing' | transloco }}</span>
+          } @else if (media()) {
+            <span class="media__name">{{ name() }}</span>
+            <span class="media__dims">{{ details() }}</span>
+          } @else {
+            <span class="media__name is-loading">{{ 'forms.media.loading' | transloco }}</span>
+          }
+          @if (developer()) {
+            <sf-copyable class="media__uuid" [value]="id" [label]="'forms.media.uuid' | transloco" />
+          }
+        </div>
+        @if (!readOnly()) {
+          <div class="media__actions">
+            <sf-button variant="secondary" size="sm" icon="swap_horiz" (click)="choose()">{{ 'forms.media.replace' | transloco }}</sf-button>
+            <sf-button variant="ghost" size="sm" icon="delete" [label]="'forms.media.remove' | transloco" (click)="remove()" />
+          </div>
+        }
+      </div>
+      <sf-field [label]="'forms.media.alt' | transloco" [hint]="'forms.media.altHint' | transloco" [findings]="altFindings()">
+        <sf-input [readonly]="readOnly()" [value]="alt()" (valueChange)="setAlt($event)" />
+      </sf-field>
+    } @else {
+      <div
+        class="drop"
+        sfDropTarget
+        [class.is-over]="over()"
+        [class.is-readonly]="readOnly()"
+        (dragover)="onOver($event)"
+        (dragleave)="over.set(false)"
+        (drop)="onDrop($event)"
+      >
+        <sf-icon class="drop__icon" name="add_photo_alternate" />
+        <span class="drop__text">{{ (readOnly() ? 'forms.media.none' : 'forms.media.drop') | transloco }}</span>
+        @if (!readOnly() && projectKey()) {
+          <sf-button variant="secondary" size="sm" icon="photo_library" (click)="choose()">{{ 'forms.media.choose' | transloco }}</sf-button>
+        }
+      </div>
     }
-
-    <input
-      type="text"
-      placeholder="Media UUID"
-      [formControl]="field('uuid')"
-      [attr.readonly]="definition().readOnly ? '' : null"
-    />
-    <input
-      type="text"
-      placeholder="Alt text"
-      [formControl]="field('altOverride')"
-      [attr.readonly]="definition().readOnly ? '' : null"
-    />
   </div>
 </sf-field>
 

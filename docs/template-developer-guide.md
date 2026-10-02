@@ -1556,6 +1556,7 @@ The render-time limits (`SF-TPL-0130`–`0133`, `0135`) fail only the affected p
 | `SF-CDL-0117` | error | a rule name, state path or fill path declared twice in one source, or fills that read each other in a cycle (M33) |
 | `SF-CDL-0118` | error | `rule "x" off` for a rule no ancestor template defines (M33) |
 | `SF-CDL-0119` | error | an invalid built-in modifier (`level`, `scope`, `onGeneration`, `message` after `required`, `maxLength`, …), `onGeneration` without level `error` and scope `generation`, or a custom rule named like a built-in (M33) |
+| `SF-CDL-0120` | error | `width` with a value other than `half` or `full`, or on a structural editor (`group`, `list`, `catalog`, `pagination`) — set it on the leaf editors inside (M35.17) |
 | `SF-CDL-0200` | error | CDL syntax error |
 
 ### 3.3 Generation (`SF-GEN-*`) — `generate.GenerationDiagnosticCodes` + `generate.GenerationService`

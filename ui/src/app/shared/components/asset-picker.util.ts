@@ -5,6 +5,7 @@
 export type PickerType =
   | 'PAGE'
   | 'MEDIA'
+  | 'PAGE_REFERENCE'
   | 'PAGE_TEMPLATE'
   | 'SECTION_TEMPLATE'
   | 'RECORD'
@@ -15,6 +16,7 @@ export type PickerType =
 export const PICKER_TYPE_OPTIONS: { value: PickerType; labelKey: string }[] = [
   { value: 'PAGE', labelKey: 'enum.pickerType.PAGE' },
   { value: 'MEDIA', labelKey: 'enum.pickerType.MEDIA' },
+  { value: 'PAGE_REFERENCE', labelKey: 'enum.pickerType.PAGE_REFERENCE' },
   { value: 'PAGE_TEMPLATE', labelKey: 'enum.pickerType.PAGE_TEMPLATE' },
   { value: 'SECTION_TEMPLATE', labelKey: 'enum.pickerType.SECTION_TEMPLATE' },
   { value: 'RECORD', labelKey: 'enum.pickerType.RECORD' },
@@ -130,4 +132,41 @@ export type Translator = (key: string, params?: Record<string, unknown>) => stri
 /** "1 record" / "12 records" (`common.count.records`). */
 export function recordCountLabel(count: number | null | undefined, translate: Translator): string {
   return translate('common.count.records', { count: count ?? 0 });
+}
+
+/** A folder as the picker's tree and breadcrumb need it. */
+export interface PickerFolderNode {
+  uuid?: string;
+  uid?: string;
+  displayName?: string;
+  path?: string;
+  children?: readonly PickerFolderNode[];
+}
+
+/** The folders from the top down to the one with `uuid` (inclusive); empty when it is not in the tree. */
+export function folderTrail<T extends PickerFolderNode>(tree: readonly T[] | null | undefined, uuid: string | null | undefined): T[] {
+  if (!uuid) {
+    return [];
+  }
+  for (const node of tree ?? []) {
+    if (node.uuid === uuid) {
+      return [node];
+    }
+    const inner = folderTrail((node.children ?? []) as readonly T[], uuid);
+    if (inner.length > 0) {
+      return [node, ...inner];
+    }
+  }
+  return [];
+}
+
+/** The folders as select options, depth first, a child after its parent and marked with an en dash per level. */
+export function folderOptions(
+  tree: readonly PickerFolderNode[] | null | undefined,
+  depth = 0,
+): { value: string; label: string }[] {
+  return (tree ?? []).flatMap((node) => [
+    { value: node.uuid ?? '', label: `${'– '.repeat(depth)}${node.displayName ?? node.uid ?? ''}` },
+    ...folderOptions(node.children, depth + 1),
+  ]);
 }

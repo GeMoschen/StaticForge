@@ -139,5 +139,10 @@ public final class DiagnosticCodes {
     public static final String CDL_RULE_UNKNOWN_OVERRIDE = "SF-CDL-0118";
     /** M33: an invalid built-in modifier or {@code onGeneration}, or a rule named like a built-in. */
     public static final String CDL_RULE_INVALID_MODIFIER = "SF-CDL-0119";
+    /**
+     * M35.17: {@code width} with a value other than {@code half} or {@code full}, or on a structural editor
+     * ({@code group}, {@code list}, {@code catalog}, {@code pagination}) — only leaf editors lay out in the form's grid.
+     */
+    public static final String CDL_INVALID_WIDTH = "SF-CDL-0120";
     public static final String CDL_SYNTAX = "SF-CDL-0200";
 }

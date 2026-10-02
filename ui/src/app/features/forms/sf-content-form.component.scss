@@ -1,76 +1,23 @@
 .sf-content-form {
-  display: flex;
-  flex-direction: column;
-  gap: var(--sf-4);
-}
+  // The form spans the full width of its pane (M35.9 decision 33): one column; from 46 rem of the form's own width two
+  // columns, but only the fields the template marks `width: half` pair up (M35.17 decision 81) — everything else spans the
+  // row, in the original order.
+  container: sf-content-form / inline-size;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sf-4) var(--sf-4);
 
-.sf-content-form__issue {
-  margin: var(--sf-1) 0 0;
-  color: var(--sf-rust);
-  font-size: var(--sf-text-xs);
-}
+  @container sf-content-form (min-width: 46rem) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
 
-// Editor rule levels (M33.8): errors rust, warnings amber, infos and hints quieter.
-.sf-content-form__issue--warning {
-  color: var(--sf-amber, #9a6700);
-}
+    > .sf-content-form__editor {
+      grid-column: 1 / -1;
+    }
 
-.sf-content-form__issue--info {
-  color: var(--sf-slate);
-}
-
-.sf-content-form__issue--hint {
-  color: var(--sf-slate);
-  font-style: italic;
-  opacity: 0.85;
-}
-
-.sf-content-form__states {
-  display: flex;
-  gap: var(--sf-2);
-  margin: 0 0 var(--sf-1);
-}
-
-.sf-content-form__state {
-  padding: 0 0.4em;
-  border: 1px solid var(--sf-line);
-  border-radius: var(--sf-radius);
-  font-size: var(--sf-text-xs);
-  color: var(--sf-slate);
-}
-
-.sf-content-form__state--required {
-  color: var(--sf-rust);
-  border-color: currentColor;
-}
-
-.sf-content-form__lang {
-  display: flex;
-  align-items: center;
-  gap: var(--sf-2);
-  margin: 0 0 var(--sf-1);
-}
-
-.sf-content-form__badge {
-  display: inline-flex;
-  align-items: center;
-  padding: 0 0.4em;
-  border-radius: var(--sf-radius);
-  background: var(--sf-surface-muted, var(--sf-surface));
-  border: 1px solid var(--sf-line);
-  font-size: var(--sf-text-xs);
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  color: var(--sf-slate);
-}
-
-.sf-content-form__badge--all {
-  font-weight: 400;
-}
-
-.sf-content-form__hint {
-  font-size: var(--sf-text-xs);
-  color: var(--sf-slate);
+    > .sf-content-form__editor--half {
+      grid-column: auto;
+    }
+  }
 }
 
 .sf-content-form__fallback {

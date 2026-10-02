@@ -23,6 +23,21 @@
   }
 }
 
+// The label with what sits beside it (the language chip), on one line.
+.sf-field__head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--sf-space-2);
+  min-width: 0;
+}
+
+.sf-field__findings {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sf-space-1);
+}
+
 .sf-field__label {
   color: var(--sf-text);
   font-size: var(--sf-fs-13);

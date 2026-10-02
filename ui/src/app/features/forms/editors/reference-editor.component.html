@@ -1,53 +1,68 @@
-<sf-field [label]="definition().label" [hint]="definition().help">
-  <div class="sf-reference" sfDropTarget (drop)="onDrop($event)">
-    <div class="sf-reference__current" [class.sf-reference__current--broken]="resolved()?.broken">
-      @if (uuid(); as u) {
-        <sf-icon class="sf-reference__icon" [name]="resolved()?.broken ? 'link_off' : 'link'" />
-        @if (resolved()?.broken !== 'missing' && link(); as route) {
-          <a class="sf-reference__label sf-reference__label--link" [routerLink]="route" target="_blank" title="Open in a new tab">
-            {{ resolved()?.label ?? u }}
-          </a>
-        } @else {
-          <span class="sf-reference__label">{{ resolved()?.label ?? u }}</span>
+<sf-field
+  [label]="definition().label"
+  [hint]="definition().help"
+  [required]="fieldRequired()"
+  [empty]="fieldEmpty()"
+  [tags]="fieldTags()"
+  [findings]="fieldFindings()"
+>
+  <div class="ref" sfDropTarget (drop)="onDrop($event)">
+    @if (uuid(); as u) {
+      <div class="ref__card" [class.is-broken]="resolved()?.broken">
+        <sf-icon class="ref__icon" [name]="icon()" />
+        <span class="ref__text">
+          <span class="ref__head">
+            @if (resolved(); as target) {
+              @if (target.broken === 'missing') {
+                <span class="ref__name is-broken">{{ 'forms.reference.missing' | transloco }}</span>
+              } @else if (target.unreachable) {
+                <span class="ref__name is-loading">{{ 'forms.reference.unreachable' | transloco }}</span>
+              } @else {
+                <span class="ref__name">{{ target.label }}</span>
+                @if (target.broken === 'deleted') {
+                  <sf-badge tone="danger" [label]="'forms.reference.deleted' | transloco" />
+                }
+                @if (targetType() === 'RECORD_SET') {
+                  <sf-badge tone="neutral" [label]="target.dataset ?? ('forms.reference.recordSet' | transloco)" />
+                  @if (target.recordCount != null) {
+                    <span class="ref__meta">{{ recordCountLabel(target.recordCount) }}</span>
+                  }
+                } @else if (targetType() === 'RECORD' && definition().dataset) {
+                  <sf-badge tone="neutral" [label]="definition().dataset!" />
+                }
+              }
+            } @else {
+              <span class="ref__name is-loading">{{ 'forms.reference.loading' | transloco }}</span>
+            }
+          </span>
+          @if (location(); as where) {
+            <span class="ref__meta">{{ where }}</span>
+          }
+          @if (developer()) {
+            <sf-copyable class="ref__uuid" [value]="u" [label]="'forms.reference.uuid' | transloco" />
+          }
+        </span>
+        <span class="ref__actions">
+          @if (link(); as route) {
+            <a class="ref__open" [routerLink]="route.commands" [queryParams]="route.queryParams" target="_blank" rel="noopener">
+              <sf-icon name="open_in_new" />
+              {{ 'forms.reference.open' | transloco }}
+            </a>
+          }
+          @if (!definition().readOnly) {
+            <sf-button variant="secondary" size="sm" icon="swap_horiz" (click)="openPicker()">{{ 'forms.reference.change' | transloco }}</sf-button>
+            <sf-button variant="ghost" size="sm" icon="close" [label]="'forms.reference.remove' | transloco" (click)="reset()" />
+          }
+        </span>
+      </div>
+    } @else {
+      <div class="ref__card is-empty">
+        <sf-icon class="ref__icon" name="link" />
+        <span class="ref__text ref__none">{{ 'forms.reference.none' | transloco }}</span>
+        @if (!definition().readOnly) {
+          <sf-button variant="secondary" size="sm" icon="search" (click)="openPicker()">{{ 'forms.reference.choose' | transloco }}</sf-button>
         }
-        @switch (resolved()?.broken) {
-          @case ('missing') {
-            <span class="sf-reference__broken">Not found</span>
-          }
-          @case ('deleted') {
-            <span class="sf-reference__broken">Deleted</span>
-          }
-        }
-        @if (targetType() === 'RECORD_SET') {
-          @if (resolved()?.dataset; as dataset) {
-            <span class="sf-reference__type" title="Dataset">{{ dataset }}</span>
-          } @else {
-            <span class="sf-reference__type">Record set</span>
-          }
-          @if (resolved()?.recordCount != null) {
-            <span class="sf-reference__meta">{{ recordCountLabel(resolved()?.recordCount) }}</span>
-          }
-        } @else if (targetType()) {
-          <span class="sf-reference__type">{{ targetType() === 'RECORD' && definition().dataset ? definition().dataset : targetType() }}</span>
-        }
-      } @else {
-        <span class="sf-reference__empty">No asset selected</span>
-      }
-    </div>
-
-    @if (!definition().readOnly) {
-      <sf-button variant="secondary" (click)="openPicker()">Choose…</sf-button>
-      @if (uuid()) {
-        <button
-          type="button"
-          class="sf-reference__reset"
-          title="Clear reference"
-          aria-label="Clear reference"
-          (click)="reset()"
-        >
-          <sf-icon name="close" />
-        </button>
-      }
+      </div>
     }
   </div>
 </sf-field>

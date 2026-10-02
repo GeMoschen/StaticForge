@@ -78,7 +78,8 @@
       "RECORD": "Records",
       "RECORD_SET": "Record sets",
       "NAV_FOLDER": "Navigation folders",
-      "DATASET": "Datasets"
+      "DATASET": "Datasets",
+      "PAGE_REFERENCE": "Navigation entries"
     },
     "cdlSection": {
       "content": "Content",
@@ -366,7 +367,8 @@
       "moreAssets": "{base} · {count} assets"
     },
     "field": {
-      "optional": "(optional)"
+      "optional": "(optional)",
+      "required": "This field is required."
     },
     "search": {
       "clear": "Clear search",
@@ -577,6 +579,12 @@
     "undo": {
       "done": "Undone.",
       "failed": "Could not undo — it can be restored from the history."
+    },
+    "finding": {
+      "hint": "Hint",
+      "info": "Information",
+      "warning": "Warning",
+      "error": "Error"
     }
   },
   "shell": {
@@ -834,7 +842,11 @@
         "developerOn": "Turn developer mode on",
         "developerOff": "Turn developer mode off",
         "switchProject": "Switch project…",
-        "signOut": "Sign out"
+        "signOut": "Sign out",
+        "richToolbar": "Focus the formatting toolbar",
+        "richBold": "Bold",
+        "richItalic": "Italic",
+        "richLink": "Insert link"
       }
     },
     "sidenav": {
@@ -890,7 +902,8 @@
         "overlays": "Overlays",
         "data": "Data",
         "cards": "Cards and catalogs",
-        "code": "Code editor"
+        "code": "Code editor",
+        "contentForm": "Content form"
       },
       "code": {
         "intro": "The code panel: a header with the file, the language, Format and Find; the editor with line numbers, fold markers, the active line, bracket matching and the diagnostics underlined; the diagnostics listed below (a row jumps to its position); a status line with the caret position and the counts. It fills the height it is given and follows the theme and density.",
@@ -3300,6 +3313,296 @@
           "submit": "Save",
           "saved": "“{name}” was saved."
         }
+      },
+      "forms": {
+        "title": "Content form",
+        "required": "This field is required.",
+        "computed": "Computed",
+        "allLanguages": "All languages",
+        "levels": {
+          "hint": "Hint",
+          "info": "Information",
+          "warning": "Warning",
+          "error": "Error"
+        },
+        "editors": {
+          "text": "Text",
+          "textarea": "Text area",
+          "richtext": "Rich text",
+          "markdown": "Markdown",
+          "number": "Number",
+          "boolean": "Switch",
+          "date": "Date",
+          "datetime": "Date and time",
+          "select": "Select",
+          "multiselect": "Multi-select",
+          "color": "Colour",
+          "link": "Link",
+          "media": "Media",
+          "reference": "Reference",
+          "list": "List",
+          "group": "Group",
+          "json": "JSON",
+          "catalog": "Catalog of cards",
+          "pagination": "Pagination"
+        },
+        "hints": {
+          "computed": "Filled in by the CMS; you cannot change it.",
+          "readonly": "This field is locked.",
+          "text": "Shown in the tree and the browser tab.",
+          "textarea": "A few sentences.",
+          "richtext": "Use the toolbar; Alt+F10 jumps to it.",
+          "markdown": "Written in Markdown.",
+          "number": "Net price in euros.",
+          "boolean": "Show this item in the navigation.",
+          "date": "The publication date.",
+          "datetime": "Local time of the project.",
+          "select": "One roast level.",
+          "multiselect": "Pick any number of tags.",
+          "color": "Used for the badge.",
+          "link": "A page of this site or a web address.",
+          "media": "The image shown at the top of the page.",
+          "reference": "The record this page is about.",
+          "list": "Drag the handle or press Alt+↑ / Alt+↓ to reorder.",
+          "group": "Related fields, collapsible.",
+          "json": "Must be valid JSON.",
+          "catalog": "Cards of the allowed types, in order.",
+          "pagination": "Where the list comes from and how it is paged."
+        },
+        "group": {
+          "title": "Title",
+          "canonical": "Canonical path"
+        },
+        "pagination": {
+          "source": "Source",
+          "pageSize": "Page size",
+          "sort": "Sort"
+        },
+        "findings": {
+          "jsonInvalid": "Not valid JSON: {message}"
+        },
+        "rich": {
+          "toolbar": "Formatting",
+          "bold": "Bold",
+          "italic": "Italic",
+          "h2": "Heading 2",
+          "h3": "Heading 3",
+          "ul": "Bulleted list",
+          "ol": "Numbered list",
+          "quote": "Quote",
+          "link": "Link",
+          "clear": "Clear formatting",
+          "linkTitle": "Insert link",
+          "address": "Address",
+          "addressInvalid": "Enter a web address (https://…), a mail link, a path starting with / or an anchor.",
+          "pickPage": "Choose a page…",
+          "picked": "Linking to “{name}”.",
+          "newTab": "Open in a new tab",
+          "cancel": "Cancel",
+          "apply": "Apply"
+        },
+        "picker": {
+          "title": {
+            "asset": "Choose an asset",
+            "source": "Choose a source",
+            "one": {
+              "PAGE": "Choose a page",
+              "MEDIA": "Choose a file",
+              "PAGE_TEMPLATE": "Choose a page template",
+              "SECTION_TEMPLATE": "Choose a section template",
+              "RECORD": "Choose a record",
+              "RECORD_SET": "Choose a record set",
+              "NAV_FOLDER": "Choose a navigation folder",
+              "DATASET": "Choose a dataset",
+              "PAGE_REFERENCE": "Choose a navigation entry"
+            }
+          },
+          "types": {
+            "PAGE": "Pages",
+            "MEDIA": "Media",
+            "PAGE_TEMPLATE": "Page templates",
+            "SECTION_TEMPLATE": "Section templates",
+            "RECORD": "Records",
+            "RECORD_SET": "Record sets",
+            "NAV_FOLDER": "Navigation folder",
+            "DATASET": "Dataset",
+            "PAGE_REFERENCE": "Navigation entries"
+          },
+          "all": {
+            "PAGE": "All pages",
+            "MEDIA": "All media",
+            "PAGE_TEMPLATE": "All page templates",
+            "SECTION_TEMPLATE": "All section templates",
+            "RECORD": "All records",
+            "RECORD_SET": "All record sets",
+            "NAV_FOLDER": "All navigation",
+            "DATASET": "All datasets",
+            "PAGE_REFERENCE": "All navigation entries"
+          },
+          "sourceType": "Source type",
+          "assetType": "Asset type",
+          "dataset": "Dataset",
+          "folder": "Folder",
+          "folders": "Folders",
+          "location": "Location",
+          "search": "Search by name or UID",
+          "loading": "Loading…",
+          "count": "{count, plural, =0 {No results} one {# result} other {# results}}",
+          "loadingList": "Loading the list",
+          "error": "The list could not be loaded.",
+          "retry": "Retry",
+          "empty": {
+            "PAGE": "No pages here",
+            "MEDIA": "No files here",
+            "PAGE_TEMPLATE": "No page templates here",
+            "SECTION_TEMPLATE": "No section templates here",
+            "RECORD": "No records in this dataset",
+            "RECORD_SET": "No record sets here",
+            "NAV_FOLDER": "No navigation folders",
+            "DATASET": "No datasets",
+            "PAGE_REFERENCE": "No navigation entries here"
+          },
+          "emptyMatch": {
+            "PAGE": "No pages match “{query}”",
+            "MEDIA": "No files match “{query}”",
+            "PAGE_TEMPLATE": "No page templates match “{query}”",
+            "SECTION_TEMPLATE": "No section templates match “{query}”",
+            "RECORD": "No records match “{query}”",
+            "RECORD_SET": "No record sets match “{query}”",
+            "NAV_FOLDER": "No navigation folders match “{query}”",
+            "DATASET": "No datasets match “{query}”",
+            "PAGE_REFERENCE": "No navigation entries match “{query}”"
+          },
+          "hint": {
+            "record": "Try a different search or dataset.",
+            "folder": "Try a different search or folder.",
+            "plain": "Try a different search."
+          },
+          "clearSearch": "Clear search",
+          "searchAll": "Searching every folder",
+          "records": "{count, plural, one {# record} other {# records}}",
+          "status": {
+            "released": "Released",
+            "changed": "Changed",
+            "draft": "Draft"
+          },
+          "selected": "Selected:",
+          "nothing": "Nothing selected yet.",
+          "cancel": "Cancel",
+          "choose": "Choose"
+        },
+        "media": {
+          "uuid": "Media UUID",
+          "replace": "Replace",
+          "remove": "Remove the file",
+          "alt": "Alternative text",
+          "altHint": "Describe the image for people who cannot see it.",
+          "altMissing": "Add alternative text so the image is accessible.",
+          "none": "No file chosen.",
+          "drop": "Drop a file here or choose one from the library.",
+          "choose": "Choose"
+        },
+        "ref": {
+          "linkKind": "Link target",
+          "modePage": "Page",
+          "modeWeb": "Web address",
+          "open": "Open",
+          "change": "Change",
+          "remove": "Remove the target",
+          "none": "Nothing chosen yet.",
+          "choose": {
+            "page": "Choose a page…",
+            "media": "Choose a file…",
+            "record": "Choose a record…"
+          },
+          "webAddress": "Web address",
+          "opens": "Opens “{name}”."
+        },
+        "list": {
+          "handle": "Move item {n}",
+          "item": "Item {n}",
+          "remove": "Remove item {n}",
+          "empty": "No items yet.",
+          "add": "Add item",
+          "count": "{count, plural, =0 {No items} one {# item} other {# items}}",
+          "help": "Reorder with Alt and the up or down arrow.",
+          "removed": "Item {n} removed.",
+          "moved": "Moved to position {n} of {count}."
+        },
+        "page": {
+          "intro": "Introduction",
+          "related": "Related page",
+          "relatedHint": "Shown as “Read next” below the article.",
+          "moreLink": "Read more link",
+          "highlights": "Highlights",
+          "seo": "Search and sharing",
+          "seoTitle": "Search title",
+          "canonical": "Canonical path",
+          "teaserLong": "The teaser is longer than 140 characters; search results may cut it off.",
+          "metaInfo": "{count} of {max} characters."
+        },
+        "record": {
+          "description": "Description",
+          "origin": "Origin page",
+          "originHint": "The page that tells the story of this coffee.",
+          "tastingNotes": "Brewing tips"
+        }
+      }
+    },
+    "forms": {
+      "intro": "Every editor of the content form in each of its states, the inline findings under a field and the two-column layout.",
+      "findingsTitle": "Findings",
+      "findingsNote": "A field can carry findings of four levels: hint, info, warning and error. A required error shows once: the rule's own message when a rule reports it, the form's otherwise.",
+      "price": "Price",
+      "priceHint": "Shown with the product.",
+      "requiredServer": "Required, and a rule says so too",
+      "requiredServerHint": "The rule's message replaces the form's.",
+      "requiredClient": "Required, only the form knows",
+      "requiredClientHint": "The form adds the required message itself.",
+      "chipTitle": "Language chip",
+      "chipNote": "A localized field shows the editing language next to its label, a shared field shows “All languages”, and a field that is not localized shows nothing.",
+      "layoutTitle": "Two-column layout",
+      "layoutNote": "A field opts in to half width in the template. The form shows two columns from 46rem of its own width and one below; long fields always take the full width.",
+      "layout": {
+        "number": "Price",
+        "date": "Publication date",
+        "category": "Category",
+        "author": "Author",
+        "teaser": "Teaser"
+      },
+      "editorsTitle": "Editors",
+      "editorsNote": "Each editor in its four states: default, required (empty), read-only and computed.",
+      "states": {
+        "default": "Default",
+        "required": "Required",
+        "readonly": "Read-only",
+        "computed": "Computed"
+      },
+      "pickerTitle": "Asset picker",
+      "pickerNote": "One dialog picks pages, files, templates, records and record sets, and the pagination sources. The type switch shows only the types the field allows; folders, search and the footer behave the same everywhere.",
+      "pickerOpen": "Open the picker",
+      "pickerPicked": "Chosen: {name}",
+      "pickers": {
+        "any": "Any asset (type switch)",
+        "pages": "Pages only",
+        "media": "Media only",
+        "records": "Records of one dataset",
+        "source": "Pagination source",
+        "loading": "Loading state",
+        "error": "Error state"
+      },
+      "chip": {
+        "none": "Not localized",
+        "language": "A language",
+        "all": "All languages",
+        "english": "English"
+      },
+      "findings": {
+        "hint": "Prices are net of tax.",
+        "info": "The price was last changed on 14 September.",
+        "warning": "This is higher than the other roasts.",
+        "error": "The price must be a positive number.",
+        "serverRule": "The rule “Name is required” is not met."
       }
     }
   },
@@ -3954,6 +4257,223 @@
         "issuedOnce": "This is the only time it is shown. Copy it now.",
         "done": "Done"
       }
+    }
+  },
+  "forms": {
+    "field": {
+      "allLanguages": "All languages",
+      "computed": "Computed",
+      "computedHint": "Filled in from other fields.",
+      "readOnlyHint": "A rule makes this field read-only.",
+      "requiredInDefault": "Required in {language} only.",
+      "notTranslated": "Not translated — shows “{text}” from {language}.",
+      "copyFrom": "Copy from {language}"
+    },
+    "rich": {
+      "toolbar": "Formatting",
+      "bold": "Bold",
+      "italic": "Italic",
+      "h2": "Heading 2",
+      "h3": "Heading 3",
+      "ul": "Bulleted list",
+      "ol": "Numbered list",
+      "quote": "Quote",
+      "link": "Link",
+      "clear": "Clear formatting",
+      "linkTitle": "Insert link",
+      "editLinkTitle": "Edit link",
+      "address": "Address",
+      "addressInvalid": "Enter a web address (https://…), a mail link, a path starting with / or an anchor.",
+      "pickPage": "Choose a page…",
+      "picked": "Linking to “{name}”.",
+      "newTab": "Open in a new tab",
+      "removeLink": "Remove link",
+      "apply": "Apply"
+    },
+    "picker": {
+      "title": {
+        "asset": "Choose an asset",
+        "source": "Choose a source",
+        "one": {
+          "PAGE": "Choose a page",
+          "MEDIA": "Choose a file",
+          "PAGE_TEMPLATE": "Choose a page template",
+          "SECTION_TEMPLATE": "Choose a section template",
+          "RECORD": "Choose a record",
+          "RECORD_SET": "Choose a record set",
+          "NAV_FOLDER": "Choose a navigation folder",
+          "DATASET": "Choose a dataset",
+          "PAGE_REFERENCE": "Choose a navigation entry"
+        }
+      },
+      "all": {
+        "PAGE": "All pages",
+        "MEDIA": "All media",
+        "PAGE_TEMPLATE": "All page templates",
+        "SECTION_TEMPLATE": "All section templates",
+        "RECORD": "All records",
+        "RECORD_SET": "All record sets",
+        "NAV_FOLDER": "All navigation",
+        "DATASET": "All datasets",
+        "PAGE_REFERENCE": "All navigation entries"
+      },
+      "sourceType": "Source type",
+      "assetType": "Asset type",
+      "dataset": "Dataset",
+      "folder": "Folder",
+      "folders": "Folders",
+      "location": "Location",
+      "search": "Search by name or UID",
+      "loading": "Loading…",
+      "count": "{count, plural, =0 {No results} one {# result} other {# results}}",
+      "loadingList": "Loading the list",
+      "error": "The list could not be loaded.",
+      "retry": "Retry",
+      "empty": {
+        "PAGE": "No pages here",
+        "MEDIA": "No files here",
+        "PAGE_TEMPLATE": "No page templates here",
+        "SECTION_TEMPLATE": "No section templates here",
+        "RECORD": "No records in this dataset",
+        "RECORD_SET": "No record sets here",
+        "NAV_FOLDER": "No navigation folders",
+        "DATASET": "No datasets",
+        "PAGE_REFERENCE": "No navigation entries here"
+      },
+      "emptyMatch": {
+        "PAGE": "No pages match “{query}”",
+        "MEDIA": "No files match “{query}”",
+        "PAGE_TEMPLATE": "No page templates match “{query}”",
+        "SECTION_TEMPLATE": "No section templates match “{query}”",
+        "RECORD": "No records match “{query}”",
+        "RECORD_SET": "No record sets match “{query}”",
+        "NAV_FOLDER": "No navigation folders match “{query}”",
+        "DATASET": "No datasets match “{query}”",
+        "PAGE_REFERENCE": "No navigation entries match “{query}”"
+      },
+      "hint": {
+        "record": "Try a different search or dataset.",
+        "folder": "Try a different search or folder.",
+        "plain": "Try a different search."
+      },
+      "clearSearch": "Clear search",
+      "searchAll": "Searching every folder",
+      "records": "{count, plural, one {# record} other {# records}}",
+      "status": {
+        "NEW": "New",
+        "CHANGED": "Changed",
+        "UNPUBLISHED": "Unpublished",
+        "DELETION_PENDING": "Deletion pending",
+        "PUBLISHED": "Published"
+      },
+      "selected": "Selected:",
+      "nothing": "Nothing selected yet.",
+      "cancel": "Cancel",
+      "choose": "Choose"
+    },
+    "list": {
+      "add": "Add row",
+      "remove": "Remove row {n}",
+      "removed": "Row {n} removed.",
+      "moved": "Row moved to position {n} of {count}.",
+      "handle": "Row {n}: drag, or press Alt+Up or Alt+Down to move",
+      "help": "Alt plus the up or down arrow moves the row.",
+      "empty": "No rows yet.",
+      "count": "{count, plural, one {# row} other {# rows}}"
+    },
+    "catalog": {
+      "untitled": "Untitled",
+      "removed": "Removed {type} “{summary}”",
+      "loading": "Loading the card…"
+    },
+    "editors": {
+      "errors": {
+        "required": "This field is required",
+        "maxlength": "Must be at most {max} characters",
+        "pattern": "Invalid format",
+        "maxchars": "Must be at most {max} characters",
+        "min": "Must be at least {min}",
+        "max": "Must be at most {max}",
+        "listmin": "At least {required} rows required",
+        "listmax": "At most {required} rows allowed",
+        "json": "Must be valid JSON",
+        "invalid": "Invalid value"
+      },
+      "select": {
+        "placeholder": "Select…"
+      },
+      "multiselect": {
+        "placeholder": "Select values…"
+      },
+      "pagination": {
+        "navfolder": "Navigation folder",
+        "dataset": "Dataset",
+        "notpaginated": "Not paginated",
+        "change": "Change source…",
+        "choose": "Choose source…",
+        "clear": "Clear",
+        "perpage": "Items per page",
+        "sortby": "Sort by",
+        "asc": "Ascending",
+        "desc": "Descending",
+        "ascaria": "Ascending, switch to descending",
+        "descaria": "Descending, switch to ascending"
+      }
+    },
+    "media": {
+      "uuid": "UUID",
+      "replace": "Replace",
+      "remove": "Remove the file",
+      "alt": "Alternative text",
+      "altHint": "Describe the image for people who cannot see it.",
+      "altMissing": "Add alternative text so the image is accessible.",
+      "none": "No file chosen.",
+      "drop": "Drop a file here or choose one from the library.",
+      "choose": "Choose",
+      "missing": "This file no longer exists.",
+      "loading": "Loading the file…"
+    },
+    "reference": {
+      "none": "Nothing chosen yet.",
+      "choose": "Choose…",
+      "change": "Change",
+      "remove": "Remove the target",
+      "open": "Open",
+      "missing": "This target no longer exists.",
+      "deleted": "Deleted",
+      "unreachable": "The target could not be loaded.",
+      "loading": "Loading…",
+      "recordSet": "Record set",
+      "uuid": "UUID"
+    },
+    "link": {
+      "kinds": {
+        "INTERNAL": "Page",
+        "MEDIA": "File",
+        "EXTERNAL": "Web address",
+        "ANCHOR": "Anchor",
+        "MAIL": "E-mail"
+      },
+      "kind": "Link target",
+      "none": "Nothing linked yet.",
+      "missing": "The linked page or file no longer exists.",
+      "loading": "Loading…",
+      "uuid": "UUID",
+      "open": "Open",
+      "change": "Change",
+      "choose": "Choose target",
+      "close": "Close",
+      "remove": "Remove the link",
+      "choosePage": "Choose a page…",
+      "chooseFile": "Choose a file…",
+      "url": "Web address",
+      "urlPlaceholder": "https://example.com",
+      "titleLabel": "Title",
+      "newTab": "Open in a new tab",
+      "anchor": "Anchor",
+      "anchorPlaceholder": "section-name",
+      "mail": "E-mail address",
+      "mailPlaceholder": "name@example.com"
     }
   }
 }

@@ -10,6 +10,12 @@ import { provideProjectPermissions } from '../../core/project/testing/project-pe
 import { ToastService } from '../../core/ui/toast.service';
 import { PageDeleteDialogComponent } from './page-delete-dialog.component';
 
+/** Chooses a row of the asset picker (it lives in the page body, as a dialog does) by double click. */
+function pickRow(name: string): void {
+  const row = Array.from(document.querySelectorAll('.picker__row')).find((r) => r.textContent?.includes(name)) as HTMLElement;
+  row.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+}
+
 type AssetSummaryView = components['schemas']['AssetSummaryView'];
 type ChannelView = components['schemas']['ChannelView'];
 type PageAssetSummaryView = components['schemas']['PageAssetSummaryView'];
@@ -97,7 +103,7 @@ describe('PageDeleteDialogComponent', () => {
     http.expectOne((r) => r.url === `${BASE}/assets`).flush(PICKER);
     fixture.detectChanges();
     expect(el().querySelector('.dialog sf-asset-picker-dialog')).toBeNull();
-    (Array.from(el().querySelectorAll('.dialog__item')).find((b) => b.textContent?.includes('Saw')) as HTMLButtonElement).click();
+    pickRow('Saw');
     fixture.detectChanges();
     expect(el().querySelector('sf-redirect-option')?.textContent).toContain('Saw');
 
@@ -170,7 +176,7 @@ describe('PageDeleteDialogComponent', () => {
     fixture.detectChanges();
     http.expectOne((r) => r.url === `${BASE}/assets`).flush({ ...PICKER, content: [HAMMER_PAGE] });
     fixture.detectChanges();
-    (Array.from(el().querySelectorAll('.dialog__item')).find((b) => b.textContent?.includes('Hammer')) as HTMLButtonElement).click();
+    pickRow('Hammer');
     fixture.detectChanges();
     expect(el().querySelector('sf-redirect-option [role="alert"]')?.textContent).toContain('going offline itself');
     expect(el().querySelector('sf-redirect-option')?.textContent).toContain('Home');

@@ -50,11 +50,12 @@
       <div class="record__grid">
         @for (f of plainFields(); track f.field.id) {
           <sf-field
-            [class.record__wide]="f.field.type === 'longtext' || f.field.type === 'media'"
+            [class.record__half]="f.field.type !== 'longtext' && f.field.type !== 'media'"
             [label]="f.field.label"
             [required]="!!f.field.required"
-            [hint]="f.field.localized ? ('styleguide.sample.record.localized' | transloco: { lang: state.lang().toUpperCase() }) : undefined"
-          >
+            [empty]="isEmpty(f.value)"
+          
+        [tags]="(f.field.localized ? chip() : 'all') | fieldTags">
             @switch (f.field.type) {
               @case ('longtext') {
                 <sf-textarea [rows]="3" [value]="text(f.value)" (valueChange)="setValue(f.field.id, $event)" />
@@ -69,14 +70,7 @@
                 <sf-number-input unit="€" [min]="0" [step]="0.1" [value]="number(f.value)" (valueChange)="setValue(f.field.id, $event)" />
               }
               @case ('media') {
-                <div class="media">
-                  <span class="media__thumb" aria-hidden="true"><sf-icon name="image" /></span>
-                  <span class="media__name">{{ text(f.value) }}</span>
-                  <sf-button variant="secondary" size="sm" icon="swap_horiz" (click)="state.notice()">{{
-                    'styleguide.sample.editor.replace' | transloco
-                  }}</sf-button>
-                  <sf-button variant="ghost" size="sm" icon="delete" [label]="'styleguide.sample.editor.remove' | transloco" (click)="state.notice()" />
-                </div>
+                <sf-sample-media-field [value]="media()" (valueChange)="media.set($event)" />
               }
               @default {
                 <sf-input [required]="!!f.field.required" [value]="text(f.value)" (valueChange)="setValue(f.field.id, $event)" />
@@ -84,6 +78,18 @@
             }
           </sf-field>
         }
+        <sf-field [label]="forms('description')"
+        [tags]="chip() | fieldTags">
+          <sf-sample-rich-text [label]="forms('description')" [features]="richFeatures" [value]="description()" (valueChange)="description.set($event)" />
+        </sf-field>
+        <sf-field [label]="forms('origin')" [hint]="forms('originHint')"
+        [tags]="'all' | fieldTags">
+          <sf-sample-reference-field kind="page" [reference]="origin()" (referenceChange)="origin.set($event)" />
+        </sf-field>
+        <sf-field [label]="forms('tastingNotes')"
+        [tags]="chip() | fieldTags">
+          <sf-sample-list-field [label]="forms('tastingNotes')" [items]="notes()" (itemsChange)="notes.set($event)" />
+        </sf-field>
       </div>
     </sf-section>
 

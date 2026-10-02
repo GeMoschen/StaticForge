@@ -1,27 +1,88 @@
 .sf-list {
   display: flex;
   flex-direction: column;
-  gap: var(--sf-2);
+  gap: var(--sf-space-2);
 }
+
 .sf-list__row {
   display: flex;
-  gap: var(--sf-3);
   align-items: flex-start;
-  padding: var(--sf-2);
-  border: 1px solid var(--sf-line);
+  gap: var(--sf-space-2);
+  padding: var(--sf-space-2);
+  border: 1px solid var(--sf-border);
   border-radius: var(--sf-radius-md);
+  background: var(--sf-surface);
+
+  &.is-dragging {
+    opacity: 0.5;
+  }
+
+  &.is-over {
+    border-color: var(--sf-accent);
+    box-shadow: inset 0 0 0 1px var(--sf-accent);
+  }
 }
+
+.sf-list__handle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  padding: var(--sf-space-1);
+  border: 0;
+  border-radius: var(--sf-radius-sm);
+  background: transparent;
+  color: var(--sf-text-muted);
+  cursor: grab;
+
+  &:hover {
+    background: var(--sf-hover);
+    color: var(--sf-text);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--sf-focus-ring);
+    outline-offset: 1px;
+  }
+}
+
+.sf-list__index {
+  flex: none;
+  min-width: var(--sf-space-4);
+  padding-block-start: var(--sf-space-1);
+  color: var(--sf-text-muted);
+  font-size: var(--sf-fs-12);
+  line-height: var(--sf-lh-12);
+  text-align: center;
+}
+
 .sf-list__items {
-  flex: 1;
   display: flex;
+  flex: 1 1 auto;
   flex-direction: column;
-  gap: var(--sf-2);
+  gap: var(--sf-space-2);
+  min-width: 0;
 }
-.sf-list__actions {
+
+.sf-list__empty {
+  margin: 0;
+  padding: var(--sf-space-3);
+  border: 1px dashed var(--sf-border);
+  border-radius: var(--sf-radius-md);
+  color: var(--sf-text-muted);
+  font-size: var(--sf-fs-13);
+  line-height: var(--sf-lh-13);
+  text-align: center;
+}
+
+.sf-list__footer {
   display: flex;
-  gap: var(--sf-1);
+  align-items: center;
+  gap: var(--sf-space-3);
 }
-.sf-editor__error {
-  font-size: var(--sf-text-xs);
-  color: var(--sf-rust);
+
+.sf-list__count {
+  color: var(--sf-text-muted);
+  font-size: var(--sf-fs-12);
+  line-height: var(--sf-lh-12);
 }

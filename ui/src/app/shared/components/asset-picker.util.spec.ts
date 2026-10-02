@@ -1,14 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { TranslocoService } from '@jsverse/transloco';
 import { describe, expect, it } from 'vitest';
-import {
-  folderRows,
-  matchingDatasets,
-  pickerDatasets,
-  pickerRecordSets,
-  pickerTypeOptions,
-  recordCountLabel,
-} from './asset-picker.util';
+import { folderRows, matchingDatasets, pickerDatasets, pickerRecordSets, pickerTypeOptions, recordCountLabel, folderTrail, folderOptions } from './asset-picker.util';
 
 /** The active language's text for a key, through the real `en.json`. */
 const t = (key: string, params?: Record<string, unknown>) => TestBed.inject(TranslocoService).translate(key, params);
@@ -38,8 +31,8 @@ describe('pickerTypeOptions', () => {
     expect(values(['RECORD', 'PAGE'], null)).toEqual(['PAGE', 'RECORD']);
     expect(values(['RECORD_SET'], null)).toEqual(['RECORD_SET']);
     expect(t(pickerTypeOptions(['RECORD_SET'], null)[0].labelKey)).toBe('Record sets');
-    expect(values(['NOPE'], null)).toEqual(['PAGE', 'MEDIA', 'PAGE_TEMPLATE', 'SECTION_TEMPLATE', 'RECORD', 'RECORD_SET']);
-    expect(values([], undefined)).toHaveLength(6);
+    expect(values(['NOPE'], null)).toEqual(['PAGE', 'MEDIA', 'PAGE_REFERENCE', 'PAGE_TEMPLATE', 'SECTION_TEMPLATE', 'RECORD', 'RECORD_SET']);
+    expect(values([], undefined)).toHaveLength(7);
   });
 });
 
@@ -127,5 +120,44 @@ describe('pickerDatasets', () => {
 
   it('offers every dataset without a restriction', () => {
     expect(pickerDatasets(datasets, null)).toEqual(datasets);
+  });
+});
+
+describe('folder trail and options (M35.17)', () => {
+  const tree = [
+    { uuid: 'a', displayName: 'About', children: [{ uuid: 'a1', displayName: 'Team', children: [{ uuid: 'a11', uid: 'dev' }] }] },
+    { uuid: 'b', uid: 'news' },
+  ];
+
+  it('walks from the top folder down to the one asked for', () => {
+    expect(folderTrail(tree, 'a11').map((f) => f.uuid)).toEqual(['a', 'a1', 'a11']);
+    expect(folderTrail(tree, 'b').map((f) => f.uuid)).toEqual(['b']);
+  });
+
+  it('is empty for no folder or one that is not in the tree', () => {
+    expect(folderTrail(tree, null)).toEqual([]);
+    expect(folderTrail(tree, 'zzz')).toEqual([]);
+    expect(folderTrail(null, 'a')).toEqual([]);
+  });
+
+  it('lists the folders as select options, a child after its parent, marked by depth', () => {
+    expect(folderOptions(tree)).toEqual([
+      { value: 'a', label: 'About' },
+      { value: 'a1', label: '– Team' },
+      { value: 'a11', label: '– – dev' },
+      { value: 'b', label: 'news' },
+    ]);
+  });
+});
+
+describe('navigation entries (PAGE_REFERENCE)', () => {
+  it('are part of the default type switch, after media, and can be asked for by name', () => {
+    expect(pickerTypeOptions(null, null).map((o) => o.value)).toEqual(['PAGE', 'MEDIA', 'PAGE_REFERENCE', 'PAGE_TEMPLATE', 'SECTION_TEMPLATE', 'RECORD', 'RECORD_SET']);
+    expect(pickerTypeOptions(['PAGE_REFERENCE'], null).map((o) => t(o.labelKey))).toEqual(['Navigation entries']);
+    expect(pickerTypeOptions(['PAGE', 'PAGE_REFERENCE'], null).map((o) => o.value)).toEqual(['PAGE', 'PAGE_REFERENCE']);
+  });
+
+  it('are not offered under a dataset restriction', () => {
+    expect(pickerTypeOptions(['PAGE_REFERENCE'], 'team').map((o) => o.value)).toEqual(['RECORD']);
   });
 });

@@ -1,7 +1,3 @@
-<sf-field [label]="definition().label" [hint]="definition().help">
-  <input
-    type="datetime-local"
-    [formControl]="control()"
-    [attr.readonly]="definition().readOnly ? '' : null"
-  />
+<sf-field [label]="definition().label" [hint]="definition().help" [required]="fieldRequired()" [empty]="fieldEmpty()" [tags]="fieldTags()" [findings]="fieldFindings()">
+  <sf-date-input mode="datetime" [formControl]="control()" [readonly]="!!definition().readOnly" />
 </sf-field>

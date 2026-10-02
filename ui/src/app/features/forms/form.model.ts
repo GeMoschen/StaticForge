@@ -84,6 +84,11 @@ export interface EditorDefinition {
    * and the form binds whichever language is being edited. Only leaf editors carry it.
    */
   localizable?: boolean;
+  /**
+   * `half`: the field shares a row with the next half-width field when the form is wide enough (M35.17); `full`
+   * (the default) spans the row. Set by the template's `width: half`.
+   */
+  width?: 'half' | 'full';
   items?: EditorDefinition[];
   /** For PAGINATION editors (M21.1.1): sources, page size and sort keys. */
   pagination?: PaginationOptions | null;

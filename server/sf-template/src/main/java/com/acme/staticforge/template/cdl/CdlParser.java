@@ -52,6 +52,10 @@ final class CdlParser {
         int visibleWhenLine = -1;
         int visibleWhenCol = -1;
         String renamedFrom;
+        /** {@code width} (M35.17): the raw word and its position, for the validator; {@code null} when not written. */
+        String width;
+        int widthLine = -1;
+        int widthCol = -1;
         String dataset;
         int datasetLine = -1;
         int datasetCol = -1;
@@ -273,6 +277,12 @@ final class CdlParser {
                 node.visibleWhenCol = v.column();
             }
             case "renamedFrom" -> node.renamedFrom = expectString(attrTok);
+            case "width" -> {
+                Token v = peek();
+                node.widthLine = v.line();
+                node.widthCol = v.column();
+                node.width = expectWord(attrTok);
+            }
             case "min" -> node.min = expectInt(attrTok);
             case "max" -> node.max = expectInt(attrTok);
             case "maxLength" -> node.maxLength = expectInt(attrTok);
@@ -827,6 +837,18 @@ final class CdlParser {
         error(DiagnosticCodes.CDL_INVALID_ATTRIBUTE, "Expected a string value", attrTok);
         skipValue();
         return "";
+    }
+
+    /** A bare word (`half`) or a string (`"half"`), for attributes whose values are a small fixed set. */
+    private String expectWord(Token attrTok) {
+        Token t = peek();
+        if (t.type() == TokenType.IDENT || t.type() == TokenType.STRING) {
+            next();
+            return t.text();
+        }
+        error(DiagnosticCodes.CDL_INVALID_WIDTH, "Expected 'half' or 'full'", attrTok);
+        skipValue();
+        return null;
     }
 
     private Integer expectInt(Token attrTok) {

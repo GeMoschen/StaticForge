@@ -66,6 +66,7 @@
 }
 
 .record__form {
+  container: record / inline-size;
   display: flex;
   flex-direction: column;
   gap: var(--sf-space-4);
@@ -74,9 +75,21 @@
 
 .record__grid {
   display: grid;
-  // At most two equal columns across the full width; one column when two wouldn't fit 14rem each (decision 33).
-  grid-template-columns: repeat(auto-fit, minmax(max(14rem, calc((100% - var(--sf-space-4)) / 2)), 1fr));
+  // Full width (decision 33); one column, and from 1280 px two for the fields marked half (decision 72).
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--sf-gap) var(--sf-space-4);
+
+  @container record (min-width: 46rem) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+
+    > * {
+      grid-column: 1 / -1;
+    }
+
+    > .record__half {
+      grid-column: auto;
+    }
+  }
 }
 
 .record__wide {

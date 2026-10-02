@@ -1,7 +1,8 @@
-import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
-import { ReactiveFormsModule, FormControl } from '@angular/forms';
+import { ChangeDetectionStrategy, Component, computed } from '@angular/core';
+import { FormControl, ReactiveFormsModule } from '@angular/forms';
+import { SfTextareaComponent } from '../../../shared/components/forms/sf-textarea.component';
 import { SfFieldComponent } from '../../../shared/components/sf-field.component';
-import { EditorDefinition } from '../form.model';
+import { SfEditorBase } from '../editor-base';
 
 /**
  * Minimal, safe markdown preview: escapes HTML, then applies bold/italic,
@@ -61,20 +62,21 @@ function inline(text: string): string {
     .replace(/_([^_]+)_/g, '<em>$1</em>');
 }
 
+/** The MARKDOWN editor (M35.17): a monospace `sf-textarea` with the live preview beside it, in an `sf-field`. */
 @Component({
   selector: 'sf-markdown-editor',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [ReactiveFormsModule, SfFieldComponent],
+  imports: [ReactiveFormsModule, SfFieldComponent, SfTextareaComponent],
   templateUrl: './markdown-editor.component.html',
   styleUrl: './markdown-editor.component.scss',
 })
-export class SfMarkdownEditor {
-  readonly definition = input.required<EditorDefinition>();
-  readonly control = input.required<FormControl>();
-
+export class SfMarkdownEditor extends SfEditorBase<FormControl> {
   // Swap this computed's source for Monaco's model once it is introduced.
-  readonly previewHtml = computed(() => markdownToHtml(String(this.control().value ?? '')));
+  readonly previewHtml = computed(() => {
+    this.changes();
+    return markdownToHtml(String(this.control().value ?? ''));
+  });
 
   // Future extension point: disable split preview on small viewports.
   readonly preview = true;

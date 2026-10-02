@@ -1,57 +1,25 @@
 <div class="sf-content-form">
   @for (editor of definition().editors; track editor.name) {
-    <div class="sf-content-form__editor" [attr.data-sf-editor]="editor.name">
-      @if (localized()) {
-        <p class="sf-content-form__lang">
-          @if (editor.localizable) {
-            <span class="sf-content-form__badge">{{ labelOf(editingLocale()!.locale) }}</span>
-            @if (editor.required && !isDefaultLocale()) {
-              <span class="sf-content-form__hint">required in {{ labelOf(defaultLocale()) }} only</span>
-            }
-          } @else {
-            <span class="sf-content-form__badge sf-content-form__badge--all">All languages</span>
-          }
-        </p>
-      }
-
-      @if (statesFor(editor); as states) {
-        @if (states.required || states.readOnly || states.computed) {
-          <p class="sf-content-form__states">
-            @if (states.required) {
-              <span class="sf-content-form__state sf-content-form__state--required">Required</span>
-            }
-            @if (states.computed) {
-              <span class="sf-content-form__state" title="Filled in from other fields">Computed</span>
-            } @else if (states.readOnly) {
-              <span class="sf-content-form__state" title="A rule makes this field read-only">Read-only</span>
-            }
-          </p>
-        }
-      }
-
-      <sf-editor-outlet [definition]="editor" [control]="controlFor(editor)" />
+    <div
+      class="sf-content-form__editor"
+      [class.sf-content-form__editor--half]="editor.width === 'half'"
+      [attr.data-sf-editor]="editor.name"
+    >
+      <sf-editor-outlet [definition]="editor" [control]="controlFor(editor)" [chrome]="chromes().get(editor.name) ?? null" />
 
       @if (fallbackFor(editor); as fallback) {
         <p class="sf-content-form__fallback" [id]="'fallback-' + editor.name">
           <span class="sf-content-form__fallback-text">
-            Not translated — shows “{{ fallback.text }}” from {{ labelOf(fallback.locale) }}.
+            {{ 'forms.field.notTranslated' | transloco: { text: fallback.text, language: labelOf(fallback.locale) } }}
           </span>
           <button
             type="button"
             class="sf-content-form__copy"
             (click)="copyFallback(editor)"
           >
-            Copy from {{ labelOf(fallback.locale) }}
+            {{ 'forms.field.copyFrom' | transloco: { language: labelOf(fallback.locale) } }}
           </button>
         </p>
-      }
-
-      @for (finding of findingsFor(editor); track $index) {
-        <p
-          [class]="'sf-content-form__issue sf-content-form__issue--' + finding.level.toLowerCase()"
-          [attr.role]="finding.level === 'ERROR' ? 'alert' : null"
-          [attr.data-level]="finding.level"
-        >{{ finding.message }}</p>
       }
     </div>
   }
