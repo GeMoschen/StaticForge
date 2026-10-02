@@ -19,7 +19,7 @@
         renamed; manual redirects are added here or when a page is unpublished or deleted.
         @if (basisRunId(); as runId) {
           States as of
-          <a [routerLink]="['/p', projectKey(), 'settings', 'generation']" [queryParams]="{ run: runId }">run #{{ runId }}</a>
+          <a [routerLink]="['/p', projectKey(), 'publishing', 'runs']" [queryParams]="{ run: runId }">run #{{ runId }}</a>
           on the default target.
         } @else {
           Nothing is published on the default target yet, so no redirect has a state.
@@ -159,7 +159,7 @@
               </td>
               <td class="redirects__created">
                 @if (row.kind === 'AUTO' && row.sourceRunId != null) {
-                  <a [routerLink]="['/p', projectKey(), 'settings', 'generation']" [queryParams]="{ run: row.sourceRunId }">
+                  <a [routerLink]="['/p', projectKey(), 'publishing', 'runs']" [queryParams]="{ run: row.sourceRunId }">
                     from run #{{ row.sourceRunId }}
                   </a>
                 } @else {

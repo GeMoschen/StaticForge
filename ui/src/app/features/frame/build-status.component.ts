@@ -50,7 +50,7 @@ export class BuildStatusComponent {
   });
 
   /** Until Publishing is a screen of its own (M35.11), the builds live on the Generation page of Settings. */
-  protected readonly generationLink = computed(() => ['/p', this.frame.projectKey() ?? '', 'settings', 'generation']);
+  protected readonly generationLink = computed(() => ['/p', this.frame.projectKey() ?? '', 'publishing', 'runs']);
 
   protected readonly stateOfRun = stateOfRun;
   protected readonly toneOf = toneOf;

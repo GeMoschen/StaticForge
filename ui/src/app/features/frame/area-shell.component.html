@@ -1,0 +1,9 @@
+<div class="area__body" [class.is-narrow]="nav.narrow()">
+  <sf-side-nav #nav="sfSideNav" class="area__nav" [items]="items()" [label]="label()" />
+  <div class="area__content">
+    <sf-page-header [title]="title()" />
+    <div class="area__page">
+      <router-outlet />
+    </div>
+  </div>
+</div>

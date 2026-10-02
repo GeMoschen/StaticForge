@@ -50,6 +50,14 @@ describe('DeveloperModeService', () => {
     expect(mode.available()).toBe(false);
   });
 
+  it('answers for a given project before the frame follows the URL (route guards)', () => {
+    const { mode, prefs } = setup({ projectRoles: { acme: 'EDITOR', other: 'DEVELOPER' } }, 'acme');
+    expect(mode.enabledIn('acme')).toBe(false);
+    expect(mode.enabledIn('other')).toBe(true);
+    prefs.setDeveloperMode(false);
+    expect(mode.enabledIn('other')).toBe(false);
+  });
+
   it('counts an instance admin as a developer everywhere', () => {
     const { mode } = setup({ systemRole: 'INSTANCE_ADMIN' }, 'acme');
     expect(mode.available()).toBe(true);

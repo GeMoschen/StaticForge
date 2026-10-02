@@ -3,6 +3,7 @@ import { Router, Routes } from '@angular/router';
 import { authGuard, instanceAdminGuard, loginGuard, projectMemberGuard } from './core/auth/auth.guard';
 import { passwordChangeGuard, setPasswordGuard } from './core/auth/password-change.guard';
 import { styleguideGuard } from './features/styleguide/styleguide.guard';
+import { developerModeGuard } from './core/frame/developer-mode.guard';
 import { routeTitle } from './core/frame/route-title';
 import { projectResolver } from './core/project/project.resolver';
 import { LoginComponent } from './features/auth/login.component';
@@ -15,16 +16,24 @@ import { PagesListComponent } from './features/pages/pages-list.component';
 import { PageEditorComponent } from './features/pages/page-editor.component';
 import { NavigationComponent } from './features/navigation/navigation.component';
 import { GlobalsComponent } from './features/globals/globals.component';
-import { ProjectSettingsShellComponent } from './features/settings/project-settings-shell.component';
-import { ProjectSettingsGeneralViewComponent } from './features/settings/project-settings-general-view.component';
-import { ProjectSettingsGenerationViewComponent } from './features/settings/project-settings-generation-view.component';
+import { ProjectSettingsGeneralComponent } from './features/settings/project-settings-general.component';
+import { ProjectSettingsLocalesComponent } from './features/settings/project-settings-locales.component';
+import { ProjectSettingsMediaComponent } from './features/settings/project-settings-media.component';
+import { ProjectSettingsCodeHighlightingPageComponent } from './features/settings/project-settings-code-highlighting-page.component';
+import { ProjectSettingsCompactionComponent } from './features/settings/project-settings-compaction.component';
 import { ProjectSettingsMembersComponent } from './features/settings/project-settings-members.component';
-import { RevisionsListComponent } from './features/revisions/revisions-list.component';
-import { RevisionDiffComponent } from './features/revisions/revision-diff.component';
 import { ProjectSettingsImportExportComponent } from './features/settings/project-settings-import-export.component';
 import { ProjectSettingsUrlRegistryComponent } from './features/settings/project-settings-url-registry.component';
 import { ProjectSettingsQualityComponent } from './features/settings/project-settings-quality.component';
 import { ProjectSettingsRedirectsComponent } from './features/settings/project-settings-redirects.component';
+import { ProjectSettingsTargetsComponent } from './features/settings/project-settings-targets.component';
+import { ProjectSettingsPublishPolicyComponent } from './features/settings/project-settings-publish-policy.component';
+import { SettingsShellComponent } from './features/settings/settings-shell.component';
+import { ChannelsComponent } from './features/channels/channels.component';
+import { PublishingShellComponent } from './features/publishing/publishing-shell.component';
+import { PublishingRunsComponent } from './features/publishing/publishing-runs.component';
+import { RevisionsListComponent } from './features/revisions/revisions-list.component';
+import { RevisionDiffComponent } from './features/revisions/revision-diff.component';
 import { ContentComponent } from './features/content/content.component';
 import { RecordEditorComponent } from './features/content/record-editor.component';
 import { RecordSetViewComponent } from './features/content/record-set-view.component';
@@ -40,6 +49,17 @@ import { SchedulesComponent } from './features/schedules/schedules.component';
  * (section editor → content form → editor registry → catalog editor → section editor), which chunk boundaries make
  * fragile. The initial budget in `angular.json` is sized for the single bundle.
  */
+/** Settings pages that moved, as `[old sub-path, new path]` below the project (see the routes). */
+export const MOVED_FROM_SETTINGS: readonly (readonly [string, string])[] = [
+  ['generation', 'publishing/runs'],
+  ['targets', 'publishing/targets'],
+  ['quality', 'publishing/quality'],
+  ['redirects', 'publishing/redirects'],
+  ['url-registry', 'publishing/urls'],
+  ['revisions/:revisionId', 'history/:revisionId'],
+  ['revisions', 'history'],
+];
+
 export const routes: Routes = [
   {
     // The living style guide (M35.9): dev builds, or instance admins.
@@ -157,63 +177,57 @@ export const routes: Routes = [
             title: routeTitle('frame.section.schedules'),
             component: SchedulesComponent,
           },
+          // Pages that moved out of Settings (M35.11): Publishing took over Generation, Targets, Quality, Redirects and
+          // URLs, History took over Revisions. Each redirect keeps the query (`?run=`) and a revision's id; they sit
+          // before `settings` so its shell never matches them.
+          ...MOVED_FROM_SETTINGS.map(([from, to]) => ({ path: `settings/${from}`, redirectTo: to })),
+          {
+            // Publishing (M35.11): the runs, where they go and how, and the checks on what they produce.
+            path: 'publishing',
+            title: routeTitle('frame.section.publishing'),
+            component: PublishingShellComponent,
+            children: [
+              { path: '', pathMatch: 'full', redirectTo: 'runs' },
+              { path: 'runs', title: routeTitle('frame.sub.publishing.runs'), component: PublishingRunsComponent },
+              { path: 'targets', title: routeTitle('frame.sub.publishing.targets'), component: ProjectSettingsTargetsComponent },
+              { path: 'policy', title: routeTitle('frame.sub.publishing.policy'), component: ProjectSettingsPublishPolicyComponent },
+              { path: 'quality', title: routeTitle('frame.sub.publishing.quality'), component: ProjectSettingsQualityComponent },
+              { path: 'redirects', title: routeTitle('frame.sub.publishing.redirects'), component: ProjectSettingsRedirectsComponent },
+              { path: 'urls', title: routeTitle('frame.sub.publishing.urls'), component: ProjectSettingsUrlRegistryComponent },
+            ],
+          },
+          // The project's history (M35.12 builds the full page); it was Settings › Revisions.
+          { path: 'history', title: routeTitle('frame.section.history'), component: RevisionsListComponent },
+          { path: 'history/:revisionId', title: routeTitle('frame.section.history'), component: RevisionDiffComponent },
           {
             path: 'settings',
             title: routeTitle('frame.section.settings'),
-            component: ProjectSettingsShellComponent,
+            component: SettingsShellComponent,
             children: [
               { path: '', pathMatch: 'full', redirectTo: 'general' },
+              { path: 'general', title: routeTitle('frame.sub.settings.general'), component: ProjectSettingsGeneralComponent },
+              { path: 'languages', title: routeTitle('frame.sub.settings.languages'), component: ProjectSettingsLocalesComponent },
               {
-                path: 'general',
-                title: routeTitle('frame.sub.settings.general'),
-                component: ProjectSettingsGeneralViewComponent,
+                path: 'channels',
+                title: routeTitle('frame.sub.settings.channels'),
+                canActivate: [developerModeGuard('general')],
+                component: ChannelsComponent,
               },
+              { path: 'media', title: routeTitle('frame.sub.settings.media'), component: ProjectSettingsMediaComponent },
               {
-                path: 'members',
-                title: routeTitle('frame.sub.settings.members'),
-                component: ProjectSettingsMembersComponent,
+                path: 'code-highlighting',
+                title: routeTitle('frame.sub.settings.code-highlighting'),
+                component: ProjectSettingsCodeHighlightingPageComponent,
               },
-              {
-                path: 'generation',
-                title: routeTitle('frame.sub.settings.generation'),
-                component: ProjectSettingsGenerationViewComponent,
-              },
-              // The Channels, Languages and Media tabs are now sections of "General", and Targets a
-              // section of "Generation"; their old paths stay as redirects so existing links keep working.
-              { path: 'media', redirectTo: 'general' },
-              { path: 'locales', redirectTo: 'general' },
-              { path: 'channels', redirectTo: 'general' },
-              { path: 'targets', redirectTo: 'generation' },
-              {
-                path: 'quality',
-                title: routeTitle('frame.sub.settings.quality'),
-                component: ProjectSettingsQualityComponent,
-              },
-              {
-                path: 'redirects',
-                title: routeTitle('frame.sub.settings.redirects'),
-                component: ProjectSettingsRedirectsComponent,
-              },
-              {
-                path: 'revisions',
-                title: routeTitle('frame.sub.settings.revisions'),
-                component: RevisionsListComponent,
-              },
-              {
-                path: 'revisions/:revisionId',
-                title: routeTitle('frame.sub.settings.revisions'),
-                component: RevisionDiffComponent,
-              },
-              {
-                path: 'url-registry',
-                title: routeTitle('frame.sub.settings.url-registry'),
-                component: ProjectSettingsUrlRegistryComponent,
-              },
+              { path: 'compaction', title: routeTitle('frame.sub.settings.compaction'), component: ProjectSettingsCompactionComponent },
               {
                 path: 'import-export',
                 title: routeTitle('frame.sub.settings.import-export'),
                 component: ProjectSettingsImportExportComponent,
               },
+              { path: 'members', title: routeTitle('frame.sub.settings.members'), component: ProjectSettingsMembersComponent },
+              // The Languages tab was called Locales.
+              { path: 'locales', redirectTo: 'languages' },
             ],
           },
         ],

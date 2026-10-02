@@ -84,7 +84,7 @@ describe('FrameTopbarComponent', () => {
     const crumbs = screen.getByRole('navigation', { name: 'Location' });
     expect(crumbs.textContent).toContain('Pages');
     expect(crumbs.querySelector('[aria-current="page"]')?.textContent).toContain('Our story');
-    expect(screen.getByRole('link', { name: 'Project history' }).getAttribute('href')).toBe('/p/acme/settings/revisions');
+    expect(screen.getByRole('link', { name: 'Project history' }).getAttribute('href')).toBe('/p/acme/history');
     expect(screen.getByRole('button', { name: 'Search or jump to…' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Keyboard shortcuts' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Account menu for Ada Lovelace' })).toBeTruthy();

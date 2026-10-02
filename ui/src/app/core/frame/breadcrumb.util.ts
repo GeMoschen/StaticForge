@@ -49,7 +49,7 @@ export function buildBreadcrumb({ location, label, item }: CrumbInput): Crumb[] 
   }
   const rootSection = kind === 'admin' ? 'admin' : section;
   if (sub !== null && rootSection !== null && KNOWN_SUBS[rootSection]?.includes(sub)) {
-    const link = kind === 'admin' ? ['/admin', sub] : ['/p', projectKey ?? '', 'settings', sub];
+    const link = kind === 'admin' ? ['/admin', sub] : ['/p', projectKey ?? '', rootSection, sub];
     crumbs.push({ id: `${rootSection}.${sub}`, label: label(`frame.sub.${rootSection}.${sub}`), link });
   }
   if (item) {

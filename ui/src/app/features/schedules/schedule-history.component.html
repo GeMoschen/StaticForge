@@ -84,10 +84,10 @@
             }
             <div class="history__links">
               @if (row.execution.revisionId) {
-                <a [routerLink]="['/p', projectKey(), 'settings', 'revisions', row.execution.revisionId]">Revision r{{ row.execution.revisionId }}</a>
+                <a [routerLink]="['/p', projectKey(), 'history', row.execution.revisionId]">Revision r{{ row.execution.revisionId }}</a>
               }
               @if (row.execution.generationRunId) {
-                <a [routerLink]="['/p', projectKey(), 'settings', 'generation']" [queryParams]="{ run: row.execution.generationRunId }">
+                <a [routerLink]="['/p', projectKey(), 'publishing', 'runs']" [queryParams]="{ run: row.execution.generationRunId }">
                   Generation run #{{ row.execution.generationRunId }}
                 </a>
               } @else if (row.deletedRun !== null) {

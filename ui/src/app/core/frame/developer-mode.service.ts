@@ -17,18 +17,27 @@ export class DeveloperModeService {
   private readonly frame = inject(FrameContextStore);
 
   /** Whether the user has developer rights where they are (the switch is only offered then). */
-  readonly available = computed(() => {
-    const projectKey = this.frame.projectKey();
+  readonly available = computed(() => this.availableIn(this.frame.projectKey()));
+
+  /** Whether developer details are shown. */
+  readonly enabled = computed(() => this.available() && (this.preferences.developerMode() ?? true));
+
+  /**
+   * Whether developer details are shown in `projectKey` — for a route guard, which runs before the frame's location
+   * (the last finished navigation) follows the URL.
+   */
+  enabledIn(projectKey: string | null): boolean {
+    return this.availableIn(projectKey) && (this.preferences.developerMode() ?? true);
+  }
+
+  private availableIn(projectKey: string | null): boolean {
     if (projectKey !== null) {
       return roleRank(this.auth.memberRoleFor(projectKey)) >= roleRank('DEVELOPER');
     }
     return (
       this.auth.isInstanceAdmin() || Object.values(this.auth.projectRoles()).some((role) => roleRank(role) >= roleRank('DEVELOPER'))
     );
-  });
-
-  /** Whether developer details are shown. */
-  readonly enabled = computed(() => this.available() && (this.preferences.developerMode() ?? true));
+  }
 
   set(value: boolean): void {
     this.preferences.setDeveloperMode(value);

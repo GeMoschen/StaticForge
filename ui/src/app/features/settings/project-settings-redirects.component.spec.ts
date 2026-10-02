@@ -161,7 +161,7 @@ describe('ProjectSettingsRedirectsComponent', () => {
     expect(auto.textContent).toContain('Automatic');
     const runLink = auto.querySelector('a') as HTMLAnchorElement;
     expect(runLink.textContent?.trim()).toBe('from run #5');
-    expect(runLink.getAttribute('href')).toBe('/p/proj/settings/generation?run=5');
+    expect(runLink.getAttribute('href')).toBe('/p/proj/publishing/runs?run=5');
 
     expect(shadowed.textContent).toContain('https://example.org/neu');
     expect(shadowed.textContent).toContain('Manual');
@@ -177,7 +177,7 @@ describe('ProjectSettingsRedirectsComponent', () => {
     expect(loop.textContent).toContain('EN');
 
     // The run the states belong to.
-    expect(el().querySelector('.redirects__hint a')?.getAttribute('href')).toBe('/p/proj/settings/generation?run=9');
+    expect(el().querySelector('.redirects__hint a')?.getAttribute('href')).toBe('/p/proj/publishing/runs?run=9');
   });
 
   it('shows "Not built" while the default target has no build', () => {

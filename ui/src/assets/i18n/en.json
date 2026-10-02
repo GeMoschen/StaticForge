@@ -592,24 +592,34 @@
       "search": "Search",
       "changes": "Changes",
       "schedules": "Schedules",
-      "settings": "Settings"
+      "settings": "Settings",
+      "publishing": "Publishing",
+      "history": "History"
     },
     "sub": {
       "settings": {
         "general": "General",
-        "members": "Members",
-        "generation": "Generation",
-        "quality": "Quality",
-        "redirects": "Redirects",
-        "revisions": "Revisions",
-        "url-registry": "URL registry",
-        "import-export": "Import / export"
+        "languages": "Languages",
+        "channels": "Channels",
+        "media": "Media",
+        "code-highlighting": "Code highlighting",
+        "compaction": "Compaction",
+        "import-export": "Import / export",
+        "members": "Members"
       },
       "admin": {
         "users": "Users",
         "projects": "Projects",
         "jobs": "Jobs",
         "audit": "Audit"
+      },
+      "publishing": {
+        "runs": "Runs",
+        "targets": "Targets",
+        "policy": "Publish policy",
+        "quality": "Quality",
+        "redirects": "Redirects",
+        "urls": "URLs"
       }
     },
     "title": {
@@ -640,7 +650,7 @@
       "signOut": "Sign out"
     },
     "build": {
-        "none": "No builds yet",
+      "none": "No builds yet",
       "running": "Building…",
       "success": "Published",
       "partial": "Published with warnings",
@@ -649,7 +659,7 @@
       "unknown": "Build",
       "recent": "Recent builds",
       "files": "{count, plural, one {# file} other {# files}}",
-    "runningReason": "A build is already running.",
+      "runningReason": "A build is already running.",
       "allRuns": "All builds",
       "now": "Build now",
       "starting": "Build started.",
@@ -703,6 +713,17 @@
       "title": "Keyboard shortcuts",
       "search": "Search or jump to",
       "sheet": "Show this list"
+    },
+    "sidenav": {
+      "settings": "Settings sections",
+      "publishing": "Publishing sections",
+      "group": {
+        "project": "Project",
+        "maintenance": "Maintenance",
+        "people": "People",
+        "checks": "Checks"
+      },
+      "unavailable": "This page is not available in the editor view. Turn on developer mode to open it."
     }
   },
   "styleguide": {

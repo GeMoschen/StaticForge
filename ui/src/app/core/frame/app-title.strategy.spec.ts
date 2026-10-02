@@ -38,10 +38,10 @@ describe('document title', () => {
                   children: [{ path: ':uuid', component: BlankComponent }],
                 },
                 {
-                  path: 'settings',
-                  title: routeTitle('frame.section.settings'),
+                  path: 'publishing',
+                  title: routeTitle('frame.section.publishing'),
                   component: BlankComponent,
-                  children: [{ path: 'generation', title: routeTitle('frame.sub.settings.generation'), component: BlankComponent }],
+                  children: [{ path: 'runs', title: routeTitle('frame.sub.publishing.runs'), component: BlankComponent }],
                 },
               ],
             },
@@ -74,8 +74,8 @@ describe('document title', () => {
 
   it('puts the sub-page before its area, and counts an inherited title once', async () => {
     TestBed.inject(ProjectContextStore).project.set({ key: 'acme', name: 'Acme Website' });
-    await harness.navigateByUrl('/p/acme/settings/generation');
-    expect(flush()).toBe('Generation · Settings · Acme Website — StaticForge');
+    await harness.navigateByUrl('/p/acme/publishing/runs');
+    expect(flush()).toBe('Runs · Publishing · Acme Website — StaticForge');
     await harness.navigateByUrl('/p/acme/pages/p1');
     expect(flush()).toBe('Pages · Acme Website — StaticForge');
   });
@@ -86,8 +86,8 @@ describe('document title', () => {
     TestBed.inject(FrameContextStore).setItem({ label: 'Our story' });
     expect(flush()).toBe('Our story · Pages · Acme Website — StaticForge');
 
-    await harness.navigateByUrl('/p/acme/settings/generation');
-    expect(flush()).toBe('Generation · Settings · Acme Website — StaticForge');
+    await harness.navigateByUrl('/p/acme/publishing/runs');
+    expect(flush()).toBe('Runs · Publishing · Acme Website — StaticForge');
   });
 
   it('falls back to the project key until the project has loaded', async () => {

@@ -63,7 +63,7 @@
           <a
             class="revisions__row"
             [style.height.px]="ITEM_HEIGHT"
-            [routerLink]="['/p', projectKey(), 'settings', 'revisions', rev.revisionId]"
+            [routerLink]="['/p', projectKey(), 'history', rev.revisionId]"
             [attr.aria-label]="'Revision ' + rev.revisionId + (rev.compacted ? ' — ' + compactedHint : '')"
           >
             <span class="revisions__rev">

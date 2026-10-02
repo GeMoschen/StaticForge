@@ -45,7 +45,7 @@
       @if (targets().length === 0) {
         <p class="dialog__note">
           This project has no generation target yet.
-          <a [routerLink]="['/p', projectKey(), 'settings', 'targets']" (click)="cancelled.emit()">Create one in Targets</a>
+          <a [routerLink]="['/p', projectKey(), 'publishing', 'targets']" (click)="cancelled.emit()">Create one in Targets</a>
           before generating.
         </p>
       } @else {

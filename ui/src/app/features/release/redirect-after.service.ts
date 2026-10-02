@@ -33,7 +33,7 @@ export class RedirectAfterService {
     ).subscribe((results) => {
       const openRedirects = {
         label: 'Open Redirects',
-        run: () => void this.router.navigate(['/p', projectKey, 'settings', 'redirects']),
+        run: () => void this.router.navigate(['/p', projectKey, 'publishing', 'redirects']),
       };
       const failed = results.filter((result) => result.problem !== null);
       if (failed.length > 0) {

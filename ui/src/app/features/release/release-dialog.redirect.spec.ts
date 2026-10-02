@@ -168,7 +168,7 @@ describe('ReleaseDialogComponent — "Redirect old URL to…"', () => {
     expect(warning?.message).toContain('The page has no published output to redirect.');
     expect(warning?.action?.label).toBe('Open Redirects');
     warning!.action!.run();
-    expect(navigate).toHaveBeenCalledWith(['/p', 'proj', 'settings', 'redirects']);
+    expect(navigate).toHaveBeenCalledWith(['/p', 'proj', 'publishing', 'redirects']);
   });
 
   it('needs a page once the option is ticked; nothing preselected when no folder above has an online index', () => {

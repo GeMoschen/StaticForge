@@ -7,7 +7,7 @@ export interface FrameLocation {
   projectKey: string | null;
   /** The area: a project's `pages`, `media`, `settings`, … (`null` at the project root and outside a project). */
   section: string | null;
-  /** The part of `settings` or `admin` that is open (`generation`, `users`, …). */
+  /** The part of `publishing`, `settings` or `admin` that is open (`runs`, `general`, `users`, …). */
   sub: string | null;
 }
 
@@ -22,15 +22,18 @@ export const PROJECT_SECTIONS: readonly string[] = [
   'search',
   'changes',
   'schedules',
+  'publishing',
+  'history',
   'settings',
 ];
 
 /** Project areas with a sub-page of their own; the other areas treat what follows as the open item. */
-const SECTIONS_WITH_SUB = new Set(['settings']);
+const SECTIONS_WITH_SUB = new Set(['publishing', 'settings']);
 
 /** The sub-pages that have a label (and so a breadcrumb segment). */
 export const KNOWN_SUBS: Readonly<Record<string, readonly string[]>> = {
-  settings: ['general', 'members', 'generation', 'quality', 'redirects', 'revisions', 'url-registry', 'import-export'],
+  publishing: ['runs', 'targets', 'policy', 'quality', 'redirects', 'urls'],
+  settings: ['general', 'languages', 'channels', 'media', 'code-highlighting', 'compaction', 'import-export', 'members'],
   admin: ['users', 'projects', 'jobs', 'audit'],
 };
 

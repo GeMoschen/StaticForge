@@ -37,8 +37,7 @@ const PUBLISH: RailGroup = {
   id: 'publish',
   items: [
     { id: 'changes', icon: 'difference', route: ['changes'], badge: 'changes' },
-    // Publishing is a screen of its own from M35.11; until then it is the Generation page of Settings.
-    { id: 'publishing', icon: 'rocket_launch', route: ['settings', 'generation'] },
+    { id: 'publishing', icon: 'rocket_launch', route: ['publishing'] },
     { id: 'schedules', icon: 'event_upcoming', route: ['schedules'] },
   ],
 };
@@ -93,9 +92,6 @@ export function activeRailItem(location: FrameLocation): string | null {
   if (location.section === null) {
     return 'home';
   }
-  if (location.section === 'settings' && location.sub === 'generation') {
-    return 'publishing';
-  }
-  // The search page is reached from the top bar and belongs to no rail item.
-  return location.section === 'search' ? null : location.section;
+  // The search page and the history are reached from the top bar and belong to no rail item.
+  return location.section === 'search' || location.section === 'history' ? null : location.section;
 }

@@ -19,8 +19,10 @@ describe('parseFrameLocation', () => {
     expect(parseFrameLocation('/p/acme')).toMatchObject({ kind: 'project', projectKey: 'acme', section: null });
   });
 
-  it('gives only settings a sub-page; the id after another area is its item', () => {
-    expect(parseFrameLocation('/p/acme/settings/generation')).toMatchObject({ section: 'settings', sub: 'generation' });
+  it('gives only publishing and settings a sub-page; the id after another area is its item', () => {
+    expect(parseFrameLocation('/p/acme/publishing/targets')).toMatchObject({ section: 'publishing', sub: 'targets' });
+    expect(parseFrameLocation('/p/acme/settings/languages')).toMatchObject({ section: 'settings', sub: 'languages' });
+    expect(parseFrameLocation('/p/acme/history/42')).toMatchObject({ section: 'history', sub: null });
     expect(parseFrameLocation('/p/acme/content/records/r1')).toMatchObject({ section: 'content', sub: null });
   });
 

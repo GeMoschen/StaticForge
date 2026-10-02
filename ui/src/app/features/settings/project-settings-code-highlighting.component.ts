@@ -57,7 +57,7 @@ function problemOf(row: OverrideRow, rows: readonly OverrideRow[]): string | nul
 }
 
 /**
- * The project's code highlighting overrides (M33 follow-up), on the General tab: which format the code editors
+ * The project's code highlighting overrides (M33 follow-up), a Settings page of its own: which format the code editors
  * highlight a file extension or MIME type as. They apply to processed text media and to templates of channels whose
  * "Highlight as" is Auto, before the built-in detection; an extension entry wins over a MIME entry.
  */

@@ -28,7 +28,7 @@ import { chainLines, otherCausesLabel, reasonBadge, type ReasonView } from './in
               }
               @if (last && !impact()) {
                 @if (reason()?.rootRevision; as revision) {
-                  <a class="reason__revision" [routerLink]="['/p', projectKey(), 'settings', 'revisions', revision]">
+                  <a class="reason__revision" [routerLink]="['/p', projectKey(), 'history', revision]">
                     {{ reason()?.rootKind === 'ASSET_DELETED' ? 'deleted' : 'changed' }} in r{{ revision }}
                   </a>
                 }

@@ -25,10 +25,17 @@ describe('buildBreadcrumb', () => {
     expect(crumbs[3].link).toBeUndefined();
   });
 
-  it('adds the settings and admin sub-pages', () => {
+  it('adds the settings, publishing and admin sub-pages, each linked below its own area', () => {
+    const publishing = build('/p/acme/publishing/targets');
+    expect(publishing.map((c) => c.label)).toEqual(['publishing', 'targets']);
+    expect(publishing[0].link).toEqual(['/p', 'acme', 'publishing']);
+    expect(build('/p/acme/publishing/targets/x')[1].id).toBe('publishing.targets');
+    expect(build('/p/acme/history').map((c) => c.label)).toEqual(['history']);
     const settings = build('/p/acme/settings/members');
     expect(settings.map((c) => c.label)).toEqual(['settings', 'members']);
     expect(settings[0].link).toEqual(['/p', 'acme', 'settings']);
+    expect(settings[1].link).toBeUndefined();
+    expect(build('/p/acme/publishing/runs', { label: 'Run 5' })[1].link).toEqual(['/p', 'acme', 'publishing', 'runs']);
     const admin = build('/admin/audit');
     expect(admin.map((c) => c.label)).toEqual(['admin', 'audit']);
     expect(admin[0].link).toEqual(['/admin']);

@@ -1,6 +1,6 @@
 ---
 id: M35.11
-status: todo
+status: done
 depends: [M35.10]
 epic: m35-ui-ux-overhaul
 feature: frame
@@ -40,9 +40,9 @@ differ, the gate wins. Note any deviation you need in this file and get it appro
 
 ## Acceptance criteria
 
-- [ ] Route table documented in the task's notes. Every old route redirects to its new home.
-- [ ] Vitest route tests for the redirects and guards.
-- [ ] `npx vitest run` and `npx ng build` green.
+- [x] Route table documented in the task's notes. Every old route redirects to its new home.
+- [x] Vitest route tests for the redirects and guards.
+- [x] `npx vitest run` and `npx ng build` green.
 
 ## Out of scope
 
@@ -63,3 +63,32 @@ differ, the gate wins. Note any deviation you need in this file and get it appro
 - The frame's rail item *Publishing* and the top-bar *History* button still point at Settings → Generation and
   Settings → Revisions. Repoint both here (and in M35.12), and keep the rail's active-item matching working for the new
   routes.
+
+## Notes (M35.11 implementation)
+
+Route table (below `/p/:projectKey`; `app.routes.ts`, tested by `app.routes.spec.ts` against the real table):
+
+| New route | Screen | Notes |
+|---|---|---|
+| `publishing` → `runs` | `PublishingShellComponent` (`sf-side-nav`: Runs, Targets, Publish policy; group *Checks*: Quality, Redirects, URLs) | |
+| `publishing/runs` | run list, run details, *Build now* | `?run=` and `?tab=findings` as before |
+| `publishing/targets`, `policy`, `quality`, `redirects`, `urls` | the former Settings screens | |
+| `history`, `history/:revisionId` | revisions list and diff | M35.12 builds the full page |
+| `settings` → `general` | `SettingsShellComponent` (grouped side menu) | |
+| `settings/general` | name, description | code highlighting moved out |
+| `settings/languages`, `channels`, `media`, `code-highlighting`, `compaction`, `import-export`, `members` | one screen each | `channels`: `developerModeGuard('general')`; the menu hides Channels outside developer mode and Compaction from non-admins |
+
+Old URLs (all redirect, query kept): `settings/generation` → `publishing/runs`; `settings/targets|quality|redirects`
+→ `publishing/...`; `settings/url-registry` → `publishing/urls`; `settings/revisions[/:id]` → `history[/:id]`;
+`settings/locales` → `settings/languages`. (`settings/media|channels` are real pages now.)
+
+- Both areas share `AreaShellComponent` (`features/frame`): side menu, one `sf-page-header` (`h1` = the open page) and
+  the page. Entries come from the pure `areaNav` (`core/frame/area-nav.ts`).
+- Frame: `publishing` and `history` are project areas; the rail's *Publishing* and the top bar's *History* point at the
+  new routes; every in-app link and toast target (build status, Build now, schedule history, redirects, rebuild
+  reasons, revision links, spine tick) was repointed.
+- `DeveloperModeService.enabledIn(projectKey)` answers for a guard (the frame's location lags the URL).
+- Deviations / left for later: the **archive danger zone** of General (M35.9 decision 31) has no home yet in the
+  project settings (archive/unarchive exist only in Administration and the archived banner); it is built with General's
+  contents in M35.25. The sub-pages keep their own `h2` panel titles under the new `h1` until M35.24/M35.25 restyle
+  their contents (out of scope here).

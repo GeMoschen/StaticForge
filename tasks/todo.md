@@ -80,7 +80,8 @@ every screen. Screen migration starts only after the style guide (M35.9) is sign
   - Review: 229 test files / 1,930 tests, build + lint green; checked in headless Chrome against a seeded backend
     (admin + editor, light/dark, compact/comfortable, collapsed rail, dev mode off, 1440/1024). Open items for later
     tasks are listed in the 010 task file.
-- [ ] M35.11 IA: Publishing area, Settings side menu + split
+- [x] M35.11 IA: Publishing area, Settings side menu + split
+  - Review: see `35-m35-ui-ux-overhaul/011-information-architecture.md` (route table, redirects, area shell); 1,971 tests, build + lint green
 - [ ] M35.12 history drawer, full history, time-travel banner (spine removed)
 - [ ] M35.13 save UX, unsaved guards, confirm + undo
 - [ ] M35.14 keyboard-first: shortcut registry, palette actions, `?` sheet

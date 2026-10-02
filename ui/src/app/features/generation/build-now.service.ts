@@ -40,7 +40,7 @@ export class BuildNowService {
         this.started.next(run);
         this.toasts.show(`Build #${run.id} started.`, 'success', {
           label: 'Show progress',
-          run: () => void this.router.navigate(['/p', projectKey, 'settings', 'generation'], { queryParams: { run: run.id } }),
+          run: () => void this.router.navigate(['/p', projectKey, 'publishing', 'runs'], { queryParams: { run: run.id } }),
         });
       },
       error: () => {

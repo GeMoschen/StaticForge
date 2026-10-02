@@ -47,9 +47,11 @@ describe('activeRailItem', () => {
     expect(active('/p/acme')).toBe('home');
   });
 
-  it('marks Publishing for the generation page and Settings for the other settings pages', () => {
-    expect(active('/p/acme/settings/generation')).toBe('publishing');
+  it('marks Publishing for every publishing page and Settings for every settings page', () => {
+    expect(active('/p/acme/publishing/runs')).toBe('publishing');
+    expect(active('/p/acme/publishing/urls')).toBe('publishing');
     expect(active('/p/acme/settings/members')).toBe('settings');
+    expect(active('/p/acme/history')).toBeNull();
   });
 
   it('marks the open administration section, and nothing for search or the project list', () => {

@@ -44,7 +44,7 @@ describe('FrameRailComponent', () => {
     expect(screen.getByRole('link', { name: 'Media' }).getAttribute('aria-current')).toBe('page');
     expect(screen.getByRole('link', { name: 'Pages' }).getAttribute('aria-current')).toBeNull();
     expect(screen.getByRole('link', { name: 'Pages' }).getAttribute('href')).toBe('/p/proj/pages');
-    expect(screen.getByRole('link', { name: 'Publishing' }).getAttribute('href')).toBe('/p/proj/settings/generation');
+    expect(screen.getByRole('link', { name: 'Publishing' }).getAttribute('href')).toBe('/p/proj/publishing');
   });
 
   it('hides the Develop group and Templates with developer mode off', async () => {

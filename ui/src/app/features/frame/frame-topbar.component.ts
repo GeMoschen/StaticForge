@@ -68,7 +68,7 @@ export class FrameTopbarComponent {
   private readonly userPopover = viewChild.required<SfPopoverComponent>('userMenu');
 
   protected readonly inProject = computed(() => this.frame.location().kind === 'project');
-  protected readonly historyLink = computed(() => ['/p', this.frame.projectKey() ?? '', 'settings', 'revisions']);
+  protected readonly historyLink = computed(() => ['/p', this.frame.projectKey() ?? '', 'history']);
 
   protected readonly crumbs = computed(() =>
     buildBreadcrumb({

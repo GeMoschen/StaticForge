@@ -15,7 +15,7 @@
     @if (permissions.canIncrementalBuild()) {
       <sf-button variant="primary" [disabled]="store.targets().length === 0" (click)="openDialog()">New generation</sf-button>
       @if (store.targetsLoaded() && store.targets().length === 0) {
-        <p class="toolbar__note">This project has no generation target yet — create one under Settings › Targets.</p>
+        <p class="toolbar__note">This project has no generation target yet — create one under Publishing › Targets.</p>
       }
     } @else if (!readOnly()) {
       <p class="toolbar__note">Builds are started by developers in this project.</p>

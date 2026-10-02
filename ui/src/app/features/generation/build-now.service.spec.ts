@@ -55,9 +55,9 @@ describe('BuildNowService', () => {
     expect(started.message).toBe('Build #42 started.');
     expect(started.action?.label).toBe('Show progress');
     started.action!.run();
-    expect(navigate).toHaveBeenCalledWith(['/p', 'proj', 'settings', 'generation'], { queryParams: { run: 42 } });
+    expect(navigate).toHaveBeenCalledWith(['/p', 'proj', 'publishing', 'runs'], { queryParams: { run: 42 } });
     expect(TestBed.inject(Router).createUrlTree(navigate.mock.calls[0][0], navigate.mock.calls[0][1]).toString()).toBe(
-      '/p/proj/settings/generation?run=42',
+      '/p/proj/publishing/runs?run=42',
     );
   });
 });
