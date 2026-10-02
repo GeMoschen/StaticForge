@@ -11,6 +11,8 @@ import {
   signal,
   untracked,
 } from '@angular/core';
+import { MOVE_SECTION_SHORTCUTS } from '../../core/ui/documented-shortcuts';
+import { ShortcutService } from '../../core/ui/shortcut.service';
 import { FormGroup } from '@angular/forms';
 // Imported from their own files, not the `../forms` barrel: that barrel re-exports
 // `editor-registry.ts`, which imports `SfCatalogEditor`, which imports this component to
@@ -40,6 +42,8 @@ import type { SectionInstance } from './types';
   styleUrl: './section-editor.component.scss',
 })
 export class SectionEditorComponent {
+  private readonly documentedKeys = inject(ShortcutService).use(MOVE_SECTION_SHORTCUTS);
+
   private readonly fb = inject(FormBuilderService);
   /** The language being edited (M24.4.1); `null` in a project without languages. */
   protected readonly editingLocale = inject(EditingLocaleStore).binding;

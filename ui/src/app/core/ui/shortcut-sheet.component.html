@@ -1,0 +1,31 @@
+@if (shortcuts.shortcutSheetOpen()) {
+  <sf-dialog size="md" [title]="'frame.shortcuts.title' | transloco" (closed)="close()">
+    <sf-search-input
+      class="sheet__search"
+      [placeholder]="'frame.shortcuts.searchPlaceholder' | transloco"
+      [aria-label]="'frame.shortcuts.searchPlaceholder' | transloco"
+      [(value)]="search"
+    />
+
+    @for (section of sections(); track section.key) {
+      <section class="sheet__group" [attr.aria-labelledby]="'sheet-' + section.key">
+        <h3 class="sheet__heading" [id]="'sheet-' + section.key">
+          {{ 'frame.shortcuts.groups.' + section.group | transloco }}
+          @if (section.local && section.group !== 'screen') {
+            <span class="sheet__scope">{{ 'frame.shortcuts.thisScreen' | transloco }}</span>
+          }
+        </h3>
+        <dl class="sheet__list">
+          @for (item of section.items; track item.id) {
+            <div class="sheet__row">
+              <dt>{{ item.label }}</dt>
+              <dd><sf-kbd [keys]="item.keys" /></dd>
+            </div>
+          }
+        </dl>
+      </section>
+    } @empty {
+      <p class="sheet__empty">{{ 'frame.shortcuts.empty' | transloco: { query: search() } }}</p>
+    }
+  </sf-dialog>
+}

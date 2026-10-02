@@ -114,7 +114,7 @@ export class SampleTopbarComponent {
   }
 
   protected palette(): void {
-    this.state.notice('topbar.paletteNotice');
+    this.state.paletteQuery.set('');
   }
 
   protected buildNow(): void {

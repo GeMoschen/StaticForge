@@ -1,4 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, effect, inject, input, signal, untracked } from '@angular/core';
+import { createShortcut } from '../../core/ui/documented-shortcuts';
+import { ShortcutService } from '../../core/ui/shortcut.service';
 import { ActivatedRoute, Router } from '@angular/router';
 import { forkJoin, tap, type Observable } from 'rxjs';
 import { ApiClient } from '../../core/api/api.client';
@@ -181,6 +183,12 @@ export class GlobalsComponent {
       },
     });
   }
+
+  /** `n` creates a global set (M35.14). */
+  private readonly newSetShortcut = inject(ShortcutService).use([
+    createShortcut({ handler: () => this.newSet(), palette: { label: 'frame.shortcuts.items.createGlobalSet' } }),
+  ]);
+
 
   protected newSet(): void {
     if (this.readOnly()) {

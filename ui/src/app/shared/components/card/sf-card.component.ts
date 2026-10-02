@@ -8,7 +8,10 @@ import {
   model,
   output,
   viewChild,
+  inject,
 } from '@angular/core';
+import { MOVE_SECTION_SHORTCUTS } from '../../../core/ui/documented-shortcuts';
+import { ShortcutService } from '../../../core/ui/shortcut.service';
 import { NgTemplateOutlet } from '@angular/common';
 import { TranslocoPipe } from '@jsverse/transloco';
 import { sfUniqueId } from '../forms/sf-field-context';
@@ -43,6 +46,8 @@ export type SfCardMove = -1 | 1;
   styleUrl: './sf-card.component.scss',
 })
 export class SfCardComponent {
+  private readonly documentedKeys = inject(ShortcutService).use(MOVE_SECTION_SHORTCUTS);
+
   /** The card type's name ("Product teaser"); also names the toggle and the menu. */
   readonly type = input.required<string>();
   /** Shown after the type ("Product teaser · Yirgacheffe 250 g"); "Untitled" when empty. */

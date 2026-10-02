@@ -1,8 +1,4 @@
 {
-  "src/app/core/ui/command-palette/command-palette.component.scss": {
-    "colors": 1,
-    "zIndex": 2
-  },
   "src/app/features/admin/admin-audit.component.scss": {
     "colors": 0,
     "zIndex": 1
@@ -116,18 +112,6 @@
     "zIndex": 1
   },
   "src/app/features/release/release-plan.component.scss": {
-    "colors": 1,
-    "zIndex": 0
-  },
-  "src/app/features/revisions/revision-diff.component.scss": {
-    "colors": 2,
-    "zIndex": 2
-  },
-  "src/app/features/revisions/revision-spine.component.scss": {
-    "colors": 0,
-    "zIndex": 1
-  },
-  "src/app/features/revisions/time-travel-banner.component.scss": {
     "colors": 1,
     "zIndex": 0
   },

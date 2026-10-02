@@ -30,8 +30,16 @@ export class ActiveEditorService {
   readonly hasUnsaved = computed(() => this.open().some((editor) => editor.dirty() || editor.error() !== null));
 
   constructor() {
-    // `shift: false`: Ctrl+Shift+S is not "save".
-    const unregister = this.shortcuts.register('s', { mod: true, shift: false }, () => void this.saveActive());
+    // Ctrl+Shift+S is not "save" (the registry matches the exact modifiers).
+    const unregister = this.shortcuts.register({
+      id: 'save',
+      keys: 'Mod+S',
+      scope: 'global',
+      group: 'general',
+      description: 'frame.shortcuts.items.save',
+      allowInInput: true,
+      handler: () => void this.saveActive(),
+    });
     this.window?.addEventListener('beforeunload', this.onBeforeUnload);
     inject(DestroyRef).onDestroy(() => {
       unregister();

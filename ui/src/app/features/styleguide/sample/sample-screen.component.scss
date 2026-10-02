@@ -51,31 +51,6 @@
   min-width: 0;
 }
 
-// ── Shortcut sheet ───────────────────────────────────────────────────────────
-.shortcuts {
-  display: flex;
-  flex-direction: column;
-  margin: 0;
-}
-
-.shortcuts__row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--sf-space-4);
-  padding: var(--sf-space-2) 0;
-  border-bottom: 1px solid var(--sf-border);
-  font-size: var(--sf-fs-13);
-  line-height: var(--sf-lh-13);
-
-  dt {
-    color: var(--sf-text);
-  }
-
-  dd {
-    margin: 0;
-  }
-}
 
 .sample__tree {
   height: 100%;

@@ -112,14 +112,9 @@
 }
 
 @if (state.shortcutsOpen()) {
-  <sf-dialog size="sm" [title]="'styleguide.sample.topbar.shortcuts' | transloco" (closed)="state.shortcutsOpen.set(false)">
-    <dl class="shortcuts">
-      @for (s of shortcuts; track s.key) {
-        <div class="shortcuts__row">
-          <dt>{{ 'styleguide.sample.shortcuts.' + s.key | transloco }}</dt>
-          <dd><sf-kbd [keys]="s.keys" /></dd>
-        </div>
-      }
-    </dl>
-  </sf-dialog>
+  <sf-sample-shortcut-sheet />
+}
+
+@if (state.paletteQuery() !== null) {
+  <sf-sample-palette />
 }

@@ -8,6 +8,8 @@ import {
   signal,
   untracked,
 } from '@angular/core';
+import { createShortcut } from '../../core/ui/documented-shortcuts';
+import { ShortcutService } from '../../core/ui/shortcut.service';
 import { ActivatedRoute, Router, RouterOutlet } from '@angular/router';
 import { tap, type Subscription } from 'rxjs';
 import { consumeQueryParam } from '../../shared/deep-link';
@@ -281,6 +283,14 @@ export class PagesListComponent {
         },
       });
   }
+
+  /** `n` creates a page (M35.14). */
+  private readonly newPageShortcut = inject(ShortcutService).use([
+    createShortcut({
+      handler: () => (this.readOnly() ? false : this.openNewPage()),
+      palette: { label: 'frame.shortcuts.items.createPage' },
+    }),
+  ]);
 
   protected openNewPage(): void {
     if (this.readOnly()) {

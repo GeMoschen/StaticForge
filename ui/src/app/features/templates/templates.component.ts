@@ -1,4 +1,6 @@
 import { ChangeDetectionStrategy, Component, DestroyRef, computed, effect, inject, input, signal, untracked } from '@angular/core';
+import { createShortcut } from '../../core/ui/documented-shortcuts';
+import { ShortcutService } from '../../core/ui/shortcut.service';
 import { ActivatedRoute, Router } from '@angular/router';
 import { ProjectContextStore } from '../../core/project/project-context.store';
 import { tap } from 'rxjs';
@@ -194,6 +196,14 @@ export class TemplatesComponent {
       { allowSignalWrites: true },
     );
   }
+
+  /** `n` creates a template (M35.14). */
+  private readonly newTemplateShortcut = inject(ShortcutService).use([
+    createShortcut({
+      handler: () => (this.store.readOnly() ? false : this.newTemplate()),
+      palette: { label: 'frame.shortcuts.items.createTemplate' },
+    }),
+  ]);
 
   newTemplate(): void {
     if (this.store.readOnly()) {

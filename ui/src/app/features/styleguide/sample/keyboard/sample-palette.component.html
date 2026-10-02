@@ -1,0 +1,91 @@
+<div class="backdrop" (click)="close()"></div>
+<section class="palette" role="dialog" aria-modal="true" [attr.aria-label]="'styleguide.sample.keyboard.title' | transloco">
+  <div class="palette__field">
+    @if (mode() === 'all') {
+      <sf-icon class="palette__icon" name="search" />
+    } @else {
+      <span class="palette__mode">{{ 'styleguide.sample.keyboard.modes.' + mode() | transloco }}</span>
+    }
+    <input
+      #input
+      class="palette__input"
+      type="text"
+      role="combobox"
+      autocomplete="off"
+      spellcheck="false"
+      aria-autocomplete="list"
+      aria-haspopup="listbox"
+      [attr.aria-expanded]="options().length > 0"
+      [attr.aria-controls]="listboxId"
+      [attr.aria-activedescendant]="active()?.id ?? null"
+      [attr.aria-label]="'styleguide.sample.keyboard.title' | transloco"
+      [placeholder]="placeholder()"
+      [value]="display()"
+      (input)="onInput($event)"
+      (keydown)="onKeydown($event)"
+    />
+  </div>
+
+  <div class="palette__results">
+    <ul class="palette__list" role="listbox" [id]="listboxId" [attr.aria-label]="'styleguide.sample.keyboard.results' | transloco">
+      @for (section of sections(); track section.group) {
+        <li role="presentation" class="palette__group">
+          <div class="palette__heading" [id]="section.headingId" role="presentation">
+            {{ 'styleguide.sample.keyboard.groups.' + section.group | transloco }}
+          </div>
+          <ul role="group" class="palette__options" [attr.aria-labelledby]="section.headingId">
+            @for (option of section.options; track option.id) {
+              <li
+                role="option"
+                class="palette__option"
+                [id]="option.id"
+                [class.is-active]="active()?.id === option.id"
+                [attr.aria-selected]="active()?.id === option.id"
+                (mousemove)="hover(option)"
+                (mousedown)="$event.preventDefault()"
+                (click)="run(option.row.entry)"
+              >
+                <sf-icon class="palette__option-icon" [name]="option.row.entry.icon" />
+                <span class="palette__option-name">
+                  @for (part of option.parts; track $index) {
+                    @if (part.mark) {
+                      <mark>{{ part.text }}</mark>
+                    } @else {
+                      {{ part.text }}
+                    }
+                  }
+                </span>
+                @if (contextText(option.row.entry); as context) {
+                  <span class="palette__option-context">{{ context }}</span>
+                }
+                @if (option.row.entry.shortcut; as shortcut) {
+                  <sf-kbd class="palette__option-keys" [keys]="shortcut" />
+                }
+              </li>
+            }
+            @if (section.more > 0) {
+              <li role="presentation" class="palette__more">
+                {{ 'styleguide.sample.keyboard.more' | transloco: { count: section.more } }}
+              </li>
+            }
+          </ul>
+        </li>
+      }
+    </ul>
+
+    @if (options().length === 0) {
+      <p class="palette__empty">{{ 'styleguide.sample.keyboard.empty' | transloco: { query: parsed().rest } }}</p>
+    }
+    @if (mode() === 'all' && parsed().rest === '') {
+      <p class="palette__tip">{{ 'styleguide.sample.keyboard.tip' | transloco }}</p>
+    }
+  </div>
+
+  <footer class="palette__footer">
+    <span><sf-kbd keys="ArrowUp" /><sf-kbd keys="ArrowDown" /> {{ 'styleguide.sample.keyboard.footer.move' | transloco }}</span>
+    <span><sf-kbd keys="Enter" /> {{ 'styleguide.sample.keyboard.footer.run' | transloco }}</span>
+    <span><sf-kbd keys="Escape" /> {{ 'styleguide.sample.keyboard.footer.close' | transloco }}</span>
+  </footer>
+
+  <div class="sf-sr-only" aria-live="polite" aria-atomic="true">{{ announcement() }}</div>
+</section>

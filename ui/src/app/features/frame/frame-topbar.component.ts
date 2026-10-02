@@ -102,7 +102,7 @@ export class FrameTopbarComponent {
   ]);
 
   protected openSearch(): void {
-    this.shortcuts.commandPaletteOpen.set(true);
+    this.shortcuts.openPalette();
   }
 
   protected openShortcuts(): void {

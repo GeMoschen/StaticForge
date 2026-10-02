@@ -1,130 +1,131 @@
 @if (open()) {
-  <div class="sf-command-palette__backdrop" (click)="close()"></div>
-  <div
-    class="sf-command-palette"
-    role="dialog"
-    aria-modal="true"
-    aria-labelledby="sf-palette-title"
-  >
-    <h2 id="sf-palette-title" class="sf-command-palette__title">{{ 'shell.palette.title' | transloco }}</h2>
-    <div class="sf-command-palette__field">
-      <sf-icon class="sf-command-palette__field-icon" name="search" />
-      <input
-        #input
-        [sfAutofocus]="true"
-        class="sf-command-palette__input"
-        type="text"
-        role="combobox"
-        autocomplete="off"
-        spellcheck="false"
-        aria-autocomplete="list"
-        aria-haspopup="listbox"
-        [attr.aria-expanded]="options().length > 0"
-        [attr.aria-controls]="listboxId"
-        [attr.aria-activedescendant]="activeOption()?.id ?? null"
-        [attr.aria-disabled]="projectKey() === null ? 'true' : null"
-        [placeholder]="(projectKey() === null ? 'shell.palette.placeholderNoProject' : 'shell.palette.placeholderProject') | transloco"
-        [attr.aria-label]="'shell.palette.ariaLabel' | transloco"
-        [value]="query()"
-        (input)="onInput($event)"
-        (keydown)="onKeydown($event)"
-      />
-      @if (state().kind === 'loading') {
-        <span class="sf-command-palette__busy" aria-hidden="true"></span>
-      }
-    </div>
+  <div #host class="sf-command-palette-host">
+    <div class="backdrop" (click)="close()"></div>
+    <section class="palette" role="dialog" aria-modal="true" aria-labelledby="sf-palette-title">
+      <h2 id="sf-palette-title" class="sf-sr-only">{{ 'shell.palette.title' | transloco }}</h2>
+      <div class="palette__field">
+        @if (mode() === 'all') {
+          <sf-icon class="palette__icon" name="search" />
+        } @else {
+          <span class="palette__mode">{{ 'shell.palette.modes.' + mode() | transloco }}</span>
+        }
+        <input
+          #input
+          class="palette__input"
+          type="text"
+          role="combobox"
+          autocomplete="off"
+          spellcheck="false"
+          aria-autocomplete="list"
+          aria-haspopup="listbox"
+          [attr.aria-expanded]="options().length > 0"
+          [attr.aria-controls]="listboxId"
+          [attr.aria-activedescendant]="active()?.id ?? null"
+          [attr.aria-label]="'shell.palette.ariaLabel' | transloco"
+          [placeholder]="placeholder()"
+          [value]="display()"
+          (input)="onInput($event)"
+          (keydown)="onKeydown($event)"
+        />
+        @if (searching()) {
+          <span class="palette__busy" aria-hidden="true"></span>
+        }
+      </div>
 
-    @if (timeTravel.isTimeTravel()) {
-      <p class="sf-command-palette__note">
-        <sf-icon name="history" /> {{ 'shell.palette.timeTravelNote' | transloco }}
-      </p>
-    }
-
-    <div class="sf-command-palette__results">
-      @switch (state().kind) {
-        @case ('no-project') {
-          <p class="sf-command-palette__hint">{{ 'shell.palette.hintNoProject' | transloco }}</p>
-        }
-        @case ('unavailable') {
-          <p class="sf-command-palette__hint sf-command-palette__hint--warning">
-            {{ 'shell.palette.hintUnavailable' | transloco }}
-          </p>
-        }
-        @case ('idle') {
-          @if (query().trim().length > 0) {
-            <p class="sf-command-palette__hint">{{ 'shell.palette.hintMinLength' | transloco }}</p>
-          } @else {
-            <p class="sf-command-palette__hint">
-              {{ 'shell.palette.hintIdle' | transloco }}
-            </p>
-          }
-        }
+      @if (timeTravel.isTimeTravel()) {
+        <p class="palette__note">
+          <sf-icon name="history" /> {{ 'shell.palette.timeTravelNote' | transloco }}
+        </p>
       }
 
-      <ul class="sf-command-palette__listbox" role="listbox" [id]="listboxId" [attr.aria-label]="'shell.palette.results' | transloco">
-        @for (entry of groups(); track entry.group.type) {
-          <li role="presentation" class="sf-command-palette__group">
-            <div class="sf-command-palette__group-heading" [id]="entry.headingId" role="presentation">
-              {{ entry.group.label }}
-              <span class="sf-command-palette__group-count">{{ entry.group.total }}</span>
-            </div>
-            <ul role="group" [attr.aria-labelledby]="entry.headingId" class="sf-command-palette__options">
-              @for (option of entry.options; track option.id) {
-                <li
-                  role="option"
-                  [id]="option.id"
-                  class="sf-command-palette__option"
-                  [class.is-active]="activeOption()?.id === option.id"
-                  [class.sf-command-palette__option--more]="option.kind === 'more'"
-                  [attr.aria-selected]="activeOption()?.id === option.id"
-                  (mousemove)="hover(option)"
-                  (mousedown)="$event.preventDefault()"
-                  (click)="choose(option)"
-                >
-                  @if (option.kind === 'hit' && option.hit; as hit) {
-                    <sf-icon class="sf-command-palette__option-icon" [name]="option.group.icon" />
-                    <span class="sf-command-palette__option-body">
-                      <span class="sf-command-palette__option-line">
-                        <span class="sf-command-palette__option-name">{{ hit.displayName || hit.uid }}</span>
-                        <span class="sf-command-palette__option-uid">{{ hit.uid }}</span>
-                        <span class="sf-command-palette__option-path">{{ hit.folderPath }}</span>
-                      </span>
-                      @if (option.parts && option.parts.length > 0) {
-                        <span class="sf-command-palette__snippet"
-                          >@for (part of option.parts; track $index) {@if (part.mark) {<mark>{{ part.text }}</mark>} @else {<span>{{ part.text }}</span>}}</span
-                        >
+      <div class="palette__results">
+        <ul class="palette__list" role="listbox" [id]="listboxId" [attr.aria-label]="'shell.palette.results' | transloco">
+          @for (section of sections(); track section.group) {
+            <li role="presentation" class="palette__group">
+              <div class="palette__heading" [id]="section.headingId" role="presentation">
+                {{ 'shell.palette.groups.' + section.group | transloco }}
+              </div>
+              <ul role="group" class="palette__options" [attr.aria-labelledby]="section.headingId">
+                @for (option of section.options; track option.id) {
+                  <li
+                    role="option"
+                    class="palette__option"
+                    [id]="option.id"
+                    [class.is-active]="active()?.id === option.id"
+                    [attr.aria-selected]="active()?.id === option.id"
+                    (mousemove)="hover(option)"
+                    (mousedown)="$event.preventDefault()"
+                    (click)="run(option)"
+                  >
+                    <sf-icon class="palette__option-icon" [name]="option.row.item.icon" />
+                    <span class="palette__option-name">
+                      @for (part of option.parts; track $index) {
+                        @if (part.mark) {
+                          <mark>{{ part.text }}</mark>
+                        } @else {
+                          {{ part.text }}
+                        }
                       }
                     </span>
-                  } @else {
-                    <sf-icon class="sf-command-palette__option-icon" name="arrow_forward" />
-                    <span class="sf-command-palette__option-body">{{ optionLabel(option) }}</span>
-                  }
-                </li>
-              }
-            </ul>
-          </li>
-        }
-      </ul>
-
-      @if (state().kind === 'results' && totalHits() === 0) {
-        <p class="sf-command-palette__hint">{{ 'shell.palette.noResults' | transloco : { query: state().q } }}</p>
-      }
-    </div>
-
-    @if (projectKey() !== null) {
-      <div class="sf-command-palette__footer">
-        <span><kbd>↑</kbd><kbd>↓</kbd> {{ 'shell.palette.move' | transloco }}</span>
-        <span><kbd>Enter</kbd> {{ 'shell.palette.open' | transloco }}</span>
-        <button type="button" class="sf-command-palette__footer-link" (mousedown)="$event.preventDefault()" (click)="openSearchPage()">
-          <kbd>Ctrl</kbd><kbd>Enter</kbd> {{ 'shell.palette.searchPage' | transloco }}
-          @if (totalHits() > 0) {
-            {{ 'shell.palette.resultCount' | transloco : { count: totalHits() } }}
+                    @if (option.row.item.context; as context) {
+                      <span class="palette__option-context">{{ context }}</span>
+                    }
+                    @if (option.row.item.keys; as keys) {
+                      <sf-kbd class="palette__option-keys" [keys]="keys" />
+                    }
+                  </li>
+                }
+                @if (section.more > 0) {
+                  <li role="presentation" class="palette__more">
+                    @if (section.group === 'search') {
+                      <button type="button" class="palette__more-link" (mousedown)="$event.preventDefault()" (click)="openSearchPage()">
+                        {{ 'shell.palette.seeAll' | transloco: { total: totalHits() } }}
+                      </button>
+                    } @else {
+                      {{ 'shell.palette.more' | transloco: { count: section.more } }}
+                    }
+                  </li>
+                }
+              </ul>
+            </li>
           }
-        </button>
-        <span><kbd>Esc</kbd> {{ 'shell.palette.close' | transloco }}</span>
-      </div>
-    }
+        </ul>
 
-    <div class="sf-sr-only" aria-live="polite" aria-atomic="true">{{ announcement() }}</div>
+        @if (options().length === 0) {
+          @switch (state().kind) {
+            @case ('unavailable') {
+              <p class="palette__hint">{{ 'shell.palette.hintUnavailable' | transloco }}</p>
+            }
+            @case ('loading') {
+              <p class="palette__hint">{{ 'shell.palette.searching' | transloco }}</p>
+            }
+            @default {
+              <p class="palette__hint">{{ 'shell.palette.noResults' | transloco: { query: parsed().rest } }}</p>
+            }
+          }
+        } @else if (state().kind === 'unavailable') {
+          <p class="palette__hint">{{ 'shell.palette.hintUnavailable' | transloco }}</p>
+        }
+        @if (mode() === 'all' && parsed().rest === '') {
+          <p class="palette__hint">{{ 'shell.palette.tip' | transloco }}</p>
+        }
+      </div>
+
+      <footer class="palette__footer">
+        <span><sf-kbd keys="ArrowUp" /><sf-kbd keys="ArrowDown" /> {{ 'shell.palette.move' | transloco }}</span>
+        <span><sf-kbd keys="Enter" /> {{ 'shell.palette.run' | transloco }}</span>
+        @if (projectKey() !== null) {
+          <button type="button" class="palette__footer-link" (mousedown)="$event.preventDefault()" (click)="openSearchPage()">
+            <sf-kbd keys="Mod+Enter" /> {{ 'shell.palette.searchPage' | transloco }}
+            @if (totalHits() > 0) {
+              {{ 'shell.palette.resultCount' | transloco: { count: totalHits() } }}
+            }
+          </button>
+        }
+        <span><sf-kbd keys="Escape" /> {{ 'shell.palette.close' | transloco }}</span>
+      </footer>
+
+      <div class="sf-sr-only" aria-live="polite" aria-atomic="true">{{ announcement() }}</div>
+    </section>
   </div>
 }

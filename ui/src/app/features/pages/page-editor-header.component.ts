@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, HostListener, computed, effect, inject, signal, untracked } from '@angular/core';
+import { ShortcutService } from '../../core/ui/shortcut.service';
 import { ApiClient } from '../../core/api/api.client';
 import { from, switchMap, tap } from 'rxjs';
 import { ToastService } from '../../core/ui/toast.service';
@@ -74,11 +75,15 @@ export class PageEditorHeaderComponent {
     this.editingDisplayName.set(false);
   }
 
-  @HostListener('document:keydown.escape')
-  protected onEscape(): void {
-    if (this.metaOpen()) {
-      this.closeMeta();
+  /** Escape goes through the shortcut registry, which orders it among the open layers (M35.14). */
+  private readonly escapeShortcut = inject(ShortcutService).useEscape(() => this.onEscape());
+
+  protected onEscape(): boolean {
+    if (!this.metaOpen()) {
+      return false;
     }
+    this.closeMeta();
+    return true;
   }
 
   /** A press anywhere outside the popover (and its title button) closes it — including on a button that opens a modal. */

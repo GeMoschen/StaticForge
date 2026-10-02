@@ -1,0 +1,29 @@
+<sf-dialog size="md" [title]="'styleguide.sample.topbar.shortcuts' | transloco" (closed)="close()">
+  <sf-search-input
+    class="sheet__search"
+    [placeholder]="'styleguide.sample.keyboard.sheet.search' | transloco"
+    [aria-label]="'styleguide.sample.keyboard.sheet.search' | transloco"
+    [(value)]="search"
+  />
+
+  @for (section of sections(); track section.scope + section.id) {
+    <section class="sheet__group" [attr.aria-labelledby]="'sheet-' + section.scope + '-' + section.id">
+      <h3 class="sheet__heading" [id]="'sheet-' + section.scope + '-' + section.id">
+        {{ 'styleguide.sample.keyboard.sheet.groups.' + section.id | transloco }}
+        @if (section.scope === 'screen') {
+          <span class="sheet__scope">{{ 'styleguide.sample.keyboard.sheet.thisScreen' | transloco }}</span>
+        }
+      </h3>
+      <dl class="sheet__list">
+        @for (item of section.items; track item.id) {
+          <div class="sheet__row">
+            <dt>{{ describe(item.id) }}</dt>
+            <dd><sf-kbd [keys]="item.keys" /></dd>
+          </div>
+        }
+      </dl>
+    </section>
+  } @empty {
+    <p class="sheet__empty">{{ 'styleguide.sample.keyboard.sheet.empty' | transloco: { query: search() } }}</p>
+  }
+</sf-dialog>

@@ -22,6 +22,7 @@ import {
 import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
 import { Observable, firstValueFrom, isObservable } from 'rxjs';
 import { PreferencesService } from '../../core/preferences/preferences.service';
+import { ShortcutService } from '../../core/ui/shortcut.service';
 import { ToastService } from '../../core/ui/toast.service';
 import { SfTooltipDirective } from '../directives/sf-tooltip.directive';
 import { ContextMenuItem, ContextMenuService } from '../services/context-menu.service';
@@ -354,6 +355,22 @@ export class SfTreeComponent<T = unknown> implements OnInit, OnDestroy {
   });
 
   constructor() {
+    // The keys the rows answer to, listed on the `?` sheet; the tree handles them itself (M35.14).
+    const keys = (id: string, keys: string, enabled?: () => boolean) => ({
+      id: `tree.${id}`,
+      keys,
+      scope: 'component' as const,
+      group: 'tree' as const,
+      description: `frame.shortcuts.items.${id}`,
+      enabled,
+    });
+    inject(ShortcutService).use([
+      keys('treeExpand', 'ArrowRight'),
+      keys('treeCollapse', 'ArrowLeft'),
+      keys('treeRename', 'F2', () => this.actions().includes('rename')),
+      keys('treeReorder', 'Alt+ArrowUp', () => this.canReorder()),
+    ]);
+
     // A later data source replaces the loaded structure (the first one is loaded in ngOnInit, synchronously).
     effect(
       () => {

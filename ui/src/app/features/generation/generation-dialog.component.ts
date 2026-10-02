@@ -21,6 +21,7 @@ import { RouterLink } from '@angular/router';
 import { Observable, map } from 'rxjs';
 import { ApiClient } from '../../core/api/api.client';
 import { ProjectContextStore } from '../../core/project/project-context.store';
+import { ShortcutService } from '../../core/ui/shortcut.service';
 import { SfAssetPickerDialogComponent, type AssetPicked } from '../../shared/components/sf-asset-picker-dialog.component';
 import { ChannelsService } from '../channels/channels.service';
 import type { components } from '../../core/api/generated/schema.d.ts';
@@ -97,7 +98,6 @@ interface GenerationForm {
   ],
   templateUrl: './generation-dialog.component.html',
   styleUrl: './generation-dialog.component.scss',
-  host: { '(keydown.alt.p)': 'onPreviewShortcut($event)' },
 })
 export class GenerationDialogComponent {
   readonly projectKey = input.required<string>();
@@ -111,6 +111,19 @@ export class GenerationDialogComponent {
   readonly defaultTargetId = input<number | null>(null);
   readonly started = output<GenerationRunView>();
   readonly cancelled = output<void>();
+
+  /** Alt+P previews the build plan, also from inside a field (M35.14: through the shortcut registry). */
+  private readonly previewShortcut = inject(ShortcutService).use([
+    {
+      id: 'generation.preview',
+      keys: 'Alt+P',
+      scope: 'component',
+      group: 'editing',
+      description: 'frame.shortcuts.items.generationPreview',
+      allowInInput: true,
+      handler: () => this.preview(),
+    },
+  ]);
 
   private readonly api = inject(GenerationService);
   private readonly apiClient = inject(ApiClient);
@@ -262,11 +275,6 @@ export class GenerationDialogComponent {
       ...(folderPath ? { folderPath } : {}),
       ...(assetUuids.length > 0 ? { assetUuids } : {}),
     };
-  }
-
-  onPreviewShortcut(event: Event): void {
-    event.preventDefault();
-    this.preview();
   }
 
   onValidateChange(event: Event): void {

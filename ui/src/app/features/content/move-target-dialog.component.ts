@@ -1,14 +1,15 @@
 import {
   ChangeDetectionStrategy,
   Component,
-  HostListener,
   computed,
   effect,
+  inject,
   input,
   output,
   signal,
   untracked,
 } from '@angular/core';
+import { ShortcutService } from '../../core/ui/shortcut.service';
 import { SfButtonComponent } from '../../shared/components/sf-button.component';
 import { SfSpinnerComponent } from '../../shared/components/sf-spinner.component';
 import type { MoveTarget } from './content-tree.util';
@@ -110,11 +111,15 @@ export class MoveTargetDialogComponent {
     );
   }
 
-  @HostListener('document:keydown.escape')
-  protected onEscape(): void {
-    if (this.open()) {
-      this.cancel();
+  /** Escape goes through the shortcut registry, which orders it among the open layers (M35.14). */
+  private readonly escapeShortcut = inject(ShortcutService).useEscape(() => this.onEscape());
+
+  protected onEscape(): boolean {
+    if (!this.open()) {
+      return false;
     }
+    this.cancel();
+    return true;
   }
 
   protected isChosen(target: MoveTarget): boolean {

@@ -21,6 +21,7 @@ import { SfIconComponent } from '../../shared/components/sf-icon.component';
 import { ScheduleDialogComponent } from '../schedules/schedule-dialog.component';
 import type { ScheduleType } from '../schedules/schedule.util';
 import { formatInstant } from '../schedules/zoned-time.util';
+import { ShortcutService } from '../../core/ui/shortcut.service';
 import { ReleaseBadgeComponent } from './release-badge.component';
 import { ReleaseDialogComponent } from './release-dialog.component';
 import { ReleaseEventsStore } from './release-events.store';
@@ -133,6 +134,20 @@ export class ReleaseBarComponent implements OnDestroy {
   protected readonly name = computed(() => assetName(this.subject()));
 
   constructor() {
+    // Alt+Shift+R opens the release dialog of the open item, from inside a field too (M35.14).
+    inject(ShortcutService).use([
+      {
+        id: 'release',
+        keys: 'Alt+Shift+R',
+        scope: 'screen',
+        group: 'publishing',
+        description: 'frame.shortcuts.items.release',
+        allowInInput: true,
+        enabled: () => this.permissions.canRelease() && this.canReleaseAny() && this.dialog() === null,
+        handler: () => this.open('release'),
+        palette: { icon: 'rocket_launch', label: 'frame.shortcuts.items.releaseItem', context: () => this.name() || null },
+      },
+    ]);
     effect(() => {
       const key = this.projectKey();
       const uuid = this.assetUuid();

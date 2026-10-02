@@ -211,6 +211,26 @@ changes, large delete, undo variants). **Not signed off yet** — the app is bui
     delete / move / rename that exists; the backend gets folder-subtree restore and restore for templates, page
     sections and UID changes.
 
+## Review round 4 (2026-10-02): command palette and `?` sheet (signed off 2026-10-02)
+
+Added to the sample for M35.14 (`sample/keyboard/`; `/styleguide/sample?cmdk=` and `…&cmdk=%23gen` for the palette,
+`…&sheet=1` for the sheet; Ctrl/Cmd+K and `?` work in the sample too). **Signed off by the user on 2026-10-02**; M35.14 built the app's palette and sheet as signed off.
+
+52. **Palette:** a modal combobox, 42rem wide. Groups: *Actions* (those that fit what is open), *Navigate* (every screen,
+    then settings pages while typing), *Recent*, *Favorites*, *Search results* (needs 2+ characters, capped at 4).
+    Without text: five context actions, Recent, Favorites, then the screens. Fuzzy matching, matched characters
+    underlined; key hints on the right; the selected row is highlighted with the focus ring. Entries a person may not use
+    are left out (Templates, Channels and *Go to Templates* need developer mode; release needs an open page or record).
+53. **Prefix modes:** `>` actions only, `#` settings pages, `@` projects. The prefix becomes a chip before the box
+    (Actions / Settings / Projects); Backspace on an empty box leaves the mode. *Switch project…* enters `@`.
+54. **`?` sheet:** the shortcuts of the open screen first (badge *On this screen*), then *Everywhere*, *Go to* and
+    *Publishing*; a search field filters by description or keys. In the app it is generated from the registry.
+55. **Browser-reserved keys (user, 2026-10-02):** History **Alt+H**, Release **Alt+Shift+R**, Build now **Alt+Shift+B**
+    (Ctrl+H, Ctrl+Shift+R and Ctrl+Shift+B belong to the browser).
+56. **Scope (user, 2026-10-02):** M35.14 builds the registry and every set in its Goals list, including table keys
+    (↑/↓, Space, Enter, Shift, Ctrl+A), release and build; actions are registered by the services and screens that own
+    them (registry-driven), permission-checked through `ProjectAccessStore`.
+
 ## Notes / hazards
 
 - Sign-off: **signed off by the user on 2026-10-01** — gallery https://claude.ai/artifact/33yY26sd6H17UTP9sPPJid

@@ -1,7 +1,6 @@
 import {
   ChangeDetectionStrategy,
   Component,
-  HostListener,
   computed,
   effect,
   inject,
@@ -10,6 +9,7 @@ import {
   signal,
   untracked,
 } from '@angular/core';
+import { ShortcutService } from '../../core/ui/shortcut.service';
 import { RouterLink } from '@angular/router';
 import { forkJoin } from 'rxjs';
 import { ApiClient } from '../../core/api/api.client';
@@ -106,7 +106,9 @@ export class ScheduleHistoryComponent {
     });
   }
 
-  @HostListener('document:keydown.escape')
+  /** Escape goes through the shortcut registry, which orders it among the open layers (M35.14). */
+  private readonly escapeShortcut = inject(ShortcutService).useEscape(() => this.onEscape());
+
   protected onEscape(): void {
     this.closed.emit();
   }

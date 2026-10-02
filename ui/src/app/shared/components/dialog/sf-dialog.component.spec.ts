@@ -203,6 +203,14 @@ describe('DialogService lifetime', () => {
 
   it('keeps the page shortcuts quiet while a modal is open', async () => {
     const shortcuts = TestBed.inject(ShortcutService);
+    shortcuts.register({
+      id: 'palette',
+      keys: 'Mod+K',
+      scope: 'global',
+      group: 'general',
+      description: 'frame.shortcuts.items.palette',
+      handler: () => shortcuts.openPalette(),
+    });
     const ref = TestBed.inject(DialogService).open(NameDialog, { title: 'Rename page' });
     await screen.findByRole('dialog');
 

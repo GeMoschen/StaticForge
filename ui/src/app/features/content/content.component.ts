@@ -1,5 +1,7 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { ChangeDetectionStrategy, Component, computed, effect, inject, input, signal, untracked } from '@angular/core';
+import { createShortcut } from '../../core/ui/documented-shortcuts';
+import { ShortcutService } from '../../core/ui/shortcut.service';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, NavigationEnd, Router, RouterLink, RouterOutlet } from '@angular/router';
 import { filter, forkJoin, map, tap, type Observable } from 'rxjs';
@@ -326,6 +328,12 @@ export class ContentComponent {
       },
     });
   }
+
+  /** `n` creates a record set (M35.14). */
+  private readonly newSetShortcut = inject(ShortcutService).use([
+    createShortcut({ handler: () => this.newSet(), palette: { label: 'frame.shortcuts.items.createRecordSet' } }),
+  ]);
+
 
   protected newSet(folderUuid: string | null = this.selectedFolderUuid()): void {
     if (this.canEdit() && this.datasets().length > 0) {

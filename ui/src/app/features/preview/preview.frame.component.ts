@@ -17,6 +17,7 @@ import { ApiClient, type PreviewView } from '../../core/api/api.client';
 import { EditingLocaleStore } from '../../core/project/editing-locale.store';
 import { LocalesStore } from '../../core/project/locales.store';
 import { ProjectAccessStore } from '../../core/project/project-access.store';
+import { ShortcutService } from '../../core/ui/shortcut.service';
 import { previewErrorDocument, previewProblem } from './preview-error';
 import { pageNumbers, readPageHeaders, requestedPage } from './preview-pagination.util';
 import {
@@ -198,7 +199,6 @@ export class SfPreviewFrameComponent implements OnDestroy {
 
   private timer: ReturnType<typeof setTimeout> | null = null;
 
-  private readonly onKeydownRef = (event: KeyboardEvent) => this.onKeydown(event);
   private readonly onMessageRef = (event: MessageEvent) => this.onMessage(event);
 
   /**
@@ -219,9 +219,18 @@ export class SfPreviewFrameComponent implements OnDestroy {
   });
 
   constructor() {
-    if (typeof document !== 'undefined') {
-      document.addEventListener('keydown', this.onKeydownRef);
-    }
+    // Ctrl/Cmd+Enter refreshes the preview, also from inside a field (M35.14: through the shortcut registry).
+    inject(ShortcutService).use([
+      {
+        id: 'preview.refresh',
+        keys: 'Mod+Enter',
+        scope: 'component',
+        group: 'editing',
+        description: 'frame.shortcuts.items.refreshPreview',
+        allowInInput: true,
+        handler: () => this.refreshManually(),
+      },
+    ]);
     if (typeof window !== 'undefined') {
       window.addEventListener('message', this.onMessageRef);
     }
@@ -277,9 +286,6 @@ export class SfPreviewFrameComponent implements OnDestroy {
     if (this.timer) {
       clearTimeout(this.timer);
       this.timer = null;
-    }
-    if (typeof document !== 'undefined') {
-      document.removeEventListener('keydown', this.onKeydownRef);
     }
     if (typeof window !== 'undefined') {
       window.removeEventListener('message', this.onMessageRef);
@@ -367,13 +373,6 @@ export class SfPreviewFrameComponent implements OnDestroy {
     const number = requestedPage(event.data);
     if (number !== null) {
       this.goToPage(number);
-    }
-  }
-
-  private onKeydown(event: KeyboardEvent): void {
-    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'enter') {
-      event.preventDefault();
-      this.refreshManually();
     }
   }
 

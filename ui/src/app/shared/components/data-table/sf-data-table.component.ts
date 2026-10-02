@@ -23,6 +23,7 @@ import {
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, ParamMap, Router } from '@angular/router';
 import { TranslocoPipe } from '@jsverse/transloco';
+import { ShortcutService } from '../../../core/ui/shortcut.service';
 import { PreferencesService } from '../../../core/preferences/preferences.service';
 import type { TableColumnsPreference } from '../../../core/preferences/preferences.types';
 import { SfVirtualScrollDirective } from '../../virtual/virtual-window';
@@ -375,6 +376,24 @@ export class SfDataTableComponent<T> implements OnInit, OnDestroy {
   );
 
   constructor() {
+    // The keys the rows answer to, listed on the `?` sheet; the table handles them itself (M35.14).
+    const selectable = () => this.selectable();
+    const keys = (id: string, keys: string, enabled?: () => boolean) => ({
+      id: `table.${id}`,
+      keys,
+      scope: 'component' as const,
+      group: 'lists' as const,
+      description: `frame.shortcuts.items.${id}`,
+      enabled,
+    });
+    inject(ShortcutService).use([
+      keys('rowMove', 'ArrowUp'),
+      keys('rowOpen', 'Enter'),
+      keys('rowSelect', 'Space', selectable),
+      keys('rowExtend', 'Shift+ArrowDown', selectable),
+      keys('rowAll', 'Mod+A', selectable),
+    ]);
+
     // A batch that ended (loading went false, or an error came) without new rows may be asked for again.
     effect(() => {
       // Both read every time: each is a trigger (no short-circuit).
@@ -813,6 +832,16 @@ export class SfDataTableComponent<T> implements OnInit, OnDestroy {
       case 'Enter':
         event.preventDefault();
         this.rowOpen.emit(row);
+        break;
+      case 'a':
+      case 'A':
+        // Ctrl/Cmd+A selects the rows of the page instead of the page's text.
+        if ((event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey) {
+          event.preventDefault();
+          if (this.selectable()) {
+            this.togglePage(true);
+          }
+        }
         break;
     }
   }

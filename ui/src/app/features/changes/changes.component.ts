@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, effect, inject, input, signal, untracked } from '@angular/core';
 import { ProjectAccessStore } from '../../core/project/project-access.store';
 import { ProjectPermissionsStore } from '../../core/project/project-permissions.store';
+import { ShortcutService } from '../../core/ui/shortcut.service';
 import { SfButtonComponent } from '../../shared/components/sf-button.component';
 import { ReleaseDialogComponent } from '../release/release-dialog.component';
 import { ReleaseEventsStore } from '../release/release-events.store';
@@ -72,6 +73,20 @@ export class ChangesComponent {
   protected readonly scheduling = signal<ReleaseChoice[] | null>(null);
 
   constructor() {
+    // Alt+Shift+R releases the selected changes (M35.14).
+    inject(ShortcutService).use([
+      {
+        id: 'release',
+        keys: 'Alt+Shift+R',
+        scope: 'screen',
+        group: 'publishing',
+        description: 'frame.shortcuts.items.release',
+        allowInInput: true,
+        enabled: () => this.permissions.canRelease() && this.store.selectedRows().length > 0 && this.dialog() === null,
+        handler: () => this.releaseSelected(),
+        palette: { icon: 'rocket_launch', label: 'frame.shortcuts.items.releaseSelected' },
+      },
+    ]);
     this.store.connect(this.projectKey, this.state);
     effect(() => {
       const key = this.projectKey();

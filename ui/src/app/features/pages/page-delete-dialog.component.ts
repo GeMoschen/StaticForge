@@ -1,7 +1,6 @@
 import {
   ChangeDetectionStrategy,
   Component,
-  HostListener,
   computed,
   inject,
   input,
@@ -9,6 +8,7 @@ import {
   signal,
   viewChild,
 } from '@angular/core';
+import { ShortcutService } from '../../core/ui/shortcut.service';
 import { tap } from 'rxjs';
 import { ApiClient } from '../../core/api/api.client';
 import type { components } from '../../core/api/generated/schema.d.ts';
@@ -78,7 +78,9 @@ export class PageDeleteDialogComponent {
     () => !this.submitting() && (!this.offersRedirect() || intentReady(this.redirectIntent())),
   );
 
-  @HostListener('document:keydown.escape')
+  /** Escape goes through the shortcut registry, which orders it among the open layers (M35.14). */
+  private readonly escapeShortcut = inject(ShortcutService).useEscape(() => this.onEscape());
+
   protected onEscape(): void {
     if (this.pickingRedirect()) {
       this.pickingRedirect.set(false);

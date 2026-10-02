@@ -29,6 +29,7 @@ import { SfSpinnerComponent } from './sf-spinner.component';
 import { concreteTemplates } from '../../features/templates/inheritance.util';
 import { deriveUid, UID_PATTERN } from '../uid.util';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { ShortcutService } from '../../core/ui/shortcut.service';
 
 type TemplateSummary = components['schemas']['TemplateSummary'];
 
@@ -214,21 +215,22 @@ export class SfCreateAssetDialogComponent {
     );
   }
 
-  @HostListener('document:keydown', ['$event'])
-  protected onKeydown(event: KeyboardEvent): void {
+  /** Escape goes through the shortcut registry (M35.14): it closes the picker first, then the dialog. */
+  private readonly escapeShortcut = inject(ShortcutService).useEscape(() => {
     if (!this.open()) {
-      return;
+      return false;
     }
-    if (event.key === 'Escape') {
-      event.preventDefault();
-      if (this.showPicker()) {
-        this.closePicker();
-      } else {
-        this.cancel();
-      }
-      return;
+    if (this.showPicker()) {
+      this.closePicker();
+    } else {
+      this.cancel();
     }
-    if (event.key === 'Tab') {
+    return true;
+  });
+
+  @HostListener('keydown.tab', ['$event'])
+  protected onTab(event: KeyboardEvent): void {
+    if (this.open()) {
       this.trapFocus(event);
     }
   }

@@ -1,7 +1,6 @@
 import {
   ChangeDetectionStrategy,
   Component,
-  HostListener,
   computed,
   effect,
   inject,
@@ -10,6 +9,7 @@ import {
   signal,
   untracked,
 } from '@angular/core';
+import { ShortcutService } from '../../core/ui/shortcut.service';
 import type { components } from '../../core/api/generated/schema.d.ts';
 import { problemOf } from '../../core/api/problem.util';
 import { SfAssetPickerDialogComponent, type AssetPicked } from '../../shared/components/sf-asset-picker-dialog.component';
@@ -114,7 +114,9 @@ export class RedirectDialogComponent {
     });
   }
 
-  @HostListener('document:keydown.escape')
+  /** Escape goes through the shortcut registry, which orders it among the open layers (M35.14). */
+  private readonly escapeShortcut = inject(ShortcutService).useEscape(() => this.onEscape());
+
   protected onEscape(): void {
     if (this.picking()) {
       this.picking.set(false);

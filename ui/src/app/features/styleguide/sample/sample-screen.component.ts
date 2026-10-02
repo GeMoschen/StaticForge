@@ -14,10 +14,9 @@ import {
 import { ActivatedRoute } from '@angular/router';
 import { TranslocoPipe } from '@jsverse/transloco';
 import { DensityService } from '../../../core/ui/density.service';
+import { ShortcutService } from '../../../core/ui/shortcut.service';
 import { ThemeService } from '../../../core/ui/theme.service';
 import { SfDrawerComponent } from '../../../shared/components/dialog/sf-drawer.component';
-import { SfDialogComponent } from '../../../shared/components/dialog/sf-dialog.component';
-import { SfKbdComponent } from '../../../shared/components/display/sf-kbd.component';
 import { SfMenuComponent, SfMenuItem } from '../../../shared/components/menu/sf-menu.component';
 import {
   SfTreeAction,
@@ -69,6 +68,8 @@ import { SampleHistoryDrawerComponent } from './history/sample-history-drawer.co
 import { SampleTimeTravelBannerComponent } from './history/sample-time-travel-banner.component';
 import { revisionById } from './history/history-data';
 import { SampleNavigationAreaComponent } from './navigation/sample-navigation-area.component';
+import { SamplePaletteComponent } from './keyboard/sample-palette.component';
+import { SampleShortcutSheetComponent } from './keyboard/sample-shortcut-sheet.component';
 
 const DARK_QUERY = '(prefers-color-scheme: dark)';
 /** `--sf-tree-width` (the splitter takes a number); narrower below the large breakpoint. */
@@ -76,21 +77,12 @@ const TREE_WIDTH = 280;
 const TREE_WIDTH_NARROW = 240;
 const WIDE_QUERY = '(min-width: 1280px)';
 
-const SHORTCUTS: readonly { readonly key: string; readonly keys: string }[] = [
-  { key: 'palette', keys: 'Mod+K' },
-  { key: 'goPages', keys: 'g p' },
-  { key: 'save', keys: 'Mod+S' },
-  { key: 'rename', keys: 'F2' },
-  { key: 'moveSection', keys: 'Alt+ArrowUp' },
-  { key: 'sheet', keys: '?' },
-];
-
 function oneOf<T extends string>(value: string | null, allowed: readonly T[]): T | null {
   return allowed.includes(value as T) ? (value as T) : null;
 }
 
 /** The query parameters the screen owns; every other parameter belongs to an area and is kept as it is. */
-const OWN_PARAMS = ['area', 'view', 'template', 'tab', 'channel', 'focus', 'dev', 'rail', 'theme', 'density', 'palette', 'hdrawer', 'travel'];
+const OWN_PARAMS = ['area', 'view', 'template', 'tab', 'channel', 'focus', 'dev', 'rail', 'theme', 'density', 'palette', 'hdrawer', 'travel', 'cmdk', 'sheet', 'sheetq'];
 
 /**
  * The M35.9 sample screen: a clickable prototype of the new frame (dark top bar, rail) around the working areas —
@@ -134,9 +126,9 @@ const OWN_PARAMS = ['area', 'view', 'template', 'tab', 'channel', 'focus', 'dev'
     SampleTemplatesTreeComponent,
     SampleTimeTravelBannerComponent,
     SampleTopbarComponent,
-    SfDialogComponent,
+    SamplePaletteComponent,
+    SampleShortcutSheetComponent,
     SfDrawerComponent,
-    SfKbdComponent,
     SfMenuComponent,
     SfSplitterComponent,
     SfTreeComponent,
@@ -157,7 +149,6 @@ export class SampleScreenComponent {
 
   protected readonly treeWidth =
     typeof matchMedia !== 'function' || matchMedia(WIDE_QUERY).matches ? TREE_WIDTH : TREE_WIDTH_NARROW;
-  protected readonly shortcuts = SHORTCUTS;
   protected readonly treeActions: readonly SfTreeAction[] = ['rename', 'delete', 'create'];
 
   /** Lazy children with status badges (only when not released) and, in developer mode, the UID. */
@@ -193,6 +184,27 @@ export class SampleScreenComponent {
     this.state.theme.set(theme.preference());
     this.state.density.set(density.density());
     this.readQueryParams();
+
+    // The sample has no app shell, so it registers the two keys the frame owns in the app (M35.14).
+    inject(ShortcutService).use([
+      {
+        id: 'palette',
+        keys: 'Mod+K',
+        scope: 'global',
+        group: 'general',
+        description: 'frame.shortcuts.items.palette',
+        allowInInput: true,
+        handler: () => this.state.paletteQuery.set(''),
+      },
+      {
+        id: 'sheet',
+        keys: '?',
+        scope: 'global',
+        group: 'general',
+        description: 'frame.shortcuts.items.sheet',
+        handler: () => this.state.shortcutsOpen.set(true),
+      },
+    ]);
 
     // Preview theme and density on <html>; restore the user's own when leaving.
     const dark = typeof matchMedia === 'function' ? matchMedia(DARK_QUERY).matches : false;
@@ -344,6 +356,13 @@ export class SampleScreenComponent {
     if (params.has('travel') && revisionById(travel)) {
       this.state.travel.set(travel);
     }
+    if (params.has('cmdk')) {
+      this.state.paletteQuery.set(params.get('cmdk') ?? '');
+    }
+    if (params.get('sheet') === '1') {
+      this.state.shortcutsQuery.set(params.get('sheetq') ?? '');
+      this.state.shortcutsOpen.set(true);
+    }
     const rail = oneOf<SampleRail>(params.get('rail'), ['expanded', 'collapsed']);
     if (rail) {
       this.state.rail.set(rail);
@@ -384,6 +403,12 @@ export class SampleScreenComponent {
     }
     if (this.state.travel() !== null) {
       query.set('travel', String(this.state.travel()));
+    }
+    if (this.state.paletteQuery() !== null) {
+      query.set('cmdk', this.state.paletteQuery()!);
+    }
+    if (this.state.shortcutsOpen()) {
+      query.set('sheet', '1');
     }
     query.set('dev', this.state.devMode() ? '1' : '0');
     query.set('rail', this.state.rail());

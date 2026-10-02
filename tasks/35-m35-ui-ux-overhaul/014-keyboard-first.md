@@ -1,6 +1,6 @@
 ---
 id: M35.14
-status: todo
+status: done
 depends: [M35.10]
 epic: m35-ui-ux-overhaul
 feature: frame
@@ -66,10 +66,10 @@ the drawer's *Open full history* leads to `/p/:key/history`.
 
 ## Acceptance criteria
 
-- [ ] Vitest: chord timing, input suppression, scope activation/deactivation on route change, palette action
+- [x] Vitest: chord timing, input suppression, scope activation/deactivation on route change, palette action
       filtering by permission, and the sheet reflects the registry.
-- [ ] No component uses raw `document`/`window` `keydown` listeners for shortcuts (grep check).
-- [ ] `npx vitest run` and `npx ng build` green.
+- [x] No component uses raw `document`/`window` `keydown` listeners for shortcuts (grep check).
+- [x] `npx vitest run` and `npx ng build` green.
 
 ## Notes / hazards
 
@@ -82,3 +82,32 @@ the drawer's *Open full history* leads to `/p/:key/history`.
   shortcuts that exist today and is filled from the registry here.
 - Already built in the design system, to register rather than re-implement: `sf-tree` `Alt+↑/↓` sibling reordering
   (M35.9 decision 23), the menu and card shortcuts, and the `sf-catalog` card actions.
+
+## Review (2026-10-02)
+
+Design signed off in the sample first (gate round 4, decisions 52–56). Built as signed off.
+
+- **Registry** (`core/ui/shortcut.service.ts`, `shortcut-keys.util.ts`): one keydown listener; a command has an id, keys
+  (`sf-kbd` notation, sequences like `g p`), scope (global, screen, component), group, description key, handler,
+  `enabled`, `allowInInput` and optional palette metadata. Most specific scope wins; a handler returning `false` passes
+  the key on; typing in a field is ignored unless `allowInInput`; behind a modal nothing fires; dev-mode conflict
+  detection (same keys, same scope). `use()` registers for the lifetime of the injection context, so a route change
+  switches a screen's set off. Handler-less entries document keys a component handles itself (trees, tables, cards).
+- **Global set** (`features/frame/frame-shortcuts.ts`): `Mod+K`, `?`, `g` chords to every screen (Templates in developer
+  mode only), `[` sidebar, `Alt+H` history, `Alt+Shift+B` Build now (permission + not while a build runs), palette-only
+  actions (theme, density, developer mode, switch project, sign out). Screens add `n` (pages, templates, schedules,
+  content, navigation, globals), `Alt+Shift+R` release (release bar, changes), `Mod+Enter` preview, `Alt+P` generation
+  preview, `/` focus filter (`sf-search-input`), `Ctrl+A` in tables, and document tree, table, card and section keys.
+- **Browser-reserved keys:** `Ctrl+H`, `Ctrl+Shift+R`, `Ctrl+Shift+B` belong to the browser → History `Alt+H`, Release
+  `Alt+Shift+R`, Build `Alt+Shift+B` (user decision, gate 55).
+- **Palette** (`core/ui/command-palette/`): `palette-model.ts` (pure grouping and ranking), `fuzzy-match.util.ts`; groups
+  Actions, Navigate, Recent, Favorites, Search results; `>` `#` `@` modes; on the overlay stack (modal, inert page).
+- **`?` sheet:** generated from the registry, screen shortcuts first, searchable.
+- **Ad-hoc listeners replaced:** nine legacy dialogs' `document:keydown.escape` (now `useEscape`, so only the top layer
+  closes), preview frame, generation dialog, `sf-search-input`, the two asset dialogs (Tab trap on the host). New lint
+  `npm run lint:keys` (`scripts/check-keydown-listeners.mjs`) fails on raw `document`/`window` key listeners; allowed:
+  the registry, the overlay stack and tooltips.
+- **Checks:** 257 test files / 2,222 tests, `ng build` and `npm run lint` green; checked in Chrome against a throwaway
+  backend (palette, `g` chords, `n`, `?` sheet).
+- **Open:** Recent and Favorites show whatever `PreferencesService` holds — M35.15 fills them. `[`/`n`/`/` exist where a
+  screen registers them; screens built later add their own sets (their task files).

@@ -1,4 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, effect, inject, input, signal, untracked } from '@angular/core';
+import { createShortcut } from '../../core/ui/documented-shortcuts';
+import { ShortcutService } from '../../core/ui/shortcut.service';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { ApiClient } from '../../core/api/api.client';
 import type { components } from '../../core/api/generated/schema.d.ts';
@@ -191,6 +193,12 @@ export class SchedulesComponent {
   protected closeHistory(): void {
     this.navigate({ id: null });
   }
+
+  /** `n` creates a schedule (M35.14). */
+  private readonly newScheduleShortcut = inject(ShortcutService).use([
+    createShortcut({ handler: () => this.newSchedule(), palette: { label: 'frame.shortcuts.items.createSchedule' } }),
+  ]);
+
 
   protected newSchedule(): void {
     this.dialog.set({ schedule: null, types: ['GENERATION', 'RECURRING_GENERATION'] });

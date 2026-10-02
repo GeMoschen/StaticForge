@@ -1,4 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, effect, inject, input, signal, untracked } from '@angular/core';
+import { createShortcut } from '../../core/ui/documented-shortcuts';
+import { ShortcutService } from '../../core/ui/shortcut.service';
 import { ActivatedRoute, Router } from '@angular/router';
 import { tap } from 'rxjs';
 import { ApiClient } from '../../core/api/api.client';
@@ -214,6 +216,12 @@ export class NavigationComponent {
       },
     });
   }
+
+  /** `n` creates a menu item (M35.14). */
+  private readonly newItemShortcut = inject(ShortcutService).use([
+    createShortcut({ handler: () => this.newReference(), palette: { label: 'frame.shortcuts.items.createMenuItem' } }),
+  ]);
+
 
   protected newReference(): void {
     if (this.readOnly()) {

@@ -5,12 +5,14 @@ import {
   ElementRef,
   HostListener,
   effect,
+  inject,
   input,
   output,
   signal,
   untracked,
   viewChild,
 } from '@angular/core';
+import { ShortcutService } from '../../core/ui/shortcut.service';
 import { SfButtonComponent } from './sf-button.component';
 import { SfFieldComponent } from './sf-field.component';
 import { SfSpinnerComponent } from './sf-spinner.component';
@@ -82,17 +84,18 @@ export class SfRenameAssetDialogComponent {
     );
   }
 
-  @HostListener('document:keydown', ['$event'])
-  protected onKeydown(event: KeyboardEvent): void {
+  /** Escape goes through the shortcut registry (M35.14). */
+  private readonly escapeShortcut = inject(ShortcutService).useEscape(() => {
     if (!this.open()) {
-      return;
+      return false;
     }
-    if (event.key === 'Escape') {
-      event.preventDefault();
-      this.close();
-      return;
-    }
-    if (event.key === 'Tab') {
+    this.close();
+    return true;
+  });
+
+  @HostListener('keydown.tab', ['$event'])
+  protected onTab(event: KeyboardEvent): void {
+    if (this.open()) {
       this.trapFocus(event);
     }
   }

@@ -216,6 +216,10 @@ export class SampleState {
   /** The revision the full History page opens (the drawer's *Details*). */
   readonly historyRev = signal<number | null>(null);
   readonly shortcutsOpen = signal(false);
+  /** The `?` sheet's search text when it opens (`sheetq`). */
+  readonly shortcutsQuery = signal('');
+  /** The command palette (M35.14): `null` = closed, else its query including a mode prefix (`>`, `#`, `@`). */
+  readonly paletteQuery = signal<string | null>(null);
 
   // ── Unsaved changes (M35.13) ───────────────────────────────────────────────
   private readonly guards = new Set<() => Promise<boolean>>();

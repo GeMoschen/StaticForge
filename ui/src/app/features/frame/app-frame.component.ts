@@ -12,6 +12,7 @@ import { HistoryDrawerStore } from '../history/history-drawer.store';
 import { TimeTravelBannerComponent } from '../revisions/time-travel-banner.component';
 import { TimeTravelStore } from '../revisions/time-travel.store';
 import { FrameRailComponent } from './frame-rail.component';
+import { useFrameShortcuts } from './frame-shortcuts';
 import { FrameTopbarComponent } from './frame-topbar.component';
 
 /**
@@ -46,6 +47,11 @@ export class AppFrameComponent {
   private readonly editors = inject(ActiveEditorService);
 
   protected readonly projectKey = this.frame.projectKey;
+
+  constructor() {
+    useFrameShortcuts();
+  }
+
   protected readonly hasRail = computed(
     () => railGroups({ location: this.frame.location(), developerMode: this.developerMode.enabled() }).length > 0,
   );

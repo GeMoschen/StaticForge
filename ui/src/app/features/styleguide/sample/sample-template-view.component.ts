@@ -1,6 +1,7 @@
 import { NgTemplateOutlet } from '@angular/common';
 import { ChangeDetectionStrategy, Component, DestroyRef, computed, effect, inject, signal, untracked } from '@angular/core';
 import { TranslocoPipe } from '@jsverse/transloco';
+import { ShortcutService } from '../../../core/ui/shortcut.service';
 import { ToastService } from '../../../core/ui/toast.service';
 import type { CodeDiagnostic } from '../../../shared/code-editor/code-editor.types';
 import { SfCodePanelComponent } from '../../../shared/code-editor/sf-code-panel.component';
@@ -91,11 +92,22 @@ function sameSettings(a: SampleTemplateSettings | null, b: SampleTemplateSetting
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './sample-template-view.component.html',
   styleUrl: './sample-template-view.component.scss',
-  host: { '(document:keydown)': 'onKeydown($event)' },
 })
 export class SampleTemplateViewComponent {
   protected readonly state = inject(SampleState);
   private readonly toasts = inject(ToastService);
+  /** Ctrl/Cmd+S saves the open template (the registry keeps the browser's own "save page" away). */
+  private readonly saveShortcut = inject(ShortcutService).use([
+    {
+      id: 'save',
+      keys: 'Mod+S',
+      scope: 'screen',
+      group: 'general',
+      description: 'frame.shortcuts.items.save',
+      allowInInput: true,
+      handler: () => (this.def() ? this.save() : false),
+    },
+  ]);
 
   protected readonly cdlTabsId = CDL_TABS;
   protected readonly channelTabsId = CHANNEL_TABS;
@@ -265,13 +277,6 @@ export class SampleTemplateViewComponent {
     this.saved.set(this.sources());
     this.savedSettings.set(this.settings());
     this.toasts.show(this.state.t('template.savedToast', { name: this.name() }), 'success');
-  }
-
-  protected onKeydown(event: KeyboardEvent): void {
-    if ((event.ctrlKey || event.metaKey) && !event.altKey && event.key.toLowerCase() === 's' && this.def()) {
-      event.preventDefault();
-      this.save();
-    }
   }
 
   protected secondary(): void {

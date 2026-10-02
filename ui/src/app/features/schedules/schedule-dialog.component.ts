@@ -1,7 +1,6 @@
 import {
   ChangeDetectionStrategy,
   Component,
-  HostListener,
   OnDestroy,
   computed,
   effect,
@@ -11,6 +10,7 @@ import {
   signal,
   untracked,
 } from '@angular/core';
+import { ShortcutService } from '../../core/ui/shortcut.service';
 import type { Subscription } from 'rxjs';
 import { ApiClient } from '../../core/api/api.client';
 import type { components } from '../../core/api/generated/schema.d.ts';
@@ -204,7 +204,9 @@ export class ScheduleDialogComponent implements OnDestroy {
     this.previewRequest?.unsubscribe();
   }
 
-  @HostListener('document:keydown.escape')
+  /** Escape goes through the shortcut registry, which orders it among the open layers (M35.14). */
+  private readonly escapeShortcut = inject(ShortcutService).useEscape(() => this.onEscape());
+
   protected onEscape(): void {
     this.close();
   }

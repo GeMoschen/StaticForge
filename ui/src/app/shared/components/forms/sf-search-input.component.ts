@@ -4,18 +4,18 @@ import {
   Component,
   ElementRef,
   booleanAttribute,
+  effect,
   inject,
   input,
   model,
+  untracked,
   viewChild,
 } from '@angular/core';
 import { TranslocoPipe } from '@jsverse/transloco';
+import { ShortcutService } from '../../../core/ui/shortcut.service';
 import { SfButtonComponent } from '../sf-button.component';
 import { SfIconComponent } from '../sf-icon.component';
 import { SfControlBase, provideSfControl } from './sf-control';
-
-/** Targets where `/` is typed text, not the search shortcut. */
-const EDITABLE = 'input, textarea, select, [contenteditable]:not([contenteditable="false"])';
 
 /**
  * A search box (M35.6): `role=searchbox` with a leading search icon and a clear button while it holds text (clearing
@@ -23,7 +23,8 @@ const EDITABLE = 'input, textarea, select, [contenteditable]:not([contenteditabl
  * surrounding dialog or panel.
  *
  * With `focusShortcut`, `/` anywhere on the page focuses it (announced through `aria-keyshortcuts`, hinted by a `/`
- * badge) — unless the key goes to something editable or comes with Ctrl/Alt/Meta. Use it for one search per screen.
+ * badge) — unless the key goes to something editable or comes with Ctrl/Alt/Meta. The key is registered with the
+ * shortcut registry while the box lives (M35.14), so the `?` sheet lists it. Use it for one search per screen.
  */
 @Component({
   selector: 'sf-search-input',
@@ -32,9 +33,6 @@ const EDITABLE = 'input, textarea, select, [contenteditable]:not([contenteditabl
   changeDetection: ChangeDetectionStrategy.OnPush,
   styleUrl: './sf-search-input.component.scss',
   providers: [provideSfControl(() => SfSearchInputComponent)],
-  host: {
-    '(document:keydown)': 'onDocumentKeydown($event)',
-  },
   template: `
     <div
       class="sf-search-input"
@@ -92,6 +90,29 @@ export class SfSearchInputComponent extends SfControlBase<string> {
 
   constructor() {
     super();
+    const shortcuts = inject(ShortcutService);
+    effect((onCleanup) => {
+      if (this.focusShortcut()) {
+        // Registering writes a signal: not from inside the effect's own reactive context.
+        const unregister = untracked(() =>
+          shortcuts.register({
+            id: 'filter',
+            keys: '/',
+            scope: 'component',
+            group: 'screen',
+            description: 'frame.shortcuts.items.filter',
+            handler: () => {
+              if (this.isDisabled()) {
+                return false;
+              }
+              this.focus();
+              return true;
+            },
+          }),
+        );
+        onCleanup(unregister);
+      }
+    });
   }
 
   focus(): void {
@@ -120,23 +141,6 @@ export class SfSearchInputComponent extends SfControlBase<string> {
       event.stopPropagation();
       this.clear();
     }
-  }
-
-  protected onDocumentKeydown(event: KeyboardEvent): void {
-    if (
-      !this.focusShortcut() ||
-      event.key !== '/' ||
-      event.defaultPrevented ||
-      event.ctrlKey ||
-      event.altKey ||
-      event.metaKey ||
-      this.isDisabled() ||
-      (event.target instanceof Element && event.target.closest(EDITABLE))
-    ) {
-      return;
-    }
-    event.preventDefault();
-    this.focus();
   }
 
   private update(value: string): void {
