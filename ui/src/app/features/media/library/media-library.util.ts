@@ -18,6 +18,35 @@ export function findFolder(nodes: FolderView[], uuid: string): FolderView | null
   return null;
 }
 
+/** The folder that holds the folder `uuid` (`null` for a top-level entry of `nodes`, or an unknown uuid). */
+export function findParentFolder(nodes: FolderView[], uuid: string, parent: FolderView | null = null): FolderView | null {
+  for (const node of nodes) {
+    if (node.uuid === uuid) {
+      return parent;
+    }
+    const found = findParentFolder(node.children ?? [], uuid, node);
+    if (found) {
+      return found;
+    }
+  }
+  return null;
+}
+
+/** How many sub-folders and media items a folder holds in all its levels — what deleting it takes along. */
+export function folderContentCount(
+  folder: FolderView,
+  mediaByFolder: ReadonlyMap<string, readonly unknown[]>,
+): { folders: number; media: number } {
+  let folders = 0;
+  let media = mediaByFolder.get(folder.path ?? '')?.length ?? 0;
+  for (const child of folder.children ?? []) {
+    const inner = folderContentCount(child, mediaByFolder);
+    folders += 1 + inner.folders;
+    media += inner.media;
+  }
+  return { folders, media };
+}
+
 export function findFolderByPath(nodes: FolderView[], path: string): FolderView | null {
   for (const node of nodes) {
     if (node.path === path) {

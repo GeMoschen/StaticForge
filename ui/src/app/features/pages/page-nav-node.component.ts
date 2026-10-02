@@ -2,7 +2,12 @@ import { ChangeDetectionStrategy, Component, effect, inject, input, output, sign
 import { Router } from '@angular/router';
 import { ApiClient } from '../../core/api/api.client';
 import { ProjectContextStore } from '../../core/project/project-context.store';
+import { tap } from 'rxjs';
 import { ToastService } from '../../core/ui/toast.service';
+import { UndoService } from '../../core/ui/undo.service';
+import { ConfirmService } from '../../shared/components/dialog/confirm.service';
+import { restoreSection } from './section-undo.util';
+import { PagesTreeRefresh } from './pages-tree-refresh.service';
 import { ContextMenuItem, ContextMenuService } from '../../shared/services/context-menu.service';
 import { TreeClipboardService } from '../../shared/services/tree-clipboard.service';
 import type { components } from '../../core/api/generated/schema.d.ts';
@@ -39,6 +44,9 @@ export class PageNavNodeComponent {
   private readonly store = inject(ProjectContextStore);
   private readonly router = inject(Router);
   private readonly toast = inject(ToastService);
+  private readonly undo = inject(UndoService);
+  private readonly confirms = inject(ConfirmService);
+  private readonly treeRefresh = inject(PagesTreeRefresh);
   private readonly menu = inject(ContextMenuService);
   private readonly clipboard = inject(TreeClipboardService);
 
@@ -257,20 +265,32 @@ export class PageNavNodeComponent {
       });
   }
 
-  private deleteSection(bodyName: string, section: SectionInstance): void {
+  private async deleteSection(bodyName: string, section: SectionInstance): Promise<void> {
     const uuid = this.summary().uuid;
     if (!uuid || this.readOnly()) {
       return;
     }
     const label = this.sectionTitle(section.templateRef);
-    if (!window.confirm(`Delete "${label}"? This cannot be undone.`)) {
+    const confirmed = await this.confirms.confirm({
+      title: `Delete the section “${label}”?`,
+      confirmLabel: 'Delete section',
+      tone: 'danger',
+    });
+    if (!confirmed) {
       return;
     }
+    const key = this.projectKey();
+    const position = this.sectionsFor(bodyName).findIndex((s) => s.instanceId === section.instanceId);
     this.api
-      .deleteSection(this.projectKey(), uuid, bodyName, section.instanceId, this.page()?.revision ?? undefined)
+      .deleteSection(key, uuid, bodyName, section.instanceId, this.page()?.revision ?? undefined)
       .subscribe({
         next: () => {
-          this.toast.show('Section deleted', 'success');
+          // Undo puts the section back identically (same instance id and content) at its index.
+          this.undo.offer(`Deleted the section “${label}”.`, () =>
+            restoreSection(this.api, key, uuid, bodyName, section, Math.max(position, 0)).pipe(
+              tap(() => this.store.notifyPageChanged(uuid)),
+            ),
+          );
           this.load();
           this.store.notifyPageChanged(uuid);
         },
@@ -326,13 +346,20 @@ export class PageNavNodeComponent {
       return;
     }
     this.renamingName.set(true);
+    const key = this.projectKey();
+    const oldName = this.summary().displayName ?? this.summary().uid ?? '';
     this.api
-      .renameAsset(this.projectKey(), uuid, { displayName }, this.page()?.revision ?? undefined)
+      .renameAsset(key, uuid, { displayName }, this.page()?.revision ?? undefined)
       .subscribe({
-        next: () => {
+        next: (renamed) => {
           this.renamingName.set(false);
           this.renameOpen.set(false);
-          this.toast.show('Page renamed', 'success');
+          // Undo renames back; the etag is the revision the rename produced.
+          this.undo.offer(`Renamed “${oldName}” to “${displayName}”.`, () =>
+            this.api
+              .renameAsset(key, uuid, { displayName: oldName }, renamed.revision)
+              .pipe(tap(() => this.treeRefresh.notify())),
+          );
           this.changed.emit();
         },
         error: () => {

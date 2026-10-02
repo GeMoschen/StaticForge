@@ -20,6 +20,7 @@ import { SampleCatalogFieldComponent } from './sample-catalog-field.component';
 import { SampleDataset, SampleDatasetField, SampleRecord, SampleValue, datasetById } from './sample-content-data';
 import { SAMPLE_LANGS } from './sample-data';
 import { STATUS_ICONS, STATUS_TONES, SampleState } from './sample-state';
+import { SfSaveStatusComponent } from '../../../shared/components/layout/sf-save-status.component';
 
 const SAVE_DELAY_MS = 700;
 
@@ -40,6 +41,7 @@ interface RecordField {
   selector: 'sf-sample-record-editor',
   standalone: true,
   imports: [
+    SfSaveStatusComponent,
     SampleBreadcrumbComponent,
     SampleCatalogFieldComponent,
     SfButtonComponent,

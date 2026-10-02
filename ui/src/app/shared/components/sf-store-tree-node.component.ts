@@ -1,8 +1,9 @@
 import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
-import { ChangeDetectionStrategy, Component, computed, inject, input, output, signal } from '@angular/core';
-import { Observable } from 'rxjs';
+import { ChangeDetectionStrategy, Component, DestroyRef, computed, inject, input, output, signal } from '@angular/core';
+import { Observable, tap } from 'rxjs';
 import { ApiClient } from '../../core/api/api.client';
 import { ToastService } from '../../core/ui/toast.service';
+import { UndoService } from '../../core/ui/undo.service';
 import { ContextMenuItem, ContextMenuService } from '../services/context-menu.service';
 import { SfIconComponent } from './sf-icon.component';
 import { SfRenameAssetDialogComponent } from './sf-rename-asset-dialog.component';
@@ -90,6 +91,12 @@ export class SfStoreTreeNodeComponent {
   private readonly toast = inject(ToastService);
   private readonly menu = inject(ContextMenuService);
   private readonly transloco = inject(TranslocoService);
+  private readonly undo = inject(UndoService);
+  private destroyed = false;
+
+  constructor() {
+    inject(DestroyRef).onDestroy(() => (this.destroyed = true));
+  }
 
   /** Time travel or an archived project (M26). */
   protected readonly readOnly = inject(ProjectAccessStore).readOnly;
@@ -105,6 +112,11 @@ export class SfStoreTreeNodeComponent {
    * whose folders have no endpoint of their own.
    */
   readonly renameFolder = input<FolderRenameFn | null>(null);
+  /**
+   * Offers Undo after a rename or a UID change instead of the plain toast (M35.13). Off by default, so a store that
+   * has not adopted it behaves as before.
+   */
+  readonly undoable = input(false);
   /** Store-specific context-menu entries, appended to "Rename" on every node of the tree. */
   readonly menuItems = input<StoreTreeMenuFn | null>(null);
 
@@ -226,14 +238,26 @@ export class SfStoreTreeNodeComponent {
     const request$ = rename
       ? rename(key, uuid, displayName, revision)
       : this.api.renameAsset(key, uuid, { displayName }, revision);
+    const oldName = this.node().displayName ?? this.node().uid ?? '';
     request$.subscribe({
-      next: () => {
+      next: (renamed) => {
         this.renamingName.set(false);
         this.renameOpen.set(false);
-        const noun = this.isFolder()
-          ? this.transloco.translate('shared.storeTree.folder')
-          : (this.leafNoun() ?? this.transloco.translate('shared.storeTree.item'));
-        this.toast.show(this.transloco.translate('shared.storeTree.renamed', { noun }), 'success');
+        if (this.undoable()) {
+          // Undo renames back; the etag is the revision the rename produced.
+          const after = (renamed as { revision?: number } | null)?.revision;
+          const back$ = () =>
+            (rename ? rename(key, uuid, oldName, after) : this.api.renameAsset(key, uuid, { displayName: oldName }, after)).pipe(
+              // The node may be gone by then (the tree re-rendered): an emit on a destroyed output throws.
+              tap(() => !this.destroyed && this.changed.emit()),
+            );
+          this.undo.offer(this.transloco.translate('shared.storeTree.renamedFromTo', { old: oldName, new: displayName }), back$);
+        } else {
+          const noun = this.isFolder()
+            ? this.transloco.translate('shared.storeTree.folder')
+            : (this.leafNoun() ?? this.transloco.translate('shared.storeTree.item'));
+          this.toast.show(this.transloco.translate('shared.storeTree.renamed', { noun }), 'success');
+        }
         this.changed.emit();
       },
       error: () => {

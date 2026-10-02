@@ -27,8 +27,11 @@
       }
     </div>
     <div class="actions">
-      @if (save.dirty() && !store.readOnly()) {
-        <span class="detail__unsaved" role="status">Unsaved changes — the definition and every channel save together.</span>
+      @if (!store.readOnly()) {
+        <sf-save-status [state]="saveState()" [savedAt]="save.lastSaved()" [errorCount]="save.error()?.count ?? 0" />
+        @if (save.dirty()) {
+          <span class="detail__unsaved">The definition and every channel save together.</span>
+        }
       }
       <sf-button variant="primary" [disabled]="save.saving() || store.readOnly() || !save.dirty()" (click)="save.saveTemplate()">
         Save template
@@ -92,6 +95,7 @@
       [projectKey]="store.projectKey()"
       [uuid]="d.uuid ?? ''"
       [uid]="d.uid ?? ''"
+      [undoable]="true"
       (uidChanged)="loader.onUidChanged()"
     />
     @if (store.showPaginationPaths()) {

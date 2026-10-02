@@ -89,6 +89,13 @@ public interface AssetService {
     /** Writes the payload/display name of the version valid at {@code fromRevision} as a new (append-only) revision. */
     AssetVersionView restore(UUID uuid, long fromRevision, RevisionContext ctx);
 
+    /**
+     * Brings a soft-deleted asset back exactly as its last live version was (undo of a delete): one new revision,
+     * references re-materialized. {@code 404} when unknown, {@code 409 SF-DOM-0111} when it is not deleted and
+     * {@code 409 SF-DOM-0112} while its parent folder is deleted (restore the folder first).
+     */
+    AssetVersionView restoreDeleted(UUID uuid, RevisionContext ctx);
+
     /** The version valid at {@code revision}, or empty when the asset did not exist yet. */
     Optional<AssetVersionView> findAt(long projectId, UUID uuid, long revision);
 

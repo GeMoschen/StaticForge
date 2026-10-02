@@ -1,7 +1,10 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/angular';
-import { of } from 'rxjs';
+import { of, throwError } from 'rxjs';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { TestBed } from '@angular/core/testing';
 import { ApiClient } from '../../core/api/api.client';
+import { ToastService } from '../../core/ui/toast.service';
+import { ConfirmService } from '../../shared/components/dialog/confirm.service';
 import { NavReferenceDetailComponent } from './nav-reference-detail.component';
 import { NavigationService, type PageReferenceView } from './navigation.service';
 import { stubReleaseBar } from '../release/testing/release-bar.stub';
@@ -143,21 +146,79 @@ describe('NavReferenceDetailComponent', () => {
     expect(api.changeUid).toHaveBeenCalledWith('proj', 'ref-uuid', { uid: 'new_uid' });
   });
 
-  it('deletes the reference via NavigationService.deleteReference on confirm', async () => {
-    const nav = makeNavStub();
-    const api = makeApiStub();
-    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
-    await render(NavReferenceDetailComponent, {
-      componentInputs: { projectKey: 'proj', reference },
-      providers: [
-        { provide: NavigationService, useValue: nav },
-        { provide: ApiClient, useValue: api },
-      ],
+  describe('undo', () => {
+    const lastToast = () => TestBed.inject(ToastService).toasts().at(-1)!;
+
+    async function setup(options: { confirmed?: boolean; api?: Partial<Record<keyof ApiClient, unknown>> } = {}) {
+      const nav = makeNavStub();
+      const api = makeApiStub({ restoreAsset: vi.fn().mockReturnValue(of({})), ...options.api });
+      const confirms = { confirm: vi.fn().mockResolvedValue(options.confirmed ?? true) };
+      const view = await render(NavReferenceDetailComponent, {
+        componentInputs: { projectKey: 'proj', reference },
+        providers: [
+          { provide: NavigationService, useValue: nav },
+          { provide: ApiClient, useValue: api },
+          { provide: ConfirmService, useValue: confirms },
+        ],
+      });
+      return { nav, api, confirms, view };
+    }
+
+    it('asks with a danger confirmation, deletes, and offers Undo that restores the last live revision', async () => {
+      const { nav, api, confirms } = await setup();
+
+      screen.getByText('Delete reference').click();
+
+      await waitFor(() => expect(nav.deleteReference).toHaveBeenCalledWith('proj', 'ref-uuid'));
+      const options = confirms.confirm.mock.calls[0][0];
+      expect(options.tone).toBe('danger');
+      expect(options.irreversible).toBeUndefined();
+      expect(options.typeToConfirm).toBeUndefined();
+      expect(lastToast().message).toBe('Deleted “Products Home”.');
+      expect(lastToast().action).toBeDefined();
+      expect(api['restoreAsset']).not.toHaveBeenCalled();
+
+      lastToast().action!.run();
+      await waitFor(() => expect(api['restoreAsset']).toHaveBeenCalledWith('proj', 'ref-uuid', { fromRevision: 5 }));
     });
 
-    screen.getByText('Delete reference').click();
+    it('does not delete when the confirmation is declined', async () => {
+      const { nav } = await setup({ confirmed: false });
 
-    expect(nav.deleteReference).toHaveBeenCalledWith('proj', 'ref-uuid');
-    confirmSpy.mockRestore();
+      screen.getByText('Delete reference').click();
+
+      await waitFor(() => expect(TestBed.inject(ConfirmService).confirm).toHaveBeenCalled());
+      expect(nav.deleteReference).not.toHaveBeenCalled();
+    });
+
+    it('shows the error toast when the restore fails', async () => {
+      await setup({ api: { restoreAsset: vi.fn().mockReturnValue(throwError(() => new Error('409'))) } });
+
+      screen.getByText('Delete reference').click();
+      await waitFor(() => expect(lastToast().action).toBeDefined());
+      lastToast().action!.run();
+
+      await waitFor(() => expect(lastToast().kind).toBe('error'));
+      expect(lastToast().message).toMatch(/Could not undo/);
+    });
+
+    it('offers Undo for a rename that renames back with the revision the rename produced', async () => {
+      const renameAsset = vi.fn().mockReturnValue(of({ revision: 6 }));
+      const { api, view } = await setup({ api: { renameAsset } });
+      const component = view.fixture.componentInstance as unknown as {
+        nameDraft: { set: (v: string) => void };
+        saveName: () => void;
+      };
+
+      component.nameDraft.set('Shop');
+      component.saveName();
+
+      expect(renameAsset).toHaveBeenCalledWith('proj', 'ref-uuid', { displayName: 'Shop' }, 5);
+      expect(lastToast().message).toBe('Renamed “Products Home” to “Shop”.');
+      lastToast().action!.run();
+      await waitFor(() =>
+        expect(api['renameAsset']).toHaveBeenLastCalledWith('proj', 'ref-uuid', { displayName: 'Products Home' }, 6),
+      );
+    });
   });
 });

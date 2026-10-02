@@ -217,6 +217,25 @@ export class SampleState {
   readonly historyRev = signal<number | null>(null);
   readonly shortcutsOpen = signal(false);
 
+  // ── Unsaved changes (M35.13) ───────────────────────────────────────────────
+  private readonly guards = new Set<() => Promise<boolean>>();
+
+  /** An editor with unsaved changes registers what asks the person before the screen changes; returns its removal. */
+  registerGuard(guard: () => Promise<boolean>): () => void {
+    this.guards.add(guard);
+    return () => this.guards.delete(guard);
+  }
+
+  /** Whether the screen may change: every registered guard agrees (each asks only when its editor has unsaved changes). */
+  async canLeave(): Promise<boolean> {
+    for (const guard of [...this.guards]) {
+      if (!(await guard())) {
+        return false;
+      }
+    }
+    return true;
+  }
+
   readonly folder = computed<SampleEntry | null>(() => entryById(this.folderId()));
   readonly page = computed<SampleEntry>(() => entryById(this.pageId())!);
   readonly contentFolder = computed<SampleContentEntry | null>(() => contentEntry(this.contentFolderId()));

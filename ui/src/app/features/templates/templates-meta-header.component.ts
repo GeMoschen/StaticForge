@@ -1,4 +1,6 @@
-import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
+import { saveStateOf } from '../../core/editor/editor-state';
+import { SfSaveStatusComponent } from '../../shared/components/layout/sf-save-status.component';
 import { RouterLink } from '@angular/router';
 import { SfButtonComponent } from '../../shared/components/sf-button.component';
 import { SfFieldComponent } from '../../shared/components/sf-field.component';
@@ -16,7 +18,7 @@ import { TemplatesStore } from './templates.store';
   selector: 'sf-template-meta-header',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [SfButtonComponent, SfFieldComponent, SfUidRenameComponent, RouterLink],
+  imports: [SfButtonComponent, SfFieldComponent, SfSaveStatusComponent, SfUidRenameComponent, RouterLink],
   templateUrl: './templates-meta-header.component.html',
   styleUrls: [
     './templates-panel.scss',
@@ -31,6 +33,9 @@ export class TemplateMetaHeaderComponent {
   protected readonly loader = inject(TemplatesLoader);
 
   protected readonly defaultPaginationPath = DEFAULT_PAGINATION_PATH;
+
+  /** The save status (M35.13): the same words and look in every editor. */
+  protected readonly saveState = computed(() => saveStateOf({ dirty: this.save.dirty, saving: this.save.saving, error: this.save.error }));
 
   protected onDisplayNameInput(event: Event): void {
     this.store.displayName.set((event.target as HTMLInputElement).value);

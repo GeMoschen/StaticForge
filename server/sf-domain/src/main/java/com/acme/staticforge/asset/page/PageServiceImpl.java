@@ -129,18 +129,45 @@ public class PageServiceImpl implements PageService {
     @Override
     @Transactional
     public AssetVersionView addSection(
-            UUID uuid, String bodyName, String templateUuid, Integer position, long expectedRevision, RevisionContext ctx) {
+            UUID uuid, String bodyName, String templateUuid, Integer position, String explicitInstanceId, JsonNode content,
+            long expectedRevision, RevisionContext ctx) {
         requireSectionTemplate(templateUuid, ctx.projectId());
         Asset page = requirePage(uuid, ctx.projectId());
         AssetVersion current = requireOpen(page.getId());
 
-        String instanceId = UUID.randomUUID().toString();
-        ObjectNode newPayload = bodyService.addSection(current.getPayload(), bodyName, templateUuid, position, instanceId);
+        if (content != null && !content.isObject()) {
+            throw new SfException(ProblemFactory.unprocessableEntity("Section content must be a JSON object."));
+        }
+        String instanceId = explicitInstanceId == null || explicitInstanceId.isBlank()
+                ? UUID.randomUUID().toString()
+                : explicitInstanceId;
+        if (instanceIdInUse(current.getPayload(), instanceId)) {
+            throw new SfException(ProblemFactory.unprocessableEntity(
+                    "A section with instanceId " + instanceId + " exists on this page already."));
+        }
+        ObjectNode newPayload =
+                bodyService.addSection(current.getPayload(), bodyName, templateUuid, position, instanceId, content);
         validatePagePayload(newPayload, ctx.projectId());
         contentValidation.requireValidSection(ctx.projectId(), newPayload, bodyName, instanceId);
         ObjectNode gated = contentRules.savePage(ctx.projectId(), uuid, current.getPayload(), newPayload);
 
         return assetService.update(uuid, new UpdateAssetCommand(current.getDisplayName(), gated), expectedRevision, ctx);
+    }
+
+    /** Whether any body of {@code payload} holds a section with {@code instanceId}. */
+    private static boolean instanceIdInUse(JsonNode payload, String instanceId) {
+        JsonNode bodies = payload == null ? null : payload.get("bodies");
+        if (bodies == null || !bodies.isObject()) {
+            return false;
+        }
+        for (JsonNode body : bodies) {
+            for (JsonNode section : body) {
+                if (instanceId.equals(section.path("instanceId").asText())) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     @Override

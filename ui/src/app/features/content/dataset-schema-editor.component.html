@@ -33,7 +33,7 @@
       <sf-field label="Description" hint="Shown to editors in the Content store.">
         <textarea class="dataset-editor__description" [value]="description()" [disabled]="!canEdit()" (input)="onDescriptionInput($event)"></textarea>
       </sf-field>
-      <sf-uid-rename [projectKey]="projectKey()" [uuid]="d.uuid ?? ''" [uid]="d.uid ?? ''" (uidChanged)="onUidChanged()" />
+      <sf-uid-rename [projectKey]="projectKey()" [uuid]="d.uuid ?? ''" [uid]="d.uid ?? ''" [undoable]="true" (uidChanged)="onUidChanged()" />
       <sf-field label="Title field" hint="A text field whose value becomes each record's display name. Takes effect after saving the schema.">
         <select [value]="titleEditor()" [disabled]="!canEdit()" (change)="onTitleEditorChange($event)">
           <option value="">None — editors name records themselves</option>

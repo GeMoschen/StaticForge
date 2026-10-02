@@ -47,6 +47,8 @@ export class SfRenameAssetDialogComponent {
   readonly uid = input.required<string>();
   readonly displayName = input.required<string>();
   readonly submittingName = input(false);
+  /** Offers Undo after a UID change (see `sf-uid-rename`). */
+  readonly undoableUid = input(false);
 
   readonly renameDisplayName = output<string>();
   readonly uidChanged = output<string>();

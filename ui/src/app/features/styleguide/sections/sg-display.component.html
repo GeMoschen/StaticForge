@@ -211,4 +211,16 @@
       </div>
     </div>
   </div>
+  <div class="sg-sub">
+    <h3 class="sg-sub__title">{{ 'styleguide.page.display.saveStatus' | transloco }}</h3>
+    <p class="sg-note">{{ 'styleguide.page.display.saveStatusNote' | transloco }}</p>
+    <div class="sg-row">
+      <sf-save-status state="saved" savedAt="12:04" />
+      <sf-save-status state="saved" />
+      <sf-save-status state="saving" />
+      <sf-save-status state="dirty" />
+      <sf-save-status state="error" />
+      <sf-save-status state="error" [errorCount]="2" />
+    </div>
+  </div>
 </section>

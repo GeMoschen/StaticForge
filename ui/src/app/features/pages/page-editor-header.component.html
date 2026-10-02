@@ -41,6 +41,7 @@
               [projectKey]="editor.projectKey()"
               [uuid]="editor.uuid()"
               [uid]="p.uid ?? ''"
+              [undoable]="true"
               (uidChanged)="onUidChanged($event)"
             />
           </section>
@@ -58,5 +59,9 @@
   @if (editor.fields.translationSummary(); as summary) {
     <span class="page-editor__translation" aria-live="polite">{{ summary }}</span>
   }
-  <span class="page-editor__status" aria-live="polite">{{ statusLabel() }}</span>
+  @if (readOnlyLabel()) {
+    <span class="page-editor__status" aria-live="polite">{{ readOnlyLabel() }}</span>
+  } @else {
+    <sf-save-status class="page-editor__status" [state]="status().state" [savedAt]="savedAt()" [errorCount]="status().errorCount" />
+  }
 </header>

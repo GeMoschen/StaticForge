@@ -2,7 +2,10 @@ import { Injectable, inject, signal } from '@angular/core';
 import { ApiClient } from '../../core/api/api.client';
 import type { components } from '../../core/api/generated/schema.d.ts';
 import { ProjectContextStore } from '../../core/project/project-context.store';
+import { switchMap, tap, from } from 'rxjs';
 import { ToastService } from '../../core/ui/toast.service';
+import { UndoService } from '../../core/ui/undo.service';
+import { restoreSection } from './section-undo.util';
 import type { BodyDefinition, ContentDefinition } from '../forms';
 import { EMPTY_DEF } from './page-editor.mapping';
 import { PageEditorStore } from './page-editor.store';
@@ -23,6 +26,7 @@ export class PageEditorSectionsService {
   private readonly api = inject(ApiClient);
   private readonly project = inject(ProjectContextStore);
   private readonly toast = inject(ToastService);
+  private readonly undo = inject(UndoService);
   private readonly editor = inject(PageEditorStore);
   private readonly palette = inject(SectionPaletteService);
 
@@ -52,18 +56,33 @@ export class PageEditorSectionsService {
     if (this.editor.readOnly()) {
       return;
     }
+    const key = this.editor.projectKey();
+    const uuid = this.editor.uuid();
+    const position = this.editor.sectionsFor(bodyName).findIndex((s) => s.instanceId === instanceId);
+    const section = this.editor.sectionsFor(bodyName)[position];
     this.api
-      .deleteSection(
-        this.editor.projectKey(),
-        this.editor.uuid(),
-        bodyName,
-        instanceId,
-        this.editor.autosave.revision() ?? undefined,
-      )
+      .deleteSection(key, uuid, bodyName, instanceId, this.editor.autosave.revision() ?? undefined)
       .subscribe({
         next: (page) => {
           this.editor.applyServerPage(page);
-          this.toast.show('Section removed', 'success');
+          if (!section) {
+            this.toast.show('Section removed', 'success');
+            return;
+          }
+          // Undo puts the section back identically (same instance id and content) at its index, on top of whatever
+          // was saved since: pending edits are written first so the page it re-reads is current.
+          this.undo.offer(`Removed the section “${this.title(section.templateRef)}”.`, () =>
+            from(this.editor.autosave.flush()).pipe(
+              switchMap(() => restoreSection(this.api, key, uuid, bodyName, section, position)),
+              tap((restored) => {
+                if (this.editor.uuid() === uuid) {
+                  this.editor.applyServerPage(restored);
+                } else {
+                  this.project.notifyPageChanged(uuid);
+                }
+              }),
+            ),
+          );
         },
         error: () => this.toast.show('Could not remove section — someone may have edited this page, try reloading it.', 'error'),
       });

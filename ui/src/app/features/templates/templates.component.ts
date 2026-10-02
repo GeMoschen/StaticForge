@@ -1,7 +1,9 @@
-import { ChangeDetectionStrategy, Component, computed, effect, inject, input, signal, untracked } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, computed, effect, inject, input, signal, untracked } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { ProjectContextStore } from '../../core/project/project-context.store';
+import { tap } from 'rxjs';
 import { ToastService } from '../../core/ui/toast.service';
+import { UndoService } from '../../core/ui/undo.service';
 import { templateKindOfFolderPath } from '../../shared/asset-route.util';
 import { EMPTY_SECTIONS, cdlFields } from '../../shared/code-editor/cdl-sections';
 import { SfButtonComponent } from '../../shared/components/sf-button.component';
@@ -10,7 +12,7 @@ import { SfEmptyStateComponent } from '../../shared/components/sf-empty-state.co
 import { consumeQueryParam } from '../../shared/deep-link';
 import { SfAssetImpactComponent } from '../generation/insight/sf-asset-impact.component';
 import { ContentService } from '../content/content.service';
-import { DatasetSchemaEditorComponent } from '../content/dataset-schema-editor.component';
+import { DatasetSchemaEditorComponent, type DeletedDataset } from '../content/dataset-schema-editor.component';
 import { TemplateCdlPanelComponent } from './templates-cdl-panel.component';
 import { TemplateChannelPanelComponent } from './templates-channel-panel.component';
 import { TemplatesEditing } from './templates-editing';
@@ -30,6 +32,7 @@ import {
   type TemplateAssetKind,
 } from './types';
 import { useFrameItem } from '../../core/frame/use-frame-item';
+import { ActiveEditorService } from '../../core/editor/active-editor.service';
 
 /** What a new dataset starts with: one field, so its first record already has something to fill in. */
 const NEW_DATASET_CONTENT = `editor text name { label "Name" required }
@@ -73,6 +76,7 @@ export class TemplatesComponent {
   private readonly service = inject(TemplatesService);
   private readonly contentService = inject(ContentService);
   private readonly toast = inject(ToastService);
+  private readonly undo = inject(UndoService);
   private readonly projectContext = inject(ProjectContextStore);
   protected readonly store = inject(TemplatesStore);
   protected readonly save = inject(TemplatesSaveCoordinator);
@@ -84,6 +88,9 @@ export class TemplatesComponent {
 
   constructor() {
     this.store.bind(this.projectKey);
+    // The open template is an editor for the frame (M35.13): Ctrl+S, the leave guard and the tab-close prompt.
+    const unregister = inject(ActiveEditorService).register(this.save.asEditorState());
+    inject(DestroyRef).onDestroy(unregister);
     // The open template or dataset: the breadcrumb ends with it, and the History drawer shows its versions (M35.12).
     useFrameItem(() => {
       const uuid = this.store.selectedUuid();
@@ -274,7 +281,12 @@ export class TemplatesComponent {
     this.loader.onDatasetChanged();
   }
 
-  protected onDatasetDeleted(): void {
+  protected onDatasetDeleted(deleted: DeletedDataset): void {
+    const key = this.projectKey();
     this.loader.onDatasetDeleted();
+    // Undo brings the dataset back as its last live version was.
+    this.undo.offer(`Deleted “${deleted.name}”.`, () =>
+      this.contentService.restoreDataset(key, deleted.uuid).pipe(tap(() => this.loader.onTreeChanged())),
+    );
   }
 }

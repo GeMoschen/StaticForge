@@ -1,7 +1,9 @@
 import { ChangeDetectionStrategy, Component, computed, effect, inject, input, signal, untracked } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
+import { tap } from 'rxjs';
 import { ApiClient } from '../../core/api/api.client';
 import { ToastService } from '../../core/ui/toast.service';
+import { UndoService } from '../../core/ui/undo.service';
 import { ContextMenuItem, ContextMenuService } from '../../shared/services/context-menu.service';
 import { SfButtonComponent } from '../../shared/components/sf-button.component';
 import { SfEmptyStateComponent } from '../../shared/components/sf-empty-state.component';
@@ -74,6 +76,7 @@ export class NavigationComponent {
   private readonly releaseEvents = inject(ReleaseEventsStore);
   private readonly api = inject(ApiClient);
   private readonly toasts = inject(ToastService);
+  private readonly undo = inject(UndoService);
   private readonly menu = inject(ContextMenuService);
 
   /** Time travel or an archived project (M26). */
@@ -261,18 +264,34 @@ export class NavigationComponent {
     if (!source) {
       return;
     }
+    this.move(source, event.target, 'Could not move — that may create a cycle.');
+  }
+
+  /**
+   * Moves a folder or reference (`target` undefined: to the root) and offers Undo, which moves it back into the folder
+   * it was in — read before the move.
+   */
+  private move(source: NavTreeView, target: string | undefined, failure: string): void {
     const key = this.projectKey();
-    const request$ =
-      source.type === 'FOLDER'
-        ? this.nav.moveFolder(key, event.source, event.target)
-        : this.nav.moveReference(key, event.source, event.target);
-    request$.subscribe({
+    const uuid = source.uuid ?? '';
+    const from = this.parentUuidOf(uuid);
+    const label = source.displayName ?? source.uid ?? 'item';
+    const to = target ? (findNode(this.forest(), target)?.displayName ?? 'the folder') : 'All navigation';
+    const moveTo = (folderUuid: string | undefined) =>
+      source.type === 'FOLDER' ? this.nav.moveFolder(key, uuid, folderUuid) : this.nav.moveReference(key, uuid, folderUuid);
+    moveTo(target).subscribe({
       next: () => {
-        this.toasts.show('Moved', 'success');
+        this.undo.offer(`Moved “${label}” to ${to}.`, () => moveTo(from).pipe(tap(() => this.reload(key))));
         this.reload(key);
       },
-      error: () => this.toasts.show('Could not move — that may create a cycle.', 'error'),
+      error: () => this.toasts.show(failure, 'error'),
     });
+  }
+
+  /** The folder an entry sits in; `undefined` when it sits in the root ("All navigation"). */
+  private parentUuidOf(uuid: string): string | undefined {
+    const parent = findParent(this.forest(), uuid);
+    return parent && parent.uuid !== this.navigationRoot()?.uuid ? parent.uuid : undefined;
   }
 
   protected onFolderChanged(): void {
@@ -327,17 +346,7 @@ export class NavigationComponent {
     if (!node) {
       return;
     }
-    const key = this.projectKey();
-    const request$ = node.type === 'FOLDER'
-      ? this.nav.moveFolder(key, source, undefined)
-      : this.nav.moveReference(key, source, undefined);
-    request$.subscribe({
-      next: () => {
-        this.toasts.show('Moved to root', 'success');
-        this.reload(key);
-      },
-      error: () => this.toasts.show('Could not move — try again in a moment.', 'error'),
-    });
+    this.move(node, undefined, 'Could not move — try again in a moment.');
   }
 
   /** "All navigation" is the store's root — it can't be renamed, moved, or deleted, but you can
@@ -452,6 +461,19 @@ function toStoreNode(node: NavTreeView): StoreTreeNode {
         : { text: 'unresolved', broken: true },
     children: (node.children ?? []).map(toStoreNode),
   };
+}
+
+function findParent(nodes: NavTreeView[], uuid: string, parent: NavTreeView | null = null): NavTreeView | null {
+  for (const node of nodes) {
+    if (node.uuid === uuid) {
+      return parent;
+    }
+    const found = findParent(node.children ?? [], uuid, node);
+    if (found) {
+      return found;
+    }
+  }
+  return null;
 }
 
 function findNode(nodes: NavTreeView[], uuid: string): NavTreeView | null {

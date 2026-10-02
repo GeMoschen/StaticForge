@@ -25,7 +25,11 @@
             <span class="record-editor__badge" title="Dataset">{{ dataset()?.displayName ?? rec.datasetUid }}</span>
           }
         </div>
-        <span class="record-editor__status" role="status" aria-live="polite">{{ statusLabel() }}</span>
+        @if (readOnlyLabel()) {
+          <span class="record-editor__status" role="status" aria-live="polite">{{ readOnlyLabel() }}</span>
+        } @else {
+          <sf-save-status class="record-editor__status" [state]="status().state" [savedAt]="autosave.lastSavedAt()" [errorCount]="status().errorCount" />
+        }
         @if (!readOnly() && !rec.deleted) {
           <sf-button variant="secondary" [disabled]="autosave.saveState() === 'saving'" (click)="saveNow()">Save now</sf-button>
           <sf-button variant="secondary" (click)="actions.openMove()">Move…</sf-button>

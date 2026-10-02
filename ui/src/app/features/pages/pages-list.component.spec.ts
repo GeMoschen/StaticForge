@@ -1,11 +1,12 @@
 import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { fireEvent, render, screen, waitFor } from '@testing-library/angular';
-import { Subject, of } from 'rxjs';
+import { Subject, of, throwError } from 'rxjs';
 import { describe, expect, it, vi } from 'vitest';
 import { ApiClient } from '../../core/api/api.client';
 import { ProjectAccessStore } from '../../core/project/project-access.store';
 import { ProjectContextStore } from '../../core/project/project-context.store';
+import { ToastService } from '../../core/ui/toast.service';
 import { TimeTravelStore } from '../revisions/time-travel.store';
 import { PagesListComponent } from './pages-list.component';
 
@@ -175,6 +176,83 @@ describe('PagesListComponent', () => {
       TestBed.inject(TimeTravelStore).enter(3);
 
       await waitFor(() => expect(screen.queryByText('new folder')).toBeNull());
+    });
+  });
+  describe('undo (M35.13)', () => {
+    const tree = [
+      {
+        uuid: 'root',
+        path: '/',
+        displayName: 'All Pages',
+        protectedFolder: true,
+        children: [
+          { uuid: 'folder-a', path: '/a/', displayName: 'Alpha', children: [{ uuid: 'folder-sub', path: '/a/sub/', displayName: 'Sub', children: [] }] },
+          { uuid: 'folder-b', path: '/b/', displayName: 'Beta', children: [] },
+        ],
+      },
+    ];
+    const inA = { uuid: 'page-x', uid: 'x', type: 'PAGE', displayName: 'Xylophone', folderPath: '/a/' };
+    const inRoot = { uuid: 'page-r', uid: 'r', type: 'PAGE', displayName: 'Rootpage', folderPath: '/' };
+
+    async function open(api: ReturnType<typeof apiStub>) {
+      const store = projectStoreStub();
+      Object.assign(store, { pageFolderTree: signal(tree as never), activePageUuid: signal(null), pageMutated: signal(null), sectionTemplates: signal([]) });
+      const view = await render(PagesListComponent, {
+        componentInputs: { projectKey: 'proj' },
+        providers: [
+          { provide: ApiClient, useValue: api },
+          { provide: ProjectContextStore, useValue: store },
+        ],
+      });
+      const move = (event: { source: string; target: string }) =>
+        (view.fixture.componentInstance as unknown as { moveItemTo(e: typeof event): void }).moveItemTo(event);
+      const toasts = view.fixture.debugElement.injector.get(ToastService);
+      return { move, toasts, view };
+    }
+
+    it('a page move offers Undo, which moves the page back into its old folder', async () => {
+      const api = apiStub({ listPages: vi.fn().mockReturnValue(of([inA, inRoot])) });
+      const { move, toasts } = await open(api);
+
+      move({ source: 'page-x', target: 'folder-b' });
+      expect(api.moveAsset).toHaveBeenLastCalledWith('proj', 'page-x', { folderUuid: 'folder-b' });
+      expect(toasts.toasts().at(-1)?.message).toBe('Moved “Xylophone” to Beta.');
+
+      toasts.toasts().at(-1)!.action!.run();
+      await waitFor(() => expect(api.moveAsset).toHaveBeenLastCalledWith('proj', 'page-x', { folderUuid: 'folder-a' }));
+    });
+
+    it('moves a page that lived in the root back to the root (an empty body)', async () => {
+      const api = apiStub({ listPages: vi.fn().mockReturnValue(of([inA, inRoot])) });
+      const { move, toasts } = await open(api);
+
+      move({ source: 'page-r', target: 'folder-b' });
+      toasts.toasts().at(-1)!.action!.run();
+
+      await waitFor(() => expect(api.moveAsset).toHaveBeenLastCalledWith('proj', 'page-r', {}));
+    });
+
+    it('a folder move is undone into the folder that contained it', async () => {
+      const api = apiStub({ listPages: vi.fn().mockReturnValue(of([])) });
+      const { move, toasts } = await open(api);
+
+      move({ source: 'folder-sub', target: 'folder-b' });
+      expect(toasts.toasts().at(-1)?.message).toBe('Moved “Sub” to Beta.');
+      toasts.toasts().at(-1)!.action!.run();
+
+      await waitFor(() => expect(api.moveAsset).toHaveBeenLastCalledWith('proj', 'folder-sub', { folderUuid: 'folder-a' }));
+    });
+
+    it('shows the error toast when the move back fails', async () => {
+      const api = apiStub({ listPages: vi.fn().mockReturnValue(of([inA])) });
+      const { move, toasts } = await open(api);
+      move({ source: 'page-x', target: 'folder-b' });
+      api.moveAsset.mockReturnValue(throwError(() => new Error('422')));
+
+      toasts.toasts().at(-1)!.action!.run();
+
+      await waitFor(() => expect(toasts.toasts().at(-1)?.kind).toBe('error'));
+      expect(toasts.toasts().at(-1)?.message).toMatch(/Could not undo/);
     });
   });
 });

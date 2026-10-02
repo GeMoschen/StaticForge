@@ -84,10 +84,12 @@ export class SampleRailComponent {
     return AREA_OF_ITEM[id] === this.state.area();
   }
 
-  protected select(id: string): void {
+  protected async select(id: string): Promise<void> {
     const area = AREA_OF_ITEM[id];
     if (area && SAMPLE_AREAS.includes(area)) {
-      this.state.openArea(area);
+      if (await this.state.canLeave()) {
+        this.state.openArea(area);
+      }
     } else {
       this.state.notice('rail.notInSample', { name: this.label(id) });
     }

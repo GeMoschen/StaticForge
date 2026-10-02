@@ -6,7 +6,7 @@ import { ApiClient } from '../../../core/api/api.client';
 import { ProjectAccessStore } from '../../../core/project/project-access.store';
 import { ProjectContextStore } from '../../../core/project/project-context.store';
 import { sortByDisplayName } from '../../../shared/tree-sort.util';
-import { PAGE_SIZE, findFolder, findFolderByPath } from './media-library.util';
+import { PAGE_SIZE, findFolder, findFolderByPath, findParentFolder } from './media-library.util';
 
 export type MediaView = components['schemas']['MediaView'];
 export type MediaSummaryView = components['schemas']['MediaSummaryView'];
@@ -98,6 +98,27 @@ export class MediaLibraryStore {
     }
     return findFolder(this.tree(), uuid)?.children ?? [];
   });
+
+  /**
+   * The folder a folder or media item sits in right now — what its move is undone back to. `undefined` is the root
+   * ("All media"), which a move addresses with no folder; also the answer for an unknown uuid.
+   */
+  parentFolderUuidOf(uuid: string): string | undefined {
+    const rootUuid = this.mediaRoot()?.uuid;
+    const itemPath = this.allMedia().find((m) => m.uuid === uuid)?.folderPath;
+    const parent = itemPath != null ? findFolderByPath(this.tree(), itemPath) : findParentFolder(this.tree(), uuid);
+    return parent?.uuid && parent.uuid !== rootUuid ? parent.uuid : undefined;
+  }
+
+  /** What a folder or media item is called, for messages; `undefined` for an unknown uuid. */
+  labelOf(uuid: string): string | undefined {
+    const folder = findFolder(this.tree(), uuid);
+    if (folder) {
+      return folder.displayName ?? folder.uid;
+    }
+    const media = this.allMedia().find((m) => m.uuid === uuid) ?? this.items().find((m) => m.uuid === uuid);
+    return media?.displayName ?? media?.uid;
+  }
 
   /** The uuid of whichever media item's detail drawer is currently open, for tree-leaf
    * highlighting. */

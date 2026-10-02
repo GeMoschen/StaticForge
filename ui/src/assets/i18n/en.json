@@ -311,6 +311,7 @@
       "placeholder": "lowercase letters, numbers, underscores",
       "invalid": "Use lowercase letters, numbers, and underscores only",
       "changed": "UID changed",
+      "changedFrom": "UID changed from “{old}” to “{new}”.",
       "changeFailed": "Could not change UID — it may already be used by another asset.",
       "archived": "This project is archived and read-only.",
       "timeTravel": "Viewing a past revision — exit time travel to make changes",
@@ -324,6 +325,7 @@
       "protectedFolder": "Built-in folder — can't be renamed, moved, or deleted",
       "rename": "Rename",
       "renamed": "{noun} renamed",
+      "renamedFromTo": "Renamed “{old}” to “{new}”.",
       "renameFailed": "Could not rename — try again in a moment."
     },
     "diff": {
@@ -545,6 +547,30 @@
       "resize": "Resize panels",
       "collapse": "Collapse panel",
       "restore": "Restore panel"
+    },
+    "saveStatus": {
+      "saved": "Saved",
+      "savedAt": "Saved {time}",
+      "saving": "Saving…",
+      "dirty": "Unsaved changes",
+      "error": "Not saved",
+      "errors": "Not saved — {count, plural, one {# error} other {# errors}}",
+      "rejected": "{count, plural, one {# error} other {# errors}} to fix",
+      "conflict": "someone else changed it in the meantime",
+      "failed": "the server could not save it"
+    },
+    "unsaved": {
+      "title": "Unsaved changes",
+      "message": "“{name}” has changes that are not saved yet.",
+      "failed": "Not saved — {message}. Fix it, or discard the changes.",
+      "discard": "Discard",
+      "cancel": "Cancel",
+      "save": "Save",
+      "retry": "Try again"
+    },
+    "undo": {
+      "done": "Undone.",
+      "failed": "Could not undo — it can be restored from the history."
     }
   },
   "shell": {
@@ -905,7 +931,9 @@
         "avatars": "Avatars",
         "copyable": "Copyable value",
         "relativeTime": "Relative time",
-        "logo": "Logo"
+        "logo": "Logo",
+        "saveStatus": "Save status",
+        "saveStatusNote": "Beside the page actions: Saved (with the time), Saving…, Unsaved changes, Not saved — N errors. Polite live region."
       },
       "layout": {
         "pageHeader": "Page header",
@@ -939,7 +967,8 @@
         "confirm": {
           "default": "Confirm",
           "danger": "Confirm a delete",
-          "typed": "Confirm by typing"
+          "typed": "Confirm by typing",
+          "bulk": "Confirm a large delete (25+)"
         },
         "drawers": "Drawers",
         "drawerPlain": "Drawer",
@@ -958,8 +987,17 @@
           "success": "Success",
           "warning": "Warning",
           "error": "Error",
-          "undo": "With Undo"
-        }
+          "undo": "With Undo",
+          "undoVariant": {
+            "rename": "Undo a rename",
+            "move": "Undo a move",
+            "bulk": "Undo a bulk delete"
+          }
+        },
+        "unsaved": "Unsaved changes",
+        "unsavedNote": "Shown when leaving an editor with changes that are not saved: Discard, Cancel or Save. A refused save keeps the person here and says why.",
+        "unsavedSaves": "Leave with unsaved changes",
+        "unsavedFails": "Leave — the save fails"
       },
       "data": {
         "tree": "Tree",
@@ -1037,7 +1075,8 @@
           "archiveHint": "Hides the project from all members and stops its schedules and builds. An instance admin can restore it.",
           "archiveTitle": "Archive {name}?",
           "archiveMessage": "The project disappears for all members, and its scheduled releases and builds stop. An instance admin can restore it.",
-          "archiveConfirm": "Archive project"
+          "archiveConfirm": "Archive project",
+          "nameRequired": "the project name is required"
         },
         "languages": {
           "add": "Add language",
@@ -1188,7 +1227,8 @@
             "draftHint": "Nothing goes live until you release it."
           },
           "import": "Import"
-        }
+        },
+        "title": "Settings"
       },
       "media": {
         "downloadNotice": "{count, plural, one {Downloading “{name}”} other {Downloading # files}} (prototype — nothing is downloaded).",
@@ -2233,7 +2273,9 @@
         "releaseDone": "Released “{name}” (prototype — nothing was published).",
         "deleteTitle": "Delete “{name}”?",
         "deleteMessage": "The page can be restored from the history.",
-        "deleteConfirm": "Delete page"
+        "deleteConfirm": "Delete page",
+        "saveNow": "Save now",
+        "saveRefused": "the title is required"
       },
       "history": {
         "projectTitle": "Project history",

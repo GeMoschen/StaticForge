@@ -1,5 +1,10 @@
-import { ChangeDetectionStrategy, Component, computed, inject, input, output, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, computed, inject, input, output, signal } from '@angular/core';
+import { tap } from 'rxjs';
+import { ApiClient } from '../../core/api/api.client';
 import { ToastService } from '../../core/ui/toast.service';
+import { UndoService } from '../../core/ui/undo.service';
+import { ConfirmService } from '../../shared/components/dialog/confirm.service';
+import { typeToConfirmFor } from '../../shared/components/dialog/delete-confirm';
 import { SfButtonComponent } from '../../shared/components/sf-button.component';
 import { SfFieldComponent } from '../../shared/components/sf-field.component';
 import { SfIconComponent } from '../../shared/components/sf-icon.component';
@@ -7,8 +12,9 @@ import { SfUidRenameComponent } from '../../shared/components/sf-uid-rename.comp
 import { etagFor, NavigationService, type NavigationFolderView, type NavTreeView } from './navigation.service';
 import { ProjectAccessStore } from '../../core/project/project-access.store';
 import { ReleaseBarComponent } from '../release/release-bar.component';
+import { ReleaseEventsStore } from '../release/release-events.store';
 import type { ReleaseMode } from '../release/release-choice.util';
-import { type ReleaseBlock, deleteQuestion } from '../release/release-status.util';
+import { type ReleaseBlock, STAYS_ONLINE_NOTE, isOnline } from '../release/release-status.util';
 
 interface StartNodeOption {
   value: string;
@@ -51,6 +57,15 @@ export class NavFolderDetailComponent {
 
   private readonly nav = inject(NavigationService);
   private readonly toast = inject(ToastService);
+  private readonly api = inject(ApiClient);
+  private readonly undo = inject(UndoService);
+  private readonly confirms = inject(ConfirmService);
+  private readonly releaseEvents = inject(ReleaseEventsStore);
+  private alive = true;
+
+  constructor() {
+    inject(DestroyRef).onDestroy(() => (this.alive = false));
+  }
 
   /** Time travel or an archived project (M26). */
   protected readonly readOnly = inject(ProjectAccessStore).readOnly;
@@ -102,11 +117,27 @@ export class NavFolderDetailComponent {
       return;
     }
     this.savingName.set(true);
-    this.nav.renameFolder(this.projectKey(), uuid, name, this.etag()).subscribe({
-      next: () => {
+    const key = this.projectKey();
+    const oldName = this.folder().displayName;
+    this.nav.renameFolder(key, uuid, name, this.etag()).subscribe({
+      next: (renamed) => {
         this.savingName.set(false);
         this.editingName.set(false);
-        this.toast.show('Folder renamed', 'success');
+        if (oldName) {
+          // Rename back; the revision the rename produced guards against edits made in between.
+          this.undo.offer(`Renamed “${oldName}” to “${name}”.`, () =>
+            this.nav.renameFolder(key, uuid, oldName, renamed.revision == null ? undefined : etagFor(renamed.revision)).pipe(
+              tap(() => {
+                this.releaseEvents.changed();
+                if (this.alive) {
+                  this.changed.emit();
+                }
+              }),
+            ),
+          );
+        } else {
+          this.toast.show('Folder renamed', 'success');
+        }
         this.changed.emit();
       },
       error: () => {
@@ -144,24 +175,35 @@ export class NavFolderDetailComponent {
     }
   }
 
-  protected requestDelete(): void {
+  protected async requestDelete(): Promise<void> {
     const uuid = this.folder().uuid;
     if (!uuid || this.isProtected() || this.readOnly()) {
       return;
     }
     const name = this.folder().displayName ?? this.folder().uid ?? 'this folder';
-    const childCount = this.children().length;
-    const message = childCount > 0
-      ? `Delete "${name}" and everything inside it (${childCount} item(s))? This cannot be undone.`
-      : `Delete "${name}"? This cannot be undone.`;
-    if (!window.confirm(deleteQuestion(message, this.release()))) {
+    const inside = countNodes(this.children());
+    const confirmed = await this.confirms.confirm({
+      title: `Delete “${name}”?`,
+      message:
+        [inside > 0 ? `This also deletes the ${inside} ${inside === 1 ? 'entry' : 'entries'} inside it.` : '', isOnline(this.release()) ? STAYS_ONLINE_NOTE : '']
+          .filter(Boolean)
+          .join(' ') || undefined,
+      confirmLabel: 'Delete',
+      tone: 'danger',
+      typeToConfirm: typeToConfirmFor(1 + inside),
+    });
+    if (!confirmed) {
       return;
     }
+    const key = this.projectKey();
     this.deleting.set(true);
-    this.nav.deleteFolder(this.projectKey(), uuid, true).subscribe({
+    this.nav.deleteFolder(key, uuid, true).subscribe({
       next: () => {
         this.deleting.set(false);
-        this.toast.show('Folder deleted', 'success');
+        // One restore brings the folder and everything the delete took along back; the tree re-reads through the release events.
+        this.undo.offer(`Deleted “${name}”.`, () =>
+          this.api.restoreFolder(key, uuid).pipe(tap(() => this.releaseEvents.changed())),
+        );
         this.deleted.emit(uuid);
       },
       error: () => {
@@ -189,4 +231,9 @@ export class NavFolderDetailComponent {
 interface StartNodeInputLike {
   kind: 'PAGE_REFERENCE' | 'FOLDER';
   assetUuid: string;
+}
+
+/** How many entries a list of tree nodes holds, in all levels. */
+function countNodes(nodes: readonly NavTreeView[]): number {
+  return nodes.reduce((sum, node) => sum + 1 + countNodes(node.children ?? []), 0);
 }

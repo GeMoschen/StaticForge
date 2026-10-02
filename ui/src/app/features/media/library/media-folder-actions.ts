@@ -1,11 +1,16 @@
-import { Injectable, inject, signal } from '@angular/core';
+import { Injectable, Injector, inject, signal } from '@angular/core';
+import { type Observable, firstValueFrom, tap } from 'rxjs';
 import { ApiClient } from '../../../core/api/api.client';
 import { ToastService } from '../../../core/ui/toast.service';
+import { UndoService } from '../../../core/ui/undo.service';
+import { ConfirmService } from '../../../shared/components/dialog/confirm.service';
+import { typeToConfirmFor } from '../../../shared/components/dialog/delete-confirm';
 import type { CreateAssetFormValue } from '../../../shared/components/sf-create-asset-dialog.component';
 import { ContextMenuService } from '../../../shared/services/context-menu.service';
 import { TreeClipboardService } from '../../../shared/services/tree-clipboard.service';
-import { deleteQuestion } from '../../release/release-status.util';
+import { STAYS_ONLINE_NOTE, isOnline } from '../../release/release-status.util';
 import type { FolderMoveEvent } from '../media-folder-node.component';
+import { folderContentCount } from './media-library.util';
 import { type FolderView, MediaLibraryStore } from './media-library.store';
 
 /** Everything you can do to a folder of the library: create, rename, delete, cut and paste, drag and drop. */
@@ -13,6 +18,9 @@ import { type FolderView, MediaLibraryStore } from './media-library.store';
 export class MediaFolderActions {
   private readonly api = inject(ApiClient);
   private readonly toasts = inject(ToastService);
+  private readonly undo = inject(UndoService);
+  private readonly confirms = inject(ConfirmService);
+  private readonly injector = inject(Injector);
   private readonly menu = inject(ContextMenuService);
   private readonly clipboard = inject(TreeClipboardService);
   private readonly library = inject(MediaLibraryStore);
@@ -67,12 +75,29 @@ export class MediaFolderActions {
     if (!event.source || !event.target || this.library.readOnly()) {
       return;
     }
-    this.api.moveAsset(this.library.projectKey(), event.source, { folderUuid: event.target }).subscribe({
+    this.move(event.source, event.target, 'Could not move — that may create a cycle.');
+  }
+
+  /**
+   * Moves a folder or media item (`target` undefined: to the root) and offers Undo, which moves it back to the folder
+   * it was in. The parent is read before the move; the messages name what moved and where.
+   */
+  private move(source: string, target: string | undefined, failure: string, onMoved?: () => void): void {
+    const key = this.library.projectKey();
+    const from = this.library.parentFolderUuidOf(source);
+    const label = this.library.labelOf(source) ?? 'item';
+    const to = target ? (this.library.labelOf(target) ?? 'the folder') : 'All media';
+    this.api.moveAsset(key, source, target ? { folderUuid: target } : {}).subscribe({
       next: () => {
-        this.toasts.show('Moved', 'success');
+        onMoved?.();
+        this.undo.offer(`Moved “${label}” to ${to}.`, () =>
+          this.api
+            .moveAsset(key, source, from ? { folderUuid: from } : {})
+            .pipe(tap(() => this.library.reloadFolders())),
+        );
         this.library.reloadFolders();
       },
-      error: () => this.toasts.show('Could not move — that may create a cycle.', 'error'),
+      error: () => this.toasts.show(failure, 'error'),
     });
   }
 
@@ -89,13 +114,7 @@ export class MediaFolderActions {
     if (!source || this.library.readOnly()) {
       return;
     }
-    this.api.moveAsset(this.library.projectKey(), source, {}).subscribe({
-      next: () => {
-        this.toasts.show('Moved to root', 'success');
-        this.library.reloadFolders();
-      },
-      error: () => this.toasts.show('Could not move — try again in a moment.', 'error'),
-    });
+    this.move(source, undefined, 'Could not move — try again in a moment.');
   }
 
   /** "All media" is the project's media root — its only folder action is creating a subfolder there (it can't be renamed, deleted, cut, or pasted into). */
@@ -153,7 +172,7 @@ export class MediaFolderActions {
       },
       { label: 'Paste', icon: 'content_paste', disabled: !clip, action: () => this.pasteInto(uuid) },
       { label: '', separator: true },
-      { label: 'Delete', icon: 'delete', danger: true, action: () => this.deleteFolder(folder) },
+      { label: 'Delete', icon: 'delete', danger: true, action: () => void this.deleteFolder(folder) },
     ]);
   }
 
@@ -183,29 +202,75 @@ export class MediaFolderActions {
     this.library.reloadFolders();
   }
 
-  private deleteFolder(folder: FolderView): void {
+  /** Asks, deletes the folder with everything in it and offers Undo (one restore brings the whole subtree back). */
+  async deleteFolder(folder: FolderView): Promise<boolean> {
     const uuid = folder.uuid;
     if (!uuid || this.library.readOnly()) {
-      return;
+      return false;
     }
     const name = folder.displayName ?? folder.uid ?? 'this folder';
-    if (!window.confirm(deleteQuestion(`Delete "${name}" and everything inside it? This cannot be undone.`, folder.release))) {
-      return;
-    }
-    this.api.deleteFolder(this.library.projectKey(), uuid, true).subscribe({
-      next: () => {
-        this.toasts.show('Folder deleted', 'success');
-        if (this.library.folderUuid() === uuid) {
-          this.library.selectFolder(null);
-        } else {
-          this.library.reloadFolders();
-        }
-      },
-      error: () => this.toasts.show('Could not delete folder — try again in a moment.', 'error'),
+    const inside = folderContentCount(folder, this.library.mediaByFolder());
+    const total = inside.folders + inside.media;
+    const contents = [
+      inside.media > 0 ? `${inside.media} media ${inside.media === 1 ? 'item' : 'items'}` : '',
+      inside.folders > 0 ? `${inside.folders} ${inside.folders === 1 ? 'sub-folder' : 'sub-folders'}` : '',
+    ].filter(Boolean);
+    const confirmed = await this.confirms.confirm({
+      title: `Delete “${name}”?`,
+      message: [total > 0 ? `This also deletes ${contents.join(' and ')} inside it.` : '', isOnline(folder.release) ? STAYS_ONLINE_NOTE : '']
+        .filter(Boolean)
+        .join(' ') || undefined,
+      confirmLabel: 'Delete',
+      tone: 'danger',
+      typeToConfirm: typeToConfirmFor(1 + total),
+      injector: this.injector,
     });
+    if (!confirmed) {
+      return false;
+    }
+    const key = this.library.projectKey();
+    try {
+      await firstValueFrom(this.api.deleteFolder(key, uuid, true), { defaultValue: undefined });
+    } catch {
+      this.toasts.show('Could not delete folder — try again in a moment.', 'error');
+      return false;
+    }
+    this.undo.offer(`Deleted “${name}”.`, () =>
+      this.api.restoreFolder(key, uuid).pipe(tap(() => this.library.reloadFolders())),
+    );
+    if (this.library.folderUuid() === uuid) {
+      this.library.selectFolder(null);
+    } else {
+      this.library.reloadFolders();
+    }
+    return true;
   }
 
-  private pasteInto(targetUuid: string): void {
+  /**
+   * Renames a folder and offers Undo (rename back; the revision the rename produced guards against edits made in
+   * between). The caller handles errors.
+   */
+  renameFolderTo(folder: FolderView, displayName: string): Observable<FolderView> {
+    const key = this.library.projectKey();
+    const uuid = folder.uuid ?? '';
+    const oldName = folder.displayName;
+    return this.api.renameFolder(key, uuid, { displayName }, folder.revision).pipe(
+      tap((renamed) => {
+        if (oldName) {
+          this.undo.offer(`Renamed “${oldName}” to “${displayName}”.`, () =>
+            this.api
+              .renameFolder(key, uuid, { displayName: oldName }, renamed.revision)
+              .pipe(tap(() => this.library.reloadFolders())),
+          );
+        } else {
+          this.toasts.show('Folder renamed', 'success');
+        }
+      }),
+    );
+  }
+
+  /** Pastes the cut folder or media item into `targetUuid`, with Undo. */
+  pasteInto(targetUuid: string): void {
     if (this.library.readOnly()) {
       return;
     }
@@ -213,13 +278,6 @@ export class MediaFolderActions {
     if (!entry || entry.mode !== 'cut') {
       return;
     }
-    this.api.moveAsset(this.library.projectKey(), entry.uuid, { folderUuid: targetUuid }).subscribe({
-      next: () => {
-        this.clipboard.clear();
-        this.toasts.show(`Moved "${entry.label}"`, 'success');
-        this.library.reloadFolders();
-      },
-      error: () => this.toasts.show('Could not move — try again in a moment.', 'error'),
-    });
+    this.move(entry.uuid, targetUuid, 'Could not move — try again in a moment.', () => this.clipboard.clear());
   }
 }

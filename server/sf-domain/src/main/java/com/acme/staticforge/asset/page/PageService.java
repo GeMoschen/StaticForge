@@ -20,7 +20,15 @@ public interface PageService {
 
     AssetVersionView patchContent(UUID uuid, JsonNode mergePatch, long expectedRevision, RevisionContext ctx);
 
-    AssetVersionView addSection(UUID uuid, String bodyName, String templateUuid, Integer position, long expectedRevision, RevisionContext ctx);
+    /**
+     * Adds a section of {@code templateUuid} to {@code bodyName} at {@code position} (end when null or out of range).
+     * {@code instanceId} and {@code content} are optional: without them a fresh instance id and empty content are
+     * used; with them the section comes back exactly as given (undo of a section delete). An {@code instanceId}
+     * that is already used on the page is {@code 422}.
+     */
+    AssetVersionView addSection(
+            UUID uuid, String bodyName, String templateUuid, Integer position, String instanceId, JsonNode content,
+            long expectedRevision, RevisionContext ctx);
 
     AssetVersionView reorderSections(UUID uuid, String bodyName, List<String> instanceIds, long expectedRevision, RevisionContext ctx);
 

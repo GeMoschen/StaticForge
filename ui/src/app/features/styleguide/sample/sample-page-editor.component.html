@@ -22,10 +22,7 @@
       </sf-button>
     </span>
     <ng-container sfPageHeaderActions>
-      <span class="editor__save" role="status">
-        <sf-icon [name]="saving() ? 'sync' : 'cloud_done'" />
-        {{ (saving() ? 'styleguide.sample.editor.saving' : 'styleguide.sample.editor.saved') | transloco }}
-      </span>
+      <sf-save-status class="editor__save" [state]="saveState()" [savedAt]="savedAt()" [errorCount]="titleBlank() ? 1 : 0" />
       <sf-button variant="ghost" icon="history" [label]="'styleguide.sample.editor.history' | transloco" (click)="state.history.set('page')" />
       <sf-button variant="secondary" icon="visibility" [aria-pressed]="preview()" (click)="preview.set(!preview())">{{
         'styleguide.sample.editor.preview' | transloco

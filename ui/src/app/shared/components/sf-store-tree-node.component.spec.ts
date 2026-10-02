@@ -1,8 +1,9 @@
 import '@angular/compiler';
 import { fireEvent, render, screen } from '@testing-library/angular';
-import { of } from 'rxjs';
+import { of, throwError } from 'rxjs';
 import { describe, expect, it, vi } from 'vitest';
 import { ApiClient } from '../../core/api/api.client';
+import { ToastService } from '../../core/ui/toast.service';
 import { TimeTravelStore } from '../../features/revisions/time-travel.store';
 import { ContextMenuService } from '../services/context-menu.service';
 import { SfStoreTreeNodeComponent, type StoreTreeMenuFn, type StoreTreeNode } from './sf-store-tree-node.component';
@@ -116,6 +117,65 @@ describe('SfStoreTreeNodeComponent', () => {
     );
 
     expect(renameFolder).toHaveBeenCalledWith('proj', 'folder-uuid', 'Brand', 7);
+  });
+
+  describe('undo (M35.13)', () => {
+    type Renamer = { submitRenameDisplayName(name: string): void };
+
+    async function renameWithUndo(api: { renameAsset: ReturnType<typeof vi.fn> }, renameFolder?: ReturnType<typeof vi.fn>) {
+      const { fixture } = await render(SfStoreTreeNodeComponent, {
+        componentInputs: {
+          node: { uuid: 'set-uuid', uid: 'site', displayName: 'Site', kind: renameFolder ? 'FOLDER' : 'LEAF', revision: 42 } satisfies StoreTreeNode,
+          projectKey: 'proj',
+          undoable: true,
+          renameFolder: renameFolder ?? null,
+        },
+        providers: [{ provide: ApiClient, useValue: api }],
+      });
+      (fixture.componentInstance as unknown as Renamer).submitRenameDisplayName('Site settings');
+      return fixture.debugElement.injector.get(ToastService);
+    }
+
+    it('offers Undo instead of the plain toast, and Undo renames back with the revision the rename produced', async () => {
+      const api = { renameAsset: vi.fn().mockReturnValue(of({ revision: 43 })) };
+      const toasts = await renameWithUndo(api);
+
+      expect(toasts.toasts().at(-1)?.message).toBe('Renamed “Site” to “Site settings”.');
+      toasts.toasts().at(-1)!.action!.run();
+
+      await vi.waitFor(() => expect(api.renameAsset).toHaveBeenLastCalledWith('proj', 'set-uuid', { displayName: 'Site' }, 43));
+    });
+
+    it("undoes a folder rename through the store's own folder rename", async () => {
+      const renameFolder = vi.fn().mockReturnValue(of({ revision: 8 }));
+      const toasts = await renameWithUndo({ renameAsset: vi.fn() }, renameFolder);
+
+      toasts.toasts().at(-1)!.action!.run();
+
+      await vi.waitFor(() => expect(renameFolder).toHaveBeenLastCalledWith('proj', 'set-uuid', 'Site', 8));
+    });
+
+    it('shows the error toast when the rename back fails', async () => {
+      const api = { renameAsset: vi.fn().mockReturnValueOnce(of({ revision: 43 })).mockReturnValue(throwError(() => new Error('412'))) };
+      const toasts = await renameWithUndo(api);
+
+      toasts.toasts().at(-1)!.action!.run();
+
+      await vi.waitFor(() => expect(toasts.toasts().at(-1)?.kind).toBe('error'));
+      expect(toasts.toasts().at(-1)?.message).toMatch(/Could not undo/);
+    });
+
+    it('keeps the plain toast for a store that did not opt in', async () => {
+      const { fixture } = await render(SfStoreTreeNodeComponent, {
+        componentInputs: { node: { uuid: 'set-uuid', displayName: 'Site', kind: 'LEAF', revision: 42 } satisfies StoreTreeNode, projectKey: 'proj' },
+        providers: [{ provide: ApiClient, useValue: { renameAsset: vi.fn().mockReturnValue(of({})) } }],
+      });
+      (fixture.componentInstance as unknown as Renamer).submitRenameDisplayName('Site settings');
+
+      const last = fixture.debugElement.injector.get(ToastService).toasts().at(-1);
+      expect(last?.message).toBe('Item renamed');
+      expect(last?.action).toBeUndefined();
+    });
   });
 
   describe('record set leaves (M25.5.1)', () => {

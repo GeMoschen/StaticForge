@@ -35,6 +35,7 @@
             [projectKey]="projectKey()"
             leafNoun="Property set"
             [renameFolder]="renameFolder"
+            [undoable]="true"
             (select)="select($event)"
             (move)="onMove($event)"
             (changed)="onSetChanged()"
@@ -51,7 +52,7 @@
         [uuid]="set.uuid ?? ''"
         (closed)="closeDetail()"
         (changed)="onSetChanged()"
-        (deleted)="onSetDeleted()"
+        (deleted)="onSetDeleted($event)"
       />
     } @else {
       <sf-empty-state

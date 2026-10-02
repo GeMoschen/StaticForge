@@ -193,7 +193,7 @@ sample does not show is **added to the sample first** (`/styleguide`), reviewed 
 | M35.10 | [App frame: top bar, rail, developer mode, titles](010-app-frame.md) | 2 frame | frontend | M35.2, M35.4, M35.9 | done |
 | M35.11 | [Information architecture: Publishing, Settings menu](011-information-architecture.md) | 2 frame | frontend | M35.10 | todo |
 | M35.12 | [History drawer, full history, time-travel banner](012-history.md) | 2 frame | frontend | M35.10 | done |
-| M35.13 | [Save UX, unsaved guards, confirm and undo](013-save-guard-undo.md) | 2 frame | frontend | M35.10 | todo |
+| M35.13 | [Save UX, unsaved guards, confirm and undo](013-save-guard-undo.md) | 2 frame | frontend | M35.10 | done |
 | M35.14 | [Keyboard-first: shortcuts, palette actions, `?` sheet](014-keyboard-first.md) | 2 frame | frontend | M35.10 | todo |
 | M35.15 | [Recents and favorites](015-recents-favorites.md) | 2 frame | frontend | M35.3, M35.10 | todo |
 | M35.16 | [Login, account and admin screens](016-login-account-admin.md) | 3 screens | frontend | M35.10, M35.13 | todo |

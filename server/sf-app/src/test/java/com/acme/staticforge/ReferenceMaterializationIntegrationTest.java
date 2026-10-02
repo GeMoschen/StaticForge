@@ -112,7 +112,7 @@ class ReferenceMaterializationIntegrationTest {
         });
 
         AssetVersionView withSection = pageService.addSection(
-                page.uuid(), "main", section.uuid().toString(), null, page.validFromRevision(), fx.ctx());
+                page.uuid(), "main", section.uuid().toString(), null, null, null, page.validFromRevision(), fx.ctx());
         assertThat(open(fx, page.uuid()))
                 .filteredOn(row -> row.getToAssetId().equals(id(fx, section.uuid())))
                 .singleElement()

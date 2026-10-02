@@ -4,6 +4,7 @@ import { HttpErrorResponse } from '@angular/common/http';
 import {
   ChangeDetectionStrategy,
   Component,
+  DestroyRef,
   OnDestroy,
   computed,
   effect,
@@ -39,6 +40,9 @@ import type { ReleaseMode } from '../release/release-choice.util';
 import { RecordActionsService } from './record-actions.service';
 import { RecordSidePanelComponent, type ContentIssue, type RecordSidePanelTab } from './record-side-panel.component';
 import { useFrameItem } from '../../core/frame/use-frame-item';
+import { ActiveEditorService } from '../../core/editor/active-editor.service';
+import { autosaveEditorState, autosaveStatus } from '../../core/editor/autosave-editor-state';
+import { SfSaveStatusComponent } from '../../shared/components/layout/sf-save-status.component';
 
 type AssetHistoryEntry = components['schemas']['AssetHistoryEntry'];
 type UsageDto = components['schemas']['UsageDto'];
@@ -60,6 +64,7 @@ const EMPTY_DEF: ContentDefinition = { editors: [], bodies: [] };
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
+    SfSaveStatusComponent,
     RouterLink,
     SfButtonComponent,
     RecordSidePanelComponent,
@@ -133,27 +138,12 @@ export class RecordEditorComponent implements OnDestroy {
   /** The field that names the record; without one the record keeps its uuid as its name (M25). */
   protected readonly titleEditor = computed(() => this.dataset()?.titleEditor ?? null);
 
-  protected readonly statusLabel = computed(() => {
-    if (this.timeTravelling()) {
-      return 'Viewing revision ' + (this.timeTravel.activeRevision() ?? '—');
-    }
-    switch (this.autosave.saveState()) {
-      case 'dirty':
-        return 'Unsaved';
-      case 'saving':
-        return 'Saving…';
-      case 'saved':
-        return 'Saved ' + (this.autosave.lastSavedAt() ?? '');
-      case 'error':
-        return 'Save failed';
-      case 'rejected': {
-        const errors = this.autosave.rejected().filter((f) => f.severity === 'ERROR').length;
-        return `Not saved — fix ${errors} error${errors === 1 ? '' : 's'}`;
-      }
-      default:
-        return '';
-    }
-  });
+  /** Why the record cannot be edited; the save status is for a record that can. */
+  protected readonly readOnlyLabel = computed(() =>
+    this.timeTravelling() ? 'Viewing revision ' + (this.timeTravel.activeRevision() ?? '—') : '',
+  );
+  /** The save status (M35.13): the same words and look in every editor. */
+  protected readonly status = computed(() => autosaveStatus(this.autosave));
 
   /** The conflict's changed top-level fields, for the drawer summary. */
   protected readonly changedKeys = computed(() => {
@@ -169,6 +159,16 @@ export class RecordEditorComponent implements OnDestroy {
   });
 
   constructor() {
+    // The open record is an editor for the frame (M35.13): Ctrl+S saves it, and leaving it with an edit that could not
+    // be written asks first.
+    const unregister = inject(ActiveEditorService).register(
+      autosaveEditorState({
+        name: () => this.record()?.displayName || this.record()?.uid || '',
+        autosave: this.autosave as never,
+        reload: () => this.load(this.projectKey(), this.recordUuid(), null),
+      }),
+    );
+    inject(DestroyRef).onDestroy(unregister);
     // The breadcrumb ends with the open record, and the History drawer shows its versions (M35.12).
     useFrameItem(() => {
       const record = this.record();

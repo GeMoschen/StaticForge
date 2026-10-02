@@ -326,7 +326,7 @@ until the deletion is released.
 | `GET`/`POST` | `/projects/{projectKey}/pages` (`GET`: `?folder=`, `?templateUuid=`, `?q=`, `?revision=`) |
 | `GET`/`PUT`/`DELETE` | `/projects/{projectKey}/pages/{uuid}` |
 | `PATCH` | `/projects/{projectKey}/pages/{uuid}/content` (JSON-Merge-Patch) |
-| `POST` | `/projects/{projectKey}/pages/{uuid}/bodies/{body}/sections` |
+| `POST` | `/projects/{projectKey}/pages/{uuid}/bodies/{body}/sections` (`{templateUuid, position?, instanceId?, content?}`; `instanceId` and `content` re-insert a deleted section exactly as it was — the undo of `DELETE …/sections/{instanceId}`; an `instanceId` already on the page is `422`) |
 | `PUT` | `/projects/{projectKey}/pages/{uuid}/bodies/{body}/order` |
 | `DELETE` | `/projects/{projectKey}/pages/{uuid}/bodies/{body}/sections/{instanceId}` |
 | `POST` | `/projects/{projectKey}/pages/{uuid}/duplicate` |
@@ -404,8 +404,17 @@ Rate limited per user on the draft-check budget (`sf.preview.rate-limit.checks-p
 | `GET`/`POST` | `/projects/{projectKey}/folders` (`scope` = `PAGES`, `MEDIA`, `NAVIGATION`, `TEMPLATES`, `GLOBALS` or `CONTENT`; `GET`: `?depth=`, `?revision=`) |
 | `PUT`/`DELETE` | `/projects/{projectKey}/folders/{uuid}` |
 | `POST` | `/projects/{projectKey}/folders/{uuid}/move` |
+| `POST` | `/projects/{projectKey}/folders/{uuid}/restore` (`EDITOR`, no body; M35.13) |
 
-`GET /folders?scope=…&revision=R` (M35, time travel) answers the tree as it was at revision `R`: folders (and, in the
+**Folder restore (M35.13, undo of a folder delete).** `POST /folders/{uuid}/restore` brings the folder back together
+with everything the very revision that deleted it tombstoned in its subtree (sub-folders, pages, media, navigation
+entries, templates, record sets and their records) as one new revision, all or nothing, and answers the restored
+`FolderView`. Paths are rebuilt under the parent's current path. What was deleted by another revision before or after
+stays deleted. Errors: `404` unknown, `409 SF-DOM-0111` not deleted, `409 SF-DOM-0112` the parent folder is deleted
+(restore it first), `409 SF-DOM-0113` a live folder holds the path now. Other kinds of assets restore through
+`POST /assets/{uuid}/restore` (`{fromRevision}`), templates and datasets through their own `/restore` (§9, §6.2).
+
+`GET /folders?scope=…&revision=R` (M35, time travel)`GET /folders?scope=…&revision=R` (M35, time travel) answers the tree as it was at revision `R`: folders (and, in the
 `CONTENT` scope, record sets with their record counts) deleted since are in it, those created later are not, with
 `displayName`, `uid`, `path`, parents, `revision` and the `release` statuses of `R` (`scheduled` is always empty). It is
 the same read in a fixed number of queries, whatever the size of the tree. `X-SF-Compacted: true` marks a snapshot that
@@ -441,7 +450,7 @@ A **dataset** is a record schema (CDL, no bodies) in the fixed `datasets` folder
 | `POST` | `/projects/{projectKey}/datasets` | `DEVELOPER` | `{parentFolderUuid?, displayName, contentCdl, rulesCdl?, titleEditor?, description?, channelTemplates?, comment?}` → `201`; the parent defaults to `datasets`. Record templates compile against the schema: an unknown channel key is `422` with `field`, compile errors `422 SF-API-0422` with `channel`, `diagnostics` and `channelDiagnostics`; warnings come back in `recordTemplateDiagnostics` |
 | `PUT` | `/projects/{projectKey}/datasets/{uuid}` | `DEVELOPER` | `{displayName?, contentCdl, rulesCdl?, titleEditor?, description?, channelTemplates?, comment?}`; `renamedFrom` rewrites the key in every record and every record set query, in the same revision (never in record templates: a template still reading the old name fails the save). Without `channelTemplates` the stored record templates are kept and recompiled. The response adds `recordTemplateDiagnostics` (warnings by channel) and `brokenRecordSets` — `[{uuid, uid, displayName, diagnostics}]`, the sets whose stored query no longer validates against the saved schema (a removed or retyped field; the save succeeds, those sets render nothing until fixed). Both are empty on reads |
 | `DELETE` | `/projects/{projectKey}/datasets/{uuid}` | `DEVELOPER` | `409 SF-DOM-0121` with `recordCount`/`setCount` while it has live records or record sets, even with `?force=true` |
-| `POST` | `/projects/{projectKey}/datasets/{uuid}/restore` | `DEVELOPER` | |
+| `POST` | `/projects/{projectKey}/datasets/{uuid}/restore` | `DEVELOPER` | `{fromRevision?}`: with a body it restores that version; without a body (or `fromRevision`) a deleted dataset comes back as its last live version was (undo of the delete, M35.13): `409 SF-DOM-0111` not deleted, `409 SF-DOM-0112` its folder is deleted |
 | `GET` | `/projects/{projectKey}/datasets/{uuid}/records` | `VIEWER` | paged listing of every record of the dataset across all of its record sets (set queries are not applied), see below |
 | `POST` | `/projects/{projectKey}/datasets/{uuid}/records` | `EDITOR` | `{recordSetUuid, content, comment?}` → `201`; the record goes into that record set, which must be a live set of this dataset (M25; otherwise `422 SF-DOM-0104`). Without `recordSetUuid` (the pre-M25 shape with `folderUuid`) it is `400 SF-API-0400` with `field: "recordSetUuid"`. A record is never named by hand: its `uid` is its uuid in uid form (`3f2a9c1e_8b7d_…`), and its `displayName` is the dataset's `titleEditor` value, else the uuid |
 | `GET` | `/projects/{projectKey}/records/{uuid}` | `VIEWER` | `{uuid, uid, displayName, datasetUuid, datasetUid, recordSet: {uuid, uid, displayName}, folderUuid, folderPath, content, revision, changedBy, changedAt, deleted, issues}` — `folderUuid`/`folderPath` are the record set's Content folder; `?revision=` |
@@ -551,6 +560,7 @@ The CDL of a template is sent and returned as its sections (M34, spec §14.9): `
 |---|---|
 | `GET`/`POST` | `/projects/{projectKey}/section-templates` |
 | `GET`/`PUT`/`DELETE` | `/projects/{projectKey}/section-templates/{uuid}` |
+| `POST` | `/projects/{projectKey}/section-templates/{uuid}/restore` and `/projects/{projectKey}/page-templates/{uuid}/restore` (`DEVELOPER`, no body; M35.13) — undo of the delete: the template comes back as its last live version was, in one revision, edges re-opened. Returns the template detail. `409 SF-DOM-0111` not deleted; `409 SF-DOM-0112` its folder, or the page template it extends, is deleted |
 | `GET`/`POST` | `/projects/{projectKey}/page-templates` (list items carry `abstract` and `parentTemplateRef`; create accepts `abstract` and `paginationPath`, a channel → pattern map for pages 2..N of a paginated page that must contain `{pageNumber}`) |
 | `GET`/`PUT`/`DELETE` | `/projects/{projectKey}/page-templates/{uuid}` (M20: `abstract` on read and update; read-only `parentTemplateRef`, `ancestors`, `effectiveDefinition`, `inheritedFrom`; a save returns `descendantWarnings`; M35: `warnings`, `SF-GEN-0112` per channel whose `outputPath` has no `{locale}` in a project with several languages, on every read and save; `422 SF-DOM-0122` making a used template abstract, `422 SF-DOM-0124` with `descendants[]` when descendants would break) |
 | `PUT`/`DELETE` | `/projects/{projectKey}/{templateKind}/{uuid}/channels/{channelKey}` (one channel on its own; the UI uses the template `PUT` instead) |
@@ -1184,6 +1194,9 @@ Codes from `cms-specification.md` Appendix B, annotated with where they are rais
 | `SF-DOM-0104` | 422 | record set containment violated (M25): a record outside a live record set of its dataset, a record set outside a Content folder, or anything but a record in a set — on create, move, restore — `RecordSetContainment` |
 | `SF-DOM-0105` | 422 | a record's uid and display name are derived and can't be set or changed (M25) — `RecordNaming` |
 | `SF-DOM-0110` | 409 | folder not empty — `FolderService`; a record set with live records (delete without `cascade`) carries `recordCount` (M25) |
+| `SF-DOM-0111` | 409 | restore of something that is not deleted (folder, template, dataset) — `FolderService`, `AssetService.restoreDeleted` (M35.13) |
+| `SF-DOM-0112` | 409 | restore blocked: the parent folder (or the template a page template extends) is deleted — restore that first (M35.13) |
+| `SF-DOM-0113` | 409 | folder restore: a live folder holds the path now (M35.13) — `FolderServiceImpl` |
 | `SF-DOM-0120` | 409 | asset still referenced by an open edge from a non-deleted asset (delete without `force`) — `AssetServiceImpl` |
 | `SF-DOM-0121` | 409 | dataset still has live records or live record sets (delete, with or without `force`); the problem carries `recordCount` and `setCount` (M25) — `AssetServiceImpl` |
 | `SF-DOM-0122` | 422 | a page template that pages use can't become abstract; carries `pageCount`, `pageUids`, `pageUuids` — `TemplateServiceImpl` |

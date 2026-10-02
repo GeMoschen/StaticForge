@@ -8,6 +8,7 @@ import type { components } from '../../core/api/generated/schema.d.ts';
 import { LocalesStore } from '../../core/project/locales.store';
 import { MediaDetailDrawerComponent } from './media-detail-drawer.component';
 import { localeFileRows } from './media-locale-files.util';
+import { MediaItemActions } from './library/media-item-actions';
 import { MediaNavNodeComponent } from './media-nav-node.component';
 
 type MediaView = components['schemas']['MediaView'];
@@ -183,7 +184,7 @@ describe('media tree leaf release badge', () => {
   function render(summary: MediaSummaryView): HTMLElement {
     TestBed.configureTestingModule({
       imports: [MediaNavNodeComponent],
-      providers: [provideHttpClient(), provideHttpClientTesting(), provideRouter([])],
+      providers: [provideHttpClient(), provideHttpClientTesting(), provideRouter([]), { provide: MediaItemActions, useValue: {} }],
     });
     const fixture = TestBed.createComponent(MediaNavNodeComponent);
     fixture.componentRef.setInput('projectKey', 'proj1');

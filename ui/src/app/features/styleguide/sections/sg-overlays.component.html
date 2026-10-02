@@ -89,6 +89,18 @@
         <sf-button variant="secondary" (click)="toast(t.kind, t.message)">{{ 'styleguide.page.overlays.toast.' + t.kind | transloco }}</sf-button>
       }
       <sf-button variant="secondary" icon="undo" (click)="undoToast()">{{ 'styleguide.page.overlays.toast.undo' | transloco }}</sf-button>
+      @for (v of undoVariants; track v.key) {
+        <sf-button variant="secondary" icon="undo" (click)="undoVariant(v.message)">{{ 'styleguide.page.overlays.toast.undoVariant.' + v.key | transloco }}</sf-button>
+      }
+    </div>
+  </div>
+
+  <div class="sg-sub">
+    <h3 class="sg-sub__title">{{ 'styleguide.page.overlays.unsaved' | transloco }}</h3>
+    <p class="sg-note">{{ 'styleguide.page.overlays.unsavedNote' | transloco }}</p>
+    <div class="sg-row">
+      <sf-button variant="secondary" (click)="unsavedDialog(false)">{{ 'styleguide.page.overlays.unsavedSaves' | transloco }}</sf-button>
+      <sf-button variant="secondary" (click)="unsavedDialog(true)">{{ 'styleguide.page.overlays.unsavedFails' | transloco }}</sf-button>
     </div>
   </div>
 </section>

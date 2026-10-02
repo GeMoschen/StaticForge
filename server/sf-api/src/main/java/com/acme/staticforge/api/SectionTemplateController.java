@@ -115,6 +115,20 @@ public class SectionTemplateController extends AbstractTemplateController {
         return ResponseEntity.noContent().build();
     }
 
+    /**
+     * Undoes the delete: the template comes back as its last live version was, in one new revision. {@code 409
+     * SF-DOM-0111} when it is not deleted, {@code 409 SF-DOM-0112} while its folder (or the template it extends) is
+     * deleted.
+     */
+    @PostMapping("/{uuid}/restore")
+    @PreAuthorize("@projectAuth.has(#projectKey, " + ProjectRoleExpr.DEVELOPER + ")")
+    public ResponseEntity<TemplateDetail> restore(@PathVariable String projectKey, @PathVariable UUID uuid) {
+        TemplateView view = templateService.restore(uuid, ctx(projectKey, "restore section template"));
+        return ResponseEntity.ok()
+                .header(HttpHeaders.ETAG, RevisionHeaders.etag(view.validFromRevision()))
+                .body(toDetail(projectKey, view));
+    }
+
     @PutMapping("/{uuid}/channels/{channelKey}")
     @PreAuthorize("@projectAuth.has(#projectKey, " + ProjectRoleExpr.DEVELOPER + ")")
     public ResponseEntity<ChannelTemplateDto> saveChannel(

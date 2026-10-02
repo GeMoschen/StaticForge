@@ -2,7 +2,7 @@
   <h1 class="sf-sr-only">Templates</h1>
   <sf-templates-tree-pane (newTemplate)="newTemplate()" />
 
-  <section class="templates__detail" (keydown)="save.onKeydown($event)">
+  <section class="templates__detail">
     <div class="templates__toolbar">
       @if (store.readOnly()) {
         <span class="templates__toolbar-readonly">{{ store.readOnlyLabel() }}</span>
@@ -19,7 +19,7 @@
           [projectKey]="projectKey()"
           [uuid]="datasetUuid"
           (changed)="onDatasetChanged()"
-          (deleted)="onDatasetDeleted()"
+          (deleted)="onDatasetDeleted($event)"
         />
       </div>
     } @else {

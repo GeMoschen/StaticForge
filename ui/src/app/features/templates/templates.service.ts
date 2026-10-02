@@ -72,6 +72,13 @@ export class TemplatesService {
     );
   }
 
+  /** Undo of a template delete: the template comes back as its last live version was (M35.13). */
+  restore(kind: TemplateKind, key: string, uuid: string): Observable<TemplateDetail> {
+    return this.http.post<TemplateDetail>(`${endpoint(kind, key)}/${uuid}/restore`, null, {
+      withCredentials: true,
+    });
+  }
+
   delete(kind: TemplateKind, key: string, uuid: string): Observable<void> {
     return this.http.delete<void>(`${endpoint(kind, key)}/${uuid}`, {
       withCredentials: true,

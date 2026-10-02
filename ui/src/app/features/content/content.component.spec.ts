@@ -1,12 +1,14 @@
 import '@angular/compiler';
 import { provideRouter, Router } from '@angular/router';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/angular';
-import { of } from 'rxjs';
+import { of, throwError } from 'rxjs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ApiClient } from '../../core/api/api.client';
 import { AuthStore } from '../../core/auth/auth.store';
 import { ProjectContextStore } from '../../core/project/project-context.store';
 import { provideProjectPermissions } from '../../core/project/testing/project-permissions.testing';
+import { ToastService } from '../../core/ui/toast.service';
+import { ConfirmService } from '../../shared/components/dialog/confirm.service';
 import { ContextMenuService } from '../../shared/services/context-menu.service';
 import { TimeTravelStore } from '../revisions/time-travel.store';
 import { ContentComponent } from './content.component';
@@ -76,18 +78,29 @@ function contentStub() {
   };
 }
 
+function apiStub() {
+  return {
+    renameAsset: vi.fn(),
+    assetHistory: vi.fn().mockReturnValue(of([{ revision: 9, deleted: true }, { revision: 6, deleted: false }])),
+    restoreAsset: vi.fn().mockReturnValue(of({})),
+  };
+}
+
 async function setup(
   content: ReturnType<typeof contentStub>,
   menu = new ContextMenuService(),
   role = 'EDITOR',
   projectContext = { updateContentFolderTree: vi.fn() },
+  api: Record<string, unknown> = apiStub(),
+  confirm = vi.fn().mockResolvedValue(true),
 ) {
   const view = await render(ContentComponent, {
     componentInputs: { projectKey: 'proj' },
     providers: [
       provideRouter([]),
       { provide: ContentService, useValue: content },
-      { provide: ApiClient, useValue: { renameAsset: vi.fn() } },
+      { provide: ApiClient, useValue: api },
+      { provide: ConfirmService, useValue: { confirm } },
       { provide: AuthStore, useValue: { roleFor: () => role, isArchived: () => false } },
       { provide: TimeTravelStore, useValue: new TimeTravelStore() },
       { provide: ContextMenuService, useValue: menu },
@@ -225,16 +238,113 @@ describe('ContentComponent (record sets)', () => {
     const content = contentStub();
     const menu = new ContextMenuService();
     const open = vi.spyOn(menu, 'open');
-    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
-    await setup(content, menu);
+    const confirm = vi.fn().mockResolvedValue(true);
+    await setup(content, menu, 'EDITOR', undefined, undefined, confirm);
     await waitFor(() => expect(treeRow('Leads')).toBeTruthy());
 
     fireEvent.contextMenu(treeRow('Leads'));
     open.mock.calls[0][1].find((item) => item.label === 'Delete…')!.action!();
 
-    expect(confirm.mock.calls[0][0]).toContain('and its 3 records');
-    expect(content.deleteRecordSet).toHaveBeenCalledWith('proj', 'set-leads', true);
+    await waitFor(() => expect(content.deleteRecordSet).toHaveBeenCalledWith('proj', 'set-leads', true));
+    const options = confirm.mock.calls[0][0];
+    expect(options.message).toContain('and its 3 records');
+    expect(options.tone).toBe('danger');
+    expect(options.irreversible).toBeUndefined();
+    expect(options.typeToConfirm).toBeUndefined();
     await waitFor(() => expect(content.folders).toHaveBeenCalledTimes(2));
+  });
+
+  describe('undo', () => {
+    const lastToast = (view: { fixture: { debugElement: { injector: { get: <T>(t: unknown) => T } } } }) =>
+      view.fixture.debugElement.injector.get<ToastService>(ToastService).toasts().at(-1)!;
+
+    async function deleteLeads(content: ReturnType<typeof contentStub>, api: ReturnType<typeof apiStub>, confirm = vi.fn().mockResolvedValue(true)) {
+      const menu = new ContextMenuService();
+      const open = vi.spyOn(menu, 'open');
+      const view = await setup(content, menu, 'EDITOR', undefined, api, confirm);
+      await waitFor(() => expect(treeRow('Leads')).toBeTruthy());
+      fireEvent.contextMenu(treeRow('Leads'));
+      open.mock.calls[0][1].find((item) => item.label === 'Delete…')!.action!();
+      await waitFor(() => expect(content.deleteRecordSet).toHaveBeenCalled());
+      return view;
+    }
+
+    it('offers Undo after a delete; Undo restores the set (and its records) from its last live revision and reloads', async () => {
+      const content = contentStub();
+      const api = apiStub();
+      const view = await deleteLeads(content, api);
+      await waitFor(() => expect(lastToast(view).message).toBe('Deleted “Leads” and its 3 records.'));
+      expect(lastToast(view).action).toBeDefined();
+
+      lastToast(view).action!.run();
+
+      await waitFor(() => expect(api.restoreAsset).toHaveBeenCalledWith('proj', 'set-leads', { fromRevision: 6 }));
+      await waitFor(() => expect(content.folders.mock.calls.length).toBeGreaterThanOrEqual(3));
+    });
+
+    it('shows the error toast when the restore fails', async () => {
+      const content = contentStub();
+      const api = apiStub();
+      api.restoreAsset.mockReturnValue(throwError(() => new Error('409')));
+      const view = await deleteLeads(content, api);
+
+      lastToast(view).action!.run();
+
+      await waitFor(() => expect(lastToast(view).kind).toBe('error'));
+      expect(lastToast(view).message).toMatch(/Could not undo/);
+    });
+
+    it('asks for the typed word for a set with 25 or more records', async () => {
+      const content = contentStub();
+      content.folders.mockReturnValue(
+        of([
+          {
+            ...FOLDERS[0],
+            children: [{ uuid: 'set-big', uid: 'big', displayName: 'Big', type: 'RECORD_SET', recordCount: 30 }],
+          },
+        ]),
+      );
+      content.listRecordSets.mockReturnValue(of([{ ...SETS[0], uuid: 'set-big', uid: 'big', displayName: 'Big', recordCount: 30 }]));
+      const menu = new ContextMenuService();
+      const open = vi.spyOn(menu, 'open');
+      const confirm = vi.fn().mockResolvedValue(false);
+      await setup(content, menu, 'EDITOR', undefined, undefined, confirm);
+      await waitFor(() => expect(treeRow('Big')).toBeTruthy());
+
+      fireEvent.contextMenu(treeRow('Big'));
+      open.mock.calls[0][1].find((item) => item.label === 'Delete…')!.action!();
+
+      await waitFor(() => expect(confirm).toHaveBeenCalled());
+      expect(confirm.mock.calls[0][0].typeToConfirm).toBe('delete');
+      expect(content.deleteRecordSet).not.toHaveBeenCalled();
+    });
+
+    it('a drag-move offers Undo, which moves the set back into the folder it came from', async () => {
+      const content = contentStub();
+      const view = await setup(content);
+      await waitFor(() => expect(treeRow('Team')).toBeTruthy());
+
+      // "Leads" lives in "Team"; drop it onto the "Products" side: the root row is the drop target of a move to the top.
+      fireEvent.drop(screen.getByText('All content'), { dataTransfer: { getData: () => 'set-leads' } as unknown as DataTransfer });
+      await waitFor(() => expect(content.moveAsset).toHaveBeenCalledWith('proj', 'set-leads', undefined));
+      expect(lastToast(view).message).toBe('Moved “Leads” to the store root.');
+
+      lastToast(view).action!.run();
+      await waitFor(() => expect(content.moveAsset).toHaveBeenLastCalledWith('proj', 'set-leads', 'team'));
+    });
+
+    it('a failing move-back shows the error toast', async () => {
+      const content = contentStub();
+      const view = await setup(content);
+      await waitFor(() => expect(treeRow('Team')).toBeTruthy());
+      fireEvent.drop(screen.getByText('All content'), { dataTransfer: { getData: () => 'set-leads' } as unknown as DataTransfer });
+      await waitFor(() => expect(content.moveAsset).toHaveBeenCalledTimes(1));
+      content.moveAsset.mockReturnValue(throwError(() => new Error('422')));
+
+      lastToast(view).action!.run();
+
+      await waitFor(() => expect(lastToast(view).kind).toBe('error'));
+    });
   });
 
   it('drags a set onto a folder through the asset move, a folder through the folder move', async () => {

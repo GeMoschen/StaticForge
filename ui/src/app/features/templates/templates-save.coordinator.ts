@@ -1,11 +1,14 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { computed, inject, Injectable, signal } from '@angular/core';
+import type { EditorError, EditorStateService } from '../../core/editor/editor-state';
+import { tap } from 'rxjs';
 import { ToastService } from '../../core/ui/toast.service';
+import { UndoService } from '../../core/ui/undo.service';
+import type { SaveResult } from '../../shared/components/dialog/unsaved-changes.service';
 import {
   cdlFields,
   errorCount,
   firstSectionWithErrors,
-  isSaveShortcut,
   sectionsEqual,
   splitDiagnostics,
 } from '../../shared/code-editor/cdl-sections';
@@ -33,9 +36,14 @@ export class TemplatesSaveCoordinator {
   private readonly loader = inject(TemplatesLoader);
   private readonly service = inject(TemplatesService);
   private readonly toast = inject(ToastService);
+  private readonly undo = inject(UndoService);
 
   readonly saving = signal(false);
   readonly confirmDelete = signal(false);
+  /** The clock time of the last save ("12:04"). */
+  readonly lastSaved = signal<string | null>(null);
+  /** Why the last save was refused; kept while the edits that were refused are still there. */
+  private readonly failure = signal<EditorError | null>(null);
   /**
    * The message of a pending "this discards translations" confirmation (M24.2.2), or `null`. The
    * server refused the save and wrote nothing; confirming re-sends it with `confirmDiscard`.
@@ -61,14 +69,29 @@ export class TemplatesSaveCoordinator {
     return !sameChannels || !sameMeta || saved === null || !sectionsEqual(store.sections(), saved);
   });
 
-  /** Ctrl+S / ⌘S saves the template (M34), from anywhere in the editor. */
-  onKeydown(event: KeyboardEvent): void {
-    if (isSaveShortcut(event)) {
-      event.preventDefault();
-      if (this.dirty() && !this.saving()) {
-        this.saveTemplate();
-      }
-    }
+  /** Why the template is not saved (compile errors, a missing pagination path, a conflict); `null` when it is. */
+  readonly error = computed(() => (this.dirty() ? this.failure() : null));
+
+  /**
+   * The template editor as the frame sees it (M35.13): the header's status, Ctrl/Cmd+S, the leave guard and the tab-close
+   * prompt read this. It is an explicit-save editor.
+   */
+  asEditorState(): EditorStateService {
+    const store = this.store;
+    return {
+      name: computed(() => store.displayName() || store.detail()?.displayName || store.detail()?.uid || ''),
+      dirty: this.dirty,
+      saving: this.saving,
+      lastSaved: this.lastSaved,
+      error: this.error,
+      autosave: false,
+      save: () => this.saveAsync(),
+      discard: async () => {
+        this.failure.set(null);
+        this.pendingDiscard.set(null);
+        this.loader.discardEdits();
+      },
+    };
   }
 
   /** A `409` whose body counts discarded translations is the localization confirmation, not a conflict. */
@@ -92,18 +115,30 @@ export class TemplatesSaveCoordinator {
    * request, so the whole change is one revision. A rejected save keeps every edit and opens the first failing tab.
    */
   saveTemplate(confirmDiscard = false): void {
+    void this.saveAsync(confirmDiscard);
+  }
+
+  /** The Save as a promise: `{ ok: true }` once written (or when there is nothing to write), else why it was refused. */
+  saveAsync(confirmDiscard = false): Promise<SaveResult> {
     const store = this.store;
     const key = store.projectKey();
     const uuid = store.selectedUuid();
     const detail = store.detail();
     if (!key || !uuid || !detail || store.readOnly()) {
-      return;
+      return Promise.resolve({ ok: true });
     }
     if (Object.keys(store.paginationPathErrors()).length > 0) {
-      this.toast.show('A pagination path is missing {pageNumber} — fix it before saving.', 'error');
-      return;
+      const message = 'A pagination path is missing {pageNumber}';
+      this.toast.show(`${message} — fix it before saving.`, 'error');
+      this.failure.set({ message, count: 1 });
+      return Promise.resolve({ ok: false, message });
     }
     this.saving.set(true);
+    return new Promise<SaveResult>((resolve) => this.send(key, uuid, detail, confirmDiscard, resolve));
+  }
+
+  private send(key: string, uuid: string, detail: TemplateDetail, confirmDiscard: boolean, resolve: (result: SaveResult) => void): void {
+    const store = this.store;
     this.service
       .update(
         store.kind(),
@@ -132,6 +167,9 @@ export class TemplatesSaveCoordinator {
           this.loader.applyUpdated(updated);
           this.toast.show('Template saved', 'success');
           this.saving.set(false);
+          this.failure.set(null);
+          this.lastSaved.set(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+          resolve({ ok: true });
           store.cdlDiagnostics.set([]);
           store.octlDiagnostics.set({});
           store.descendantProblems.set([]);
@@ -147,12 +185,16 @@ export class TemplatesSaveCoordinator {
           // (M24.2.2); nothing was written, so re-sending with the flag is the whole retry.
           if (!confirmDiscard && this.isDiscardConfirmation(err)) {
             this.saving.set(false);
-            this.pendingDiscard.set(problem?.detail ?? 'This change discards translations.');
+            const message = problem?.detail ?? 'This change discards translations.';
+            this.pendingDiscard.set(message);
+            resolve({ ok: false, message });
             return;
           }
           if (problem?.field?.startsWith('paginationPath') && problem.detail) {
             this.toast.show(problem.detail, 'error');
             this.saving.set(false);
+            this.failure.set({ message: problem.detail, count: 1 });
+            resolve({ ok: false, message: problem.detail });
             return;
           }
           const shown = this.showSaveProblems(err, (diagnostics) => this.showSaveDiagnostics(diagnostics));
@@ -160,8 +202,22 @@ export class TemplatesSaveCoordinator {
             this.toast.show('Could not save template — someone may have edited it, try reloading.', 'error');
           }
           this.saving.set(false);
+          const failure = this.failureOf(shown);
+          this.failure.set(failure);
+          resolve({ ok: false, message: failure.message });
         },
       });
+  }
+
+  /** What a refused save comes to: the compile errors on the tabs, the descendants it would break, or a conflict. */
+  private failureOf(shown: boolean): EditorError {
+    if (!shown) {
+      return { message: 'someone may have edited it in the meantime' };
+    }
+    const count = errorCount(this.store.cdlDiagnostics()) + Object.values(this.store.octlDiagnostics()).reduce((n, list) => n + errorCount(list), 0);
+    return count > 0
+      ? { message: `${count} compile ${count === 1 ? 'error' : 'errors'}`, count }
+      : { message: 'it would break other templates or pages' };
   }
 
   private etag(detail: TemplateDetail): string | undefined {
@@ -236,9 +292,20 @@ export class TemplatesSaveCoordinator {
     if (!key || !uuid || store.readOnly()) {
       return;
     }
-    this.service.delete(store.kind(), key, uuid).subscribe({
+    const kind = store.kind();
+    const detail = store.detail();
+    const name = detail?.displayName ?? detail?.uid ?? 'the template';
+    this.service.delete(kind, key, uuid).subscribe({
       next: () => {
-        this.toast.show('Template deleted', 'success');
+        // Undo brings the template back as its last live version was.
+        this.undo.offer(`Deleted “${name}”.`, () =>
+          this.service.restore(kind, key, uuid).pipe(
+            tap(() => {
+              this.loader.reloadList(key);
+              this.loader.refreshTemplateStore();
+            }),
+          ),
+        );
         this.confirmDelete.set(false);
         store.selectedUuid.set(null);
         store.detail.set(null);

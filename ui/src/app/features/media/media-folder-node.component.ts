@@ -15,10 +15,10 @@ import type { components } from '../../core/api/generated/schema.d.ts';
 import { SfIconComponent } from '../../shared/components/sf-icon.component';
 import { SfCreateAssetDialogComponent, type CreateAssetFormValue } from '../../shared/components/sf-create-asset-dialog.component';
 import { SfRenameAssetDialogComponent } from '../../shared/components/sf-rename-asset-dialog.component';
+import { MediaFolderActions } from './library/media-folder-actions';
 import { MediaNavNodeComponent } from './media-nav-node.component';
 import { ProjectAccessStore } from '../../core/project/project-access.store';
 import { ReleaseBadgeComponent } from '../release/release-badge.component';
-import { deleteQuestion } from '../release/release-status.util';
 
 type FolderView = components['schemas']['FolderView'];
 type MediaSummaryView = components['schemas']['MediaSummaryView'];
@@ -61,6 +61,7 @@ export interface FolderMoveEvent {
 export class MediaFolderNodeComponent {
   private readonly api = inject(ApiClient);
   private readonly toast = inject(ToastService);
+  private readonly actions = inject(MediaFolderActions);
   private readonly menu = inject(ContextMenuService);
   private readonly clipboard = inject(TreeClipboardService);
 
@@ -186,7 +187,7 @@ export class MediaFolderNodeComponent {
     items.push({ label: 'Paste', icon: 'content_paste', disabled: !clip, action: () => this.paste(uuid) });
     if (!protectedFolder) {
       items.push({ label: '', separator: true });
-      items.push({ label: 'Delete', icon: 'delete', danger: true, action: () => this.deleteFolder(uuid) });
+      items.push({ label: 'Delete', icon: 'delete', danger: true, action: () => this.deleteFolder() });
     }
     this.menu.open(event, items);
   }
@@ -232,11 +233,10 @@ export class MediaFolderNodeComponent {
       return;
     }
     this.renamingName.set(true);
-    this.api.renameFolder(this.projectKey(), uuid, { displayName }, this.node().revision).subscribe({
+    this.actions.renameFolderTo(this.node(), displayName).subscribe({
       next: () => {
         this.renamingName.set(false);
         this.renameOpen.set(false);
-        this.toast.show('Folder renamed', 'success');
         this.changed.emit();
       },
       error: () => {
@@ -251,21 +251,11 @@ export class MediaFolderNodeComponent {
     this.changed.emit();
   }
 
-  private deleteFolder(uuid: string): void {
-    if (this.readOnly()) {
-      return;
+  /** The confirmation, the delete and its Undo live in {@link MediaFolderActions}; it also reloads the tree. */
+  private deleteFolder(): void {
+    if (!this.readOnly()) {
+      void this.actions.deleteFolder(this.node());
     }
-    const name = this.node().displayName ?? this.node().uid ?? 'this folder';
-    if (!window.confirm(deleteQuestion(`Delete "${name}" and everything inside it? This cannot be undone.`, this.node().release))) {
-      return;
-    }
-    this.api.deleteFolder(this.projectKey(), uuid, true).subscribe({
-      next: () => {
-        this.toast.show('Folder deleted', 'success');
-        this.changed.emit();
-      },
-      error: () => this.toast.show('Could not delete folder — try again in a moment.', 'error'),
-    });
   }
 
   private paste(targetUuid: string): void {
@@ -280,13 +270,6 @@ export class MediaFolderNodeComponent {
       this.toast.show('Only Cut items can be pasted here — no duplicate exists for this item.', 'error');
       return;
     }
-    this.api.moveAsset(this.projectKey(), entry.uuid, { folderUuid: targetUuid }).subscribe({
-      next: () => {
-        this.clipboard.clear();
-        this.toast.show(`Moved "${entry.label}"`, 'success');
-        this.changed.emit();
-      },
-      error: () => this.toast.show('Could not move — try again in a moment.', 'error'),
-    });
+    this.actions.pasteInto(targetUuid);
   }
 }

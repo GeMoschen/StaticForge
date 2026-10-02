@@ -133,7 +133,8 @@ public class PageController {
             @RequestHeader(value = "If-Match", required = false) String ifMatch,
             @RequestBody AddSectionRequest request) {
         SaveFindings.Captured<AssetVersionView> saved = SaveFindings.capture(() -> pageService.addSection(
-                uuid, body, request.templateUuid(), request.position(), RevisionHeaders.expectedRevision(ifMatch), ctx(projectKey, "add section")));
+                uuid, body, request.templateUuid(), request.position(), request.instanceId(), request.content(),
+                RevisionHeaders.expectedRevision(ifMatch), ctx(projectKey, "add section")));
         AssetVersionView view = saved.value();
         return ResponseEntity.ok().header(HttpHeaders.ETAG, RevisionHeaders.etag(view.validFromRevision())).body(toPage(projectId(projectKey), view, saved.findings()));
     }

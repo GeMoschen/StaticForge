@@ -444,6 +444,29 @@ public interface AssetVersionRepository extends JpaRepository<AssetVersion, Long
             """)
     List<AssetVersion> findLiveChildVersionsClosedAt(@Param("folderId") long folderId, @Param("revision") long revision);
 
+    /**
+     * The tombstones a revision wrote that are still the current version: what one delete revision took (folder
+     * restore), minus whatever was restored on its own since. Assets of {@code projectId}, asset joined.
+     */
+    @Query("""
+            SELECT v FROM AssetVersion v JOIN FETCH v.asset a
+            WHERE a.projectId = :projectId
+              AND v.validFromRevision = :revision
+              AND v.validToRevision IS NULL
+              AND v.deleted = true
+            """)
+    List<AssetVersion> findCurrentTombstonesWrittenAt(
+            @Param("projectId") long projectId, @Param("revision") long revision);
+
+    /** The live versions of {@code projectId}'s assets that {@code revision} closed (the state a delete took). */
+    @Query("""
+            SELECT v FROM AssetVersion v JOIN FETCH v.asset a
+            WHERE a.projectId = :projectId
+              AND v.validToRevision = :revision
+              AND v.deleted = false
+            """)
+    List<AssetVersion> findLiveVersionsClosedAt(@Param("projectId") long projectId, @Param("revision") long revision);
+
     /** Current, non-deleted pages whose page template is one of {@code templateAssetIds} (M20), by uid. */
     @Query("""
             SELECT v FROM AssetVersion v JOIN FETCH v.asset a

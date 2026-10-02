@@ -1,6 +1,9 @@
 import { ChangeDetectionStrategy, Component, inject, input, output, signal } from '@angular/core';
 import { ApiClient } from '../../core/api/api.client';
+import { tap } from 'rxjs';
 import { ToastService } from '../../core/ui/toast.service';
+import { UndoService } from '../../core/ui/undo.service';
+import { TemplatesLoader } from './templates-loader';
 import { ContextMenuService } from '../../shared/services/context-menu.service';
 import { TreeClipboardService } from '../../shared/services/tree-clipboard.service';
 import { SfIconComponent } from '../../shared/components/sf-icon.component';
@@ -31,6 +34,8 @@ type TemplateSummary = components['schemas']['TemplateSummary'];
 export class TemplateNavNodeComponent {
   private readonly api = inject(ApiClient);
   private readonly toast = inject(ToastService);
+  private readonly undo = inject(UndoService);
+  private readonly loader = inject(TemplatesLoader);
   private readonly menu = inject(ContextMenuService);
   private readonly clipboard = inject(TreeClipboardService);
 
@@ -92,11 +97,15 @@ export class TemplateNavNodeComponent {
       return;
     }
     this.renamingName.set(true);
+    const oldName = this.summary().displayName ?? this.summary().uid ?? '';
     this.api.renameAsset(key, uuid, { displayName }, this.summary().revision).subscribe({
-      next: () => {
+      next: (renamed) => {
         this.renamingName.set(false);
         this.renameOpen.set(false);
-        this.toast.show('Template renamed', 'success');
+        // Undo renames back; the etag is the revision the rename produced.
+        this.undo.offer(`Renamed “${oldName}” to “${displayName}”.`, () =>
+          this.api.renameAsset(key, uuid, { displayName: oldName }, renamed.revision).pipe(tap(() => this.loader.onTreeChanged())),
+        );
         this.changed.emit();
       },
       error: () => {

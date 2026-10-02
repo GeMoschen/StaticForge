@@ -18,6 +18,8 @@ import { RouterLink } from '@angular/router';
 import type { components } from '../../core/api/generated/schema.d.ts';
 import { ProjectPermissionsStore } from '../../core/project/project-permissions.store';
 import { ToastService } from '../../core/ui/toast.service';
+import { UndoService } from '../../core/ui/undo.service';
+import { ConfirmService } from '../../shared/components/dialog/confirm.service';
 import { SfButtonComponent } from '../../shared/components/sf-button.component';
 import { SfFieldComponent } from '../../shared/components/sf-field.component';
 import {
@@ -37,6 +39,12 @@ import { DatasetRecordTemplatesComponent } from './dataset-record-templates.comp
 import { DatasetTemplatesStore } from './dataset-templates.store';
 import { ContentService, etagFor, type DatasetDetailView, type Diagnostic } from './content.service';
 import { firstPositioned, recordTemplateErrorsOf, recordTemplatesForSave } from './record-template.util';
+
+/** What the templates screen needs to offer Undo for a deleted dataset. */
+export interface DeletedDataset {
+  uuid: string;
+  name: string;
+}
 
 type BrokenRecordSet = components['schemas']['BrokenRecordSet'];
 
@@ -77,10 +85,12 @@ export class DatasetSchemaEditorComponent {
 
   /** Saved, renamed or deleted: the templates tree should reload. */
   readonly changed = output<void>();
-  readonly deleted = output<void>();
+  readonly deleted = output<DeletedDataset>();
 
   private readonly content = inject(ContentService);
   private readonly toasts = inject(ToastService);
+  private readonly undo = inject(UndoService);
+  private readonly confirms = inject(ConfirmService);
   private readonly timeTravel = inject(TimeTravelStore);
   private readonly injector = inject(Injector);
 
@@ -269,18 +279,26 @@ export class DatasetSchemaEditorComponent {
       });
   }
 
-  protected remove(): void {
+  protected async remove(): Promise<void> {
     const current = this.detail();
     if (!current?.uuid || !this.canEdit() || (current.recordCount ?? 0) > 0) {
       return;
     }
-    if (!window.confirm(`Delete the dataset "${current.displayName ?? current.uid}"?`)) {
+    const name = current.displayName ?? current.uid ?? 'the dataset';
+    const confirmed = await this.confirms.confirm({
+      title: `Delete the dataset “${name}”?`,
+      confirmLabel: 'Delete dataset',
+      tone: 'danger',
+    });
+    if (!confirmed) {
       return;
     }
-    this.content.deleteDataset(this.projectKey(), current.uuid).subscribe({
+    const key = this.projectKey();
+    const uuid = current.uuid;
+    this.content.deleteDataset(key, uuid).subscribe({
       next: () => {
-        this.toasts.show('Dataset deleted', 'success');
-        this.deleted.emit();
+        // The templates screen offers the Undo: this editor closes with the dataset.
+        this.deleted.emit({ uuid, name });
       },
       error: (err: unknown) => {
         const body = err instanceof HttpErrorResponse ? ((err.error ?? {}) as { recordCount?: number }) : {};

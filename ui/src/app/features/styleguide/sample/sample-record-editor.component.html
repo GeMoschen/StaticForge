@@ -20,10 +20,7 @@
       </span>
     }
     <ng-container sfPageHeaderActions>
-      <span class="record__save" role="status">
-        <sf-icon [name]="saving() ? 'sync' : 'cloud_done'" />
-        {{ (saving() ? 'styleguide.sample.editor.saving' : 'styleguide.sample.editor.saved') | transloco }}
-      </span>
+      <sf-save-status class="record__save" [state]="saving() ? 'saving' : 'saved'" />
       <sf-button variant="ghost" icon="history" [label]="'styleguide.sample.editor.history' | transloco" (click)="state.history.set('record')" />
       <sf-button icon="publish" (click)="release()">{{ 'styleguide.sample.editor.release' | transloco }}</sf-button>
     </ng-container>

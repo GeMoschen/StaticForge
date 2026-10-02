@@ -2,10 +2,12 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { ChangeDetectionStrategy, Component, computed, effect, inject, input, signal, untracked } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, NavigationEnd, Router, RouterLink, RouterOutlet } from '@angular/router';
-import { filter, forkJoin, map, type Observable } from 'rxjs';
+import { filter, forkJoin, map, tap, type Observable } from 'rxjs';
 import { ProjectPermissionsStore } from '../../core/project/project-permissions.store';
 import { ProjectContextStore } from '../../core/project/project-context.store';
 import { ToastService } from '../../core/ui/toast.service';
+import { UndoService } from '../../core/ui/undo.service';
+import { findParentFolder } from '../../shared/folder-tree.util';
 import { SfButtonComponent } from '../../shared/components/sf-button.component';
 import { SfCreateAssetDialogComponent, type CreateAssetFormValue } from '../../shared/components/sf-create-asset-dialog.component';
 import { SfEmptyStateComponent } from '../../shared/components/sf-empty-state.component';
@@ -91,6 +93,7 @@ export class ContentComponent {
   private readonly route = inject(ActivatedRoute);
 
   private readonly content = inject(ContentService);
+  private readonly undo = inject(UndoService);
   private readonly toasts = inject(ToastService);
   private readonly menu = inject(ContextMenuService);
   private readonly router = inject(Router);
@@ -382,11 +385,13 @@ export class ContentComponent {
       return;
     }
     this.moving.set(true);
+    const back = this.moveBack(set.uuid);
+    const target = folderUuid ? (findFolder(this.folders(), folderUuid)?.displayName ?? 'the folder') : 'the store root';
     this.content.moveAsset(this.projectKey(), set.uuid, folderUuid ?? undefined).subscribe({
       next: () => {
         this.moving.set(false);
         this.movingSet.set(null);
-        this.toasts.show('Record set moved', 'success');
+        this.offerMoveUndo(set.uuid!, back, `Moved “${set.displayName ?? set.uid ?? ''}” to ${target}.`);
         this.refresh.notify();
       },
       error: () => {
@@ -403,7 +408,13 @@ export class ContentComponent {
     }
     const recordCount = this.setsByUuid().get(uuid)?.recordCount ?? node.recordCount ?? 0;
     this.setActions
-      .delete(this.projectKey(), { uuid, name: node.displayName ?? node.uid ?? '', recordCount })
+      .delete(this.projectKey(), {
+        uuid,
+        name: node.displayName ?? node.uid ?? '',
+        recordCount,
+        release: this.setsByUuid().get(uuid)?.release ?? node.release,
+        afterUndo: () => this.refresh.notify(),
+      })
       .subscribe((deleted) => {
         if (!deleted) {
           return;
@@ -420,9 +431,12 @@ export class ContentComponent {
     if (!this.canEdit()) {
       return;
     }
+    const back = this.moveBack(event.source);
+    const name = this.nameOf(event.source);
+    const target = this.nameOf(event.target);
     this.move(event.source, event.target).subscribe({
       next: () => {
-        this.toasts.show('Moved', 'success');
+        this.offerMoveUndo(event.source, back, `Moved “${name}” to ${target}.`);
         this.refresh.notify();
       },
       error: () => this.toasts.show('Could not move — that may create a cycle.', 'error'),
@@ -441,9 +455,11 @@ export class ContentComponent {
     if (!source || !this.canEdit()) {
       return;
     }
+    const back = this.moveBack(source);
+    const name = this.nameOf(source);
     this.move(source, undefined).subscribe({
       next: () => {
-        this.toasts.show('Moved to the store root', 'success');
+        this.offerMoveUndo(source, back, `Moved “${name}” to the store root.`);
         this.refresh.notify();
       },
       error: () => this.toasts.show('Could not move — try again in a moment.', 'error'),
@@ -469,6 +485,22 @@ export class ContentComponent {
 
   protected onTreeChanged(): void {
     this.refresh.notify();
+  }
+
+  private nameOf(uuid: string): string {
+    const node = findFolder(this.folders(), uuid);
+    return node?.displayName ?? node?.uid ?? 'item';
+  }
+
+  /** The folder a folder or set lives in now (`undefined`: the store root) — where Undo moves it back. */
+  private moveBack(uuid: string): string | undefined {
+    const parent = findParentFolder(this.folders(), uuid);
+    return parent?.uuid && parent.uuid !== this.rootFolder()?.uuid ? parent.uuid : undefined;
+  }
+
+  /** One Undo for a move: moves the folder or set back to the folder it came from. */
+  private offerMoveUndo(uuid: string, back: string | undefined, message: string): void {
+    this.undo.offer(message, () => this.move(uuid, back).pipe(tap(() => this.refresh.notify())));
   }
 
   /** Folders move through the folder endpoint, sets through the generic asset move. */

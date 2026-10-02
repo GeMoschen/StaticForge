@@ -1,5 +1,5 @@
 import { HttpErrorResponse } from '@angular/common/http';
-import { Injectable, OnDestroy, computed, inject, signal } from '@angular/core';
+import { Injectable, Injector, OnDestroy, computed, inject, signal } from '@angular/core';
 import type { components } from '../../../core/api/generated/schema.d.ts';
 import { problemOf } from '../../../core/api/problem.util';
 import { diagnosticsOf } from '../text-media.util';
@@ -9,6 +9,7 @@ import {
   discardedFilesText,
   localeFileRows,
 } from '../media-locale-files.util';
+import { ConfirmService } from '../../../shared/components/dialog/confirm.service';
 import { MediaDrawerStore, type MediaView } from './media-drawer.store';
 import { MediaDrawerTextStore } from './media-drawer-text.store';
 
@@ -19,6 +20,8 @@ type MediaLocaleFileView = components['schemas']['MediaLocaleFileView'];
 export class MediaDrawerFilesStore implements OnDestroy {
   private readonly core = inject(MediaDrawerStore);
   private readonly text = inject(MediaDrawerTextStore);
+  private readonly confirms = inject(ConfirmService);
+  private readonly injector = inject(Injector);
 
   readonly replacing = signal(false);
   readonly togglingLocalized = signal(false);
@@ -201,12 +204,20 @@ export class MediaDrawerFilesStore implements OnDestroy {
     });
   }
 
-  removeLocaleFile(row: LocaleFileRow): void {
+  async removeLocaleFile(row: LocaleFileRow): Promise<void> {
     const uuid = this.core.media()?.uuid;
     if (!uuid || this.core.readOnly() || row.isDefault || !row.own || this.busyLocale()) {
       return;
     }
-    if (!window.confirm(`Remove the ${row.label} file? ${row.label} then uses the file it falls back to.`)) {
+    // Not undoable here: no endpoint puts a removed language file back (the earlier revision stays in History).
+    const confirmed = await this.confirms.confirm({
+      title: `Remove the ${row.label} file?`,
+      message: `${row.label} then uses the file it falls back to. The earlier version stays in the file's history.`,
+      confirmLabel: 'Remove file',
+      tone: 'danger',
+      injector: this.injector,
+    });
+    if (!confirmed) {
       return;
     }
     this.busyLocale.set(row.locale);

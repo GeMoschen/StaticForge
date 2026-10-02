@@ -9,6 +9,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ApiClient } from '../../core/api/api.client';
 import { AuthStore } from '../../core/auth/auth.store';
 import { ChannelsService } from '../channels/channels.service';
+import { ConfirmService } from '../../shared/components/dialog/confirm.service';
 import { TimeTravelStore } from '../revisions/time-travel.store';
 import { TemplatesService } from '../templates/templates.service';
 import { ContentService, etagFor, type DatasetDetailView } from './content.service';
@@ -63,7 +64,7 @@ function templatesStub() {
   return { validateOctl: vi.fn().mockReturnValue(of({ diagnostics: [] })) };
 }
 
-async function setup(options: { role?: string; revision?: number } = {}) {
+async function setup(options: { role?: string; revision?: number; confirm?: ReturnType<typeof vi.fn> } = {}) {
   const content = contentStub();
   const templates = templatesStub();
   const timeTravel = new TimeTravelStore();
@@ -78,6 +79,7 @@ async function setup(options: { role?: string; revision?: number } = {}) {
       { provide: TemplatesService, useValue: templates },
       { provide: ChannelsService, useValue: { list: vi.fn().mockReturnValue(of(CHANNELS)) } },
       { provide: ApiClient, useValue: {} },
+      { provide: ConfirmService, useValue: { confirm: options.confirm ?? vi.fn().mockResolvedValue(true) } },
       { provide: ProjectContextStore, useValue: { project: () => ({ key: 'acme', codeHighlighting: {} }) } },
       { provide: AuthStore, useValue: { roleFor: () => options.role ?? 'DEVELOPER', isArchived: () => false } },
       { provide: TimeTravelStore, useValue: timeTravel },
@@ -377,5 +379,42 @@ describe('DatasetSchemaEditorComponent — record templates (M25.5.2)', () => {
     expect(codeView(editor('html')).state.readOnly).toBe(true);
     expect(screen.queryByRole('group', { name: /Insert/ })).toBeNull();
     expect(saveButton().disabled).toBe(true);
+  });
+});
+
+describe('DatasetSchemaEditorComponent — delete (M35.13)', () => {
+  it('confirms with a danger dialog, deletes, and hands the deleted dataset to the screen (which offers Undo)', async () => {
+    const confirm = vi.fn().mockResolvedValue(true);
+    const { content, fixture } = await setup({ confirm });
+    content.deleteDataset.mockReturnValue(of(undefined));
+    // Only an empty dataset can be deleted.
+    content.getDataset.mockReturnValue(of({ ...DATASET, recordCount: 0 }));
+    fixture.componentRef.setInput('uuid', 'ds-other');
+    fixture.componentRef.setInput('uuid', 'ds-team');
+    fixture.detectChanges();
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Delete' })).toBeEnabled());
+    const deleted: unknown[] = [];
+    fixture.componentInstance.deleted.subscribe((d: unknown) => deleted.push(d));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+
+    await waitFor(() => expect(content.deleteDataset).toHaveBeenCalledWith('proj', 'ds-team'));
+    expect(confirm.mock.calls[0][0].tone).toBe('danger');
+    expect(confirm.mock.calls[0][0].irreversible).toBeUndefined();
+    expect(deleted).toEqual([{ uuid: 'ds-team', name: 'Team' }]);
+  });
+
+  it('does not delete when the confirmation is declined', async () => {
+    const { content, fixture } = await setup({ confirm: vi.fn().mockResolvedValue(false) });
+    content.getDataset.mockReturnValue(of({ ...DATASET, recordCount: 0 }));
+    fixture.componentRef.setInput('uuid', 'ds-other');
+    fixture.componentRef.setInput('uuid', 'ds-team');
+    fixture.detectChanges();
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Delete' })).toBeEnabled());
+
+    fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Delete' })).toBeTruthy());
+    expect(content.deleteDataset).not.toHaveBeenCalled();
   });
 });

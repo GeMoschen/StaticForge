@@ -8,7 +8,14 @@ import {
   signal,
 } from '@angular/core';
 import { ApiClient } from '../../core/api/api.client';
+import { tap } from 'rxjs';
+import { ProjectContextStore } from '../../core/project/project-context.store';
 import { ToastService } from '../../core/ui/toast.service';
+import { UndoService } from '../../core/ui/undo.service';
+import { ConfirmService } from '../../shared/components/dialog/confirm.service';
+import { findFolderByPath, findParentFolder, moveBackBody } from '../../shared/folder-tree.util';
+import { TemplatesLoader } from './templates-loader';
+import { TemplatesStore } from './templates.store';
 import { ContextMenuItem, ContextMenuService } from '../../shared/services/context-menu.service';
 import { TreeClipboardService } from '../../shared/services/tree-clipboard.service';
 import type { components } from '../../core/api/generated/schema.d.ts';
@@ -59,6 +66,11 @@ const KIND_TRANSFER_KEY = 'application/x-sf-template-kind';
 export class TemplateFolderNodeComponent {
   private readonly api = inject(ApiClient);
   private readonly toast = inject(ToastService);
+  private readonly undo = inject(UndoService);
+  private readonly confirms = inject(ConfirmService);
+  private readonly projectContext = inject(ProjectContextStore);
+  private readonly templatesStore = inject(TemplatesStore);
+  private readonly loader = inject(TemplatesLoader);
   private readonly menu = inject(ContextMenuService);
   private readonly clipboard = inject(TreeClipboardService);
 
@@ -283,11 +295,16 @@ export class TemplateFolderNodeComponent {
       return;
     }
     this.renamingName.set(true);
-    this.api.renameFolder(this.projectKey(), uuid, { displayName }, this.node().revision).subscribe({
-      next: () => {
+    const key = this.projectKey();
+    const oldName = this.node().displayName ?? this.node().uid ?? '';
+    this.api.renameFolder(key, uuid, { displayName }, this.node().revision).subscribe({
+      next: (renamed) => {
         this.renamingName.set(false);
         this.renameOpen.set(false);
-        this.toast.show('Folder renamed', 'success');
+        // Undo renames back; the etag is the revision the rename produced.
+        this.undo.offer(`Renamed “${oldName}” to “${displayName}”.`, () =>
+          this.api.renameFolder(key, uuid, { displayName: oldName }, renamed.revision).pipe(tap(() => this.loader.onTreeChanged())),
+        );
         this.changed.emit();
       },
       error: () => {
@@ -302,17 +319,27 @@ export class TemplateFolderNodeComponent {
     this.changed.emit();
   }
 
-  private deleteFolder(uuid: string): void {
+  private async deleteFolder(uuid: string): Promise<void> {
     if (this.readOnly()) {
       return;
     }
     const name = this.node().displayName ?? this.node().uid ?? 'this folder';
-    if (!window.confirm(`Delete "${name}" and everything inside it? This cannot be undone.`)) {
+    const confirmed = await this.confirms.confirm({
+      title: `Delete “${name}”?`,
+      message: 'The folder and everything inside it is deleted.',
+      confirmLabel: 'Delete folder',
+      tone: 'danger',
+    });
+    if (!confirmed) {
       return;
     }
-    this.api.deleteFolder(this.projectKey(), uuid, true).subscribe({
+    const key = this.projectKey();
+    this.api.deleteFolder(key, uuid, true).subscribe({
       next: () => {
-        this.toast.show('Folder deleted', 'success');
+        // One restore brings back the folder with its whole subtree.
+        this.undo.offer(`Deleted “${name}” and everything inside it.`, () =>
+          this.api.restoreFolder(key, uuid).pipe(tap(() => this.loader.onTreeChanged())),
+        );
         this.changed.emit();
       },
       error: () => this.toast.show('Could not delete folder — try again in a moment.', 'error'),
@@ -332,10 +359,19 @@ export class TemplateFolderNodeComponent {
       this.toast.show('Only Cut items can be pasted here — no duplicate exists for this item.', 'error');
       return;
     }
-    this.api.moveAsset(this.projectKey(), entry.uuid, { folderUuid: targetUuid }).subscribe({
+    const key = this.projectKey();
+    const tree = this.projectContext.templateFolderTree();
+    // Where it lives now is the body of the move that undoes this one.
+    const template = this.templatesStore.templates().find((t) => t.uuid === entry.uuid);
+    const parent = template ? findFolderByPath(tree, template.folderPath ?? '') : findParentFolder(tree, entry.uuid);
+    const back = moveBackBody(parent, tree[0]?.uuid);
+    const target = this.node().displayName ?? this.node().uid ?? 'folder';
+    this.api.moveAsset(key, entry.uuid, { folderUuid: targetUuid }).subscribe({
       next: () => {
         this.clipboard.clear();
-        this.toast.show(`Moved "${entry.label}"`, 'success');
+        this.undo.offer(`Moved “${entry.label}” to ${target}.`, () =>
+          this.api.moveAsset(key, entry.uuid, back).pipe(tap(() => this.loader.onTreeChanged())),
+        );
         this.changed.emit();
       },
       error: () => this.toast.show('Could not move — try again in a moment.', 'error'),

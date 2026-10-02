@@ -398,6 +398,29 @@ public class AssetServiceImpl implements AssetService {
         return toView(next);
     }
 
+    @Override
+    @Transactional
+    public AssetVersionView restoreDeleted(UUID uuid, RevisionContext ctx) {
+        Asset asset = require(ctx.projectId(), uuid);
+        if (!requireOpen(asset.getId()).isDeleted()) {
+            throw new SfException(ProblemFactory.other(409, "SF-DOM-0111", "Conflict", "Asset is not deleted."));
+        }
+        AssetVersion lastLive = assetVersionRepository.findByAssetIdOrderByValidFromRevisionDesc(asset.getId()).stream()
+                .filter(version -> !version.isDeleted())
+                .findFirst()
+                .orElseThrow(() -> new SfException(ProblemFactory.other(
+                        409, "SF-DOM-0111", "Conflict", "Asset was never live, so there is nothing to restore.")));
+        if (lastLive.getFolderId() != null
+                && assetVersionRepository.findByAssetIdAndValidToRevisionIsNull(lastLive.getFolderId())
+                        .map(AssetVersion::isDeleted)
+                        .orElse(true)) {
+            throw new SfException(ProblemFactory.other(
+                    409, "SF-DOM-0112", "Conflict",
+                    "The folder this was deleted from has been deleted too — restore the folder first."));
+        }
+        return restore(uuid, lastLive.getValidFromRevision(), ctx);
+    }
+
     /**
      * The revision that soft-deleted an asset whose current version is a tombstone: where its last live
      * version was closed, or {@code null} when it never was live.

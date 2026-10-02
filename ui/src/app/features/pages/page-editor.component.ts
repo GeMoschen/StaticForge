@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, effect, inject, input } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, effect, inject, input } from '@angular/core';
 import { useFrameItem } from '../../core/frame/use-frame-item';
 import { ReleaseBarComponent } from '../release/release-bar.component';
 import { PageAutosaveService } from './autosave.service';
@@ -12,6 +12,8 @@ import { PageEditorSectionsService } from './page-editor-sections.service';
 import { PageEditorStore } from './page-editor.store';
 import { SectionPaletteComponent } from './section-palette.component';
 import { SectionPaletteService } from './section-palette.service';
+import { ActiveEditorService } from '../../core/editor/active-editor.service';
+import { autosaveEditorState } from '../../core/editor/autosave-editor-state';
 
 /**
  * Split-view page editor: page fields and bodies/sections in the centre, the preview beside it. It composes the
@@ -65,6 +67,18 @@ export class PageEditorComponent {
     effect(() => this.editor.syncExternalMutation(), { allowSignalWrites: true });
 
     effect(() => this.editor.syncEditingLocale(), { allowSignalWrites: true });
+
+    // The open page is an editor for the frame (M35.13): Ctrl+S saves it, leaving it with an edit that could not be
+    // written asks first, and closing the tab prompts. The editor is reused when another page is opened, so it stays
+    // registered for the component's life.
+    const unregister = inject(ActiveEditorService).register(
+      autosaveEditorState({
+        name: () => this.editor.page()?.displayName || this.editor.page()?.uid || '',
+        autosave: this.editor.autosave as never,
+        reload: () => this.editor.loadRouted(),
+      }),
+    );
+    inject(DestroyRef).onDestroy(unregister);
 
     // The breadcrumb ends with the open page and the document title starts with it (M35.10).
     useFrameItem(() => {

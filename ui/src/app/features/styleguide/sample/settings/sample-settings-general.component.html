@@ -1,10 +1,10 @@
 <sf-page-header [title]="t('sections.general')">
-  <sf-sample-settings-save sfPageHeaderActions [dirty]="state.generalDirty()" (save)="save()" />
+  <sf-sample-settings-save sfPageHeaderActions [dirty]="state.generalDirty()" [errors]="state.generalError() ? 1 : 0" (save)="save()" />
 </sf-page-header>
 
 <div class="page__scroll">
   <div class="page__form">
-    <sf-field [label]="t('general.name')" required>
+    <sf-field [label]="t('general.name')" required [error]="state.generalError()">
       <sf-input [value]="state.general().name" (valueChange)="patch({ name: $event })" />
     </sf-field>
     <sf-field [label]="t('general.description')" [hint]="t('general.descriptionHint')">

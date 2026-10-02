@@ -9,10 +9,12 @@ import {
   signal,
   viewChild,
 } from '@angular/core';
+import { tap } from 'rxjs';
 import { ApiClient } from '../../core/api/api.client';
 import type { components } from '../../core/api/generated/schema.d.ts';
 import { ProjectPermissionsStore } from '../../core/project/project-permissions.store';
 import { ToastService } from '../../core/ui/toast.service';
+import { UndoService } from '../../core/ui/undo.service';
 import { SfAssetPickerDialogComponent, type AssetPicked } from '../../shared/components/sf-asset-picker-dialog.component';
 import { SfButtonComponent } from '../../shared/components/sf-button.component';
 import { SfSpinnerComponent } from '../../shared/components/sf-spinner.component';
@@ -21,6 +23,8 @@ import { RedirectAfterService } from '../release/redirect-after.service';
 import { RedirectOptionComponent } from '../release/redirect-option.component';
 import { type RedirectIntent, type RedirectSource, NO_REDIRECT, intentReady } from '../release/redirect-option.util';
 import { deleteQuestion, isOnline } from '../release/release-status.util';
+import { restoreDeletedAsset } from '../../shared/restore-deleted-asset';
+import { PagesTreeRefresh } from './pages-tree-refresh.service';
 
 type AssetSummaryView = components['schemas']['AssetSummaryView'];
 
@@ -40,6 +44,8 @@ type AssetSummaryView = components['schemas']['AssetSummaryView'];
 export class PageDeleteDialogComponent {
   private readonly api = inject(ApiClient);
   private readonly toast = inject(ToastService);
+  private readonly undo = inject(UndoService);
+  private readonly treeRefresh = inject(PagesTreeRefresh);
   private readonly permissions = inject(ProjectPermissionsStore);
   private readonly redirectAfter = inject(RedirectAfterService);
 
@@ -58,7 +64,7 @@ export class PageDeleteDialogComponent {
   protected readonly name = computed(() => assetName(this.page()));
   protected readonly online = computed(() => isOnline(this.page().release));
   protected readonly question = computed(() =>
-    deleteQuestion(`Delete "${this.name()}"? This cannot be undone.`, this.page().release),
+    deleteQuestion(`Delete "${this.name()}"?`, this.page().release),
   );
   protected readonly redirectSources = computed<RedirectSource[]>(() => {
     const page = this.page();
@@ -100,11 +106,15 @@ export class PageDeleteDialogComponent {
     const online = this.online();
     const redirect = this.offersRedirect() ? this.redirectIntent() : NO_REDIRECT;
     const sources = this.redirectSources();
+    const key = this.projectKey();
     this.submitting.set(true);
     this.api.deleteAsset(this.projectKey(), uuid).subscribe({
       next: () => {
         this.submitting.set(false);
-        this.toast.show(online ? 'Page deleted — it stays online until you release the deletion' : 'Page deleted', 'success');
+        const name = this.name();
+        const message = online ? `Deleted “${name}”. It stays online until you release the deletion.` : `Deleted “${name}”.`;
+        // Undo restores the page from its last live revision.
+        this.undo.offer(message, () => restoreDeletedAsset(this.api, key, uuid).pipe(tap(() => this.treeRefresh.notify())));
         if (redirect.wanted && redirect.page) {
           this.redirectAfter.redirect(this.projectKey(), sources, redirect.page);
         }

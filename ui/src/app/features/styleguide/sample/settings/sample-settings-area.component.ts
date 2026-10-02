@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, computed, effect, inject } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, computed, effect, inject } from '@angular/core';
 import { SfPageHeaderComponent } from '../../../../shared/components/layout/sf-page-header.component';
 import { SfSideNavComponent, SfSideNavItem } from '../../../../shared/components/layout/sf-side-nav.component';
 import { SfEmptyStateComponent } from '../../../../shared/components/sf-empty-state.component';
@@ -17,6 +17,7 @@ import {
   TRANSFER_TABS,
   UNBUILT_SECTIONS,
 } from './settings-data';
+import { SampleState } from '../sample-state';
 import { SettingsState } from './settings-state';
 
 /**
@@ -91,6 +92,11 @@ export class SampleSettingsAreaComponent {
       this.state.exportStep.set(step);
     }
 
+    // Leaving the screen (rail, tree) with unsaved changes in the open section asks first.
+    const sample = inject(SampleState, { optional: true });
+    const unregister = sample?.registerGuard(() => this.state.canLeaveSection());
+    inject(DestroyRef).onDestroy(() => unregister?.());
+
     effect(() => {
       const visible = this.state.visibleSection();
       const transfer = visible === 'importexport';
@@ -104,7 +110,9 @@ export class SampleSettingsAreaComponent {
     });
   }
 
-  protected selectSection(id: string): void {
-    this.state.open(id as SettingsSection);
+  protected async selectSection(id: string): Promise<void> {
+    if (await this.state.canLeaveSection()) {
+      this.state.open(id as SettingsSection);
+    }
   }
 }

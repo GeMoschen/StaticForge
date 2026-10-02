@@ -62,4 +62,14 @@ public interface FolderService {
      * while non-empty unless {@code cascade} is true ({@code 409 SF-DOM-0110}, with {@code recordCount} for a set).
      */
     void delete(UUID uuid, boolean cascade, RevisionContext ctx);
+
+    /**
+     * Undoes {@link #delete} of a folder: the folder and everything that very delete revision took with it (sub-folders,
+     * pages, media, navigation entries, templates, record sets with their records) come back as they were, in one new
+     * revision and atomically — all or nothing. What was restored on its own since, or deleted by another revision,
+     * stays as it is. Paths are rebuilt under the parent's current path. Errors: {@code 404} unknown,
+     * {@code 409 SF-DOM-0111} not deleted, {@code 409 SF-DOM-0112} parent folder deleted (restore it first),
+     * {@code 409 SF-DOM-0113} a live folder holds the path now.
+     */
+    AssetVersionView restore(UUID uuid, RevisionContext ctx);
 }

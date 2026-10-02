@@ -75,6 +75,7 @@
     [uid]="summary().uid ?? ''"
     [displayName]="summary().displayName ?? summary().uid ?? ''"
     [submittingName]="renamingName()"
+    [undoableUid]="true"
     (renameDisplayName)="submitRenameDisplayName($event)"
     (uidChanged)="onRenameUidChanged()"
     (closed)="closeRename()"

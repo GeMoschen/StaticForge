@@ -361,6 +361,91 @@ describe('TemplatesComponent (tabs and one save, M34)', () => {
     expect(store.sections().rules).toBe('rule x');
   });
 
+  describe('save status, Ctrl+S and the leave check (M35.13)', () => {
+    const statusText = () => (fixture.nativeElement as HTMLElement).querySelector('sf-save-status')?.textContent?.replace(/\s+/g, ' ').trim();
+    const dialog = () => document.body.querySelector<HTMLElement>('[role="dialog"]');
+    const press = (name: string) =>
+      Array.from(dialog()!.querySelectorAll('button')).find((b) => b.textContent?.trim() === name)!.click();
+
+    it('says Saved, then Unsaved changes after an edit, then Saved with the time after the save', () => {
+      open();
+      expect(statusText()).toContain('Saved');
+      editing.onSectionInput({ section: 'rules', value: 'state title requiredWhen "true"' });
+      fixture.detectChanges();
+      expect(statusText()).toContain('Unsaved changes');
+
+      save.saveTemplate();
+      fixture.detectChanges();
+      httpMock.expectOne((r) => r.method === 'PUT').flush({ ...LAYOUT, rulesCdl: 'state title requiredWhen "true"', revision: 5 });
+      fixture.detectChanges();
+      expect(statusText()).toMatch(/Saved \d/);
+    });
+
+    it('says Not saved — 2 errors after a rejected save, and keeps saying it while the refused edits are there', () => {
+      open();
+      editing.onSectionInput({ section: 'rules', value: 'rule x' });
+      save.saveTemplate();
+      httpMock.expectOne((r) => r.method === 'PUT').flush(
+        {
+          code: 'SF-API-0422',
+          diagnostics: [
+            { severity: 'ERROR', code: 'SF-CDL-0113', message: 'name', line: 1, column: 6, field: 'rules' },
+            { severity: 'ERROR', code: 'SF-TPL-0103', message: 'unknown', line: 1, column: 3, field: 'channel:md' },
+          ],
+        },
+        { status: 422, statusText: 'Unprocessable Entity' },
+      );
+      fixture.detectChanges();
+      expect(statusText()).toContain('Not saved — 2 errors');
+      expect(save.error()?.message).toBe('2 compile errors');
+    });
+
+    it('is an explicit-save editor of the frame: Ctrl+S saves it through the shortcut service', () => {
+      open();
+      editing.onSectionInput({ section: 'content', value: 'editor text headline { }' });
+      document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 's', ctrlKey: true, bubbles: true, cancelable: true }));
+      httpMock.expectOne((r) => r.method === 'PUT').flush({ ...LAYOUT, revision: 5 });
+    });
+
+    it('asks before another template opens: Cancel stays on this one with its edits', () => {
+      open();
+      editing.onSectionInput({ section: 'rules', value: 'rule x' });
+      store.select('t-2');
+      return Promise.resolve().then(() => {
+        expect(dialog()).not.toBeNull();
+        press('Cancel');
+      }).then(() => new Promise((resolve) => setTimeout(resolve)))
+        .then(() => {
+          expect(store.selectedUuid()).toBe('t-1');
+          expect(store.sections().rules).toBe('rule x');
+        });
+    });
+
+    it('Discard gives the edits up (the saved template shows again) and opens the other template', async () => {
+      open();
+      editing.onSectionInput({ section: 'rules', value: 'rule x' });
+      store.select('t-2');
+      await Promise.resolve();
+      press('Discard');
+      await new Promise((resolve) => setTimeout(resolve));
+      expect(store.selectedUuid()).toBe('t-2');
+      expect(save.dirty()).toBe(false);
+      for (const r of httpMock.match(() => true)) {
+        r.flush(emptyBodyFor(r.request.url, {}));
+      }
+    });
+
+    it('switches at once when nothing is unsaved', () => {
+      open();
+      store.select('t-2');
+      expect(store.selectedUuid()).toBe('t-2');
+      expect(dialog()).toBeNull();
+      for (const r of httpMock.match(() => true)) {
+        r.flush(emptyBodyFor(r.request.url, {}));
+      }
+    });
+  });
+
   it('shows no Bodies tab for a section template and never sends bodies', () => {
     (store.templates as { set: (v: unknown) => void }).set([
       { uuid: 't-1', assetType: 'SECTION_TEMPLATE' },

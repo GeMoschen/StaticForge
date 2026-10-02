@@ -1,4 +1,5 @@
-import { Injectable, computed, signal } from '@angular/core';
+import { Injectable, computed, inject, signal } from '@angular/core';
+import { UnsavedChangesService, type SaveResult } from '../../../../shared/components/dialog/unsaved-changes.service';
 import { injectSampleDevMode, injectSampleNotice, injectSampleText } from '../changes/sample-area.util';
 import {
   CHANNELS,
@@ -42,6 +43,8 @@ export class SettingsState {
   // ── Page values: saved and draft ───────────────────────────────────────────
   readonly general = signal<GeneralForm>(GENERAL);
   readonly generalSaved = signal<GeneralForm>(GENERAL);
+  /** Why the last General save was refused (the name is required); cleared by the next edit or a good save. */
+  readonly generalError = signal<string | null>(null);
   readonly generalDirty = computed(() => {
     const a = this.general();
     const b = this.generalSaved();
@@ -59,6 +62,64 @@ export class SettingsState {
   /** Every action that would change something says so instead. */
   notice(key = 'notice', params?: Record<string, unknown>): void {
     this.toast(this.t(key, params));
+  }
+
+  private readonly unsaved = inject(UnsavedChangesService);
+
+  /** Whether a section has unsaved changes. */
+  dirtyOf(section: SettingsSection): boolean {
+    switch (section) {
+      case 'general':
+        return this.generalDirty();
+      case 'languages':
+        return this.languagesDirty();
+      case 'channels':
+        return this.channelsDirty();
+      default:
+        return false;
+    }
+  }
+
+  /** Saves a section's draft: General needs a name; the others always succeed. */
+  saveSection(section: SettingsSection): SaveResult {
+    if (section === 'general') {
+      if (this.general().name.trim() === '') {
+        this.generalError.set(this.t('general.nameRequired'));
+        return { ok: false, message: this.t('general.nameRequired') };
+      }
+      this.generalError.set(null);
+      this.generalSaved.set(this.general());
+    } else if (section === 'languages') {
+      this.languagesSaved.set(this.languages());
+    } else if (section === 'channels') {
+      this.channelsSaved.set(this.channels());
+    }
+    return { ok: true };
+  }
+
+  /** Throws the draft of a section away. */
+  discardSection(section: SettingsSection): void {
+    if (section === 'general') {
+      this.general.set(this.generalSaved());
+      this.generalError.set(null);
+    } else if (section === 'languages') {
+      this.languages.set(this.languagesSaved());
+    } else if (section === 'channels') {
+      this.channels.set(this.channelsSaved());
+    }
+  }
+
+  /** Whether the open section may be left: it has no unsaved changes, or the person saved or discarded them. */
+  async canLeaveSection(): Promise<boolean> {
+    const section = this.visibleSection();
+    if (!this.dirtyOf(section)) {
+      return true;
+    }
+    return this.unsaved.confirmLeave({
+      name: `${this.t('title')} › ${this.t(`sections.${section}`)}`,
+      save: async () => this.saveSection(section),
+      discard: () => this.discardSection(section),
+    });
   }
 
   open(section: SettingsSection): void {

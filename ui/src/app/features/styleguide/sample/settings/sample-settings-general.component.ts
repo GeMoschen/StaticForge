@@ -47,11 +47,13 @@ export class SampleSettingsGeneralComponent {
 
   protected patch(change: Partial<GeneralForm>): void {
     this.state.general.update((g) => ({ ...g, ...change }));
+    this.state.generalError.set(null);
   }
 
   protected save(): void {
-    this.state.generalSaved.set(this.state.general());
-    this.state.notice();
+    if (this.state.saveSection('general').ok) {
+      this.state.notice();
+    }
   }
 
   protected async archive(): Promise<void> {

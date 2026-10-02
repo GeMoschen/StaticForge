@@ -3,7 +3,7 @@ package com.acme.staticforge.api;
 import com.acme.staticforge.api.dto.CreateDatasetRequest;
 import com.acme.staticforge.api.dto.DatasetDetailView;
 import com.acme.staticforge.api.dto.DatasetSummaryView;
-import com.acme.staticforge.api.dto.RestoreRequest;
+import com.acme.staticforge.api.dto.DatasetRestoreRequest;
 import com.acme.staticforge.api.dto.UpdateDatasetRequest;
 import com.acme.staticforge.asset.AssetService;
 import com.acme.staticforge.asset.dataset.CreateDatasetCommand;
@@ -133,14 +133,22 @@ public class DatasetController {
         return ResponseEntity.noContent().build();
     }
 
-    /** Restores the dataset to its state at {@code fromRevision} (for a deleted one: its last live revision). */
+    /**
+     * Restores the dataset to its state at {@code fromRevision}. Without a body (or {@code fromRevision}) a deleted
+     * dataset comes back as its last live version was (undo of the delete): {@code 409 SF-DOM-0111} when it is not
+     * deleted, {@code 409 SF-DOM-0112} while its folder is deleted.
+     */
     @PostMapping("/{uuid}/restore")
     @PreAuthorize("@projectAuth.has(#projectKey, " + ProjectRoleExpr.DEVELOPER + ")")
     public ResponseEntity<DatasetDetailView> restore(
-            @PathVariable String projectKey, @PathVariable UUID uuid, @RequestBody RestoreRequest body) {
+            @PathVariable String projectKey, @PathVariable UUID uuid, @RequestBody(required = false) DatasetRestoreRequest body) {
         long projectId = projectId(projectKey);
         require(projectId, uuid, null);
-        assetService.restore(uuid, body.fromRevision(), ctx(projectKey, "restore dataset"));
+        if (body == null || body.fromRevision() == null) {
+            assetService.restoreDeleted(uuid, ctx(projectKey, "restore dataset"));
+        } else {
+            assetService.restore(uuid, body.fromRevision(), ctx(projectKey, "restore dataset"));
+        }
         return ok(require(projectId, uuid, null));
     }
 

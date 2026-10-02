@@ -20,6 +20,7 @@ import { SfSpinnerComponent } from '../../../shared/components/sf-spinner.compon
 import { SfTabsComponent } from '../../../shared/components/sf-tabs.component';
 import { BADGES, DISPLAY, LAYOUT, STATUSES, relativeMoments } from '../styleguide.demo';
 import { sectionOf } from '../styleguide.sections';
+import { SfSaveStatusComponent } from '../../../shared/components/layout/sf-save-status.component';
 
 /**
  * The display and layout sections of the style guide (M35.9): badges, statuses, tags, keys, avatars, copyable values,
@@ -30,6 +31,7 @@ import { sectionOf } from '../styleguide.sections';
   selector: 'sf-sg-display',
   standalone: true,
   imports: [
+    SfSaveStatusComponent,
     SfAvatarComponent,
     SfBadgeComponent,
     SfBannerComponent,

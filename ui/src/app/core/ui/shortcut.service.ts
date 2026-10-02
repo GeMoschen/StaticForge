@@ -3,6 +3,7 @@ import { OverlayStack } from '../../shared/overlay/overlay-stack';
 
 export interface ShortcutOptions {
   mod?: boolean;
+  /** `true` requires Shift, `false` forbids it, left out ignores it. */
   shift?: boolean;
   alt?: boolean;
 }
@@ -89,6 +90,8 @@ export class ShortcutService implements OnDestroy {
       if ((b.opts.mod ?? false) !== mod) return false;
       if ((b.opts.alt ?? false) !== alt) return false;
       if (b.opts.shift && !event.shiftKey) return false;
+      // `shift: false` forbids Shift (Ctrl+S is not Ctrl+Shift+S); left out, Shift is ignored.
+      if (b.opts.shift === false && event.shiftKey) return false;
       return (
         b.key === event.key ||
         b.key === event.key.toLowerCase() ||
@@ -122,6 +125,10 @@ export class ShortcutService implements OnDestroy {
   }
 
   private isEditable(el: HTMLElement): boolean {
+    // A key pressed with nothing focused targets `document` (or `window`): not an element, so not an input.
+    if (typeof el.tagName !== 'string') {
+      return false;
+    }
     const tag = el.tagName.toUpperCase();
     return (
       tag === 'INPUT' ||

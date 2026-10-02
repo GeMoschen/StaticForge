@@ -3,6 +3,7 @@ import { Router, Routes } from '@angular/router';
 import { authGuard, instanceAdminGuard, loginGuard, projectMemberGuard } from './core/auth/auth.guard';
 import { passwordChangeGuard, setPasswordGuard } from './core/auth/password-change.guard';
 import { styleguideGuard } from './features/styleguide/styleguide.guard';
+import { unsavedChangesGuard } from './core/editor/unsaved-changes.guard';
 import { developerModeGuard } from './core/frame/developer-mode.guard';
 import { routeTitle } from './core/frame/route-title';
 import { projectResolver } from './core/project/project.resolver';
@@ -121,7 +122,9 @@ export const routes: Routes = [
             component: PagesListComponent,
             children: [
               {
+                // Another page, or leaving the editor, asks about unsaved changes first (M35.13).
                 path: ':uuid',
+                canDeactivate: [unsavedChangesGuard],
                 component: PageEditorComponent,
               },
             ],
@@ -137,6 +140,7 @@ export const routes: Routes = [
               },
               {
                 path: 'records/:recordUuid',
+                canDeactivate: [unsavedChangesGuard],
                 component: RecordEditorComponent,
               },
             ],
@@ -159,6 +163,7 @@ export const routes: Routes = [
           {
             path: 'templates',
             title: routeTitle('frame.section.templates'),
+            canDeactivate: [unsavedChangesGuard],
             component: TemplatesComponent,
           },
           {

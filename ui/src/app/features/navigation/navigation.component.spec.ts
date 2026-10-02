@@ -1,7 +1,9 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/angular';
-import { of } from 'rxjs';
+import { TestBed } from '@angular/core/testing';
+import { of, throwError } from 'rxjs';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiClient } from '../../core/api/api.client';
+import { ToastService } from '../../core/ui/toast.service';
 import { NavigationComponent } from './navigation.component';
 import { NavigationService, type NavTreeView } from './navigation.service';
 import { stubReleaseBar } from '../release/testing/release-bar.stub';
@@ -125,5 +127,80 @@ describe('NavigationComponent', () => {
     expect(Array.from(select.options).map((option) => option.textContent?.trim())).toContain('Main Menu');
     expect(screen.queryByRole('button', { name: 'Delete folder' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Rename folder' })).toBeNull();
+  });
+});
+
+describe('NavigationComponent (undo of a move)', () => {
+  // Two folders under the root; the reference sits in "Footer".
+  const moveTree: NavTreeView[] = [
+    {
+      uuid: 'nav-root-uuid',
+      type: 'FOLDER',
+      displayName: 'All Navigation',
+      children: [
+        {
+          uuid: 'footer-uuid',
+          type: 'FOLDER',
+          displayName: 'Footer',
+          children: [{ uuid: 'ref-uuid', type: 'PAGE_REFERENCE', displayName: 'About', children: [] }],
+        },
+        { uuid: 'header-uuid', type: 'FOLDER', displayName: 'Header', children: [] },
+      ],
+    },
+  ];
+  const lastToast = () => TestBed.inject(ToastService).toasts().at(-1)!;
+
+  async function setup(nav: Record<string, unknown> = {}) {
+    stubReleaseBar(NavFolderDetailComponent);
+    stubReleaseBar(NavReferenceDetailComponent);
+    const service = {
+      tree: vi.fn().mockReturnValue(of(moveTree)),
+      moveFolder: vi.fn().mockReturnValue(of({})),
+      moveReference: vi.fn().mockReturnValue(of({})),
+      ...nav,
+    };
+    const view = await render(NavigationComponent, {
+      componentInputs: { projectKey: 'proj' },
+      providers: [
+        { provide: NavigationService, useValue: service },
+        { provide: ApiClient, useValue: {} },
+      ],
+    });
+    await screen.findByText('Footer');
+    const component = view.fixture.componentInstance as unknown as {
+      onMove: (event: { source: string; target: string }) => void;
+    };
+    return { service, component };
+  }
+
+  it('offers Undo for moving a reference, which moves it back into its old folder', async () => {
+    const { service, component } = await setup();
+
+    component.onMove({ source: 'ref-uuid', target: 'header-uuid' });
+
+    expect(service.moveReference).toHaveBeenCalledWith('proj', 'ref-uuid', 'header-uuid');
+    expect(lastToast().message).toBe('Moved “About” to Header.');
+    lastToast().action!.run();
+    await waitFor(() => expect(service.moveReference).toHaveBeenLastCalledWith('proj', 'ref-uuid', 'footer-uuid'));
+  });
+
+  it('moves a top-level folder back to the root (no folder) on Undo', async () => {
+    const { service, component } = await setup();
+
+    component.onMove({ source: 'footer-uuid', target: 'header-uuid' });
+
+    expect(service.moveFolder).toHaveBeenCalledWith('proj', 'footer-uuid', 'header-uuid');
+    lastToast().action!.run();
+    await waitFor(() => expect(service.moveFolder).toHaveBeenLastCalledWith('proj', 'footer-uuid', undefined));
+  });
+
+  it('shows the error toast when moving back fails', async () => {
+    const { component } = await setup({ moveReference: vi.fn().mockReturnValueOnce(of({})).mockReturnValue(throwError(() => new Error('409'))) });
+
+    component.onMove({ source: 'ref-uuid', target: 'header-uuid' });
+    lastToast().action!.run();
+
+    await waitFor(() => expect(lastToast().kind).toBe('error'));
+    expect(lastToast().message).toMatch(/Could not undo/);
   });
 });

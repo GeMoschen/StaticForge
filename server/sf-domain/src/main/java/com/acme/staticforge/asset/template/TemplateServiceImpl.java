@@ -399,6 +399,30 @@ public class TemplateServiceImpl implements TemplateService {
         assetService.softDelete(uuid, false, ctx);
     }
 
+    @Override
+    @Transactional
+    public TemplateView restore(UUID uuid, RevisionContext ctx) {
+        Asset template = requireTemplate(ctx.projectId(), uuid);
+        UUID parent = assetVersionRepository.findByAssetIdOrderByValidFromRevisionDesc(template.getId()).stream()
+                .filter(version -> !version.isDeleted())
+                .findFirst()
+                .map(version -> TemplateHierarchy.TemplateVersion.parentTemplateRef(version.getPayload()))
+                .orElse(null);
+        if (parent != null) {
+            boolean parentLive = assetRepository.findByProjectIdAndUuid(ctx.projectId(), parent)
+                    .flatMap(asset -> assetVersionRepository.findByAssetIdAndValidToRevisionIsNull(asset.getId()))
+                    .map(version -> !version.isDeleted())
+                    .orElse(false);
+            if (!parentLive) {
+                throw new SfException(ProblemFactory.other(
+                        409, "SF-DOM-0112", "Conflict",
+                        "The template it extends has been deleted — restore that template first."));
+            }
+        }
+        assetService.restoreDeleted(uuid, ctx);
+        return get(ctx.projectId(), uuid);
+    }
+
     // ------------------------------------------------------------------
     // Compile-on-save
     // ------------------------------------------------------------------

@@ -3,8 +3,9 @@ import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { components } from '../../core/api/generated/schema.d.ts';
+import { provideTranslocoTesting } from '../../core/i18n/transloco-testing';
 import { provideProjectPermissions } from '../../core/project/testing/project-permissions.testing';
 import { ToastService } from '../../core/ui/toast.service';
 import { PageDeleteDialogComponent } from './page-delete-dialog.component';
@@ -53,6 +54,7 @@ describe('PageDeleteDialogComponent', () => {
         provideHttpClient(),
         provideHttpClientTesting(),
         provideRouter([]),
+        provideTranslocoTesting(),
         provideProjectPermissions({ role: () => 'EDITOR', permissions: () => permissions, readOnly: () => false }),
       ],
     });
@@ -108,8 +110,54 @@ describe('PageDeleteDialogComponent', () => {
     redirect.flush([]);
     expect(deleted).toBe(1);
     expect(TestBed.inject(ToastService).toasts().map((t) => t.message)).toContain(
-      'Page deleted — it stays online until you release the deletion',
+      'Deleted “Hammer”. It stays online until you release the deletion.',
     );
+  });
+
+  describe('undo', () => {
+    const lastToast = () => TestBed.inject(ToastService).toasts().at(-1)!;
+
+    function deleteHammer(): void {
+      open(HAMMER_PAGE, []);
+      button('Delete').click();
+      http.expectOne({ method: 'DELETE', url: `${BASE}/assets/${HAMMER}` }).flush(null, { status: 204, statusText: 'No Content' });
+    }
+
+    it('replaces the plain toast by an Undo toast, and Undo restores the page from its last live revision', async () => {
+      deleteHammer();
+      expect(lastToast().message).toBe('Deleted “Hammer”. It stays online until you release the deletion.');
+      expect(lastToast().action).toBeDefined();
+      expect(http.match(`${BASE}/assets/${HAMMER}/restore`)).toHaveLength(0);
+
+      lastToast().action!.run();
+      // The revision comes from the history at the moment of the Undo, not from the (possibly stale) tree row.
+      const history = await vi.waitFor(() => http.expectOne({ method: 'GET', url: `${BASE}/assets/${HAMMER}/history` }));
+      history.flush([
+        { revision: 9, deleted: true },
+        { revision: 7, deleted: false },
+        { revision: 6, deleted: false },
+      ]);
+      const restore = await vi.waitFor(() => http.expectOne({ method: 'POST', url: `${BASE}/assets/${HAMMER}/restore` }));
+      expect(restore.request.body).toEqual({ fromRevision: 7 });
+      restore.flush({ uuid: HAMMER });
+      await vi.waitFor(() => expect(lastToast().message).toBe('Undone.'));
+    });
+
+    it('shows the error toast when the restore fails', async () => {
+      deleteHammer();
+
+      lastToast().action!.run();
+      (await vi.waitFor(() => http.expectOne({ method: 'GET', url: `${BASE}/assets/${HAMMER}/history` }))).flush([
+        { revision: 7, deleted: false },
+      ]);
+      (await vi.waitFor(() => http.expectOne({ method: 'POST', url: `${BASE}/assets/${HAMMER}/restore` }))).flush(
+        { detail: 'folder deleted' },
+        { status: 409, statusText: 'Conflict' },
+      );
+
+      await vi.waitFor(() => expect(lastToast().kind).toBe('error'));
+      expect(lastToast().message).toMatch(/Could not undo/);
+    });
   });
 
   it('refuses the page being deleted as its own target', () => {
@@ -131,7 +179,8 @@ describe('PageDeleteDialogComponent', () => {
   it('offers no redirect for a page that was never released, nor without the right to unpublish', () => {
     open({ ...HAMMER_PAGE, release: { de: { status: 'NEW' } } });
     expect(el().querySelector('sf-redirect-option')).toBeNull();
-    expect(el().textContent).toContain('This cannot be undone.');
+    expect(el().textContent).toContain('Delete "Hammer"?');
+    expect(el().textContent).not.toContain('This cannot be undone.');
     button('Delete').click();
     http.expectOne({ method: 'DELETE', url: `${BASE}/assets/${HAMMER}` }).flush(null, { status: 204, statusText: 'No Content' });
     expect(deleted).toBe(1);

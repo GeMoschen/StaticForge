@@ -36,8 +36,8 @@ function clockLabel(date: Date): string {
 }
 
 /**
- * Debounced autosave for one revisioned asset: debounces changes, flushes on demand (blur, Ctrl+S,
- * navigation), sends the concurrency token as `If-Match`, and on a `409` surfaces the conflict
+ * Debounced autosave for one revisioned asset: debounces changes, flushes on demand (blur, Ctrl+S through the
+ * active editor, navigation), sends the concurrency token as `If-Match`, and on a `409` surfaces the conflict
  * (with the server's `base`/`theirs` payloads for a field merge) instead of silently overwriting.
  *
  * <p>Shared by the page editor and the record editor (M19.4.2); a subclass says how its asset is
@@ -71,14 +71,6 @@ export abstract class AutosaveService<P, V extends { revision?: number | null }>
   private pending = false;
   private debounceMs = DEFAULT_DEBOUNCE_MS;
 
-  private readonly onKeydownRef = (event: KeyboardEvent) => this.onKeydown(event);
-
-  constructor() {
-    if (typeof document !== 'undefined') {
-      document.addEventListener('keydown', this.onKeydownRef);
-    }
-  }
-
   /** Writes the payload with `revision` as the expected revision. */
   protected abstract persist(payload: P, revision: number | undefined): Observable<V>;
 
@@ -89,9 +81,6 @@ export abstract class AutosaveService<P, V extends { revision?: number | null }>
     if (this.timer) {
       clearTimeout(this.timer);
       this.timer = null;
-    }
-    if (typeof document !== 'undefined') {
-      document.removeEventListener('keydown', this.onKeydownRef);
     }
   }
 
@@ -133,6 +122,26 @@ export abstract class AutosaveService<P, V extends { revision?: number | null }>
     this.revision.set(revision);
   }
 
+  /** Whether an edit is waiting to be written (typed, or refused by the last save): leaving must not lose it. */
+  get hasPending(): boolean {
+    return this.pending;
+  }
+
+  /**
+   * Gives the waiting edit up (the host re-reads the server's version): no write is sent, a conflict is dropped, and
+   * the state is back to idle.
+   */
+  discardPending(): void {
+    if (this.timer) {
+      clearTimeout(this.timer);
+      this.timer = null;
+    }
+    this.pending = false;
+    this.conflict.set(null);
+    this.rejected.set([]);
+    this.saveState.set('idle');
+  }
+
   markDirty(): void {
     if (this.conflict()) {
       return;
@@ -147,29 +156,39 @@ export abstract class AutosaveService<P, V extends { revision?: number | null }>
 
   /**
    * Writes the pending edit now (blur, Ctrl+S, leaving the asset). Without a pending edit it does nothing: opening an
-   * asset and leaving it again must not append a revision.
+   * asset and leaving it again must not append a revision. Resolves `true` when nothing is left unwritten — nothing was
+   * pending, or the write succeeded — and `false` when the write failed, conflicted or was refused by the rules.
    */
-  flush(): void {
+  flush(): Promise<boolean> {
     if (this.timer) {
       clearTimeout(this.timer);
       this.timer = null;
     }
-    if (!this.pending || !this.uuid || !this.payloadProvider || this.conflict()) {
-      return;
+    if (!this.pending || !this.uuid || !this.payloadProvider) {
+      return Promise.resolve(true);
+    }
+    if (this.conflict()) {
+      return Promise.resolve(false);
     }
     this.pending = false;
     this.saveState.set('saving');
     const payload = this.payloadProvider();
     const revision = this.revision();
-    this.persist(payload, revision ?? undefined).subscribe({
-      next: (res) => {
-        this.revision.set(res.revision ?? null);
-        this.rejected.set([]);
-        this.saveState.set('saved');
-        this.lastSavedAt.set(clockLabel(new Date()));
-        this.savedHandler?.(res);
-      },
-      error: (err: unknown) => this.onFlushError(err),
+    return new Promise<boolean>((resolve) => {
+      this.persist(payload, revision ?? undefined).subscribe({
+        next: (res) => {
+          this.revision.set(res.revision ?? null);
+          this.rejected.set([]);
+          this.saveState.set('saved');
+          this.lastSavedAt.set(clockLabel(new Date()));
+          this.savedHandler?.(res);
+          resolve(true);
+        },
+        error: (err: unknown) => {
+          this.onFlushError(err);
+          resolve(false);
+        },
+      });
     });
   }
 
@@ -230,12 +249,5 @@ export abstract class AutosaveService<P, V extends { revision?: number | null }>
 
   private numberOf(value: unknown, fallback: number): number {
     return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
-  }
-
-  private onKeydown(event: KeyboardEvent): void {
-    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 's') {
-      event.preventDefault();
-      this.flush();
-    }
   }
 }

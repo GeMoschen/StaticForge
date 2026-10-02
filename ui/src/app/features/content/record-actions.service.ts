@@ -1,7 +1,11 @@
 import { Injectable, inject, signal, type Signal } from '@angular/core';
 import type { components } from '../../core/api/generated/schema.d.ts';
 import { ApiClient } from '../../core/api/api.client';
+import { tap } from 'rxjs';
 import { ToastService } from '../../core/ui/toast.service';
+import { UndoService } from '../../core/ui/undo.service';
+import { restoreDeletedAsset } from '../../shared/restore-deleted-asset';
+import { ConfirmService } from '../../shared/components/dialog/confirm.service';
 import { deleteQuestion } from '../release/release-status.util';
 import { TimeTravelStore } from '../revisions/time-travel.store';
 import { recordMoveTargets, type MoveTarget } from './content-tree.util';
@@ -32,6 +36,8 @@ export class RecordActionsService {
   private readonly api = inject(ApiClient);
   private readonly content = inject(ContentService);
   private readonly toasts = inject(ToastService);
+  private readonly undo = inject(UndoService);
+  private readonly confirms = inject(ConfirmService);
   private readonly timeTravel = inject(TimeTravelStore);
   private readonly refresh = inject(ContentStoreRefresh, { optional: true });
   private readonly autosave = inject(RecordAutosaveService);
@@ -46,7 +52,7 @@ export class RecordActionsService {
     this.ctx = ctx;
   }
 
-  remove(): void {
+  async remove(): Promise<void> {
     const record = this.ctx.record();
     if (!record?.uuid || this.ctx.readOnly()) {
       return;
@@ -54,14 +60,27 @@ export class RecordActionsService {
     const name = record.displayName ?? record.uid ?? 'this record';
     const used = this.ctx.usages().length;
     const referenced = used > 0;
-    const question = referenced
-      ? `"${name}" is used by ${used} page(s) or template(s). Delete it anyway?`
-      : `Delete "${name}"? You can restore it from its history.`;
-    if (!window.confirm(deleteQuestion(question, record.release))) {
+    const confirmed = await this.confirms.confirm({
+      title: `Delete “${name}”?`,
+      message: deleteQuestion(
+        referenced ? `It is used by ${used} page(s) or template(s). Delete it anyway?` : 'The record is deleted.',
+        record.release,
+      ),
+      confirmLabel: 'Delete record',
+      tone: 'danger',
+    });
+    if (!confirmed) {
       return;
     }
-    this.api.deleteAsset(this.ctx.projectKey(), record.uuid, referenced).subscribe({
-      next: () => this.done('Record deleted', record.uuid!),
+    const key = this.ctx.projectKey();
+    const uuid = record.uuid;
+    this.api.deleteAsset(key, uuid, referenced).subscribe({
+      next: () => {
+        // Undo restores the record from its last live revision.
+        this.undo.offer(`Deleted “${name}”.`, () => restoreDeletedAsset(this.api, key, uuid).pipe(tap(() => this.afterUndo(uuid))));
+        this.refresh?.notify();
+        this.ctx.reload(uuid);
+      },
       error: () => this.toasts.show('Could not delete the record — try again in a moment.', 'error'),
     });
   }
@@ -104,17 +123,39 @@ export class RecordActionsService {
     }
     this.autosave.flush();
     this.moving.set(true);
-    this.content.moveAsset(this.ctx.projectKey(), record.uuid, setUuid).subscribe({
+    const key = this.ctx.projectKey();
+    const uuid = record.uuid;
+    const name = record.displayName ?? record.uid ?? 'the record';
+    const from = record.recordSet?.uuid;
+    const target = this.moveTargets().find((t) => t.uuid === setUuid)?.label ?? 'the record set';
+    this.content.moveAsset(key, uuid, setUuid).subscribe({
       next: () => {
         this.moving.set(false);
         this.moveOpen.set(false);
-        this.done('Record moved', record.uuid!);
+        if (!from) {
+          this.done('Record moved', uuid);
+          return;
+        }
+        // Undo moves the record back into the set it came from.
+        this.undo.offer(`Moved “${name}” to ${target}.`, () =>
+          this.content.moveAsset(key, uuid, from).pipe(tap(() => this.afterUndo(uuid))),
+        );
+        this.refresh?.notify();
+        this.ctx.reload(uuid);
       },
       error: () => {
         this.moving.set(false);
         this.toasts.show('Could not move the record — try again in a moment.', 'error');
       },
     });
+  }
+
+  /** After an Undo: the tree and, while the editor still shows that record, the record itself. */
+  private afterUndo(uuid: string): void {
+    this.refresh?.notify();
+    if (this.ctx.record()?.uuid === uuid) {
+      this.ctx.reload(uuid);
+    }
   }
 
   private done(message: string, uuid: string): void {

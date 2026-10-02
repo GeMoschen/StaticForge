@@ -1,6 +1,9 @@
 import { Injectable, Injector, inject, signal } from '@angular/core';
+import { tap } from 'rxjs';
 import type { components } from '../../../core/api/generated/schema.d.ts';
+import { UndoService } from '../../../core/ui/undo.service';
 import { ConfirmService } from '../../../shared/components/dialog/confirm.service';
+import { ReleaseEventsStore } from '../../release/release-events.store';
 import { STAYS_ONLINE_NOTE, deleteQuestion, isOnline } from '../../release/release-status.util';
 import { MediaDrawerStore } from './media-drawer.store';
 
@@ -15,6 +18,8 @@ export class MediaDrawerUsagesStore {
   private readonly core = inject(MediaDrawerStore);
   private readonly confirms = inject(ConfirmService);
   private readonly injector = inject(Injector);
+  private readonly undo = inject(UndoService);
+  private readonly releaseEvents = inject(ReleaseEventsStore);
 
   readonly usages = signal<UsageDto[]>([]);
   readonly usagesLoading = signal(false);
@@ -55,7 +60,6 @@ export class MediaDrawerUsagesStore {
       confirmLabel: 'Delete',
       tone: 'danger',
       typeToConfirm: referenced ? DELETE_TOKEN : undefined,
-      irreversible: true,
       injector: this.injector,
     });
     if (confirmed) {
@@ -64,14 +68,27 @@ export class MediaDrawerUsagesStore {
   }
 
   private performDelete(): void {
-    const uuid = this.core.media()?.uuid;
+    const media = this.core.media();
+    const uuid = media?.uuid;
     if (!uuid || this.deleting() || this.core.readOnly()) {
       return;
     }
+    const key = this.core.projectKey();
+    const label = media.displayName ?? media.uid ?? 'the file';
+    const revision = media.revision;
     this.deleting.set(true);
-    this.core.api.deleteAsset(this.core.projectKey(), uuid).subscribe({
+    this.core.api.deleteAsset(key, uuid).subscribe({
       next: () => {
-        this.core.toasts.show('Media deleted', 'success');
+        if (revision == null) {
+          this.core.toasts.show('Media deleted', 'success');
+        } else {
+          // Undo restores the file at its last live revision; the library re-reads through the release events.
+          this.undo.offer(`Deleted “${label}”.`, () =>
+            this.core.api
+              .restoreAsset(key, uuid, { fromRevision: revision })
+              .pipe(tap(() => this.releaseEvents.changed())),
+          );
+        }
         this.deleting.set(false);
         this.core.emitDeleted(uuid);
       },

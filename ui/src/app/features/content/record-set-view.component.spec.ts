@@ -1,10 +1,12 @@
 import '@angular/compiler';
 import { provideRouter, Router } from '@angular/router';
 import { fireEvent, render, screen, waitFor } from '@testing-library/angular';
-import { of } from 'rxjs';
+import { of, throwError } from 'rxjs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiClient } from '../../core/api/api.client';
 import { AuthStore } from '../../core/auth/auth.store';
+import { ToastService } from '../../core/ui/toast.service';
+import { ConfirmService } from '../../shared/components/dialog/confirm.service';
 import { TimeTravelStore } from '../revisions/time-travel.store';
 import { ContentService, type DatasetDetailView, type RecordSetDetailView } from './content.service';
 import { RecordSetViewComponent } from './record-set-view.component';
@@ -49,11 +51,14 @@ function apiStub() {
   return {
     assetHistory: vi.fn().mockReturnValue(of([{ revision: 5, displayName: 'Leads', deleted: false }])),
     assetUsages: vi.fn().mockReturnValue(of([])),
-    restoreAsset: vi.fn(),
+    restoreAsset: vi.fn().mockReturnValue(of({})),
   };
 }
 
-async function setup(content: ReturnType<typeof contentStub>, options: { role?: string; revision?: number; panel?: string } = {}) {
+async function setup(
+  content: ReturnType<typeof contentStub>,
+  options: { role?: string; revision?: number; panel?: string; api?: ReturnType<typeof apiStub>; confirm?: ReturnType<typeof vi.fn> } = {},
+) {
   const timeTravel = new TimeTravelStore();
   if (options.revision != null) {
     timeTravel.enter(options.revision);
@@ -63,7 +68,8 @@ async function setup(content: ReturnType<typeof contentStub>, options: { role?: 
     providers: [
       provideRouter([]),
       { provide: ContentService, useValue: content },
-      { provide: ApiClient, useValue: apiStub() },
+      { provide: ApiClient, useValue: options.api ?? apiStub() },
+      { provide: ConfirmService, useValue: { confirm: options.confirm ?? vi.fn().mockResolvedValue(true) } },
       { provide: AuthStore, useValue: { roleFor: () => options.role ?? 'EDITOR' } },
       { provide: TimeTravelStore, useValue: timeTravel },
       provideProjectPermissions({ role: () => options.role ?? 'EDITOR', readOnly: () => timeTravel.isTimeTravel() }),
@@ -114,15 +120,58 @@ describe('RecordSetViewComponent', () => {
 
   it('deletes the set with its records after a confirmation naming them', async () => {
     const content = contentStub();
-    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
-    const { navigate } = await setup(content);
+    const confirm = vi.fn().mockResolvedValue(true);
+    const { navigate } = await setup(content, { confirm });
     await screen.findByRole('heading', { name: 'Leads' });
 
     fireEvent.click(screen.getByRole('button', { name: 'Delete set' }));
 
-    expect(confirm.mock.calls[0][0]).toContain('and its 12 records');
-    expect(content.deleteRecordSet).toHaveBeenCalledWith('proj', 'set-uuid', true);
-    expect(navigate).toHaveBeenCalledWith(['/p', 'proj', 'content']);
+    await waitFor(() => expect(content.deleteRecordSet).toHaveBeenCalledWith('proj', 'set-uuid', true));
+    const options = confirm.mock.calls[0][0];
+    expect(options.message).toContain('and its 12 records');
+    expect(options.tone).toBe('danger');
+    expect(options.typeToConfirm).toBeUndefined();
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith(['/p', 'proj', 'content']));
+  });
+
+  it('offers Undo after the delete, which restores the set from its last live revision', async () => {
+    const content = contentStub();
+    const api = apiStub();
+    const view = await setup(content, { api });
+    await screen.findByRole('heading', { name: 'Leads' });
+    const toasts = view.fixture.debugElement.injector.get(ToastService);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Delete set' }));
+    await waitFor(() => expect(toasts.toasts().at(-1)?.message).toBe('Deleted “Leads” and its 12 records.'));
+
+    toasts.toasts().at(-1)!.action!.run();
+
+    await waitFor(() => expect(api.restoreAsset).toHaveBeenCalledWith('proj', 'set-uuid', { fromRevision: 5 }));
+  });
+
+  it('shows the error toast when the Undo of a delete fails', async () => {
+    const api = apiStub();
+    api.restoreAsset.mockReturnValue(throwError(() => new Error('409')));
+    const view = await setup(contentStub(), { api });
+    await screen.findByRole('heading', { name: 'Leads' });
+    const toasts = view.fixture.debugElement.injector.get(ToastService);
+    fireEvent.click(screen.getByRole('button', { name: 'Delete set' }));
+    await waitFor(() => expect(toasts.toasts().at(-1)?.action).toBeDefined());
+
+    toasts.toasts().at(-1)!.action!.run();
+
+    await waitFor(() => expect(toasts.toasts().at(-1)?.kind).toBe('error'));
+  });
+
+  it('asks for the typed word before deleting a set with 25 or more records', async () => {
+    const confirm = vi.fn().mockResolvedValue(false);
+    await setup(contentStub({ ...SET, recordCount: 40 }), { confirm });
+    await screen.findByRole('heading', { name: 'Leads' });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Delete set' }));
+
+    await waitFor(() => expect(confirm).toHaveBeenCalled());
+    expect(confirm.mock.calls[0][0].typeToConfirm).toBe('delete');
   });
 
   it('reads the set and its records at the time-travel revision and offers no edits', async () => {

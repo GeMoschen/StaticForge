@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
 import { Router, RouterOutlet } from '@angular/router';
 import { TranslocoPipe } from '@jsverse/transloco';
+import { ActiveEditorService } from '../../core/editor/active-editor.service';
 import { DeveloperModeService } from '../../core/frame/developer-mode.service';
 import { FrameContextStore } from '../../core/frame/frame-context.store';
 import { railGroups } from '../../core/frame/rail-model';
@@ -41,6 +42,8 @@ export class AppFrameComponent {
   protected readonly project = inject(ProjectContextStore);
   protected readonly timeTravel = inject(TimeTravelStore);
   protected readonly history = inject(HistoryDrawerStore);
+  /** Created with the frame: Ctrl/Cmd+S and the tab-close prompt work from the first screen on (M35.13). */
+  private readonly editors = inject(ActiveEditorService);
 
   protected readonly projectKey = this.frame.projectKey;
   protected readonly hasRail = computed(

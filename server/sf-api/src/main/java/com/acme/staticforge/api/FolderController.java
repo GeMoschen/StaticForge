@@ -153,6 +153,17 @@ public class FolderController {
         return ResponseEntity.noContent().build();
     }
 
+    /**
+     * Undoes the delete of a folder: it and everything that delete took with it come back in one new revision. {@code
+     * 404} unknown; {@code 409} with {@code SF-DOM-0111} (not deleted), {@code SF-DOM-0112} (parent folder deleted) or
+     * {@code SF-DOM-0113} (path taken by a live folder).
+     */
+    @PostMapping("/{uuid}/restore")
+    @PreAuthorize("@projectAuth.has(#projectKey, " + ProjectRoleExpr.EDITOR + ")")
+    public FolderView restore(@PathVariable String projectKey, @PathVariable UUID uuid) {
+        return toView(projectId(projectKey), folderService.restore(uuid, ctx(projectKey, "restore folder")));
+    }
+
     private long projectId(String key) {
         return projectService.requireByKey(key).getId();
     }

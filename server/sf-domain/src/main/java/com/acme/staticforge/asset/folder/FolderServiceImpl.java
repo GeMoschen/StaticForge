@@ -26,6 +26,8 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -409,6 +411,84 @@ public class FolderServiceImpl implements FolderService {
                     true);
         }
         appendSummary(folder, revision, "DELETE", List.of());
+    }
+
+    @Override
+    @Transactional
+    public AssetVersionView restore(UUID uuid, RevisionContext ctx) {
+        Asset folder = requireFolder(uuid, ctx.projectId());
+        if (!requireOpen(folder.getId()).isDeleted()) {
+            throw new SfException(ProblemFactory.other(409, "SF-DOM-0111", "Conflict", "Folder is not deleted."));
+        }
+        AssetVersion lastLive = assetVersionRepository.findByAssetIdOrderByValidFromRevisionDesc(folder.getId()).stream()
+                .filter(version -> !version.isDeleted())
+                .findFirst()
+                .filter(version -> version.getValidToRevision() != null)
+                .orElseThrow(() -> new SfException(ProblemFactory.other(
+                        409, "SF-DOM-0111", "Conflict", "Folder was never live, so there is nothing to restore.")));
+        long deletedAt = lastLive.getValidToRevision();
+
+        // The delete allocated its own revision, so what it tombstoned and is still deleted is its subtree.
+        Map<Long, AssetVersion> liveBefore = new java.util.HashMap<>();
+        for (AssetVersion version : assetVersionRepository.findLiveVersionsClosedAt(ctx.projectId(), deletedAt)) {
+            liveBefore.put(version.getAssetId(), version);
+        }
+        liveBefore.put(folder.getId(), lastLive);
+        List<AssetVersion> toRestore = new java.util.ArrayList<>();
+        for (AssetVersion tombstone : assetVersionRepository.findCurrentTombstonesWrittenAt(ctx.projectId(), deletedAt)) {
+            if (liveBefore.containsKey(tombstone.getAssetId()) && !tombstone.getAssetId().equals(folder.getId())) {
+                toRestore.add(liveBefore.get(tombstone.getAssetId()));
+            }
+        }
+        toRestore.add(lastLive);
+
+        Long parentId = lastLive.getFolderId();
+        String parentPath = PathService.ROOT_PATH;
+        if (parentId != null) {
+            AssetVersion parent = assetVersionRepository.findByAssetIdAndValidToRevisionIsNull(parentId)
+                    .filter(version -> !version.isDeleted())
+                    .orElseThrow(() -> new SfException(ProblemFactory.other(
+                            409, "SF-DOM-0112", "Conflict",
+                            "The parent folder has been deleted — restore it first.")));
+            parentPath = parent.getFolderPath();
+        }
+        String oldPath = lastLive.getFolderPath();
+        String newPath = pathService.childPath(parentPath, folder.getUid());
+        boolean taken = assetVersionRepository.findCurrentByProjectAndType(ctx.projectId(), AssetType.FOLDER).stream()
+                .anyMatch(version -> !Objects.equals(version.getAssetId(), folder.getId())
+                        && pathService.ensureTrailingSlash(version.getFolderPath()).equals(newPath));
+        if (taken) {
+            throw new SfException(ProblemFactory.other(
+                    409, "SF-DOM-0113", "Conflict",
+                    "A folder with the same path exists now — rename or delete it before restoring this one."));
+        }
+
+        // Parents before children: shallower paths first, folders and record sets ahead of their contents.
+        toRestore.sort(java.util.Comparator
+                .comparingInt((AssetVersion version) -> pathService.depth(version.getFolderPath()))
+                .thenComparingInt(version -> switch (version.getAsset().getAssetType()) {
+                    case FOLDER -> 0;
+                    case RECORD_SET -> 1;
+                    default -> 2;
+                }));
+
+        Revision revision = revisionService.allocateOrJoin(ctx, ChangeType.RESTORE);
+        for (AssetVersion source : toRestore) {
+            close(source.getAssetId(), revision.getRevisionId());
+            insertVersion(
+                    source.getAsset(),
+                    revision.getRevisionId(),
+                    source.getDisplayName(),
+                    source.getPayload() == null ? null : source.getPayload().deepCopy(),
+                    ctx.userId(),
+                    Instant.now(),
+                    source.getFolderId(),
+                    pathService.rebase(source.getFolderPath(), oldPath, newPath),
+                    source.getTemplateAssetId(),
+                    false);
+            appendSummary(source.getAsset(), revision, "RESTORE", List.of());
+        }
+        return assetService.requireCurrent(ctx.projectId(), folder.getUuid());
     }
 
     /**

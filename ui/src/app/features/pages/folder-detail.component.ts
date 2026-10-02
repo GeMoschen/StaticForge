@@ -1,6 +1,11 @@
 import { ChangeDetectionStrategy, Component, computed, inject, input, output, signal } from '@angular/core';
 import { ApiClient } from '../../core/api/api.client';
+import { tap } from 'rxjs';
 import { ToastService } from '../../core/ui/toast.service';
+import { UndoService } from '../../core/ui/undo.service';
+import { ConfirmService } from '../../shared/components/dialog/confirm.service';
+import { typeToConfirmFor } from '../../shared/components/dialog/delete-confirm';
+import { PagesTreeRefresh } from './pages-tree-refresh.service';
 import type { components } from '../../core/api/generated/schema.d.ts';
 import { SfButtonComponent } from '../../shared/components/sf-button.component';
 import { SfFieldComponent } from '../../shared/components/sf-field.component';
@@ -29,6 +34,9 @@ import { SfAssetUrlsComponent } from '../settings/asset-urls.component';
 export class FolderDetailComponent {
   private readonly api = inject(ApiClient);
   private readonly toast = inject(ToastService);
+  private readonly undo = inject(UndoService);
+  private readonly confirms = inject(ConfirmService);
+  private readonly treeRefresh = inject(PagesTreeRefresh);
 
   /** Time travel or an archived project (M26). */
   protected readonly readOnly = inject(ProjectAccessStore).readOnly;
@@ -71,11 +79,16 @@ export class FolderDetailComponent {
       return;
     }
     this.savingName.set(true);
-    this.api.renameFolder(this.projectKey(), uuid, { displayName: name }, this.folder().revision).subscribe({
-      next: () => {
+    const key = this.projectKey();
+    const oldName = this.folder().displayName ?? this.folder().uid ?? '';
+    this.api.renameFolder(key, uuid, { displayName: name }, this.folder().revision).subscribe({
+      next: (renamed) => {
         this.savingName.set(false);
         this.editingName.set(false);
-        this.toast.show('Folder renamed', 'success');
+        // Undo renames back; the etag is the revision the rename produced.
+        this.undo.offer(`Renamed “${oldName}” to “${name}”.`, () =>
+          this.api.renameFolder(key, uuid, { displayName: oldName }, renamed.revision).pipe(tap(() => this.treeRefresh.notify())),
+        );
         this.renamed.emit();
       },
       error: () => {
@@ -86,11 +99,10 @@ export class FolderDetailComponent {
   }
 
   protected onUidChanged(): void {
-    this.toast.show('Folder UID changed', 'success');
     this.renamed.emit();
   }
 
-  protected requestDelete(): void {
+  protected async requestDelete(): Promise<void> {
     const uuid = this.folder().uuid;
     if (!uuid || this.readOnly()) {
       return;
@@ -98,14 +110,25 @@ export class FolderDetailComponent {
     const name = this.folder().displayName ?? this.folder().uid ?? 'this folder';
     const hasContents = this.pageCount() > 0 || this.folderCount() > 0;
     const message = hasContents
-      ? `Delete "${name}" and everything inside it (${this.pageCount()} page(s), ${this.folderCount()} sub-folder(s))? This cannot be undone.`
-      : `Delete "${name}"? This cannot be undone.`;
-    if (!window.confirm(deleteQuestion(message, this.folder().release))) {
+      ? `The folder and everything inside it (${this.pageCount()} page(s), ${this.folderCount()} sub-folder(s)) is deleted.`
+      : 'The folder is deleted.';
+    const confirmed = await this.confirms.confirm({
+      title: `Delete “${name}”?`,
+      message: deleteQuestion(message, this.folder().release),
+      confirmLabel: 'Delete folder',
+      tone: 'danger',
+      typeToConfirm: typeToConfirmFor(this.pageCount() + this.folderCount()),
+    });
+    if (!confirmed) {
       return;
     }
-    this.api.deleteFolder(this.projectKey(), uuid, true).subscribe({
+    const key = this.projectKey();
+    this.api.deleteFolder(key, uuid, true).subscribe({
       next: () => {
-        this.toast.show('Folder deleted', 'success');
+        // One restore brings back the folder with its whole subtree.
+        this.undo.offer(`Deleted “${name}”${hasContents ? ' and everything inside it' : ''}.`, () =>
+          this.api.restoreFolder(key, uuid).pipe(tap(() => this.treeRefresh.notify())),
+        );
         this.deleted.emit();
       },
       error: () => this.toast.show('Could not delete folder — try again in a moment.', 'error'),

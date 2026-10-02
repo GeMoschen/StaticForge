@@ -26,6 +26,8 @@ import { SfSwitchComponent } from '../../../shared/components/forms/sf-switch.co
 import { SfTextareaComponent } from '../../../shared/components/forms/sf-textarea.component';
 import { SfPageHeaderComponent } from '../../../shared/components/layout/sf-page-header.component';
 import { SfSectionComponent } from '../../../shared/components/layout/sf-section.component';
+import { UnsavedChangesService } from '../../../shared/components/dialog/unsaved-changes.service';
+import { SfSaveState, SfSaveStatusComponent } from '../../../shared/components/layout/sf-save-status.component';
 import { SfMenuComponent, SfMenuItem } from '../../../shared/components/menu/sf-menu.component';
 import { SfButtonComponent } from '../../../shared/components/sf-button.component';
 import { SfFieldComponent } from '../../../shared/components/sf-field.component';
@@ -82,6 +84,8 @@ interface OutlineRow {
 }
 
 const SAVE_DELAY_MS = 700;
+/** An edit waits this long before it is written (the autosave debounce). */
+const DEBOUNCE_MS = 400;
 const RELEASE_STATUS: Readonly<Record<SampleStatus, ReleaseActionStatus>> = {
   released: 'released',
   changed: 'changed',
@@ -114,6 +118,7 @@ function localizedFor(pageId: string): Record<SampleLang, LocalizedValues> {
   selector: 'sf-sample-page-editor',
   standalone: true,
   imports: [
+    SfSaveStatusComponent,
     NgTemplateOutlet,
     SampleBreadcrumbComponent,
     SampleCatalogFieldComponent,
@@ -143,6 +148,7 @@ function localizedFor(pageId: string): Record<SampleLang, LocalizedValues> {
 export class SamplePageEditorComponent {
   protected readonly state = inject(SampleState);
   private readonly confirms = inject(ConfirmService);
+  private readonly unsaved = inject(UnsavedChangesService);
   private readonly toasts = inject(ToastService);
   private readonly sanitizer = inject(DomSanitizer);
   private readonly injector = inject(Injector);
@@ -184,6 +190,15 @@ export class SamplePageEditorComponent {
   // ── Header ─────────────────────────────────────────────────────────────────
   protected readonly favorite = signal(false);
   protected readonly saving = signal(false);
+  /** An edit is waiting for the debounce. */
+  private readonly pending = signal(false);
+  /** The clock time of the last save ("12:04"). */
+  protected readonly savedAt = signal<string | null>(null);
+  /** The title is required: a blank one refuses the save ("Not saved — 1 error"). */
+  protected readonly titleBlank = computed(() => this.values().title.trim() === '');
+  protected readonly saveState = computed<SfSaveState>(() =>
+    this.titleBlank() ? 'error' : this.saving() ? 'saving' : this.pending() ? 'dirty' : 'saved',
+  );
   protected readonly preview = signal(typeof matchMedia === 'function' ? matchMedia(WIDE_QUERY).matches : true);
   protected readonly device = signal<Device>('desktop');
 
@@ -195,7 +210,8 @@ export class SamplePageEditorComponent {
       ...extra,
     });
     return [
-      item('duplicate', 'content_copy'),
+      item('saveNow', 'save', { shortcut: 'Mod+S', disabled: this.saveState() === 'saved' || this.saveState() === 'saving' }),
+      item('duplicate', 'content_copy', { separatorBefore: true }),
       item('move', 'drive_file_move'),
       item('rename', 'edit', { shortcut: 'F2' }),
       item('copyLink', 'link'),
@@ -314,6 +330,8 @@ export class SamplePageEditorComponent {
       { allowSignalWrites: true },
     );
     inject(DestroyRef).onDestroy(() => this.saveTimer && clearTimeout(this.saveTimer));
+    const unregister = this.state.registerGuard(() => this.canLeave());
+    inject(DestroyRef).onDestroy(unregister);
 
     // The scripted `focus=catalog` state: the catalog field in view, its outline entry selected.
     afterNextRender(() => {
@@ -331,6 +349,10 @@ export class SamplePageEditorComponent {
   }
 
   protected async secondary(item: SfMenuItem): Promise<void> {
+    if (item.id === 'saveNow') {
+      this.saveNow();
+      return;
+    }
     if (item.id !== 'delete') {
       this.state.notice();
       return;
@@ -408,14 +430,50 @@ export class SamplePageEditorComponent {
     afterNextRender(() => document.getElementById(`sample-outline-${id}`)?.focus(), { injector: this.injector });
   }
 
+  /** An edit: it waits for the debounce (Unsaved changes), then saves (Saving…, Saved) — unless the title is blank. */
   private markSaving(): void {
-    this.saving.set(true);
+    this.pending.set(true);
+    this.saving.set(false);
+    this.schedule(DEBOUNCE_MS);
+  }
+
+  /** *Save now* (the overflow menu, Ctrl+S): the debounce is skipped. */
+  private saveNow(): void {
+    if (this.titleBlank()) {
+      this.state.notice('editor.saveRefused');
+      return;
+    }
+    this.schedule(0);
+  }
+
+  private schedule(delay: number): void {
     if (this.saveTimer) {
       clearTimeout(this.saveTimer);
     }
     this.saveTimer = setTimeout(() => {
-      this.saving.set(false);
-      this.saveTimer = null;
-    }, SAVE_DELAY_MS);
+      if (this.titleBlank()) {
+        this.saveTimer = null;
+        return;
+      }
+      this.pending.set(false);
+      this.saving.set(true);
+      this.saveTimer = setTimeout(() => {
+        this.saving.set(false);
+        this.savedAt.set(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+        this.saveTimer = null;
+      }, SAVE_DELAY_MS);
+    }, delay);
+  }
+
+  /** Leaving the page with an edit the autosave could not write asks first (a pending one would simply be flushed). */
+  private async canLeave(): Promise<boolean> {
+    if (!this.titleBlank()) {
+      return true;
+    }
+    return this.unsaved.confirmLeave({
+      name: this.state.page().name,
+      save: async () => ({ ok: false, message: this.state.t('editor.saveRefused') }),
+      discard: () => this.setText('title', this.state.page().name),
+    });
   }
 }

@@ -87,7 +87,10 @@ every screen. Screen migration starts only after the style guide (M35.9) is sign
     (author names, languages, item names, type/date/search filters, total, asset diff, restore comment).
   - Review: see `35-m35-ui-ux-overhaul/012-history.md` (236 test files / 2,022 tests, build + lint + backend suites green,
     checked in Chrome). Open: journeys that click the spine move in M35.31, user-guide text in M35.32.
-- [ ] M35.13 save UX, unsaved guards, confirm + undo
+- [x] M35.13 save UX, unsaved guards, confirm + undo
+  - Design signed off 2026-10-02 (gate round 3, decisions 47–51). Review: see `35-m35-ui-ux-overhaul/013-save-guard-undo.md`
+    (250 test files / 2,168 tests, build + lint + backend suites green, checked in Chrome). Open: *Save now* menu entry for the
+    page editor (M35.18), other explicit-save editors wired by their screen tasks.
 - [ ] M35.14 keyboard-first: shortcut registry, palette actions, `?` sheet
 - [ ] M35.15 recents and favorites
 - [ ] M35.16 login, account, admin

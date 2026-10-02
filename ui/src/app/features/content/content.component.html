@@ -32,6 +32,7 @@
             leafNoun="Record set"
             [renameFolder]="renameFolder"
             [menuItems]="nodeMenu"
+            [undoable]="true"
             (select)="onTreeSelect($event)"
             (move)="onMove($event)"
             (changed)="onTreeChanged()"

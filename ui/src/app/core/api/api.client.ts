@@ -468,6 +468,13 @@ export class ApiClient {
     });
   }
 
+  /** Undo of a folder delete: restores the folder and everything the same delete removed, in one revision (M35.13). */
+  restoreFolder(projectKey: string, uuid: string): Observable<S['FolderView']> {
+    return this.http.post<S['FolderView']>(`${BASE}/projects/${projectKey}/folders/${uuid}/restore`, null, {
+      withCredentials: true,
+    });
+  }
+
   // ── Assets ──────────────────────────────────────────────────────────────
 
   listAssets(

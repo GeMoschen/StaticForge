@@ -1,7 +1,11 @@
 import { ChangeDetectionStrategy, Component, computed, effect, inject, input, signal, untracked } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
-import { forkJoin } from 'rxjs';
+import { forkJoin, tap, type Observable } from 'rxjs';
+import { ApiClient } from '../../core/api/api.client';
 import { ToastService } from '../../core/ui/toast.service';
+import { UndoService } from '../../core/ui/undo.service';
+import { findFolderById, findFolderByPath, findParentFolder, moveBackBody } from '../../shared/folder-tree.util';
+import { restoreDeletedAsset } from '../../shared/restore-deleted-asset';
 import { SfButtonComponent } from '../../shared/components/sf-button.component';
 import { SfCreateAssetDialogComponent, type CreateAssetFormValue } from '../../shared/components/sf-create-asset-dialog.component';
 import { SfEmptyStateComponent } from '../../shared/components/sf-empty-state.component';
@@ -15,7 +19,7 @@ import {
 } from '../../shared/components/sf-store-tree-node.component';
 import { ContextMenuItem, ContextMenuService } from '../../shared/services/context-menu.service';
 import { consumeQueryParam } from '../../shared/deep-link';
-import { GlobalSetDetailComponent } from './global-set-detail.component';
+import { GlobalSetDetailComponent, type DeletedGlobalSet } from './global-set-detail.component';
 import { etagFor, GlobalsService, type FolderView, type GlobalSetSummaryView } from './globals.service';
 import { ProjectAccessStore } from '../../core/project/project-access.store';
 import { ReleaseEventsStore, withObservedRelease } from '../release/release-events.store';
@@ -61,6 +65,8 @@ export class GlobalsComponent {
   private readonly globals = inject(GlobalsService);
   private readonly releaseEvents = inject(ReleaseEventsStore);
   private readonly toasts = inject(ToastService);
+  private readonly undo = inject(UndoService);
+  private readonly api = inject(ApiClient);
   private readonly menu = inject(ContextMenuService);
 
   /** Time travel or an archived project (M26). */
@@ -220,17 +226,40 @@ export class GlobalsComponent {
       return;
     }
     const key = this.projectKey();
-    const isSet = this.sets().some((s) => s.uuid === event.source);
-    const request$ = isSet
-      ? this.globals.moveSet(key, event.source, event.target)
-      : this.globals.moveFolder(key, event.source, event.target);
-    request$.subscribe({
+    const back = this.moveBack(event.source);
+    const message = `Moved “${this.nameOf(event.source)}” to ${this.nameOf(event.target)}.`;
+    this.moveItem(key, event.source, event.target).subscribe({
       next: () => {
-        this.toasts.show('Moved', 'success');
+        this.offerMoveUndo(key, event.source, back, message);
         this.reload(key);
       },
       error: () => this.toasts.show('Could not move — that may create a cycle.', 'error'),
     });
+  }
+
+  /** Sets move through the generic asset move, folders through the folder endpoint. */
+  private moveItem(key: string, uuid: string, target: string | undefined): Observable<unknown> {
+    return this.sets().some((s) => s.uuid === uuid)
+      ? this.globals.moveSet(key, uuid, target)
+      : this.globals.moveFolder(key, uuid, target);
+  }
+
+  private nameOf(uuid: string): string {
+    const set = this.sets().find((s) => s.uuid === uuid);
+    const folder = set ? null : findFolderById(this.folders(), uuid);
+    return set?.displayName ?? set?.uid ?? folder?.displayName ?? folder?.uid ?? 'item';
+  }
+
+  /** The folder an item lives in now (`undefined`: the store root) — where Undo moves it back. */
+  private moveBack(uuid: string): string | undefined {
+    const set = this.sets().find((s) => s.uuid === uuid);
+    const parent = set ? findFolderByPath(this.folders(), set.folderPath ?? '') : findParentFolder(this.folders(), uuid);
+    return moveBackBody(parent, this.rootFolder()?.uuid).folderUuid;
+  }
+
+  /** One Undo for a move: moves the item back to the folder it came from. */
+  private offerMoveUndo(key: string, uuid: string, back: string | undefined, message: string): void {
+    this.undo.offer(message, () => this.moveItem(key, uuid, back).pipe(tap(() => this.reload(key))));
   }
 
   protected onRootDragOver(event: DragEvent): void {
@@ -245,13 +274,11 @@ export class GlobalsComponent {
       return;
     }
     const key = this.projectKey();
-    const isSet = this.sets().some((s) => s.uuid === source);
-    const request$ = isSet
-      ? this.globals.moveSet(key, source, undefined)
-      : this.globals.moveFolder(key, source, undefined);
-    request$.subscribe({
+    const back = this.moveBack(source);
+    const message = `Moved “${this.nameOf(source)}” to the root.`;
+    this.moveItem(key, source, undefined).subscribe({
       next: () => {
-        this.toasts.show('Moved to root', 'success');
+        this.offerMoveUndo(key, source, back, message);
         this.reload(key);
       },
       error: () => this.toasts.show('Could not move — try again in a moment.', 'error'),
@@ -274,9 +301,17 @@ export class GlobalsComponent {
     this.reload(this.projectKey());
   }
 
-  protected onSetDeleted(): void {
+  protected onSetDeleted(deleted: DeletedGlobalSet): void {
+    const key = this.projectKey();
     this.closeDetail();
-    this.reload(this.projectKey());
+    this.reload(key);
+    // Undo restores the set from its last live revision.
+    this.undo.offer(
+      deleted.online
+        ? `Deleted “${deleted.name}”. It stays online until you release the deletion.`
+        : `Deleted “${deleted.name}”.`,
+      () => restoreDeletedAsset(this.api, key, deleted.uuid).pipe(tap(() => this.reload(key))),
+    );
   }
 
   private reload(key: string): void {

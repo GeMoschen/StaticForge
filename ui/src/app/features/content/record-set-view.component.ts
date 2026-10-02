@@ -223,6 +223,7 @@ export class RecordSetViewComponent {
         name: set.displayName ?? set.uid ?? '',
         recordCount: set.recordCount ?? 0,
         release: set.release,
+        afterUndo: () => this.refresh?.notify(),
       })
       .subscribe((deleted) => {
         if (deleted) {

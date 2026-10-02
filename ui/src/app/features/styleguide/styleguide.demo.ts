@@ -265,7 +265,7 @@ export const OVERLAYS = {
   undone: 'Restored 3 pages',
 } as const;
 
-export const CONFIRMS: Readonly<Record<'default' | 'danger' | 'typed', ConfirmOptions>> = {
+export const CONFIRMS: Readonly<Record<'default' | 'danger' | 'typed' | 'bulk', ConfirmOptions>> = {
   default: {
     title: 'Publish 12 pages?',
     message: 'They go live with the next release.',
@@ -277,6 +277,14 @@ export const CONFIRMS: Readonly<Record<'default' | 'danger' | 'typed', ConfirmOp
     confirmLabel: 'Delete 3 pages',
     tone: 'danger',
     details: ['Spring campaign', 'Spring teaser', 'Spring news'],
+  },
+  // 25 or more items: the word "delete" is typed (M35.13). Smaller deletes confirm plainly and offer Undo.
+  bulk: {
+    title: 'Delete 37 pages?',
+    message: 'Their translations are deleted too. You can undo this for a short while.',
+    confirmLabel: 'Delete 37 pages',
+    tone: 'danger',
+    typeToConfirm: 'delete',
   },
   typed: {
     title: 'Delete the folder "campaign"?',
@@ -295,6 +303,13 @@ export const TOASTS: readonly { readonly kind: ToastKind; readonly message: stri
   { kind: 'error', message: 'The build failed: template "Article" has 2 errors.' },
 ];
 export const UNDO_TOAST = 'Deleted 3 pages.';
+
+/** The Undo toast for each operation that offers it (M35.13); a bulk operation undoes as a group. */
+export const UNDO_VARIANTS: readonly { readonly key: 'rename' | 'move' | 'bulk'; readonly message: string }[] = [
+  { key: 'rename', message: 'Renamed “Spring campaign” to “Summer campaign”.' },
+  { key: 'move', message: 'Moved “Spring campaign” to News.' },
+  { key: 'bulk', message: 'Deleted 12 pages.' },
+];
 
 export const MENU_ITEMS: readonly SfMenuItem[] = [
   { id: 'open', label: 'Open', icon: 'open_in_new', shortcut: 'Enter', group: 'Page' },

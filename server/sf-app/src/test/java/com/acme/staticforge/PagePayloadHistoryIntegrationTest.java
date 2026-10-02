@@ -85,9 +85,9 @@ class PagePayloadHistoryIntegrationTest {
         AssetVersionView other = page(fx);
 
         AssetVersionView one = pageService.addSection(
-                page.uuid(), "main", section.uuid().toString(), null, page.validFromRevision(), fx.ctx());
+                page.uuid(), "main", section.uuid().toString(), null, null, null, page.validFromRevision(), fx.ctx());
         AssetVersionView two = pageService.addSection(
-                page.uuid(), "main", section.uuid().toString(), null, one.validFromRevision(), fx.ctx());
+                page.uuid(), "main", section.uuid().toString(), null, null, null, one.validFromRevision(), fx.ctx());
         List<String> ids = instanceIds(two);
         AssetVersionView reordered = pageService.reorderSections(
                 page.uuid(), "main", List.of(ids.get(1), ids.get(0)), two.validFromRevision(), fx.ctx());

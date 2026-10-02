@@ -9,17 +9,19 @@ import {
   untracked,
 } from '@angular/core';
 import { ActivatedRoute, Router, RouterOutlet } from '@angular/router';
-import type { Subscription } from 'rxjs';
+import { tap, type Subscription } from 'rxjs';
 import { consumeQueryParam } from '../../shared/deep-link';
 import { ApiClient } from '../../core/api/api.client';
 import { ProjectContextStore } from '../../core/project/project-context.store';
 import { ToastService } from '../../core/ui/toast.service';
+import { UndoService } from '../../core/ui/undo.service';
 import { ContextMenuItem, ContextMenuService } from '../../shared/services/context-menu.service';
 import { TreeClipboardService } from '../../shared/services/tree-clipboard.service';
 import { SfButtonComponent } from '../../shared/components/sf-button.component';
 import { SfCreateAssetDialogComponent, type CreateAssetFormValue } from '../../shared/components/sf-create-asset-dialog.component';
 import { SfEmptyStateComponent } from '../../shared/components/sf-empty-state.component';
 import type { components } from '../../core/api/generated/schema.d.ts';
+import { findFolderByPath, findParentFolder, moveBackBody } from '../../shared/folder-tree.util';
 import { FolderDetailComponent } from './folder-detail.component';
 import { FolderNodeComponent } from './folder-node.component';
 import { PageNavNodeComponent } from './page-nav-node.component';
@@ -27,6 +29,7 @@ import { SfIconComponent } from '../../shared/components/sf-icon.component';
 import type { FolderMoveEvent } from './types';
 import { sortByDisplayName, sortFolderTree } from '../../shared/tree-sort.util';
 import { ProjectAccessStore } from '../../core/project/project-access.store';
+import { PagesTreeRefresh } from './pages-tree-refresh.service';
 import { TimeTravelStore } from '../revisions/time-travel.store';
 import { ReleaseEventsStore, withObservedRelease } from '../release/release-events.store';
 
@@ -62,6 +65,8 @@ export class PagesListComponent {
   private readonly api = inject(ApiClient);
   private readonly store = inject(ProjectContextStore);
   private readonly toast = inject(ToastService);
+  private readonly undo = inject(UndoService);
+  private readonly treeRefresh = inject(PagesTreeRefresh);
   private readonly menu = inject(ContextMenuService);
   protected readonly clipboard = inject(TreeClipboardService);
 
@@ -176,6 +181,13 @@ export class PagesListComponent {
       },
       { allowSignalWrites: true },
     );
+
+    // An undo restored or moved something back (M35.13): re-read the folder tree and the pages.
+    effect(() => {
+      if (this.treeRefresh.version() > 0) {
+        untracked(() => this.onTreeChanged());
+      }
+    });
 
     // Time travel: the tree as it was then, with what was deleted since and without what was created later.
     effect(
@@ -324,9 +336,12 @@ export class PagesListComponent {
     if (!event.source || !event.target || this.readOnly()) {
       return;
     }
-    this.api.moveAsset(this.projectKey(), event.source, { folderUuid: event.target }).subscribe({
+    const key = this.projectKey();
+    const back = this.moveBack(event.source);
+    const message = `Moved “${this.nameOf(event.source)}” to ${this.nameOf(event.target)}.`;
+    this.api.moveAsset(key, event.source, { folderUuid: event.target }).subscribe({
       next: () => {
-        this.toast.show('Moved', 'success');
+        this.offerMoveUndo(key, event.source!, back, message);
         this.onTreeChanged();
       },
       error: () => this.toast.show('Could not move — that may create a cycle.', 'error'),
@@ -345,13 +360,38 @@ export class PagesListComponent {
     if (!source || this.readOnly()) {
       return;
     }
-    this.api.moveAsset(this.projectKey(), source, {}).subscribe({
+    const key = this.projectKey();
+    const back = this.moveBack(source);
+    const message = `Moved “${this.nameOf(source)}” to the root.`;
+    this.api.moveAsset(key, source, {}).subscribe({
       next: () => {
-        this.toast.show('Moved to root', 'success');
+        this.offerMoveUndo(key, source, back, message);
         this.onTreeChanged();
       },
       error: () => this.toast.show('Could not move — try again in a moment.', 'error'),
     });
+  }
+
+  /** The display name of a page or folder in the tree, for the toast text. */
+  private nameOf(uuid: string): string {
+    const page = this.loadedPages().find((p) => p.uuid === uuid);
+    const folder = findFolder(this.tree(), uuid);
+    return page?.displayName ?? page?.uid ?? folder?.displayName ?? folder?.uid ?? 'item';
+  }
+
+  /** Where a page or folder lives now, as the body of the move that puts it back (`{}` = the project root). */
+  private moveBack(uuid: string): { folderUuid?: string } {
+    const root = this.pagesRoot();
+    const page = this.loadedPages().find((p) => p.uuid === uuid);
+    const parent = page
+      ? findFolderByPath(this.tree(), page.folderPath ?? '/')
+      : findParentFolder(this.tree(), uuid);
+    return moveBackBody(parent, root?.uuid);
+  }
+
+  /** One Undo for a move: moves the item back to the folder it came from. */
+  private offerMoveUndo(key: string, uuid: string, back: { folderUuid?: string }, message: string): void {
+    this.undo.offer(message, () => this.api.moveAsset(key, uuid, back).pipe(tap(() => this.treeRefresh.notify())));
   }
 
   /** "All pages" is the project's page root — it can't be renamed, deleted, cut, or pasted into, but you can create pages/subfolders directly in it. */

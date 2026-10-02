@@ -1,0 +1,39 @@
+:host {
+  display: inline-flex;
+  align-items: center;
+}
+
+.sf-save-status {
+  display: inline-flex;
+  align-items: center;
+}
+
+.sf-save-status__quiet {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sf-space-1);
+  color: var(--sf-text-muted);
+  font-size: var(--sf-fs-12);
+  line-height: var(--sf-lh-12);
+  white-space: nowrap;
+}
+
+.sf-save-status__icon {
+  font-size: var(--sf-fs-16);
+}
+
+.sf-save-status__icon--spin {
+  animation: sf-save-status-spin 1.2s linear infinite;
+}
+
+@keyframes sf-save-status-spin {
+  to {
+    transform: rotate(-360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sf-save-status__icon--spin {
+    animation: none;
+  }
+}

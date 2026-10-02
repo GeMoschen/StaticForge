@@ -150,6 +150,11 @@ export class ContentService {
     return this.http.delete<void>(`${BASE}/projects/${projectKey}/datasets/${uuid}`, { withCredentials: true });
   }
 
+  /** Undo of a dataset delete (M35.13): an empty body restores the last live version. */
+  restoreDataset(projectKey: string, uuid: string): Observable<DatasetDetailView> {
+    return this.http.post<DatasetDetailView>(`${BASE}/projects/${projectKey}/datasets/${uuid}/restore`, {}, { withCredentials: true });
+  }
+
   /** Validates draft schema CDL sections (M34) with the dataset restrictions the save enforces. */
   validateCdl(projectKey: string, sections: CdlSections): Observable<{ diagnostics?: Diagnostic[] }> {
     return this.http.post<{ diagnostics?: Diagnostic[] }>(

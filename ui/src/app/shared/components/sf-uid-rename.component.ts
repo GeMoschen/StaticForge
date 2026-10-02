@@ -3,14 +3,17 @@ import {
   ChangeDetectionStrategy,
   Component,
   computed,
+  DestroyRef,
   inject,
   input,
   output,
   signal,
 } from '@angular/core';
+import { tap } from 'rxjs';
 import type { components } from '../../core/api/generated/schema.d.ts';
 import { ApiClient } from '../../core/api/api.client';
 import { ToastService } from '../../core/ui/toast.service';
+import { UndoService } from '../../core/ui/undo.service';
 import { ProjectAccessStore } from '../../core/project/project-access.store';
 
 type AffectedTemplate = components['schemas']['AffectedTemplate'];
@@ -33,11 +36,24 @@ export class SfUidRenameComponent {
   readonly uuid = input.required<string>();
   readonly uid = input.required<string>();
 
+  /**
+   * Offers Undo after a change instead of the plain "UID changed" toast (M35.13). Undo changes the UID back and emits
+   * `uidChanged` with the old one, so a caller that reloads on `uidChanged` reloads for the undo too. Off by default:
+   * callers that don't opt in see no difference.
+   */
+  readonly undoable = input(false);
+
   readonly uidChanged = output<string>();
 
   private readonly api = inject(ApiClient);
   private readonly toasts = inject(ToastService);
   private readonly transloco = inject(TranslocoService);
+  private readonly undo = inject(UndoService);
+  private destroyed = false;
+
+  constructor() {
+    inject(DestroyRef).onDestroy(() => (this.destroyed = true));
+  }
 
   private readonly access = inject(ProjectAccessStore);
 
@@ -101,7 +117,20 @@ export class SfUidRenameComponent {
       .subscribe({
         next: (result) => {
           const affected = result.affectedTemplates ?? [];
-          this.toasts.show(this.transloco.translate('shared.uidRename.changed'), 'success');
+          const oldUid = result.oldUid ?? this.uid();
+          const newUid = result.newUid ?? next;
+          if (this.undoable()) {
+            const key = this.projectKey();
+            const uuid = this.uuid();
+            this.undo.offer(this.transloco.translate('shared.uidRename.changedFrom', { old: oldUid, new: newUid }), () =>
+              this.api.changeUid(key, uuid, { uid: oldUid }).pipe(
+                // The component may be gone by then (its dialog closed): an emit on a destroyed output throws.
+                tap(() => !this.destroyed && this.uidChanged.emit(oldUid)),
+              ),
+            );
+          } else {
+            this.toasts.show(this.transloco.translate('shared.uidRename.changed'), 'success');
+          }
           this.editing.set(false);
           this.saving.set(false);
           this.draft.set('');

@@ -97,7 +97,7 @@ describe('SampleSettingsAreaComponent', () => {
     it('enables Save only while the form is dirty', async () => {
       await setup();
       expect(saveButton()).toHaveAttribute('aria-disabled', 'true');
-      expect(screen.getByText('All changes saved')).toBeInTheDocument();
+      expect(screen.getByText('Saved')).toBeInTheDocument();
 
       const name = screen.getByRole('textbox', { name: /Project name/ });
       fireEvent.input(name, { target: { value: 'Nordlicht Coffee' } });
@@ -107,7 +107,7 @@ describe('SampleSettingsAreaComponent', () => {
       expect(within(sideNav()).getByRole('button', { name: /General/ })).toHaveTextContent('Unsaved');
 
       fireEvent.click(saveButton());
-      expect(await screen.findByText('All changes saved')).toBeInTheDocument();
+      expect(await screen.findByText('Saved')).toBeInTheDocument();
       expect(saveButton()).toHaveAttribute('aria-disabled', 'true');
     });
 

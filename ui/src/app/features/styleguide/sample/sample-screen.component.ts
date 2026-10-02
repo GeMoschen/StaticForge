@@ -241,8 +241,11 @@ export class SampleScreenComponent {
     });
   }
 
-  protected onOpen(node: SfTreeNode<SampleEntry>): void {
+  protected async onOpen(node: SfTreeNode<SampleEntry>): Promise<void> {
     const entry = node.data!;
+    if (!(await this.state.canLeave())) {
+      return;
+    }
     if (entry.kind === 'folder') {
       this.state.openFolder(entry.id);
     } else {

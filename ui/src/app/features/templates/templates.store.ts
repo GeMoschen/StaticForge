@@ -1,4 +1,5 @@
 import { computed, inject, Injectable, signal, type Signal } from '@angular/core';
+import { ActiveEditorService } from '../../core/editor/active-editor.service';
 import type { components } from '../../core/api/generated/schema.d.ts';
 import { ProjectAccessStore } from '../../core/project/project-access.store';
 import { ProjectContextStore } from '../../core/project/project-context.store';
@@ -265,20 +266,36 @@ export class TemplatesStore {
     return this.kind() === 'section';
   }
 
+  private readonly editors = inject(ActiveEditorService);
+
+  /**
+   * Switching to another item of this screen goes through the same unsaved-changes check as a route change (M35.13):
+   * nothing unsaved, it happens at once; else the person saves or discards first, or stays.
+   */
+  private whenMayLeave(change: () => void): void {
+    if (!this.editors.hasUnsaved()) {
+      change();
+      return;
+    }
+    void this.editors.canLeave().then((may) => may && change());
+  }
+
   selectFolder(event: TemplateFolderSelectEvent): void {
-    this.selectedFolder.set(event.uuid);
-    this.selectedFolderKind.set(event.templateKind);
-    this.selectedUuid.set(null);
+    this.whenMayLeave(() => {
+      this.selectedFolder.set(event.uuid);
+      this.selectedFolderKind.set(event.templateKind);
+      this.selectedUuid.set(null);
+    });
   }
 
   select(uuid?: string | null): void {
-    this.selectedUuid.set(uuid ?? null);
+    this.whenMayLeave(() => this.selectedUuid.set(uuid ?? null));
   }
 
   /** Opens another template of the chain (breadcrumb, "Extended by", a broken descendant). */
   openTemplate(uuid: string | null | undefined): void {
     if (uuid) {
-      this.selectedUuid.set(uuid);
+      this.whenMayLeave(() => this.selectedUuid.set(uuid));
     }
   }
 

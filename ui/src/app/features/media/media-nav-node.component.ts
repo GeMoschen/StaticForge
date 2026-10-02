@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, inject, input, output, signal } from '@angular/core';
-import { ApiClient } from '../../core/api/api.client';
 import { ToastService } from '../../core/ui/toast.service';
+import { MediaItemActions } from './library/media-item-actions';
 import { ContextMenuItem, ContextMenuService } from '../../shared/services/context-menu.service';
 import { TreeClipboardService } from '../../shared/services/tree-clipboard.service';
 import { SfIconComponent } from '../../shared/components/sf-icon.component';
@@ -8,7 +8,6 @@ import { SfRenameAssetDialogComponent } from '../../shared/components/sf-rename-
 import type { components } from '../../core/api/generated/schema.d.ts';
 import { ProjectAccessStore } from '../../core/project/project-access.store';
 import { ReleaseBadgeComponent } from '../release/release-badge.component';
-import { deleteQuestion } from '../release/release-status.util';
 
 type MediaSummaryView = components['schemas']['MediaSummaryView'];
 
@@ -29,8 +28,8 @@ type MediaSummaryView = components['schemas']['MediaSummaryView'];
   styleUrl: './media-nav-node.component.scss',
 })
 export class MediaNavNodeComponent {
-  private readonly api = inject(ApiClient);
   private readonly toast = inject(ToastService);
+  private readonly items = inject(MediaItemActions);
   private readonly menu = inject(ContextMenuService);
   private readonly clipboard = inject(TreeClipboardService);
 
@@ -103,7 +102,7 @@ export class MediaNavNodeComponent {
         { label: '', separator: true },
         { label: 'Cut', icon: 'content_cut', action: () => this.clipboard.cut('MEDIA', uuid, label) },
         { label: '', separator: true },
-        { label: 'Delete', icon: 'delete', danger: true, action: () => this.delete() },
+        { label: 'Delete', icon: 'delete', danger: true, action: () => void this.delete() },
       );
     }
     this.menu.open(event, items);
@@ -120,13 +119,12 @@ export class MediaNavNodeComponent {
       return;
     }
     this.renamingName.set(true);
-    this.api
-      .renameAsset(key, uuid, { displayName }, this.summary().revision ?? undefined)
+    this.items
+      .renameMedia(uuid, this.summary().displayName, displayName, this.summary().revision)
       .subscribe({
         next: () => {
           this.renamingName.set(false);
           this.renameOpen.set(false);
-          this.toast.show('Media renamed', 'success');
           this.changed.emit();
         },
         error: () => {
@@ -141,21 +139,13 @@ export class MediaNavNodeComponent {
     this.changed.emit();
   }
 
-  private delete(): void {
+  /** The confirmation, the delete and its Undo live in {@link MediaItemActions}, which also updates the library. */
+  private async delete(): Promise<void> {
     const uuid = this.summary().uuid;
     if (!uuid || this.readOnly()) {
       return;
     }
-    const name = this.summary().displayName ?? this.summary().uid ?? 'this media item';
-    if (!window.confirm(deleteQuestion(`Delete "${name}"? This cannot be undone.`, this.summary().release))) {
-      return;
-    }
-    this.api.deleteAsset(this.projectKey(), uuid).subscribe({
-      next: () => {
-        this.toast.show('Media deleted', 'success');
-        this.changed.emit();
-      },
-      error: () => this.toast.show('Could not delete media — try again in a moment.', 'error'),
-    });
+    const { displayName, uid, revision, release } = this.summary();
+    await this.items.deleteMedia({ uuid, label: displayName ?? uid ?? 'this media item', revision, release });
   }
 }

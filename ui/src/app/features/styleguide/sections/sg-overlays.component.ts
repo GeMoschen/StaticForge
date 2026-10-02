@@ -11,7 +11,8 @@ import { SfButtonComponent } from '../../../shared/components/sf-button.componen
 import { SfFieldComponent } from '../../../shared/components/sf-field.component';
 import { SfTooltipDirective } from '../../../shared/directives/sf-tooltip.directive';
 import { ContextMenuItem, ContextMenuService } from '../../../shared/services/context-menu.service';
-import { CONFIRMS, CONTEXT_ITEMS, DIALOG_SIZES, MENU_ITEMS, OVERLAYS, TOASTS, UNDO_TOAST } from '../styleguide.demo';
+import { CONFIRMS, CONTEXT_ITEMS, DIALOG_SIZES, MENU_ITEMS, OVERLAYS, TOASTS, UNDO_TOAST, UNDO_VARIANTS } from '../styleguide.demo';
+import { UnsavedChangesService } from '../../../shared/components/dialog/unsaved-changes.service';
 import { sectionOf } from '../styleguide.sections';
 
 /**
@@ -44,13 +45,15 @@ export class SgOverlaysComponent {
   private readonly confirms = inject(ConfirmService);
   private readonly toasts = inject(ToastService);
   private readonly contextMenu = inject(ContextMenuService);
+  private readonly unsaved = inject(UnsavedChangesService);
 
   protected readonly s = sectionOf('overlays');
   protected readonly o = OVERLAYS;
   protected readonly sizes = DIALOG_SIZES;
   protected readonly menuItems = MENU_ITEMS;
   protected readonly toastKinds = TOASTS;
-  protected readonly confirmKinds = ['default', 'danger', 'typed'] as const;
+  protected readonly confirmKinds = ['default', 'danger', 'bulk', 'typed'] as const;
+  protected readonly undoVariants = UNDO_VARIANTS;
 
   protected readonly dialogSize = signal<SfDialogSize | null>(null);
   protected readonly drawer = signal<'modal' | 'plain' | null>(null);
@@ -63,6 +66,19 @@ export class SgOverlaysComponent {
 
   protected toast(kind: ToastKind, message: string): void {
     this.toasts.show(message, kind);
+  }
+
+  /** "Leave with unsaved changes?" — `fails`: the save is refused, so the dialog stays with its reason. */
+  protected async unsavedDialog(fails: boolean): Promise<void> {
+    const left = await this.unsaved.confirmLeave({
+      name: 'Spring campaign',
+      save: async () => (fails ? { ok: false, message: '2 errors' } : { ok: true }),
+    });
+    this.toasts.show(left ? OVERLAYS.confirmed : OVERLAYS.cancelled, left ? 'success' : 'info');
+  }
+
+  protected undoVariant(message: string): void {
+    this.toasts.undo(message, () => this.toasts.show(OVERLAYS.undone, 'info'));
   }
 
   protected undoToast(): void {

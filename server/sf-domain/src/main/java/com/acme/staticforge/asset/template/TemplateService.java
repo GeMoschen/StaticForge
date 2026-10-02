@@ -67,4 +67,11 @@ public interface TemplateService {
 
     /** Soft-deletes the template via the asset service. */
     void delete(UUID uuid, RevisionContext ctx);
+
+    /**
+     * Undoes {@link #delete}: the template comes back as its last live version was, in one new revision
+     * ({@code AssetService#restoreDeleted} rules). A page template that extends a template which is deleted now is
+     * refused with {@code 409 SF-DOM-0112} — its chain would be broken.
+     */
+    TemplateView restore(UUID uuid, RevisionContext ctx);
 }

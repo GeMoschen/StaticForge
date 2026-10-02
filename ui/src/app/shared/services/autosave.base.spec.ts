@@ -44,8 +44,6 @@ describe('AutosaveService — nothing pending', () => {
 
   it('does not write when an asset is opened and left again (no edit, no revision)', () => {
     autosave.flush();
-    // Ctrl+S with nothing to save is not a save either.
-    document.dispatchEvent(new KeyboardEvent('keydown', { key: 's', ctrlKey: true }));
     autosave.ngOnDestroy();
     expect(autosave.persisted).toEqual([]);
   });
@@ -81,6 +79,48 @@ describe('AutosaveService — nothing pending', () => {
     autosave.markDirty();
     autosave.configure('proj', 'record-2', 1, 100);
     autosave.flush();
+    expect(autosave.persisted).toEqual([]);
+  });
+});
+
+describe('AutosaveService — what is waiting', () => {
+  let autosave: TestAutosave;
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    TestBed.configureTestingModule({ providers: [TestAutosave] });
+    autosave = TestBed.inject(TestAutosave);
+    autosave.configure('proj', 'record-1', 1, 100);
+    autosave.setPayloadProvider(() => ({ title: 'T' }));
+  });
+
+  afterEach(() => vi.useRealTimers());
+
+  it('knows an edit is waiting until it is written, and resolves true once nothing is left', async () => {
+    expect(autosave.hasPending).toBe(false);
+    expect(await autosave.flush()).toBe(true);
+    autosave.markDirty();
+    expect(autosave.hasPending).toBe(true);
+    expect(await autosave.flush()).toBe(true);
+    expect(autosave.hasPending).toBe(false);
+    expect(autosave.persisted).toHaveLength(1);
+  });
+
+  it('resolves false while a conflict is open, and keeps the edit', async () => {
+    autosave.markDirty();
+    autosave.conflict.set({ expectedRevision: 1, currentRevision: 2 });
+    expect(await autosave.flush()).toBe(false);
+    expect(autosave.hasPending).toBe(true);
+  });
+
+  it('gives the waiting edit up on discard: no write, no conflict, back to idle', () => {
+    autosave.markDirty();
+    autosave.conflict.set({ expectedRevision: 1, currentRevision: 2 });
+    autosave.discardPending();
+    expect(autosave.hasPending).toBe(false);
+    expect(autosave.conflict()).toBeNull();
+    expect(autosave.saveState()).toBe('idle');
+    vi.advanceTimersByTime(500);
     expect(autosave.persisted).toEqual([]);
   });
 });

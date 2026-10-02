@@ -189,6 +189,28 @@ Changes the user asked for during the review (all in the signed-off sample):
     (`--sf-splitter-handle: transparent`) and its handle sits centred in an 8 px gap (`--sf-splitter-gap`). Language tags
     in a detail pane sit close together.
 
+## Review round 3 (2026-10-02): save, unsaved changes and undo (awaiting user sign-off)
+
+Added to the sample for M35.13: Settings › General (name blank → *Not saved*), the page editor (blank title), the leave
+guard through the rail, the tree and the settings menu, and the style guide (Display › Save status; Overlays › Unsaved
+changes, large delete, undo variants). **Not signed off yet** — the app is built only after the user approves.
+
+47. **`sf-save-status`** (in the page header, before the release group): *Saved 12:04* / *Saved* and *Saving…* are quiet
+    muted text with an icon; *Unsaved changes* is a warning pill; *Not saved — 2 errors* (or *Not saved*) a danger pill.
+    One polite live region that stays in place while the state changes. Explicit-save editors add a primary **Save**
+    that is enabled only while dirty; autosave editors show only the status.
+48. **Leave guard dialog:** "Unsaved changes — “<item>” has changes that are not saved yet." with **Discard** (danger
+    ghost), **Cancel**, **Save** (primary, focused). A refused save keeps the person on the page: the dialog shows
+    "Not saved — <why>. Fix it, or discard the changes." and Save becomes **Try again**. Escape and × are Cancel.
+49. **Autosave editors:** leaving flushes a pending edit silently; the dialog appears only when the autosave cannot
+    write (blank required field, rejected by rules, conflict). **Save now** (with the Ctrl+S hint) is the first entry of
+    the ⋮ menu, disabled while there is nothing to save.
+50. **Undo:** delete, move, rename and bulk variants show a toast with **Undo** (a bulk operation undoes as a group).
+    A selection of **25 or more** items needs the word **delete** typed; smaller deletes confirm plainly and offer Undo.
+51. **Scope of M35.13 (user, 2026-10-02):** infrastructure plus the page, record and template editors; Undo for every
+    delete / move / rename that exists; the backend gets folder-subtree restore and restore for templates, page
+    sections and UID changes.
+
 ## Notes / hazards
 
 - Sign-off: **signed off by the user on 2026-10-01** — gallery https://claude.ai/artifact/33yY26sd6H17UTP9sPPJid

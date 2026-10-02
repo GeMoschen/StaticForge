@@ -33,11 +33,21 @@ public class BodyService {
 
     /** Adds a section instance (stable {@code instanceId}) into {@code bodyName} at {@code position}. */
     public ObjectNode addSection(JsonNode payload, String bodyName, String templateUuid, Integer position, String instanceId) {
+        return addSection(payload, bodyName, templateUuid, position, instanceId, null);
+    }
+
+    /** {@link #addSection(JsonNode, String, String, Integer, String)} with the section's {@code content} (a copy; {@code null}: empty). */
+    public ObjectNode addSection(
+            JsonNode payload, String bodyName, String templateUuid, Integer position, String instanceId, JsonNode content) {
         ObjectNode page = object(payload);
         ObjectNode section = objectMapper.createObjectNode();
         section.put("instanceId", instanceId);
         section.put("templateRef", templateUuid);
-        section.putObject("content");
+        if (content == null) {
+            section.putObject("content");
+        } else {
+            section.set("content", content.deepCopy());
+        }
 
         List<JsonNode> sections = sections(page, bodyName);
         int index = (position == null || position < 0 || position > sections.size()) ? sections.size() : position;

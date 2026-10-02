@@ -126,6 +126,30 @@ export class TemplatesLoader {
    *   flight stay (M34), only an unchanged form is refreshed — the reload must never take back what the user typed
    *   after pressing Save
    */
+  /** Gives the unsaved edits up (M35.13): every buffer shows the saved template again, without a fetch. */
+  discardEdits(): void {
+    const detail = this.store.detail();
+    if (detail) {
+      this.applyToEditors(detail);
+      this.store.templateInUse.set(null);
+      this.store.descendantProblems.set([]);
+    }
+  }
+
+  /** Puts a template's saved values into the editor buffers (name, category, flags, paths, CDL sections, channels). */
+  private applyToEditors(detail: TemplateDetail): void {
+    const store = this.store;
+    store.displayName.set(detail.displayName ?? '');
+    store.category.set(detail.category ?? '');
+    store.deprecated.set(detail.deprecated ?? false);
+    store.abstractTemplate.set(detail.abstract ?? false);
+    store.paginationPaths.set(readPaginationPaths(detail.paginationPath));
+    store.sections.set(sectionsOf(detail));
+    store.channelSources.set(channelSourcesOf(detail));
+    store.cdlDiagnostics.set([]);
+    store.octlDiagnostics.set({});
+  }
+
   reloadDetail(key: string, uuid: string, resetOutcomes = true, keepEditsWhile?: () => boolean): void {
     const store = this.store;
     this.service.get(store.kind(), key, uuid).subscribe({
@@ -133,15 +157,7 @@ export class TemplatesLoader {
         const edited = !!keepEditsWhile && store.detail()?.uuid === detail.uuid && keepEditsWhile();
         store.detail.set(detail);
         if (!edited) {
-          store.displayName.set(detail.displayName ?? '');
-          store.category.set(detail.category ?? '');
-          store.deprecated.set(detail.deprecated ?? false);
-          store.abstractTemplate.set(detail.abstract ?? false);
-          store.paginationPaths.set(readPaginationPaths(detail.paginationPath));
-          store.sections.set(sectionsOf(detail));
-          store.channelSources.set(channelSourcesOf(detail));
-          store.cdlDiagnostics.set([]);
-          store.octlDiagnostics.set({});
+          this.applyToEditors(detail);
         }
         if (!store.cdlTabs().includes(store.cdlTab())) {
           store.cdlTab.set('content');

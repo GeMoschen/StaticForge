@@ -44,6 +44,14 @@ import type { ReleaseMode } from '../release/release-choice.util';
 import { isOnline } from '../release/release-status.util';
 import { useFrameItem } from '../../core/frame/use-frame-item';
 
+/** What the store needs to offer Undo for a deleted property set. */
+export interface DeletedGlobalSet {
+  uuid: string;
+  name: string;
+  /** The set was released: it stays online until the deletion is released. */
+  online: boolean;
+}
+
 const EMPTY_DEF: ContentDefinition = { editors: [], bodies: [] };
 
 /** A property set's CDL tabs: a set has no page, so no bodies. */
@@ -87,7 +95,8 @@ export class GlobalSetDetailComponent {
   /** The set was saved (values or schema), so the parent can refresh its tree. */
   readonly changed = output<void>();
   readonly closed = output<void>();
-  readonly deleted = output<void>();
+  /** Emitted after the set was deleted; the store offers the Undo, since this panel closes with the set. */
+  readonly deleted = output<DeletedGlobalSet>();
 
   private readonly globals = inject(GlobalsService);
   private readonly api = inject(ApiClient);
@@ -367,14 +376,10 @@ export class GlobalSetDetailComponent {
       return;
     }
     const online = isOnline(current.release);
-    this.globals.delete(this.projectKey(), current.uuid).subscribe({
-      next: () => {
-        this.toasts.show(
-          online ? 'Property set deleted — it stays online until you release the deletion' : 'Property set deleted',
-          'success',
-        );
-        this.deleted.emit();
-      },
+    const uuid = current.uuid;
+    const name = current.displayName ?? current.uid ?? 'the property set';
+    this.globals.delete(this.projectKey(), uuid).subscribe({
+      next: () => this.deleted.emit({ uuid, name, online }),
       error: (err) => {
         const inUse = err instanceof HttpErrorResponse && (err.status === 409 || err.status === 422);
         this.toasts.show(

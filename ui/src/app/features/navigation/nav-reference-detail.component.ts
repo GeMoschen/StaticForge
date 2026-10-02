@@ -3,6 +3,7 @@ import {
   ChangeDetectionStrategy,
   Component,
   OnInit,
+  DestroyRef,
   computed,
   effect,
   inject,
@@ -11,9 +12,12 @@ import {
   signal,
   untracked,
 } from '@angular/core';
+import { tap } from 'rxjs';
 import { ApiClient } from '../../core/api/api.client';
 import type { components } from '../../core/api/generated/schema.d.ts';
 import { ToastService } from '../../core/ui/toast.service';
+import { UndoService } from '../../core/ui/undo.service';
+import { ConfirmService } from '../../shared/components/dialog/confirm.service';
 import { SfAssetPickerDialogComponent, type AssetPicked } from '../../shared/components/sf-asset-picker-dialog.component';
 import { SfButtonComponent } from '../../shared/components/sf-button.component';
 import { SfFieldComponent } from '../../shared/components/sf-field.component';
@@ -22,8 +26,9 @@ import { SfUidRenameComponent } from '../../shared/components/sf-uid-rename.comp
 import { etagFor, NavigationService, type PageReferenceView } from './navigation.service';
 import { ProjectAccessStore } from '../../core/project/project-access.store';
 import { ReleaseBarComponent } from '../release/release-bar.component';
+import { ReleaseEventsStore } from '../release/release-events.store';
 import type { ReleaseMode } from '../release/release-choice.util';
-import { type ReleaseBlock, deleteQuestion } from '../release/release-status.util';
+import { type ReleaseBlock, STAYS_ONLINE_NOTE, isOnline } from '../release/release-status.util';
 
 type FolderView = components['schemas']['FolderView'];
 
@@ -71,6 +76,10 @@ export class NavReferenceDetailComponent implements OnInit {
   private readonly nav = inject(NavigationService);
   private readonly api = inject(ApiClient);
   private readonly toast = inject(ToastService);
+  private readonly undo = inject(UndoService);
+  private readonly confirms = inject(ConfirmService);
+  private readonly releaseEvents = inject(ReleaseEventsStore);
+  private alive = true;
 
   /** Time travel or an archived project (M26). */
   protected readonly readOnly = inject(ProjectAccessStore).readOnly;
@@ -110,6 +119,7 @@ export class NavReferenceDetailComponent implements OnInit {
   private lastEditingLocale: string | null = null;
 
   constructor() {
+    inject(DestroyRef).onDestroy(() => (this.alive = false));
     // The label is stored per language, so switching re-seeds the draft — otherwise the field keeps
     // the previous language's words and saving would store them under the new one (M24.4.1). An
     // unsaved draft of the language being left behind is dropped: this form saves one language
@@ -225,20 +235,37 @@ export class NavReferenceDetailComponent implements OnInit {
     }
   }
 
-  protected requestDelete(): void {
+  protected async requestDelete(): Promise<void> {
     const uuid = this.reference().uuid;
     if (!uuid || this.deleting() || this.readOnly()) {
       return;
     }
     const name = this.reference().displayName ?? this.reference().uid ?? 'this reference';
-    if (!window.confirm(deleteQuestion(`Delete "${name}"? This cannot be undone.`, this.release()))) {
+    const confirmed = await this.confirms.confirm({
+      title: `Delete “${name}”?`,
+      message: isOnline(this.release()) ? STAYS_ONLINE_NOTE : undefined,
+      confirmLabel: 'Delete',
+      tone: 'danger',
+    });
+    if (!confirmed) {
       return;
     }
+    const key = this.projectKey();
+    const revision = this.reference().revision;
     this.deleting.set(true);
-    this.nav.deleteReference(this.projectKey(), uuid).subscribe({
+    this.nav.deleteReference(key, uuid).subscribe({
       next: () => {
         this.deleting.set(false);
-        this.toast.show('Reference deleted', 'success');
+        if (revision == null) {
+          this.toast.show('Reference deleted', 'success');
+        } else {
+          // Undo restores the reference at its last live revision; the tree re-reads through the release events.
+          this.undo.offer(`Deleted “${name}”.`, () =>
+            this.api
+              .restoreAsset(key, uuid, { fromRevision: revision })
+              .pipe(tap(() => this.releaseEvents.changed())),
+          );
+        }
         this.deleted.emit(uuid);
       },
       error: () => {
@@ -272,13 +299,29 @@ export class NavReferenceDetailComponent implements OnInit {
       return;
     }
     this.savingName.set(true);
+    const key = this.projectKey();
+    const oldName = this.reference().displayName;
     this.api
-      .renameAsset(this.projectKey(), uuid, { displayName: name }, this.reference().revision ?? undefined)
+      .renameAsset(key, uuid, { displayName: name }, this.reference().revision ?? undefined)
       .subscribe({
-        next: () => {
+        next: (renamed) => {
           this.savingName.set(false);
           this.editingName.set(false);
-          this.toast.show('Reference renamed', 'success');
+          if (oldName) {
+            // Rename back; the revision the rename produced guards against edits made in between.
+            this.undo.offer(`Renamed “${oldName}” to “${name}”.`, () =>
+              this.api.renameAsset(key, uuid, { displayName: oldName }, renamed.revision ?? undefined).pipe(
+                tap(() => {
+                  this.releaseEvents.changed();
+                  if (this.alive) {
+                    this.changed.emit();
+                  }
+                }),
+              ),
+            );
+          } else {
+            this.toast.show('Reference renamed', 'success');
+          }
           this.changed.emit();
         },
         error: () => {
