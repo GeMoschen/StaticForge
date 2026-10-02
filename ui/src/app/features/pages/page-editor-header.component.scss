@@ -1,114 +1,72 @@
-@use '../../design/forms';
-
 :host {
-  display: contents;
+  display: block;
 }
 
-.page-editor__top {
+.page-editor__head {
   display: flex;
-  align-items: center;
-  gap: var(--sf-3);
-  padding: var(--sf-2) var(--sf-4);
-  border-bottom: 1px solid var(--sf-line);
-}
-
-.page-editor__title {
-  font-family: var(--sf-font-display);
-  font-size: var(--sf-text-md);
-  color: var(--sf-ink);
-}
-
-.page-editor__meta-anchor {
-  position: relative;
-}
-
-.page-editor__title-button {
-  background: transparent;
-  border: none;
-  padding: var(--sf-1) var(--sf-2);
-  margin: calc(var(--sf-1) * -1) calc(var(--sf-2) * -1);
-  border-radius: var(--sf-radius-sm);
-  cursor: pointer;
-  font: inherit;
-}
-
-.page-editor__title-button:hover {
+  flex-direction: column;
+  gap: var(--sf-space-2);
+  padding: var(--sf-space-4) var(--sf-space-6) var(--sf-space-3);
+  border-bottom: 1px solid var(--sf-border);
   background: var(--sf-surface);
 }
 
-.page-editor__meta-popover {
-  position: absolute;
-  top: calc(100% + var(--sf-2));
-  left: 0;
-  z-index: 20;
-  width: 22rem;
-  max-width: 90vw;
-  background: var(--sf-panel, #fff);
-  border: 1px solid var(--sf-line);
-  border-radius: var(--sf-radius-md, 8px);
-  box-shadow: var(--sf-shadow-lg, 0 8px 24px rgba(0, 0, 0, 0.2));
-  padding: var(--sf-3);
-  display: flex;
-  flex-direction: column;
-  gap: var(--sf-4);
-}
-
-.page-editor__meta-section {
-  display: flex;
-  flex-direction: column;
-  gap: var(--sf-2);
-}
-
-.page-editor__meta-title {
-  margin: 0;
-  font-size: var(--sf-text-xs);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--sf-slate);
-}
-
-.page-editor__meta-row {
-  display: flex;
+.page-editor__title-extras {
+  display: inline-flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: var(--sf-2);
-}
-
-.page-editor__meta-value {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: var(--sf-text-sm);
-  color: var(--sf-ink);
-}
-
-.page-editor__meta-input {
-  @include forms.sf-form-control;
-  flex: 1;
-  min-width: 0;
-}
-
-.page-editor__meta-footer {
-  display: flex;
-  justify-content: flex-end;
+  gap: var(--sf-space-1);
 }
 
 .page-editor__status {
-  margin-left: auto;
-  font-size: var(--sf-text-xs);
-  color: var(--sf-slate);
+  align-self: center;
+  margin-right: var(--sf-space-2);
+  color: var(--sf-text-muted);
+  font-size: var(--sf-fs-12);
+  line-height: var(--sf-lh-12);
 }
 
-/* How many fields the language being edited still owes (M24.4.2). */
+// How many fields the language being edited still owes (M24.4.2).
 .page-editor__translation {
-  margin-left: auto;
-  padding: 0 var(--sf-2);
-  font-size: var(--sf-text-xs);
-  color: var(--sf-slate);
+  padding: 0 var(--sf-space-2);
+  color: var(--sf-text-muted);
+  font-size: var(--sf-fs-12);
+  line-height: var(--sf-lh-12);
   white-space: nowrap;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
+// The release actions are their own group: a divider sets them apart from the page's own ⋮, which sf-page-header
+// renders right after them (decision 34).
+.page-editor__release {
+  margin-inline-end: var(--sf-space-1);
+  padding-inline-end: var(--sf-space-3);
+  border-inline-end: 1px solid var(--sf-border-strong);
+}
+
+.page-editor__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sf-space-1) var(--sf-space-6);
+  margin: 0;
+  font-size: var(--sf-fs-12);
+  line-height: var(--sf-lh-12);
+}
+
+.page-editor__meta-item {
+  display: flex;
+  align-items: center;
+  gap: var(--sf-space-2);
+
+  dt {
+    color: var(--sf-text-subtle);
+  }
+
+  dd {
+    margin: 0;
+    color: var(--sf-text-muted);
+  }
+
+  code {
+    font-family: var(--sf-font-mono);
+  }
+}

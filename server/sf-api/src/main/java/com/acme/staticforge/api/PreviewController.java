@@ -209,7 +209,7 @@ public class PreviewController {
             @RequestParam(defaultValue = "html") String channel,
             @RequestParam(required = false) Integer page,
             HttpServletRequest request) {
-        PreviewTokenService.ShareTarget target = previewTokenService.verifyShareToken(token);
+        PreviewTokenService.ShareTarget target = previewTokenService.verifyShareToken(token.indexOf('?') < 0 ? token : token.substring(0, token.indexOf('?')));
         if (target.projectKey() != null && !target.projectKey().equals(projectKey)) {
             return respond("", channel);
         }

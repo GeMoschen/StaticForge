@@ -61,13 +61,18 @@ describe('ReleaseBarComponent', () => {
   afterEach(() => http.verify());
 
   /** Renders the bar for `role`; the server's publish permissions default to what that role holds with no policy. */
-  function render(role: string, permissions = role === 'DEVELOPER' || role === 'PROJECT_ADMIN' ? ALL_PUBLISH_PERMISSIONS : []): void {
+  function render(
+    role: string,
+    permissions = role === 'DEVELOPER' || role === 'PROJECT_ADMIN' ? ALL_PUBLISH_PERMISSIONS : [],
+    layout: 'bar' | 'header' = 'bar',
+  ): void {
     TestBed.inject(ProjectContextStore).project.set(projectDetail(permissions));
     auth.setUser({ id: 1, username: 'ana', projectRoles: { proj: role } });
     fixture = TestBed.createComponent(ReleaseBarComponent);
     fixture.componentRef.setInput('projectKey', 'proj');
     fixture.componentRef.setInput('assetUuid', 'page-1');
     fixture.componentRef.setInput('refreshKey', 41);
+    fixture.componentRef.setInput('layout', layout);
     fixture.detectChanges();
     http.expectOne(DETAIL_URL).flush(DETAIL);
     http.expectOne('/api/v1/projects/proj/members').flush([{ userId: 1, username: 'ana', displayName: 'Ana' }]);
@@ -155,5 +160,63 @@ describe('ReleaseBarComponent', () => {
   it('shows an editor holding only SCHEDULE_RELEASE no actions', () => {
     render('EDITOR', ['SCHEDULE_RELEASE']);
     expect(buttons()).toEqual([]);
+  });
+
+  describe('as the header action group (M35.18)', () => {
+    function headerButtons(): string[] {
+      return Array.from(fixture.nativeElement.querySelectorAll('sf-button') as NodeListOf<HTMLElement>).map((b) =>
+        (b.textContent ?? '').trim(),
+      );
+    }
+
+    it('shows a status pill per language and Release…, Schedule… and a ⋮, without the region of the bar', () => {
+      render('DEVELOPER', ALL_PUBLISH_PERMISSIONS, 'header');
+
+      expect(fixture.nativeElement.querySelector('.bar')).toBeNull();
+      const pills = Array.from(fixture.nativeElement.querySelectorAll('.ra__pills sf-status') as NodeListOf<HTMLElement>);
+      expect(pills.map((pill) => pill.textContent?.replace(/\s+/g, ' '))).toEqual([
+        expect.stringContaining('DE'),
+        expect.stringContaining('EN'),
+      ]);
+      expect(headerButtons().filter((text) => text.includes('Release…') || text.includes('Schedule…'))).toHaveLength(2);
+      expect(fixture.nativeElement.querySelector('sf-menu')).not.toBeNull();
+    });
+
+    it('offers Unpublish… and Discard changes… in the ⋮, and opens the release dialog from Release…', () => {
+      render('DEVELOPER', ALL_PUBLISH_PERMISSIONS, 'header');
+      const items = (fixture.componentInstance as unknown as { moreItems: () => { id: string; disabled?: boolean }[] }).moreItems();
+
+      expect(items.map((item) => item.id)).toEqual(['unpublish', 'discard']);
+      expect(items.every((item) => !item.disabled)).toBe(true);
+
+      (Array.from(fixture.nativeElement.querySelectorAll('sf-button button') as NodeListOf<HTMLButtonElement>).find((b) =>
+        b.textContent?.includes('Release…'),
+      ) as HTMLButtonElement).click();
+      fixture.detectChanges();
+      expect(fixture.nativeElement.querySelector('sf-release-dialog')).not.toBeNull();
+    });
+
+    it('shows an editor the statuses but no actions', () => {
+      render('EDITOR', [], 'header');
+
+      expect(fixture.nativeElement.querySelectorAll('.ra__pills sf-status')).toHaveLength(2);
+      expect(headerButtons()).toEqual([]);
+      expect(fixture.nativeElement.querySelector('sf-menu')).toBeNull();
+    });
+
+    it('keeps the pending schedules, linking to them', () => {
+      render('DEVELOPER', ALL_PUBLISH_PERMISSIONS, 'header');
+      fixture.componentRef.setInput('refreshKey', 42);
+      fixture.detectChanges();
+      http.expectOne(DETAIL_URL).flush({
+        ...DETAIL,
+        scheduled: [{ actionId: 7, type: 'RELEASE', locale: 'en', runAt: '2026-09-29T07:00:00Z', nextRunAt: '2026-09-29T07:00:00Z', ownerUserId: 1 }],
+      });
+      fixture.detectChanges();
+
+      const link = fixture.nativeElement.querySelector('.ra__pending a') as HTMLAnchorElement;
+      expect(link.textContent).toMatch(/Release scheduled for .*2026.* by Ana \(EN\)/);
+      expect(link.getAttribute('href')).toBe('/p/proj/schedules?id=7');
+    });
   });
 });

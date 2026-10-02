@@ -259,6 +259,31 @@ export class SampleState {
   readonly historyRev = signal<number | null>(null);
   readonly shortcutsOpen = signal(false);
 
+  // ── Pages (M35.18): the settings and issues drawers, the empty project, the preview, the jump from an issue ─────
+  /** The Page settings / Folder settings drawer (`psettings=page|folder`). */
+  readonly pageSettings = signal<'page' | 'folder' | null>(null);
+  /** The Issues drawer (`issues=1`); `issuesReview` = `empty` shows the "No issues" state. */
+  readonly issues = signal(false);
+  readonly issuesReview = signal<'live' | 'empty'>('live');
+  /** The Pages area of a project without pages (`empty=1`). */
+  readonly emptyProject = signal(false);
+  /** The preview cannot render yet (`preview=incomplete`): it explains what is missing. */
+  readonly previewIncomplete = signal(false);
+  /** The editor scrolls to this outline entry (an issue's *Jump*, the preview's *Go to field*); `n` makes each request new. */
+  readonly editorJump = signal<{ readonly target: string; readonly field: string | null; readonly n: number } | null>(null);
+  private jumps = 0;
+
+  jumpTo(target: string, field: string | null = null): void {
+    this.editorJump.set({ target, field, n: ++this.jumps });
+  }
+
+  /** One right-hand drawer at a time: opening one closes the others (History, Page settings, Issues). */
+  closeDrawers(): void {
+    this.history.set(null);
+    this.pageSettings.set(null);
+    this.issues.set(false);
+  }
+
   // ── Favorites and recents (M35.15) ─────────────────────────────────────────
   /** Favorite pages: the star in the editor, the tree's context menu and the table, the tree's *Favorites* node and the palette share them. */
   readonly favorites = signal<readonly SampleFavorite[]>(FAVORITE_SEED);

@@ -1,0 +1,101 @@
+@if (editor.loading()) {
+  <sf-spinner [label]="'pages.editor.loading' | transloco" />
+} @else if (editor.error()) {
+  <sf-empty-state [title]="'pages.editor.loadError' | transloco" [description]="editor.error() ?? ''" icon="error" />
+} @else if (editor.page()) {
+  <div class="form">
+    @if (editor.contentDefinition(); as def) {
+      @if (def.editors.length > 0) {
+        <sf-section
+          [id]="fieldsId"
+          [class.is-selected]="editor.selected() === fieldsSelection"
+          [heading]="'pages.editor.fields.heading' | transloco"
+        >
+          <sf-content-form
+            data-sf-page-fields
+            [definition]="def"
+            [formGroup]="editor.fields.fieldsForm()!"
+            [projectKey]="editor.projectKey()"
+            [issues]="editor.shownIssues()"
+            [fieldStates]="editor.fields.rules.fieldStates()"
+            [ruleHub]="editor.readOnly() ? null : editor.fields.rules.hub"
+            [editingLocale]="editor.editingLocale()"
+            [storedValue]="editor.fields.storedContent()"
+            [localeLabels]="editor.fields.localeLabels()"
+          />
+        </sf-section>
+      }
+    }
+
+    @for (body of editor.bodies(); track body.name) {
+      <!-- A section dragged in from another body or page is dropped on the body it lands in. -->
+      <section
+        class="form__bodygroup"
+        [attr.data-sf-body]="body.name"
+        (dragover)="sections.onBodyDragOver($event)"
+        (drop)="sections.onBodyDrop(body, $event)"
+      >
+        <div class="form__body" [id]="cardId(bodySelection(body.name))" [class.is-selected]="editor.selected() === bodySelection(body.name)">
+          <h2 class="form__body-title">
+            <sf-icon name="view_agenda" />
+            {{ body.label ?? body.name }}
+          </h2>
+          @if (!editor.readOnly()) {
+            <sf-button
+              variant="secondary"
+              size="sm"
+              icon="add"
+              [disabled]="full(body.name, body.max)"
+              (click)="palette.open(body)"
+              >{{ 'pages.editor.body.addSection' | transloco }}</sf-button
+            >
+          }
+        </div>
+
+        @for (section of editor.sectionsFor(body.name); track sectionKey(section); let i = $index) {
+          <sf-section-editor
+            [id]="cardId(section.instanceId)"
+            [class.is-selected]="editor.selected() === section.instanceId"
+            [contentDefinition]="sections.defFor(section.templateRef)"
+            [section]="section"
+            [projectKey]="editor.projectKey()"
+            [pageUuid]="editor.uuid()"
+            [bodyName]="body.name"
+            [templateUid]="sections.uidFor(section.templateRef)"
+            [title]="sections.title(section.templateRef)"
+            [index]="i"
+            [count]="editor.bodyCount(body.name)"
+            [readOnly]="editor.readOnly()"
+            [issues]="editor.shownIssues()"
+            [rules]="editor.readOnly() ? null : editor.fields.rules.hub"
+            (valueChange)="sections.onValueChange(body.name, section.instanceId, $event)"
+            (filled)="sections.onFilled(body.name, section.instanceId, $event)"
+            (remove)="sections.remove(body.name, section.instanceId)"
+            (moveUp)="sections.moveBy(body.name, i, -1)"
+            (moveDown)="sections.moveBy(body.name, i, 1)"
+            (dragStarted)="sections.onDragStarted(body.name, $event)"
+            (dropOn)="sections.onDrop(body.name, $event)"
+            (dragEnd)="sections.drag.set(null)"
+          />
+          @if (!editor.readOnly() && !full(body.name, body.max)) {
+            <div class="form__insert">
+              <sf-button
+                variant="ghost"
+                size="sm"
+                icon="add"
+                [label]="'pages.editor.body.insertAfter' | transloco: { name: sections.title(section.templateRef) }"
+                (click)="palette.open(body, i + 1, sections.title(section.templateRef))"
+              />
+            </div>
+          }
+        } @empty {
+          <p class="form__empty">{{ 'pages.editor.body.empty' | transloco }}</p>
+        }
+      </section>
+    }
+
+    <div class="form__aside">
+      <sf-asset-urls [projectKey]="editor.projectKey()" [assetUuid]="editor.uuid()" [refreshKey]="editor.autosave.revision()" />
+    </div>
+  </div>
+}

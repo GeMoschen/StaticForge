@@ -14,6 +14,7 @@ import {
 import { MOVE_SECTION_SHORTCUTS } from '../../core/ui/documented-shortcuts';
 import { ShortcutService } from '../../core/ui/shortcut.service';
 import { FormGroup } from '@angular/forms';
+import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
 // Imported from their own files, not the `../forms` barrel: that barrel re-exports
 // `editor-registry.ts`, which imports `SfCatalogEditor`, which imports this component to
 // render cards — going through the barrel here would close that into a circular import
@@ -24,6 +25,8 @@ import { FormBuilderService } from '../forms/form-builder.service';
 import { FormFinding, SfContentFormComponent } from '../forms/sf-content-form.component';
 import { NestedRules } from '../forms/rules/nested-rules';
 import { RuleHub } from '../forms/rules/rule-hub';
+import { SfMenuComponent } from '../../shared/components/menu/sf-menu.component';
+import type { SfMenuItem } from '../../shared/components/menu/sf-menu-item';
 import { SfIconComponent } from '../../shared/components/sf-icon.component';
 import type { SectionInstance } from './types';
 
@@ -37,7 +40,7 @@ import type { SectionInstance } from './types';
   selector: 'sf-section-editor',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [SfContentFormComponent, SfIconComponent],
+  imports: [SfContentFormComponent, SfIconComponent, SfMenuComponent, TranslocoPipe],
   templateUrl: './section-editor.component.html',
   styleUrl: './section-editor.component.scss',
 })
@@ -69,8 +72,6 @@ export class SectionEditorComponent {
   readonly index = input.required<number>();
   readonly count = input.required<number>();
   readonly readOnly = input(false);
-  /** When true, the move/remove action buttons are hidden (e.g. single-section focus view). */
-  readonly hideActions = input(false);
   /**
    * The page's content findings (`PageView.issues`, M30.3.2); the form shows the ones under this section
    * (`bodies.<body>[<index>].content.…`) at their fields.
@@ -94,6 +95,18 @@ export class SectionEditorComponent {
 
   /** The field states under this form (required, read-only, computed markers). */
   protected readonly fieldStates = computed(() => this.rules()?.view()?.fieldStates ?? []);
+
+  private readonly transloco = inject(TranslocoService);
+
+  /** The section's ⋮ menu: move it a place up or down (disabled at the ends) and remove it (Undo in a toast). */
+  protected readonly menuItems = computed<SfMenuItem[]>(() => {
+    const t = (key: string) => this.transloco.translate(`pages.editor.section.${key}`);
+    return [
+      { id: 'moveUp', label: t('moveUp'), icon: 'arrow_upward', disabled: this.index() <= 0 },
+      { id: 'moveDown', label: t('moveDown'), icon: 'arrow_downward', disabled: this.index() >= this.count() - 1 },
+      { id: 'remove', label: t('remove'), icon: 'delete', danger: true, separatorBefore: true },
+    ];
+  });
 
   /** Live rules applied to this form. */
   private readonly nested = new NestedRules();
@@ -203,6 +216,16 @@ export class SectionEditorComponent {
     this.filled.emit(this.fb.valueOf(this.contentDefinition(), this.fieldForm()));
   }
 
+  protected onMenu(item: SfMenuItem): void {
+    if (item.id === 'moveUp') {
+      this.moveUp.emit();
+    } else if (item.id === 'moveDown') {
+      this.moveDown.emit();
+    } else if (item.id === 'remove') {
+      this.remove.emit();
+    }
+  }
+
   protected toggleCollapsed(event?: MouseEvent): void {
     event?.stopPropagation();
     this.collapsed.update((v) => {
@@ -213,7 +236,7 @@ export class SectionEditorComponent {
   }
 
   private collapseKey(): string {
-    return `sf-section-collapsed-${this.templateUid()}-${this.bodyName()}`;
+    return `sf-section-collapsed-${this.section().instanceId}`;
   }
 
   protected onHeaderKeydown(event: KeyboardEvent): void {

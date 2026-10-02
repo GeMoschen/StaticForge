@@ -434,7 +434,7 @@ public class MediaController {
             @RequestParam("t") String token,
             @RequestParam(required = false) String variant,
             HttpServletRequest request) {
-        PreviewTokenService.ShareTarget target = previewTokenService.verifyMediaShareToken(token);
+        PreviewTokenService.ShareTarget target = previewTokenService.verifyMediaShareToken(stripStrayQuery(token));
         if (!target.pageUuid().equals(uuid) || (target.projectKey() != null && !target.projectKey().equals(projectKey))) {
             throw new SfException(ProblemFactory.unauthorized("Invalid share token."));
         }
@@ -457,10 +457,30 @@ public class MediaController {
         MediaBinary binary = mediaService.binary(projectId, uuid, variant, revision, target.locale());
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.parseMediaType(binary.mimeType()));
+        allowAnyOrigin(headers);
         if (!isRenderable(binary.mimeType())) {
             headers.setContentDisposition(ContentDisposition.attachment().filename(binary.fileName()).build());
         }
         return new ResponseEntity<>(binary.bytes(), headers, HttpStatus.OK);
+    }
+
+    /**
+     * A share URL with something glued on behind the token — a template that appends a cache buster to a media link
+     * (<code>url("$CMS_VALUE(…)$?v=3")</code>) gives <code>…/share?t=TOKEN?v=3</code> — carries it inside the {@code t}
+     * value. A token is URL-safe (<code>A–Z a–z 0–9 - _ .</code>), so everything from the first {@code ?} on is not part of it.
+     */
+    private static String stripStrayQuery(String token) {
+        int stray = token.indexOf('?');
+        return stray < 0 ? token : token.substring(0, stray);
+    }
+
+    /**
+     * The share routes are the token's to guard — they carry no cookie or session — so any page may read them. A font
+     * in a stylesheet is fetched with CORS, and the preview frame is a sandboxed document (its origin is {@code null}):
+     * without this header the browser throws the font away.
+     */
+    private static void allowAnyOrigin(HttpHeaders headers) {
+        headers.set(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN, "*");
     }
 
     private ResponseEntity<byte[]> sharedProcessed(
@@ -481,6 +501,7 @@ public class MediaController {
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.parseMediaType(mimeType));
         headers.setCacheControl(CacheControl.noStore());
+        allowAnyOrigin(headers);
         if (renderError != null) {
             headers.set(RENDER_ERROR_HEADER, renderError);
         }

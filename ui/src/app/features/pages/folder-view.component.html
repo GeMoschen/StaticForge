@@ -1,0 +1,123 @@
+<sf-page-header class="view__header" [title]="title()" [secondaryActions]="moreActions()" (secondaryAction)="onMenu($event)">
+  <ng-container sfPageHeaderActions>
+    <sf-button variant="secondary" icon="create_new_folder" [disabled]="readOnly()" (click)="newFolder()">{{ 'pages.folder.newFolder' | transloco }}</sf-button>
+    @if (permissions.canRelease()) {
+      <sf-button variant="secondary" icon="publish" (click)="releaseFolder()">{{ 'pages.folder.release' | transloco }}</sf-button>
+    }
+    <sf-button icon="add" [disabled]="readOnly()" (click)="newPage()">{{ 'pages.folder.newPage' | transloco }}</sf-button>
+  </ng-container>
+</sf-page-header>
+
+<sf-data-table
+  class="view__table"
+  selectable
+  searchable
+  [columns]="columns()"
+  [rows]="rows()"
+  [rowKey]="rowKey"
+  [rowLabel]="rowLabel"
+  [label]="'pages.folder.table' | transloco: { name: title() }"
+  [searchPlaceholder]="'pages.folder.search' | transloco"
+  [bulkActions]="bulkActions()"
+  [loading]="loading()"
+  [error]="failed() ? ('pages.folder.loadFailed' | transloco) : null"
+  [emptyTitle]="'pages.folder.empty' | transloco"
+  [emptyDescription]="'pages.folder.emptyHint' | transloco"
+  (rowOpen)="open($event)"
+  (retry)="retry()"
+>
+  <ng-template sfDataTableCell="name" [sfDataTableCellRows]="rows()" let-row>
+    <span class="cell-name">
+      <sf-icon class="cell-name__icon" [class.is-folder]="row.kind === 'folder'" [name]="row.kind === 'folder' ? 'folder' : 'description'" />
+      <span class="cell-name__text">{{ row.name }}</span>
+      <sf-asset-favorite
+        class="cell-fav"
+        [type]="row.kind === 'folder' ? 'FOLDER' : 'PAGE'"
+        [uuid]="row.uuid"
+        [name]="row.name"
+        [folderPath]="row.path"
+        (click)="$event.stopPropagation()"
+      />
+    </span>
+  </ng-template>
+  <ng-template sfDataTableCell="template" [sfDataTableCellRows]="rows()" let-row>
+    <span class="cell-muted">{{ row.templateName ?? ('pages.folder.folderType' | transloco) }}</span>
+  </ng-template>
+  <ng-template sfDataTableCell="status" [sfDataTableCellRows]="rows()" let-row>
+    <span class="cell-status">
+      @for (entry of statuses(row); track entry.key) {
+        <sf-status size="sm" [tone]="entry.tone" [label]="entry.tag" [detail]="entry.label" />
+      } @empty {
+        <span class="cell-muted">—</span>
+      }
+    </span>
+  </ng-template>
+  <ng-template sfDataTableCell="modified" [sfDataTableCellRows]="rows()" let-row>
+    @if (row.changedAt) {
+      <span class="cell-modified">
+        @if (row.changedBy) {
+          <sf-avatar size="sm" [name]="row.changedBy" />
+          <span class="cell-modified__name">{{ row.changedBy }}</span>
+        }
+        <sf-relative-time [value]="row.changedAt" />
+      </span>
+    } @else {
+      <span class="cell-muted">—</span>
+    }
+  </ng-template>
+  <ng-template sfDataTableCell="released" [sfDataTableCellRows]="rows()" let-row>
+    @if (row.releasedAt) {
+      <sf-relative-time [value]="row.releasedAt" />
+    } @else {
+      <span class="cell-muted">{{ 'pages.folder.neverReleased' | transloco }}</span>
+    }
+  </ng-template>
+  <ng-template sfDataTableCell="path" [sfDataTableCellRows]="rows()" let-row>
+    <code class="cell-url">{{ urlOf(row) }}</code>
+  </ng-template>
+</sf-data-table>
+
+@if (settingsOpen() && folder(); as current) {
+  <sf-folder-settings-drawer
+    [projectKey]="projectKey()"
+    [folder]="current"
+    [pageCount]="pageCount()"
+    [folderCount]="folderCount()"
+    [startRenaming]="settingsRename()"
+    (closed)="settingsOpen.set(false)"
+    (changed)="onSettingsChanged()"
+  />
+}
+
+@if (dialog(); as d) {
+  @if (d.kind === 'release') {
+    <sf-release-dialog [projectKey]="projectKey()" mode="release" [choices]="d.choices" (done)="releaseDone()" (closed)="dialog.set(null)" />
+  } @else {
+    <sf-folder-move-dialog
+      [tree]="tree()"
+      [excluded]="excludedFolders(d.rows)"
+      [count]="d.rows.length"
+      (chosen)="onMoveChosen(d.rows, $event)"
+      (cancelled)="dialog.set(null)"
+    />
+  }
+}
+
+<sf-create-asset-dialog
+  kind="FOLDER"
+  scope="PAGES"
+  [open]="newFolderOpen()"
+  [submitting]="creating()"
+  [projectKey]="projectKey()"
+  (create)="submitNewFolder($event)"
+  (closed)="newFolderOpen.set(false)"
+/>
+<sf-create-asset-dialog
+  kind="PAGE"
+  [open]="newPageOpen()"
+  [submitting]="creating()"
+  [projectKey]="projectKey()"
+  [templates]="pageTemplates()"
+  (create)="submitNewPage($event)"
+  (closed)="newPageOpen.set(false)"
+/>

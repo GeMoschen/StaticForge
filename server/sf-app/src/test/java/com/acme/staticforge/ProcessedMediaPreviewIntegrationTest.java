@@ -157,6 +157,22 @@ class ProcessedMediaPreviewIntegrationTest {
     }
 
     @Test
+    void aShareLinkWithACacheBusterGluedBehindTheTokenStillWorksAndAnyPageMayReadIt() throws Exception {
+        Fixture fx = newFixture();
+        byte[] font = {1, 2, 3, 4};
+        AssetVersionView media = mediaService.upload(fx.project().getId(), null, "icons.woff2", null, font, fx.ctx());
+        String token = previewTokenService.issueMediaShareToken(media.uuid(), null, fx.project().getKey());
+
+        // `url("$CMS_VALUE(...)$?time=123")` in a stylesheet gives a second `?` behind the token.
+        MockHttpServletResponse response = fetch(media(fx, media) + "/share?t=" + token + "?time=1769685282643");
+
+        assertThat(response.getStatus()).isEqualTo(200);
+        assertThat(response.getContentAsByteArray()).isEqualTo(font);
+        // A font is fetched with CORS from the sandboxed preview frame (origin null): the token is the credential.
+        assertThat(response.getHeader(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN)).isEqualTo("*");
+    }
+
+    @Test
     void aTokenForOneFileCannotRenderAnother() throws Exception {
         Fixture fx = newFixture();
         AssetVersionView a = processed(fx, upload(fx, "a.css", "a{}"));

@@ -228,6 +228,11 @@ export class SfTreeComponent<T = unknown> implements OnInit, OnDestroy {
   readonly validateName = input<SfTreeNameValidator<T> | null>(null);
   /** Host entries for the context and ⋮ menus (inserted before "Delete"). */
   readonly menuItems = input<((nodes: readonly SfTreeNode<T>[]) => readonly ContextMenuItem[]) | null>(null);
+  /**
+   * The host's own confirmation before a delete (the typed word for a large delete, a dialog with redirect options for
+   * a published page …). Resolves `true` to go on. Without it the tree asks its plain danger confirmation.
+   */
+  readonly confirmDelete = input<((nodes: readonly SfTreeNode<T>[]) => Promise<boolean>) | null>(null);
   readonly filterable = input(true, { transform: booleanAttribute });
   /** `client` filters the loaded nodes; `server` asks {@link search} for the matching paths (large trees). */
   readonly filterMode = input<'client' | 'server'>('client');
@@ -1004,11 +1009,14 @@ export class SfTreeComponent<T = unknown> implements OnInit, OnDestroy {
       return;
     }
     const params = { count: nodes.length, name: nodes[0].label };
-    const confirmed = await this.confirms.confirm({
-      title: this.t('deleteTitle', params),
-      confirmLabel: this.t('deleteConfirm', params),
-      tone: 'danger',
-    });
+    const host = this.confirmDelete();
+    const confirmed = host
+      ? await host(nodes)
+      : await this.confirms.confirm({
+          title: this.t('deleteTitle', params),
+          confirmLabel: this.t('deleteConfirm', params),
+          tone: 'danger',
+        });
     if (!confirmed) {
       return;
     }

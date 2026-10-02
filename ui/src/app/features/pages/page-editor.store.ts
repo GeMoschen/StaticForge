@@ -20,7 +20,7 @@ import type { BodiesMap, ResolveMode, SectionInstance } from './types';
 
 type PageView = components['schemas']['PageView'];
 
-const SPLIT_KEY = 'sf-editor-split-ratio';
+const PREVIEW_KEY = 'sf-page-editor-preview';
 
 /** The routed inputs of the page editor, handed to the store once by the component. */
 export interface PageEditorInputs {
@@ -70,9 +70,34 @@ export class PageEditorStore {
   readonly issues = signal<ContentIssue[]>([]);
   /** The view the preview shows; the Issues panel notes that its checks cover the draft. */
   readonly previewView = signal<PreviewView>(readStoredView());
-  readonly splitRatio = signal(this.readSplitRatio());
-  readonly centreFlex = computed(() => `${this.splitRatio()} 1 0%`);
-  readonly previewFlex = computed(() => `${1 - this.splitRatio()} 1 0%`);
+  /** The preview beside the form (the header's Preview toggle); remembered per browser. */
+  readonly previewOpen = signal(this.readPreviewOpen());
+  /** The Issues drawer and the Page settings drawer (non-modal, below the top bar); the header's buttons toggle them. */
+  readonly issuesOpen = signal(false);
+  readonly settingsOpen = signal(false);
+  /** Asks the settings drawer to open with the display name in edit mode (⋮ › Rename, F2). */
+  readonly renameRequested = signal(false);
+  /** Opens or closes the Issues drawer; Issues and Page settings share the right edge, so one closes the other. */
+  toggleIssues(open = !this.issuesOpen()): void {
+    this.issuesOpen.set(open);
+    if (open) {
+      this.settingsOpen.set(false);
+    }
+  }
+
+  /** Opens or closes the Page settings drawer (see {@link toggleIssues}); `rename` opens it with the name in edit mode. */
+  toggleSettings(open = !this.settingsOpen(), rename = false): void {
+    this.settingsOpen.set(open);
+    if (open) {
+      this.issuesOpen.set(false);
+      this.renameRequested.set(rename);
+    }
+  }
+
+  /** What the Issues button shows: the issues counted (infos are listed, not counted) and how many are errors. */
+  readonly issueSummary = signal({ count: 0, errors: 0 });
+  /** The outline's selection: `fields`, `body:<name>` or a section's instance id; echoed on its card. */
+  readonly selected = signal<string>('fields');
   /** The preview's revision pin: set only while time travelling, so a live preview reads current state. */
   readonly timeTravelRevision = this.timeTravel.activeRevision;
 
@@ -350,16 +375,21 @@ export class PageEditorStore {
     return this.sectionsFor(bodyName).length;
   }
 
-  private readSplitRatio(): number {
-    if (typeof localStorage === 'undefined') {
-      return 0.6;
+  private readPreviewOpen(): boolean {
+    try {
+      return localStorage.getItem(PREVIEW_KEY) !== 'off';
+    } catch {
+      return true;
     }
-    const stored = Number(localStorage.getItem(SPLIT_KEY));
-    return Number.isFinite(stored) && stored > 0 ? stored : 0.6;
   }
 
-  /** Keeps the dragged divider position for the next editor. */
-  persistSplitRatio(): void {
-    localStorage.setItem(SPLIT_KEY, String(this.splitRatio()));
+  /** Shows or hides the preview beside the form. */
+  setPreviewOpen(open: boolean): void {
+    this.previewOpen.set(open);
+    try {
+      localStorage.setItem(PREVIEW_KEY, open ? 'on' : 'off');
+    } catch {
+      // Storage blocked: the choice lasts for this page only.
+    }
   }
 }

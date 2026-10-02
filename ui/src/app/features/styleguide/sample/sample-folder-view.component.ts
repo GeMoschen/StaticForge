@@ -79,9 +79,9 @@ export class SampleFolderViewComponent {
   });
 
   protected readonly bulkActions = computed<SfDataTableBulkAction<SampleEntry>[]>(() => [
-    { id: 'move', label: this.state.t('folder.bulk.move'), icon: 'drive_file_move', action: () => this.state.notice() },
+    { id: 'move', label: this.state.t('folder.bulk.move'), icon: 'drive_file_move', action: (s) => this.bulkMove(s) },
     { id: 'release', label: this.state.t('folder.bulk.release'), icon: 'publish', action: () => this.state.notice() },
-    { id: 'duplicate', label: this.state.t('folder.bulk.duplicate'), icon: 'content_copy', action: () => this.state.notice() },
+    { id: 'duplicate', label: this.state.t('folder.bulk.duplicate'), icon: 'content_copy', action: (s) => this.bulkDuplicate(s) },
     { id: 'delete', label: this.state.t('folder.bulk.delete'), icon: 'delete', variant: 'danger', action: (s) => void this.delete(s) },
   ]);
 
@@ -143,13 +143,31 @@ export class SampleFolderViewComponent {
   }
 
   protected secondary(item: SfMenuItem): void {
-    if (item.id === 'favorite') {
+    if (item.id === 'settings') {
+      this.state.closeDrawers();
+      this.state.pageSettings.set('folder');
+    } else if (item.id === 'favorite') {
       this.state.toggleFavorite(this.state.folderId()!);
     } else if (item.id === 'delete') {
       void this.deleteEntries([this.title()]);
     } else {
       this.state.notice();
     }
+  }
+
+  /** Bulk move: the move picker would ask for the target; the toast says what moved and offers Undo (decision 50). */
+  private bulkMove(selection: SfDataTableSelection<SampleEntry>): void {
+    const target = this.state.t('folder.bulk.moveTarget');
+    this.toasts.undo(this.state.t('folder.bulk.moved', { count: selection.rows.length, name: selection.rows[0]?.name, target }), () =>
+      this.toasts.show(this.state.t('folder.bulk.movedBack'), 'info'),
+    );
+  }
+
+  /** Bulk duplicate: the copies appear next to the originals; Undo removes them. */
+  private bulkDuplicate(selection: SfDataTableSelection<SampleEntry>): void {
+    this.toasts.undo(this.state.t('folder.bulk.duplicated', { count: selection.rows.length }), () =>
+      this.toasts.show(this.state.t('folder.bulk.duplicatedBack'), 'info'),
+    );
   }
 
   private delete(selection: SfDataTableSelection<SampleEntry>): Promise<void> {

@@ -103,7 +103,9 @@ every screen. Screen migration starts only after the style guide (M35.9) is sign
 - [x] M35.17 content form and editors
   - Design signed off 2026-10-02 (gate round 7, decisions 72–81). Review: see `35-m35-ui-ux-overhaul/017-content-form-editors.md`
     (280 test files / 2,584 tests, build + lint + backend CDL tests green). Open: visual pass in the host screens (M35.18/20/22).
-- [ ] M35.18 pages
+- [x] M35.18 pages
+  - Design signed off 2026-10-02 (gate round 8, decisions 82–89). Review: see `35-m35-ui-ux-overhaul/018-pages.md`
+    (292 test files / 2,700 tests, build + lint green, checked in headless Chrome). Open: start-page field (backend), e2e journeys m21/m27/m28.
 - [ ] M35.19 media
 - [ ] M35.20 content: record sets and records
 - [ ] M35.21 templates IDE

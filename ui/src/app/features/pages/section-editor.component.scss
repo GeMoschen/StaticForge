@@ -50,27 +50,7 @@
 
 .section-card__actions {
   display: flex;
-  gap: var(--sf-1);
-}
-
-.section-card__actions button {
-  padding: var(--sf-1) var(--sf-2);
-  background: transparent;
-  border: 1px solid var(--sf-line);
-  border-radius: var(--sf-radius-sm);
-  font-family: var(--sf-font-ui);
-  font-size: var(--sf-text-xs);
-  color: var(--sf-slate);
-  cursor: pointer;
-}
-
-.section-card__actions button:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-.section-card__remove {
-  color: var(--sf-rust) !important;
+  flex-shrink: 0;
 }
 
 .section-card__body {

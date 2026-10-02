@@ -72,6 +72,7 @@ describe('PageIssuesPanelComponent', () => {
   let fixture: ComponentFixture<PageIssuesPanelComponent>;
   let httpMock: HttpTestingController;
   let selected: IssueTarget[];
+  let summaries: { count: number; errors: number }[];
 
   beforeEach(() => {
     vi.useFakeTimers();
@@ -87,8 +88,11 @@ describe('PageIssuesPanelComponent', () => {
     fixture.componentRef.setInput('pageUuid', 'page-1');
     fixture.componentRef.setInput('refreshKey', 1);
     fixture.componentRef.setInput('completeness', COMPLETENESS);
+    fixture.componentRef.setInput('open', true);
     selected = [];
+    summaries = [];
     fixture.componentInstance.issueSelect.subscribe((target) => selected.push(target));
+    fixture.componentInstance.summaryChange.subscribe((summary) => summaries.push(summary));
     render();
   });
 
@@ -110,12 +114,24 @@ describe('PageIssuesPanelComponent', () => {
     return httpMock.expectOne((req) => req.url === CHECK_URL);
   }
 
-  function text(): string {
-    return (fixture.nativeElement as HTMLElement).textContent?.replace(/\s+/g, ' ') ?? '';
+  /** The drawer moves itself into `<body>`. */
+  function drawer(): HTMLElement {
+    return document.body.querySelector<HTMLElement>('.sf-drawer')!;
   }
 
-  function items(): HTMLButtonElement[] {
-    return Array.from((fixture.nativeElement as HTMLElement).querySelectorAll<HTMLButtonElement>('.issues__item'));
+  function text(): string {
+    return drawer()?.textContent?.replace(/\s+/g, ' ') ?? '';
+  }
+
+  function rows(): HTMLButtonElement[] {
+    return Array.from(document.body.querySelectorAll<HTMLButtonElement>('.issues__row'));
+  }
+
+  /** The group headings, without the level icon's ligature text. */
+  function headings(): string[] {
+    return Array.from(document.body.querySelectorAll('.issues__group-heading')).map((h) =>
+      (h.textContent ?? '').replace(/\s+/g, ' ').trim().replace(/^[a-z_]+ /, ''),
+    );
   }
 
   function checked(): void {
@@ -141,21 +157,55 @@ describe('PageIssuesPanelComponent', () => {
     expect(text()).toMatch(/checked at \d{1,2}:\d{2}/);
   });
 
-  it('groups content and output issues, errors first, and counts them all in the header', () => {
+  it('groups content and output issues by level, errors first, with a summary and the count of each group', () => {
     checked();
 
-    const lists = (fixture.nativeElement as HTMLElement).querySelectorAll('.issues__list');
-    expect(lists[0].getAttribute('aria-label')).toBe('Content issues');
-    expect(lists[0].textContent).toContain('content.title');
-    expect(lists[0].textContent).toContain('Title is required.');
-    const output = Array.from(lists[1].querySelectorAll('.issues__rule')).map((rule) => rule.textContent?.trim());
-    expect(output).toEqual(['Link to a missing page or file', 'Image without alt attribute', 'Missing or empty <title>']);
-    expect(lists[1].textContent).toContain('Fix in content or template');
-    expect(lists[1].textContent).toContain('Fix in template');
-    const count = (fixture.nativeElement as HTMLElement).querySelector('.issues__count');
-    expect(count?.textContent?.trim()).toBe('4');
-    expect(count?.classList).toContain('issues__count--error');
+    const found = headings();
+    expect(found).toEqual(['Errors 2', 'Warnings 2']);
+    expect(text()).toContain('2 errors');
+    expect(text()).toContain('2 warnings');
+    const messages = rows().map((row) => row.querySelector('.issues__message')?.textContent?.replace(/\s+/g, ' ').trim());
+    expect(messages[0]).toContain('Title is required.');
+    expect(messages[1]).toContain('Link to a missing page or file');
+    expect(messages[2]).toContain('Image without alt attribute');
+    expect(messages[3]).toContain('Missing or empty <title>');
+    expect(text()).toContain('Fix in the content or the template');
+    expect(text()).toContain('Fix in the template');
+    expect(text()).toContain('Content rule');
+    expect(text()).toContain('Output check');
     expect(text()).toContain('SF-CHK-0205, SF-CHK-0107');
+    // The Issues button's count.
+    expect(summaries.at(-1)).toEqual({ count: 4, errors: 2 });
+  });
+
+  it('says where an issue points, in words, and shows the check code in developer mode only', () => {
+    fixture.componentRef.setInput('describe', (target: IssueTarget) =>
+      target.editorPath === 'content.title' ? 'Page fields › Title' : target.sectionInstanceId === 'sec-2' ? 'Hero › Image' : null,
+    );
+    checked();
+
+    expect(text()).toContain('Page fields › Title');
+    expect(text()).toContain('Hero › Image');
+    expect(document.body.querySelector('.issues__code')).toBeNull();
+
+    fixture.componentRef.setInput('devMode', true);
+    render();
+    expect(Array.from(document.body.querySelectorAll('.issues__code')).map((code) => code.textContent)).toEqual([
+      'required',
+      'SF-CHK-0101',
+      'SF-CHK-0301',
+      'SF-CHK-0201',
+    ]);
+  });
+
+  it('reports the count while the drawer is closed, and shows no drawer', () => {
+    fixture.componentRef.setInput('open', false);
+    render();
+    expect(document.body.querySelector('.sf-drawer')).toBeNull();
+
+    checked();
+
+    expect(summaries.at(-1)).toEqual({ count: 4, errors: 2 });
   });
 
   it('checks again after each completed autosave, once for a burst of saves, and cancels a check that is overtaken', () => {
@@ -174,7 +224,18 @@ describe('PageIssuesPanelComponent', () => {
     expect(overtaken.cancelled).toBe(true);
     latest.flush({ ...RESULT, findings: [] });
     render();
-    expect(text()).toContain('No problems found in the draft.');
+    // Only the content finding is left.
+    expect(summaries.at(-1)).toEqual({ count: 1, errors: 1 });
+  });
+
+  it('shows the empty state when nothing is wrong', () => {
+    fixture.componentRef.setInput('completeness', []);
+    render();
+    nextCheck().flush({ ...RESULT, completeness: [], findings: [] });
+    render();
+
+    expect(text()).toContain('No issues');
+    expect(summaries.at(-1)).toEqual({ count: 0, errors: 0 });
   });
 
   it('checks again in the new language when the editing language switches', () => {
@@ -200,21 +261,23 @@ describe('PageIssuesPanelComponent', () => {
     render();
 
     expect(text()).toContain('Checks unavailable');
-    expect(text()).toContain('content.title'); // the content issues stay
-    const retry = (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>('.issues__retry');
+    expect(text()).toContain('Title is required.'); // the content issues stay
+    const retry = Array.from(document.body.querySelectorAll<HTMLButtonElement>('button')).find((b) => b.textContent?.trim() === 'Check again');
     retry?.click();
     nextCheck().flush(RESULT);
     render();
     expect(text()).not.toContain('Checks unavailable');
   });
 
-  it('sends the editor to the field, the section or the element an issue points at', () => {
+  it('sends the editor to the field, the section or the element an issue points at (Go to it)', () => {
     checked();
-    const [content, missingLink, missingAlt, noTitle] = items();
+    const [content, missingLink, missingAlt, noTitle] = rows();
 
     content.click();
     missingAlt.click();
     missingLink.click();
+    // A finding about the whole page points nowhere: nothing to click.
+    expect(noTitle.disabled).toBe(true);
     noTitle.click();
 
     expect(selected).toEqual([
@@ -222,18 +285,6 @@ describe('PageIssuesPanelComponent', () => {
       { editorPath: 'bodies.main[1].content.image', sectionInstanceId: 'sec-2', selector: 'body > main > figure > img' },
       { editorPath: null, sectionInstanceId: 'sec-2', selector: 'body > main > figure > a:nth-of-type(1)' },
     ]);
-  });
-
-  it('only expands an issue that points nowhere', () => {
-    checked();
-    const noTitle = items()[3];
-
-    noTitle.click();
-    render();
-
-    expect(selected).toEqual([]);
-    expect(noTitle.getAttribute('aria-expanded')).toBe('true');
-    expect(noTitle.textContent).toContain('SF-CHK-0201');
   });
 
   it('notes that the checks cover the draft while the preview shows the published page', () => {
@@ -258,11 +309,10 @@ describe('PageIssuesPanelComponent', () => {
     req.flush({ ...RESULT, completeness: undefined, findings: [] });
     render();
 
-    const labels = items().map((item) => item.querySelector('.issues__severity')?.textContent?.trim());
-    expect(labels).toEqual(['Error', 'Warning', 'Info']);
+    const found = headings();
+    expect(found).toEqual(['Errors 1', 'Warnings 1', 'Info 1']);
     expect(text()).not.toContain('Keep slugs short.');
-    const count = (fixture.nativeElement as HTMLElement).querySelector('.issues__count')?.textContent?.trim();
-    expect(count).toBe('2');
+    expect(summaries.at(-1)).toEqual({ count: 2, errors: 1 });
   });
 
   it('filters by scope chips, remembers the choice and keeps one chip on (M33)', () => {
@@ -274,25 +324,23 @@ describe('PageIssuesPanelComponent', () => {
     nextCheck().flush({ ...RESULT, completeness: undefined });
     render();
     const chip = (label: string) =>
-      Array.from((fixture.nativeElement as HTMLElement).querySelectorAll<HTMLButtonElement>('.issues__scope')).find(
-        (button) => button.textContent?.trim() === label,
-      )!;
+      Array.from(document.body.querySelectorAll<HTMLButtonElement>('.issues__chip')).find((button) => button.textContent?.trim() === label)!;
     expect(text()).toContain('Slug taken.');
     expect(text()).toContain('Image without alt attribute');
 
-    chip('Save').click();
-    chip('Generation').click();
+    chip('Saving').click();
+    chip('Building').click();
     render();
-    expect(chip('Save').getAttribute('aria-pressed')).toBe('false');
+    expect(chip('Saving').getAttribute('aria-pressed')).toBe('false');
     expect(text()).not.toContain('Slug taken.');
     expect(text()).toContain('Title is required.');
     // Output findings are what a build reports: hidden with the generation scope.
     expect(text()).not.toContain('Image without alt attribute');
     expect(JSON.parse(localStorage.getItem('sf-issues-scopes')!)).toEqual(['EDIT', 'RELEASE']);
 
-    chip('Edit').click();
-    chip('Release').click();
+    chip('Editing').click();
+    chip('Releasing').click();
     render();
-    expect(chip('Release').getAttribute('aria-pressed')).toBe('true');
+    expect(chip('Releasing').getAttribute('aria-pressed')).toBe('true');
   });
 });

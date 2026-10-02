@@ -4522,6 +4522,13 @@ export interface components {
                 [key: string]: components["schemas"]["LocaleReleaseView"];
             };
             scheduled?: components["schemas"]["ScheduledRefView"][];
+            /** The page's template name (page listings). */
+            templateName?: string;
+            /** Format: date-time */
+            changedAt?: string;
+            /** Format: int64 */
+            changedBy?: number;
+            changedByName?: string;
         };
         NavTreeView: {
             /** Format: uuid */

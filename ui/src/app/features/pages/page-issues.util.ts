@@ -149,20 +149,17 @@ export interface IssueDestination {
 }
 
 /**
- * The element an issue focuses in the page editor's centre column: the field `editor` of the page's own form (`section`
- * `null`) or of section `section`, else that section's card. A section counts only inside the section scope the editor
- * opens for it (`[data-sf-section-scope]`): right after `?section=` changes, the body scope's card with the same id is
- * still on screen and is about to be replaced — focusing it lost the focus and the highlight with it.
+ * The element an issue focuses in the page editor's form: the field `editor` of the page's own fields (`section` `null`)
+ * or of section `section`, else that section's card. The form shows the page's fields and every section in one scroll, so
+ * a card is found by its instance id.
  *
- * @returns `null` while the scope isn't rendered yet
+ * @returns `null` while the form isn't rendered yet (or has no such card)
  */
 export function issueFocusTarget(root: ParentNode, section: string | null, editor: string | null): HTMLElement | null {
   const scope =
     section === null
       ? root.querySelector<HTMLElement>('[data-sf-page-fields]')
-      : root.querySelector<HTMLElement>(
-          `[data-sf-section-scope="${cssValue(section)}"] [data-sf-section="${cssValue(section)}"]`,
-        );
+      : root.querySelector<HTMLElement>(`[data-sf-section="${cssValue(section)}"]`);
   const field =
     scope && editor
       ? scope.querySelector<HTMLElement>(

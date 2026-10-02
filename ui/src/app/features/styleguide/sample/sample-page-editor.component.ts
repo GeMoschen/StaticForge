@@ -30,6 +30,8 @@ import { SfSectionComponent } from '../../../shared/components/layout/sf-section
 import { UnsavedChangesService } from '../../../shared/components/dialog/unsaved-changes.service';
 import { SfSaveState, SfSaveStatusComponent } from '../../../shared/components/layout/sf-save-status.component';
 import { SfMenuComponent, SfMenuItem } from '../../../shared/components/menu/sf-menu.component';
+import { SfBadgeComponent } from '../../../shared/components/display/sf-badge.component';
+import { SfEmptyStateComponent } from '../../../shared/components/sf-empty-state.component';
 import { SfButtonComponent } from '../../../shared/components/sf-button.component';
 import { SfFieldComponent } from '../../../shared/components/sf-field.component';
 import { SfIconComponent } from '../../../shared/components/sf-icon.component';
@@ -67,6 +69,9 @@ import {
 } from './sample-data';
 import { HERO_SVG, buildPreviewDocument } from './sample-preview';
 import { SampleState } from './sample-state';
+import { injectSampleQuery } from './changes/sample-area.util';
+import { ISSUES, ISSUE_LEVELS, IssueLevel, SampleSectionTemplate } from './pages/pages-data';
+import { SampleSectionPaletteComponent } from './pages/sample-section-palette.component';
 
 /** The article's texts that differ per language. */
 interface LocalizedValues {
@@ -136,6 +141,9 @@ function localizedFor(pageId: string): Record<SampleLang, LocalizedValues> {
     SampleMediaFieldComponent,
     SampleReferenceFieldComponent,
     SampleReleaseActionsComponent,
+    SampleSectionPaletteComponent,
+    SfBadgeComponent,
+    SfEmptyStateComponent,
     SampleRichTextComponent,
     SfButtonComponent,
     SfComboboxComponent,
@@ -190,6 +198,21 @@ export class SamplePageEditorComponent {
   protected readonly showPrice = signal(ARTICLE_SHARED.showPrice);
   protected readonly attribution = signal(ARTICLE_SHARED.attribution);
   protected readonly sections = signal<readonly SampleSection[]>(SECTIONS);
+  /** The template each section was made from (by section id), for the palette's `max` limits. */
+  private readonly templateIds = signal<Readonly<Record<string, string>>>({ 's-hero': 'hero', 's-text': 'text', 's-product': 'product', 's-quote': 'quote' });
+  protected readonly templateCounts = computed(() => {
+    const counts: Record<string, number> = {};
+    for (const section of this.sections()) {
+      const id = this.templateIds()[section.id];
+      if (id) {
+        counts[id] = (counts[id] ?? 0) + 1;
+      }
+    }
+    return counts;
+  });
+  /** The Section palette (`secpalette=1`): the name of the section the new one goes after, `null` = at the start. */
+  protected readonly paletteAfter = signal<{ readonly name: string | null; readonly id: string | null } | null>(null);
+  private inserted = 0;
   /** The "Product teasers" catalog field (decision 12): cards in order, one teaser with nested badges. */
   protected readonly teasers = signal<readonly SampleCard[]>(initialTeasers());
   protected readonly teasersField = TEASERS_FIELD;
@@ -252,7 +275,8 @@ export class SamplePageEditorComponent {
     });
     return [
       item('saveNow', 'save', { shortcut: 'Mod+S', disabled: this.saveState() === 'saved' || this.saveState() === 'saving' }),
-      item('duplicate', 'content_copy', { separatorBefore: true }),
+      item('pageSettings', 'tune', { separatorBefore: true }),
+      item('duplicate', 'content_copy'),
       item('move', 'drive_file_move'),
       item('rename', 'edit', { shortcut: 'F2' }),
       item('copyLink', 'link'),
@@ -332,9 +356,45 @@ export class SamplePageEditorComponent {
     return this.sanitizer.bypassSecurityTrustHtml(html);
   });
 
+  // ── Issues and the preview (M35.18) ────────────────────────────────────────
+  /** The findings that need attention: errors and warnings, for the header button's badge. */
+  protected readonly issueCount = computed(() => ISSUES.filter((i) => i.level === 'error' || i.level === 'warning').length);
+  protected readonly issueErrors = computed(() => ISSUES.filter((i) => i.level === 'error').length);
+  /** The most serious finding at an outline entry (`fields`, a section id, `catalog`), for its marker. */
+  protected issueLevelOf(id: string): IssueLevel | null {
+    const levels = ISSUES.filter((issue) => issue.target === id).map((issue) => issue.level);
+    return ISSUE_LEVELS.find((level) => levels.includes(level)) ?? null;
+  }
+
+  /** What stops the preview: a blank title, or (`preview=incomplete`) required fields the page has not filled yet. */
+  protected readonly missing = computed(() => {
+    const out: string[] = [];
+    if (this.titleBlank()) {
+      out.push('title');
+    }
+    if (this.state.previewIncomplete()) {
+      out.push('category', 'canonical');
+    }
+    return out;
+  });
+  protected missingLabel(key: string): string {
+    return key === 'title' ? this.fields.title : key === 'category' ? this.fields.category : this.forms('canonical');
+  }
+
   private saveTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor() {
+    if (injectSampleQuery().get('secpalette') === '1') {
+      this.paletteAfter.set({ name: SECTIONS[0].name, id: SECTIONS[0].id });
+    }
+    // An issue's *Jump to it*, the preview's *Go to field*: the outline entry in view, the field focused.
+    effect(() => {
+      const jump = this.state.editorJump();
+      if (!jump) {
+        return;
+      }
+      untracked(() => this.jumpTo(jump.target, jump.field));
+    });
     // Another page opened: its own title.
     effect(
       () => {
@@ -394,6 +454,10 @@ export class SamplePageEditorComponent {
       this.saveNow();
       return;
     }
+    if (item.id === 'pageSettings') {
+      this.openSettings();
+      return;
+    }
     if (item.id !== 'delete') {
       this.state.notice();
       return;
@@ -408,6 +472,71 @@ export class SamplePageEditorComponent {
     if (confirmed) {
       this.toasts.undo(this.state.t('folder.deleted', { count: 1, name }), () => this.toasts.show(this.state.t('folder.restored'), 'info'));
     }
+  }
+
+  protected openSettings(): void {
+    const open = this.state.pageSettings() === 'page';
+    this.state.closeDrawers();
+    this.state.pageSettings.set(open ? null : 'page');
+  }
+
+  protected openIssues(): void {
+    const open = this.state.issues();
+    this.state.closeDrawers();
+    this.state.issues.set(!open);
+  }
+
+  /** Brings the outline entry's card into view and puts the focus in its first field. */
+  private jumpTo(target: string, field: string | null): void {
+    const row = this.outline().find((r) => r.id === target);
+    if (!row) {
+      return;
+    }
+    if (field === 'canonical') {
+      this.seoOpen.set(true);
+    }
+    this.select(row, 'instant');
+    afterNextRender(
+      () => document.getElementById(this.cardId(row.id))?.querySelector<HTMLElement>('input, textarea, [role="combobox"], [contenteditable="true"]')?.focus(),
+      { injector: this.injector },
+    );
+  }
+
+  protected jumpToMissing(): void {
+    const first = this.missing()[0];
+    if (first) {
+      this.jumpTo('fields', first);
+    }
+  }
+
+  // ── Section palette ────────────────────────────────────────────────────────
+
+  /** *Add section* (at the end of the body) and the **+** between two sections. */
+  protected openPalette(after: SampleSection | null): void {
+    this.paletteAfter.set({ name: after?.name ?? null, id: after?.id ?? null });
+  }
+
+  protected openPaletteAtEnd(): void {
+    this.openPalette(this.sections().at(-1) ?? null);
+  }
+
+  protected insertSection(template: SampleSectionTemplate): void {
+    const where = this.paletteAfter();
+    this.paletteAfter.set(null);
+    const section: SampleSection = {
+      id: `s-new-${++this.inserted}`,
+      kind: template.kind,
+      name: this.state.t(`pages.palette.items.${template.id}.name`),
+      icon: template.icon,
+    };
+    const list = [...this.sections()];
+    const at = where?.id ? list.findIndex((s) => s.id === where.id) + 1 : 0;
+    list.splice(at, 0, section);
+    this.templateIds.update((ids) => ({ ...ids, [section.id]: template.id }));
+    this.sections.set(list);
+    this.announcement.set(this.state.t('pages.palette.inserted', { name: section.name, position: at + 1 }));
+    this.state.notice('pages.palette.insertedToast', { name: section.name });
+    afterNextRender(() => this.select({ id: section.id, label: section.name, icon: section.icon, level: 2, section }), { injector: this.injector });
   }
 
   protected toggleFavorite(): void {

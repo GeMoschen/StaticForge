@@ -1,30 +1,35 @@
 <div class="page-editor" [class.page-editor--time-travel]="editor.readOnly()">
-  <h1 class="sf-sr-only">
-    {{ editor.page()?.displayName ?? editor.page()?.uid ?? 'Page editor' }}
-  </h1>
   <sf-page-editor-header />
-  <sf-release-bar
-    [projectKey]="projectKey()"
-    [assetUuid]="uuid()"
-    [refreshKey]="editor.releaseRefresh()"
-    (changed)="editor.onReleaseChanged($event)"
-  />
 
   <div class="page-editor__body">
-    <div class="page-editor__main" #main>
-      <div class="page-editor__centre" [style.flex]="editor.centreFlex()">
-        <sf-page-editor-scope />
-        @if (!editor.error()) {
-          <sf-page-editor-issues
-            [focusRoot]="main"
-            (previewFocus)="preview.focusSection($event.instanceId, $event.selector)"
-          />
-        }
-      </div>
-      <sf-page-editor-preview #preview [container]="main" />
-    </div>
+    @if (editor.page() && !editor.error()) {
+      <sf-page-editor-outline />
+    }
+    @if (editor.previewOpen() && editor.page() && !editor.error()) {
+      <sf-splitter
+        class="page-editor__split"
+        sized="end"
+        collapsible
+        paneId="page-editor-preview"
+        [defaultSize]="400"
+        [min]="300"
+        [minOther]="360"
+        [label]="'pages.preview.resize' | transloco"
+      >
+        <div sfSplitterStart class="page-editor__form-pane"><sf-page-editor-form /></div>
+        <sf-page-editor-preview sfSplitterEnd />
+      </sf-splitter>
+    } @else {
+      <div class="page-editor__form-pane"><sf-page-editor-form /></div>
+    }
   </div>
 
+  @if (!editor.error()) {
+    <sf-page-editor-issues (previewFocus)="preview()?.focusSection($event.instanceId, $event.selector)" />
+  }
+  @if (editor.settingsOpen()) {
+    <sf-page-settings />
+  }
   <sf-section-palette />
   <sf-page-editor-conflict />
 </div>

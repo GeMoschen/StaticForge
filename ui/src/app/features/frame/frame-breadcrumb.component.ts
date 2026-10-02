@@ -45,7 +45,7 @@ import { SfIconComponent } from '../../shared/components/sf-icon.component';
         @if (last || !crumb.link) {
           <span class="crumbs__current" [attr.aria-current]="last ? 'page' : null">{{ crumb.label }}</span>
         } @else {
-          <sf-button variant="ghost" size="sm" [link]="crumb.link">{{ crumb.label }}</sf-button>
+          <sf-button variant="ghost" size="sm" [link]="crumb.link" [queryParams]="crumb.queryParams ?? null">{{ crumb.label }}</sf-button>
           <sf-icon class="crumbs__sep" name="chevron_right" />
         }
       </li>

@@ -114,7 +114,11 @@
               <sf-sample-template-view />
             }
             @default {
-              <sf-sample-folder-view />
+              @if (state.emptyProject() && state.area() === 'pages') {
+                <sf-sample-pages-empty />
+              } @else {
+                <sf-sample-folder-view />
+              }
             }
           }
           }
@@ -126,6 +130,14 @@
 
 @if (state.history(); as context) {
   <sf-sample-history-drawer [context]="context" (closed)="state.history.set(null)" (openFull)="openFullHistory($event)" />
+}
+
+@if (state.pageSettings(); as kind) {
+  <sf-sample-page-settings [kind]="kind" (closed)="state.pageSettings.set(null)" />
+}
+
+@if (state.issues()) {
+  <sf-sample-issues-drawer (closed)="state.issues.set(false)" />
 }
 
 @if (state.shortcutsOpen()) {

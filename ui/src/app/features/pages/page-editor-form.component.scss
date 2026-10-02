@@ -1,0 +1,105 @@
+:host {
+  display: block;
+  min-width: 0;
+}
+
+.form {
+  // The two-column rule reads the form's own width, not the screen's: beside the preview the form is narrow (decision 72).
+  container: form / inline-size;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sf-space-4);
+  padding: var(--sf-space-4) var(--sf-space-6) var(--sf-space-12);
+
+  // The outline's selection is echoed on its card.
+  .is-selected {
+    border-radius: var(--sf-radius-lg);
+    box-shadow: 0 0 0 2px var(--sf-accent-subtle);
+  }
+}
+
+.form__bodygroup {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sf-space-4);
+}
+
+.form__body {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sf-space-2);
+  margin-top: var(--sf-space-2);
+  padding: var(--sf-space-1) 0;
+  scroll-margin-top: var(--sf-space-4);
+}
+
+.form__body-title {
+  display: flex;
+  align-items: center;
+  gap: var(--sf-space-2);
+  margin: 0;
+  color: var(--sf-text);
+  font-size: var(--sf-fs-14);
+  line-height: var(--sf-lh-14);
+  font-weight: var(--sf-weight-semibold);
+}
+
+.form__empty {
+  margin: 0;
+  padding: var(--sf-space-4);
+  border: 1px dashed var(--sf-border-strong);
+  border-radius: var(--sf-radius-md);
+  color: var(--sf-text-muted);
+  font-size: var(--sf-fs-13);
+  line-height: var(--sf-lh-13);
+  text-align: center;
+}
+
+// The **+** between two sections: no space of its own (the gap between the cards is its place), quiet until the gap is
+// hovered or has focus.
+.form__insert {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  height: 0;
+  opacity: 0;
+
+  // The hover zone is the whole gap, not just the button.
+  &::before {
+    content: '';
+    position: absolute;
+    inset-inline: 0;
+    top: calc(var(--sf-space-4) * -1);
+    height: calc(var(--sf-space-4) * 2);
+  }
+
+  sf-button {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+  }
+
+  &:hover,
+  &:focus-within {
+    opacity: 1;
+  }
+}
+
+.form__aside {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sf-space-4);
+}
+
+sf-section,
+sf-section-editor {
+  scroll-margin-top: var(--sf-space-4);
+}
+
+// The field an issue was opened at (M30.3.2), outlined for a moment.
+:host ::ng-deep .sf-issue-target {
+  outline: 2px solid var(--sf-accent);
+  outline-offset: 2px;
+  border-radius: var(--sf-radius-sm);
+}

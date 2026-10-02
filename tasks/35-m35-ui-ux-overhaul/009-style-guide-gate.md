@@ -189,7 +189,7 @@ Changes the user asked for during the review (all in the signed-off sample):
     (`--sf-splitter-handle: transparent`) and its handle sits centred in an 8 px gap (`--sf-splitter-gap`). Language tags
     in a detail pane sit close together.
 
-## Review round 3 (2026-10-02): save, unsaved changes and undo (awaiting user sign-off)
+## Review round 3 (2026-10-02): save, unsaved changes and undo (signed off 2026-10-02)
 
 Added to the sample for M35.13: Settings › General (name blank → *Not saved*), the page editor (blank title), the leave
 guard through the rail, the tree and the settings menu, and the style guide (Display › Save status; Overlays › Unsaved
@@ -231,7 +231,7 @@ Added to the sample for M35.14 (`sample/keyboard/`; `/styleguide/sample?cmdk=` a
     (↑/↓, Space, Enter, Shift, Ctrl+A), release and build; actions are registered by the services and screens that own
     them (registry-driven), permission-checked through `ProjectAccessStore`.
 
-## Review round 5 (2026-10-02): recents and favorites (awaiting user sign-off)
+## Review round 5 (2026-10-02): recents and favorites (signed off 2026-10-02)
 
 Added to the sample for M35.15 (`/styleguide/sample?area=pages&view=folder`; the editor star is on `view=editor`). **Not
 signed off yet** — the app is built only after the user approves.
@@ -344,6 +344,31 @@ review: the picker's type switch includes **Navigation entries** (the Navigation
     fields marked half flow two per row in the original order, everything else spans the row. The rule follows the form's own
     width (two columns from 46 rem — about 1280 px with no side pane), so beside the preview pane the form stays one column.
     Backend: the CDL lexer/parser/validator and the compiled definition get `width`.
+
+## Review round 8 (2026-10-02): pages — settings, issues, section palette, empty states (signed off 2026-10-02)
+
+Added to the sample for M35.18 (`/styleguide/sample?area=pages&…`: `view=editor&psettings=page`, `view=folder&psettings=folder`,
+`view=editor&issues=1|empty`, `view=editor&secpalette=1`, `empty=1`, `view=editor&preview=incomplete`). **Signed off by the user on 2026-10-02**; M35.18 builds it in the app.
+
+82. **Page settings = a non-modal drawer** (user, 2026-10-02), below the top bar, from a header settings button (reflects open state) and
+    *Page settings…* in the ⋮ menu. Name and UID changes apply at once with an Undo toast (the UID — developer mode only — warns that links
+    to the page break); navigation settings (show in navigation, label, position, hide from search engines) save with the page (footer
+    "Saving… / Saved", no Save button); a read-only block shows template, address and last change.
+83. **Folder settings** use the same drawer from the folder's ⋮ menu: start page (picker, Change…, Remove), navigation settings, path and
+    contents facts — nothing above the title.
+84. **Issues = a header drawer** (user, 2026-10-02) opened by a count button in the page header: grouped by level (Errors, Warnings, Info,
+    Hints) with counts, a "Checked when" filter (editing / saving / releasing / building) with a plain-language legend, each finding with
+    where it is, whether it is a content rule or an output check, content-or-template fix, and *Go to it*; the check code in developer mode
+    only; the old "Impact as of now" is **"Pages affected by this change"**, a collapsible section at the bottom.
+85. **The outline marks sections with findings** (icon of the most serious level + screen-reader text).
+86. **Section palette** (user: icon tile per template): a dialog from *Add section* and from a "+" between sections (hover/focus): insert
+    position named, filter field focused, categories with counts, icon tiles (name, category, description; a slot for a future
+    thumbnail), a template at its maximum disabled ("Maximum of N reached"), ↑/↓ move, Enter inserts, Esc closes, no-match state with
+    *Clear filter*.
+87. **Empty project:** says a page needs a template; developers get *Go to Templates*, editors are told to ask a developer (no dead
+    button); *Create a folder* always offered.
+88. **Incomplete-page preview:** an explanatory state instead of a blank frame — what is missing and a *Go to <field>* button.
+89. **Bulk move and duplicate** in the folder table show toasts with Undo (move target is a placeholder until a move picker exists).
 
 ## Notes / hazards
 

@@ -18,38 +18,16 @@
       type="button"
       class="section-card__toggle"
       (click)="toggleCollapsed($event)"
-      aria-label="Toggle section"
+      [attr.aria-label]="'pages.editor.section.toggle' | transloco"
     >
       <sf-icon [name]="collapsed() ? 'chevron_right' : 'expand_more'" />
     </button>
     <sf-icon class="section-card__icon" name="widgets" />
     <span class="section-card__title">{{ title() }}</span>
-    @if (!readOnly() && !hideActions()) {
-      <div class="section-card__actions">
-        <button
-          type="button"
-          [disabled]="index() <= 0"
-          (click)="moveUp.emit(); $event.stopPropagation()"
-          aria-label="Move up"
-        >
-          <sf-icon name="arrow_upward" />
-        </button>
-        <button
-          type="button"
-          [disabled]="index() >= count() - 1"
-          (click)="moveDown.emit(); $event.stopPropagation()"
-          aria-label="Move down"
-        >
-          <sf-icon name="arrow_downward" />
-        </button>
-        <button
-          type="button"
-          class="section-card__remove"
-          (click)="remove.emit(); $event.stopPropagation()"
-          aria-label="Remove section"
-        >
-          <sf-icon name="delete" />
-        </button>
+    @if (!readOnly()) {
+      <!-- A press or key inside the menu is the menu's: it must not fold the card (the header's own keys). -->
+      <div class="section-card__actions" (click)="$event.stopPropagation()" (keydown)="$event.stopPropagation()">
+        <sf-menu size="sm" [items]="menuItems()" [label]="'pages.editor.section.actions' | transloco: { name: title() }" (itemSelected)="onMenu($event)" />
       </div>
     }
   </header>

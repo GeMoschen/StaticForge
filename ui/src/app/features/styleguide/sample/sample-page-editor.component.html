@@ -23,6 +23,24 @@
     </span>
     <ng-container sfPageHeaderActions>
       <sf-save-status class="editor__save" [state]="saveState()" [savedAt]="savedAt()" [errorCount]="titleBlank() ? 1 : 0" />
+      <sf-button
+        variant="secondary"
+        icon="fact_check"
+        [aria-expanded]="state.issues()"
+        [tooltip]="'styleguide.sample.pages.issues.button' | transloco"
+        (click)="openIssues()"
+      >
+        {{ 'styleguide.sample.pages.issues.title' | transloco }}
+        <sf-badge [tone]="issueErrors() > 0 ? 'danger' : 'warning'" [label]="'' + issueCount()" />
+      </sf-button>
+      <sf-button
+        variant="ghost"
+        icon="tune"
+        [aria-expanded]="state.pageSettings() === 'page'"
+        [label]="'styleguide.sample.pages.settings.pageTitle' | transloco"
+        [tooltip]="'styleguide.sample.pages.settings.pageTitle' | transloco"
+        (click)="openSettings()"
+      />
       <sf-button variant="ghost" icon="history" [label]="'styleguide.sample.editor.history' | transloco" (click)="state.history.set('page')" />
       <sf-button variant="secondary" icon="visibility" [aria-pressed]="preview()" (click)="preview.set(!preview())">{{
         'styleguide.sample.editor.preview' | transloco
@@ -68,6 +86,14 @@
         >
           <sf-icon class="outline__icon" [name]="row.icon" />
           <span class="outline__label">{{ row.label }}</span>
+          @if (issueLevelOf(row.id); as level) {
+            <sf-icon
+              class="outline__issue is-{{ level }}"
+              [name]="level === 'error' ? 'error' : level === 'warning' ? 'warning' : level === 'info' ? 'info' : 'lightbulb'"
+              [attr.title]="'styleguide.sample.pages.issues.levels.' + level | transloco"
+            />
+            <span class="sf-sr-only">{{ 'styleguide.sample.pages.issues.levels.' + level | transloco }}</span>
+          }
         </li>
       }
     </ul>
@@ -109,12 +135,31 @@
           />
         </div>
         <div class="preview__stage">
-          <iframe
-            class="preview__frame preview__frame--{{ device() }}"
-            sandbox=""
-            [title]="'styleguide.sample.editor.previewFrame' | transloco: { name: page.name }"
-            [srcdoc]="previewDoc()"
-          ></iframe>
+          @if (missing().length > 0) {
+            <div class="preview__empty">
+              <sf-empty-state
+                icon="visibility_off"
+                [level]="3"
+                [title]="'styleguide.sample.pages.preview.title' | transloco"
+                [description]="'styleguide.sample.pages.preview.description' | transloco"
+                [primaryLabel]="'styleguide.sample.pages.preview.goTo' | transloco: { field: missingLabel(missing()[0]) }"
+                primaryIcon="arrow_forward"
+                (primary)="jumpToMissing()"
+              />
+              <ul class="preview__missing" [attr.aria-label]="'styleguide.sample.pages.preview.missing' | transloco">
+                @for (key of missing(); track key) {
+                  <li><sf-icon name="radio_button_unchecked" /> {{ missingLabel(key) }}</li>
+                }
+              </ul>
+            </div>
+          } @else {
+            <iframe
+              class="preview__frame preview__frame--{{ device() }}"
+              sandbox=""
+              [title]="'styleguide.sample.editor.previewFrame' | transloco: { name: page.name }"
+              [srcdoc]="previewDoc()"
+            ></iframe>
+          }
         </div>
       </section>
     </sf-splitter>
@@ -194,7 +239,7 @@
         <sf-icon name="view_agenda" />
         {{ bodyName }}
       </h2>
-      <sf-button variant="secondary" size="sm" icon="add" (click)="state.notice()">{{
+      <sf-button variant="secondary" size="sm" icon="add" (click)="openPaletteAtEnd()">{{
         'styleguide.sample.editor.addSection' | transloco
       }}</sf-button>
     </div>
@@ -252,6 +297,16 @@
           }
         }
       </sf-section>
+      <div class="form__insert">
+        <sf-button
+          variant="ghost"
+          size="sm"
+          icon="add"
+          [label]="'styleguide.sample.pages.palette.insertAfter' | transloco: { name: section.name }"
+          [tooltip]="'styleguide.sample.pages.palette.insertAfter' | transloco: { name: section.name }"
+          (click)="openPalette(section)"
+        />
+      </div>
     }
 
     <div class="form__catalog" [id]="cardId('catalog')" [class.is-selected]="selected() === 'catalog'">
@@ -264,3 +319,7 @@
     </div>
   </div>
 </ng-template>
+
+@if (paletteAfter(); as where) {
+  <sf-sample-section-palette [after]="where.name" [counts]="templateCounts()" (insert)="insertSection($event)" (cancelled)="paletteAfter.set(null)" />
+}

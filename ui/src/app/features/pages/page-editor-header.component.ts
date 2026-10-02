@@ -1,176 +1,147 @@
-import { ChangeDetectionStrategy, Component, HostListener, computed, effect, inject, signal, untracked } from '@angular/core';
-import { SfAssetFavoriteComponent } from '../../shared/components/sf-asset-favorite.component';
-import { ShortcutService } from '../../core/ui/shortcut.service';
+import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import { Router } from '@angular/router';
+import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
 import { ApiClient } from '../../core/api/api.client';
-import { from, switchMap, tap } from 'rxjs';
-import { ToastService } from '../../core/ui/toast.service';
-import { UndoService } from '../../core/ui/undo.service';
 import type { components } from '../../core/api/generated/schema.d.ts';
-import { SfButtonComponent } from '../../shared/components/sf-button.component';
-import { SfUidRenameComponent } from '../../shared/components/sf-uid-rename.component';
-import { PageNav, PageNavSettingsComponent } from './page-nav-settings.component';
-import { PageEditorStore } from './page-editor.store';
 import { autosaveStatus } from '../../core/editor/autosave-editor-state';
+import { DeveloperModeService } from '../../core/frame/developer-mode.service';
+import { ToastService } from '../../core/ui/toast.service';
+import { SfBadgeComponent } from '../../shared/components/display/sf-badge.component';
+import { SfPageHeaderComponent } from '../../shared/components/layout/sf-page-header.component';
 import { SfSaveStatusComponent } from '../../shared/components/layout/sf-save-status.component';
+import type { SfMenuItem } from '../../shared/components/menu/sf-menu-item';
+import { SfAssetFavoriteComponent } from '../../shared/components/sf-asset-favorite.component';
+import { SfButtonComponent } from '../../shared/components/sf-button.component';
+import { ReleaseBarComponent } from '../release/release-bar.component';
+import { PageDeleteDialogComponent } from './page-delete-dialog.component';
+import { PageEditorStore } from './page-editor.store';
+import { PagesTreeRefresh } from './pages-tree-refresh.service';
 
 type PageView = components['schemas']['PageView'];
 
 /**
- * The page editor's header: the title with its metadata popover (display name, UID, navigation and search), the
- * language's translation count and the save status.
+ * The page editor's header (M35.18): the page's name as the `h1`, its favorite star and the language's translation count;
+ * the save status, **Issues** (with the count of what is wrong), **Page settings** and the **Preview** toggle; the release
+ * actions as one group (status per language, Release…, Schedule…, ⋮) and, last, the page's own ⋮ menu — Save now,
+ * Duplicate, Rename…, Copy link, Page settings…, Delete…. Issues and settings are drawers the page editor renders; the
+ * buttons only flip the store's flags.
  */
 @Component({
   selector: 'sf-page-editor-header',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [SfAssetFavoriteComponent, SfButtonComponent, SfSaveStatusComponent, SfUidRenameComponent, PageNavSettingsComponent],
+  imports: [
+    PageDeleteDialogComponent,
+    ReleaseBarComponent,
+    SfAssetFavoriteComponent,
+    SfBadgeComponent,
+    SfButtonComponent,
+    SfPageHeaderComponent,
+    SfSaveStatusComponent,
+    TranslocoPipe,
+  ],
   templateUrl: './page-editor-header.component.html',
   styleUrl: './page-editor-header.component.scss',
 })
 export class PageEditorHeaderComponent {
   private readonly api = inject(ApiClient);
+  private readonly router = inject(Router);
   private readonly toast = inject(ToastService);
-  private readonly undo = inject(UndoService);
+  private readonly transloco = inject(TranslocoService);
+  private readonly treeRefresh = inject(PagesTreeRefresh);
   protected readonly editor = inject(PageEditorStore);
+  protected readonly developerMode = inject(DeveloperModeService).enabled;
 
-  protected readonly metaOpen = signal(false);
-  /** The page the meta popover was last shown for. */
-  private metaUuid: string | null = null;
-  protected readonly editingDisplayName = signal(false);
-  protected readonly displayNameDraft = signal('');
-  protected readonly savingDisplayName = signal(false);
+  protected readonly deleting = signal(false);
+
+  protected readonly title = computed(() => {
+    const page = this.editor.page();
+    return page?.displayName || page?.uid || this.transloco.translate('pages.editor.title');
+  });
 
   /** Why the page cannot be edited (time travel, archived); the save status is for a page that can. */
   protected readonly readOnlyLabel = computed(() => {
     const { timeTravel } = this.editor;
     if (timeTravel.isTimeTravel()) {
-      return 'Viewing revision ' + (timeTravel.activeRevision() ?? '—');
+      return this.transloco.translate('pages.editor.status.revision', { revision: timeTravel.activeRevision() ?? '—' });
     }
-    return this.editor.readOnly() ? 'Archived — read-only' : '';
+    return this.editor.readOnly() ? this.transloco.translate('pages.editor.status.archived') : '';
   });
 
   /** The save status (M35.13): the same words and look in every editor. */
   protected readonly status = computed(() => autosaveStatus(this.editor.autosave));
   protected readonly savedAt = computed(() => this.editor.autosave.lastSavedAt());
 
-  constructor() {
-    // The popover belongs to the page it was opened on; this editor is reused when another page is opened.
-    effect(
-      () => {
-        const uuid = this.editor.uuid();
-        if (uuid && uuid !== this.metaUuid) {
-          this.metaUuid = uuid;
-          untracked(() => this.closeMeta());
+  /** The page as the delete dialog wants it. */
+  protected readonly summary = computed<components['schemas']['AssetSummaryView'] | null>(() => {
+    const page = this.editor.page();
+    return page
+      ? { uuid: page.uuid, uid: page.uid, displayName: page.displayName, folderPath: page.folderPath, release: page.release }
+      : null;
+  });
+
+  protected readonly moreActions = computed<SfMenuItem[]>(() => {
+    const t = (key: string) => this.transloco.translate(`pages.editor.menu.${key}`);
+    const readOnly = this.editor.readOnly();
+    return [
+      { id: 'saveNow', label: t('saveNow'), icon: 'save', disabled: readOnly },
+      { id: 'duplicate', label: t('duplicate'), icon: 'content_copy', disabled: readOnly },
+      { id: 'rename', label: t('rename'), icon: 'edit', disabled: readOnly },
+      { id: 'copyLink', label: t('copyLink'), icon: 'link', separatorBefore: true },
+      { id: 'settings', label: t('settings'), icon: 'tune' },
+      { id: 'delete', label: t('delete'), icon: 'delete', danger: true, disabled: readOnly, separatorBefore: true },
+    ];
+  });
+
+
+  protected onMore(item: SfMenuItem): void {
+    switch (item.id) {
+      case 'saveNow':
+        void this.editor.autosave.flush();
+        break;
+      case 'duplicate':
+        this.duplicate();
+        break;
+      case 'rename':
+        this.editor.toggleSettings(true, true);
+        break;
+      case 'copyLink':
+        void this.copyLink();
+        break;
+      case 'settings':
+        this.editor.toggleSettings(true);
+        break;
+      case 'delete':
+        this.deleting.set(true);
+        break;
+    }
+  }
+
+  /** The page was deleted: the editor has nothing left to show, so it returns to the pages area. */
+  protected onDeleted(): void {
+    this.deleting.set(false);
+    void this.router.navigate(['/p', this.editor.projectKey(), 'pages']);
+  }
+
+  private duplicate(): void {
+    this.api.duplicatePage(this.editor.projectKey(), this.editor.uuid()).subscribe({
+      next: (copy: PageView) => {
+        this.treeRefresh.notify();
+        this.toast.show(this.transloco.translate('pages.editor.toast.duplicated', { name: copy.displayName ?? copy.uid }), 'success');
+        if (copy.uuid) {
+          void this.router.navigate(['/p', this.editor.projectKey(), 'pages', copy.uuid]);
         }
       },
-      { allowSignalWrites: true },
-    );
+      error: () => this.toast.show(this.transloco.translate('pages.editor.toast.duplicateFailed'), 'error'),
+    });
   }
 
-  protected toggleMeta(): void {
-    this.metaOpen.update((v) => !v);
-  }
-
-  protected closeMeta(): void {
-    this.metaOpen.set(false);
-    this.editingDisplayName.set(false);
-  }
-
-  /** Escape goes through the shortcut registry, which orders it among the open layers (M35.14). */
-  private readonly escapeShortcut = inject(ShortcutService).useEscape(() => this.onEscape());
-
-  protected onEscape(): boolean {
-    if (!this.metaOpen()) {
-      return false;
+  private async copyLink(): Promise<void> {
+    try {
+      await navigator.clipboard.writeText(location.href);
+      this.toast.show(this.transloco.translate('pages.editor.toast.linkCopied'), 'success');
+    } catch {
+      this.toast.show(this.transloco.translate('pages.editor.toast.linkFailed'), 'error');
     }
-    this.closeMeta();
-    return true;
-  }
-
-  /** A press anywhere outside the popover (and its title button) closes it — including on a button that opens a modal. */
-  @HostListener('document:mousedown', ['$event'])
-  protected onDocumentMouseDown(event: MouseEvent): void {
-    if (this.metaOpen() && !(event.target as Element | null)?.closest?.('.page-editor__meta-anchor')) {
-      this.closeMeta();
-    }
-  }
-
-  protected startEditDisplayName(): void {
-    this.displayNameDraft.set(this.editor.page()?.displayName ?? '');
-    this.editingDisplayName.set(true);
-  }
-
-  protected cancelEditDisplayName(): void {
-    this.editingDisplayName.set(false);
-  }
-
-  protected onDisplayNameInput(event: Event): void {
-    this.displayNameDraft.set((event.target as HTMLInputElement).value);
-  }
-
-  protected saveDisplayName(): void {
-    const name = this.displayNameDraft().trim();
-    const key = this.editor.projectKey();
-    const uuid = this.editor.uuid();
-    if (!name || !key || !uuid || this.savingDisplayName()) {
-      return;
-    }
-    this.savingDisplayName.set(true);
-    const oldName = this.editor.page()?.displayName ?? '';
-    this.api
-      .renameAsset(key, uuid, { displayName: name }, this.editor.autosave.revision() ?? undefined)
-      .subscribe({
-        next: (detail) => {
-          this.savingDisplayName.set(false);
-          this.editingDisplayName.set(false);
-          this.editor.page.update((cur) => (cur ? { ...cur, displayName: detail.displayName ?? name } : cur));
-          if (detail.revision != null) {
-            this.editor.autosave.setRevision(detail.revision);
-          }
-          // Undo renames back, on top of whatever was saved since: pending edits are written first so the revision is current.
-          this.undo.offer(`Renamed “${oldName}” to “${name}”.`, () =>
-            from(this.editor.autosave.flush()).pipe(
-              switchMap(() =>
-                this.api.renameAsset(key, uuid, { displayName: oldName }, this.editor.autosave.revision() ?? undefined),
-              ),
-              tap((back) => {
-                if (this.editor.uuid() !== uuid) {
-                  return;
-                }
-                this.editor.page.update((cur) => (cur ? { ...cur, displayName: back.displayName ?? oldName } : cur));
-                if (back.revision != null) {
-                  this.editor.autosave.setRevision(back.revision);
-                }
-                this.editor.notifyOwnChange();
-              }),
-            ),
-          );
-          this.editor.notifyOwnChange();
-        },
-        error: () => {
-          this.savingDisplayName.set(false);
-          this.toast.show('Could not rename page — try again in a moment.', 'error');
-        },
-      });
-  }
-
-  /** The page's `nav` settings (a `JsonNode` in the API types). */
-  protected navOf(page: PageView): PageNav | undefined {
-    return page.nav as PageNav | undefined;
-  }
-
-  /** "Show in navigation" / "Hide from search engines" (M30.2.2): saved with the page right away. */
-  protected onNavChange(nav: PageNav): void {
-    if (this.editor.readOnly()) {
-      return;
-    }
-    this.editor.page.update((cur) => (cur ? { ...cur, nav: nav as PageView['nav'] } : cur));
-    this.editor.autosave.markDirty();
-    this.editor.autosave.flush();
-  }
-
-  protected onUidChanged(newUid: string): void {
-    this.editor.page.update((cur) => (cur ? { ...cur, uid: newUid } : cur));
-    this.editor.notifyOwnChange();
   }
 }

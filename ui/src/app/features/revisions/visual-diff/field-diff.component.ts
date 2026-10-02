@@ -1,5 +1,7 @@
 import { ChangeDetectionStrategy, Component, input } from '@angular/core';
-import { SfEditorOutlet } from '../../forms/editor-outlet.component';
+// Through the barrel, not `editor-outlet.component` itself: the forms module graph is a cycle (outlet → registry → catalog editor
+// → content form → outlet) that only evaluates in the right order when it is entered at the barrel.
+import { SfEditorOutlet } from '../../forms';
 import { formatValue, RenderedChange } from './field-diff.model';
 
 /**

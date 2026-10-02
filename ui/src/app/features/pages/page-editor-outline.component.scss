@@ -1,0 +1,108 @@
+:host {
+  display: block;
+  flex: 0 0 13rem;
+  min-height: 0;
+}
+
+.outline {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--sf-space-3) var(--sf-space-2);
+  border-right: 1px solid var(--sf-border);
+  background: var(--sf-surface);
+}
+
+.outline__heading {
+  margin: 0 0 var(--sf-space-2);
+  padding: 0 var(--sf-space-2);
+  color: var(--sf-text-subtle);
+  font-size: var(--sf-fs-12);
+  line-height: var(--sf-lh-12);
+  font-weight: var(--sf-weight-semibold);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.outline__list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.outline__row {
+  display: flex;
+  align-items: center;
+  gap: var(--sf-space-2);
+  min-height: var(--sf-row-height);
+  padding: 0 var(--sf-space-2);
+  border-radius: var(--sf-radius-md);
+  color: var(--sf-text-muted);
+  font-size: var(--sf-fs-13);
+  line-height: var(--sf-lh-13);
+  cursor: pointer;
+
+  &:hover {
+    background: var(--sf-hover);
+    color: var(--sf-text);
+  }
+
+  &.is-section {
+    padding-left: var(--sf-space-6);
+  }
+
+  &.is-selected {
+    background: var(--sf-selection);
+    color: var(--sf-text);
+    font-weight: var(--sf-weight-medium);
+  }
+}
+
+.outline__icon {
+  flex-shrink: 0;
+  font-size: var(--sf-fs-16);
+}
+
+.outline__label {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.outline__hint {
+  margin: var(--sf-space-3) var(--sf-space-2) 0;
+  color: var(--sf-text-subtle);
+  font-size: var(--sf-fs-12);
+  line-height: var(--sf-lh-12);
+}
+
+// The marker of an outline entry that has findings: the most serious level, in words for screen readers.
+.outline__issue {
+  flex: none;
+  margin-inline-start: auto;
+  font-size: var(--sf-fs-14);
+
+  &.is-error {
+    color: var(--sf-danger-text);
+  }
+
+  &.is-warning {
+    color: var(--sf-warning-text);
+  }
+
+  &.is-info,
+  &.is-hint {
+    color: var(--sf-text-subtle);
+  }
+}
+
+@media (max-width: 1279px) {
+  :host {
+    flex-basis: 11rem;
+  }
+}

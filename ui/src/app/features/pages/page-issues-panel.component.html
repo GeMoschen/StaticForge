@@ -1,128 +1,117 @@
-<section class="issues" [attr.aria-labelledby]="headingId">
-  <h3 class="issues__heading" [id]="headingId">
-    <button type="button" class="issues__toggle" [attr.aria-expanded]="open()" (click)="toggle()">
-      <span aria-hidden="true">{{ open() ? '▾' : '▸' }}</span>
-      Issues
-      <span
-        class="issues__count"
-        [class.issues__count--error]="errors() > 0"
-        [class.issues__count--none]="count() === 0"
-        [attr.aria-label]="count() + (count() === 1 ? ' issue' : ' issues')"
-        >{{ count() }}</span
-      >
-    </button>
-    <span class="issues__status" aria-live="polite">
-      @if (state().kind === 'checking') {
-        <span class="issues__spinner" aria-hidden="true"></span>
-      }
-      {{ status() }}
-    </span>
-  </h3>
-
-  @if (open()) {
+@if (open()) {
+  <sf-drawer [title]="'pages.issues.title' | transloco" [width]="460" (closed)="closed.emit()">
     @if (previewView() === 'published') {
-      <p class="issues__note">The preview shows the published page; these checks cover the draft.</p>
+      <p class="issues__note">{{ 'pages.issues.publishedNote' | transloco }}</p>
     }
 
-    <div class="issues__scopes" role="group" aria-label="Show findings of">
-      @for (chip of scopeChips; track chip.scope) {
-        <button
-          type="button"
-          class="issues__scope"
-          [class.issues__scope--on]="isScopeOn(chip.scope)"
-          [attr.aria-pressed]="isScopeOn(chip.scope)"
-          (click)="toggleScope(chip.scope)"
-        >
-          {{ chip.label }}
-        </button>
+    <p class="issues__status" role="status">
+      {{ status() }}
+      @if (state().kind === 'error') {
+        {{ 'pages.issues.unavailable' | transloco }}
+        <sf-button variant="ghost" size="sm" (click)="retry()">{{ 'pages.issues.retry' | transloco }}</sf-button>
       }
+    </p>
+
+    @if (clean()) {
+      <sf-empty-state
+        icon="task_alt"
+        [level]="3"
+        [title]="'pages.issues.empty.title' | transloco"
+        [description]="'pages.issues.empty.description' | transloco"
+      />
+    } @else if (groups().length > 0) {
+      <p class="issues__summary">
+        @for (level of levels; track level) {
+          @if (count(level) > 0) {
+            <span class="issues__count is-{{ level }}">
+              <sf-icon [name]="icons[level]" />
+              {{ 'pages.issues.summary.' + level | transloco: { count: count(level) } }}
+            </span>
+          }
+        }
+      </p>
+    }
+
+    <div class="issues__filter">
+      <p class="issues__filter-label" id="page-issues-scope-label">{{ 'pages.issues.scope.label' | transloco }}</p>
+      <div class="issues__chips" role="group" aria-labelledby="page-issues-scope-label">
+        @for (chip of scopeChips; track chip.scope) {
+          <button
+            type="button"
+            class="issues__chip"
+            [class.is-on]="isScopeOn(chip.scope)"
+            [attr.aria-pressed]="isScopeOn(chip.scope)"
+            (click)="toggleScope(chip.scope)"
+          >
+            {{ 'pages.issues.scope.' + chip.scope.toLowerCase() | transloco }}
+          </button>
+        }
+      </div>
+      <p class="issues__legend">{{ 'pages.issues.scope.legend' | transloco }}</p>
     </div>
 
-    <h4 class="issues__group">Content</h4>
-    @if (content().length === 0) {
-      <p class="issues__empty">No content issues.</p>
-    } @else {
-      <ul class="issues__list" aria-label="Content issues">
-        @for (issue of content(); track $index; let i = $index) {
-          <li>
-            <button
-              type="button"
-              class="issues__item"
-              [class.issues__item--error]="issue.severity === 'ERROR'"
-              [class.issues__item--info]="issue.severity === 'INFO'"
-              [attr.aria-expanded]="isExpanded('content:' + i)"
-              (click)="selectContent(issue, i)"
-            >
-              <span class="issues__severity">{{ severity(issue.severity) }}</span>
-              <span class="issues__line">
-                <code class="issues__path">{{ issue.path }}</code>
-                <span class="issues__message" [class.issues__message--open]="isExpanded('content:' + i)">{{
-                  issue.message
-                }}</span>
-              </span>
-            </button>
-          </li>
-        }
-      </ul>
-    }
-
-    <h4 class="issues__group">Output</h4>
-    @switch (state().kind) {
-      @case ('error') {
-        <p class="issues__empty">
-          Checks unavailable — the draft could not be checked right now. Editing is not affected.
-          <button type="button" class="issues__retry" (click)="retry()">Check again</button>
-        </p>
-      }
-      @case ('checked') {
-        @if (findings().length === 0) {
-          <p class="issues__empty">No problems found in the draft.</p>
-        } @else {
-          <ul class="issues__list" aria-label="Output issues">
-            @for (finding of findings(); track $index; let i = $index) {
-              <li>
-                <button
-                  type="button"
-                  class="issues__item"
-                  [class.issues__item--error]="finding.severity === 'ERROR'"
-                  [attr.aria-expanded]="isExpanded('output:' + i)"
-                  (click)="selectFinding(finding, i)"
-                >
-                  <span class="issues__severity">{{ severity(finding.severity) }}</span>
-                  <span class="issues__line">
-                    <span class="issues__rule">{{ finding.name ?? finding.code }}</span>
-                    @if (fixHint(finding.fixHint); as hint) {
-                      <span class="issues__hint">{{ hint }}</span>
-                    }
-                    <span class="issues__message" [class.issues__message--open]="isExpanded('output:' + i)">{{
-                      finding.message
-                    }}</span>
-                    @if (isExpanded('output:' + i)) {
-                      <span class="issues__detail">
-                        <code>{{ finding.code }}</code>
-                        @if (finding.editorPath) {
-                          · field <code>{{ finding.editorPath }}</code>
-                        }
-                        @if (finding.selector) {
-                          · <code>{{ finding.selector }}</code>
-                        }
-                      </span>
+    @for (group of groups(); track group.level) {
+      <section class="issues__group" [attr.aria-labelledby]="'page-issues-group-' + group.level">
+        <h3 class="issues__group-heading" [id]="'page-issues-group-' + group.level">
+          <sf-icon class="is-{{ group.level }}" [name]="icons[group.level]" />
+          {{ 'pages.issues.levels.' + group.level | transloco }}
+          <sf-badge [tone]="group.level === 'error' ? 'danger' : group.level === 'warning' ? 'warning' : 'neutral'" [label]="'' + group.rows.length" />
+        </h3>
+        <ul class="issues__list" [attr.aria-label]="'pages.issues.levels.' + group.level | transloco">
+          @for (row of group.rows; track row.id) {
+            <li>
+              <button type="button" class="issues__row" [attr.data-sf-issue]="row.id" [disabled]="!canJump(row)" (click)="jump(row)">
+                <span class="issues__message">
+                  <span class="sf-sr-only">{{ 'pages.issues.levels.' + row.level | transloco }}: </span>
+                  @if (row.name) {
+                    <strong>{{ row.name }}</strong>
+                    ·
+                  }
+                  {{ row.message }}
+                </span>
+                @if (row.where) {
+                  <span class="issues__where">
+                    <sf-icon name="my_location" />
+                    {{ row.where }}
+                    @if (canJump(row)) {
+                      <span class="issues__jump">{{ 'pages.issues.jump' | transloco }}</span>
                     }
                   </span>
-                </button>
-              </li>
-            }
-          </ul>
-        }
-        @if (skipped().length > 0) {
-          <p class="issues__skipped">
-            Not fully checked on a draft, a build checks them: {{ skipped().join(', ') }}.
-          </p>
-        }
-      }
-      @default {
-        <p class="issues__empty">Checking the draft…</p>
+                }
+                <span class="issues__meta">
+                  <span>{{ 'pages.issues.kind.' + row.kind | transloco }}</span>
+                  <span aria-hidden="true">·</span>
+                  <span>{{ 'pages.issues.checkedWhen' | transloco: { when: whenOf(row) } }}</span>
+                  @if (row.fix) {
+                    <span aria-hidden="true">·</span>
+                    <span>{{ 'pages.issues.fix.' + row.fix | transloco }}</span>
+                  }
+                  @if (row.code && devMode()) {
+                    <code class="issues__code">{{ row.code }}</code>
+                  }
+                </span>
+              </button>
+            </li>
+          }
+        </ul>
+      </section>
+    } @empty {
+      @if (!clean()) {
+        <p class="issues__none">{{ 'pages.issues.noneShown' | transloco }}</p>
       }
     }
-  }
-</section>
+
+    @if (skipped().length > 0) {
+      <p class="issues__skipped">{{ 'pages.issues.skipped' | transloco: { rules: skipped().join(', ') } }}</p>
+    }
+
+    <section class="issues__impact">
+      <sf-asset-impact
+        [heading]="'pages.issues.impact.title' | transloco"
+        [projectKey]="projectKey()"
+        [assetUuid]="pageUuid()"
+        [refreshKey]="refreshKey()"
+      />
+    </section>
+  </sf-drawer>
+}

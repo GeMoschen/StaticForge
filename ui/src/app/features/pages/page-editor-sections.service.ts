@@ -46,12 +46,6 @@ export class PageEditorSectionsService {
     return tpl?.displayName ?? tpl?.uid ?? templateRef;
   }
 
-  /** The page's other bodies, shown as a compact drop-target rail next to the focused body so sections can be dragged straight across without leaving the editor. */
-  otherBodies(): BodyDefinition[] {
-    const current = this.editor.focusedBody()?.name;
-    return this.editor.bodies().filter((b) => b.name !== current);
-  }
-
   remove(bodyName: string, instanceId: string): void {
     if (this.editor.readOnly()) {
       return;

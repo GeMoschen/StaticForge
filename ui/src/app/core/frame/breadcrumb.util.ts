@@ -6,6 +6,8 @@ export interface Crumb {
   label: string;
   /** Router commands (absolute) to open the segment. */
   link?: readonly (string | number)[];
+  /** Query parameters of the link (a folder of the Pages store: `?folder=<uuid>`). */
+  queryParams?: Readonly<Record<string, string>>;
 }
 
 /** What the open screen contributes below its area: the folder path and the item (set through `FrameContextStore`). */

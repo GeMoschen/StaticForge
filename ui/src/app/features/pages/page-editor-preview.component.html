@@ -1,17 +1,29 @@
-<div
-  class="page-editor__divider"
-  role="separator"
-  aria-orientation="vertical"
-  (pointerdown)="onDividerPointerDown($event)"
-></div>
-
-<div class="page-editor__preview" [style.flex]="editor.previewFlex()">
-  <sf-preview-frame
-    [projectKey]="editor.projectKey()"
-    [pageUuid]="editor.uuid()"
-    [revision]="editor.timeTravelRevision()"
-    [refreshKey]="editor.autosave.revision()"
-    (sectionClick)="onSectionClick($event)"
-    (viewChange)="editor.previewView.set($event)"
-  />
-</div>
+<section class="page-editor__preview" [attr.aria-label]="'pages.preview.pane' | transloco">
+  @if (missing().length > 0) {
+    <div class="preview__empty" data-sf-preview-incomplete>
+      <sf-empty-state
+        icon="visibility_off"
+        [level]="3"
+        [title]="'pages.preview.title' | transloco"
+        [description]="'pages.preview.description' | transloco"
+        [primaryLabel]="'pages.preview.goTo' | transloco: { field: missing()[0].label }"
+        primaryIcon="arrow_forward"
+        (primary)="jumpToMissing()"
+      />
+      <ul class="preview__missing" [attr.aria-label]="'pages.preview.missing' | transloco">
+        @for (field of missing(); track field.key) {
+          <li><sf-icon name="radio_button_unchecked" /> {{ field.label }}</li>
+        }
+      </ul>
+    </div>
+  } @else {
+    <sf-preview-frame
+      [projectKey]="editor.projectKey()"
+      [pageUuid]="editor.uuid()"
+      [revision]="editor.timeTravelRevision()"
+      [refreshKey]="editor.autosave.revision()"
+      (sectionClick)="onSectionClick($event)"
+      (viewChange)="editor.previewView.set($event)"
+    />
+  }
+</section>

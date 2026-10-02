@@ -691,6 +691,26 @@ describe('SfTreeComponent', () => {
       await waitFor(() => expect(document.querySelector('[aria-live]')).toHaveTextContent('Deleted 2 items'));
     });
 
+    it('asks the host instead of its own confirmation when the host brings one (confirmDelete)', async () => {
+      const confirmDelete = vi.fn().mockResolvedValue(true);
+      const { confirm, delete: deleted } = await setup({ inputs: { confirmDelete } });
+      focus('Gamma');
+      key('Delete');
+      await waitFor(() => expect(deleted).toHaveBeenCalled());
+      expect(confirmDelete).toHaveBeenCalledWith([expect.objectContaining({ id: 'gamma' })]);
+      expect(confirm.confirm).not.toHaveBeenCalled();
+    });
+
+    it('does not delete when the host declines', async () => {
+      const confirmDelete = vi.fn().mockResolvedValue(false);
+      const { delete: deleted } = await setup({ inputs: { confirmDelete } });
+      focus('Gamma');
+      key('Delete');
+      await waitFor(() => expect(confirmDelete).toHaveBeenCalled());
+      await Promise.resolve();
+      expect(deleted).not.toHaveBeenCalled();
+    });
+
     it('does nothing when the confirmation is declined', async () => {
       const { confirm, delete: deleted } = await setup({ confirm: false });
       focus('Gamma');

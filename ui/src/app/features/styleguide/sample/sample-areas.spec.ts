@@ -51,7 +51,7 @@ describe('page editor catalog', () => {
     expect(within(teasers()).getByText('4 cards')).toBeInTheDocument();
     expect(within(teasers()).getAllByRole('group', { name: 'Badges' })).toHaveLength(2);
     expect(within(teasers()).getByRole('heading', { name: /Product teaser · Yirgacheffe Konga 250 g/ })).toBeInTheDocument();
-    await waitFor(() => expect(screen.getByRole('option', { name: 'Product teasers' })).toHaveAttribute('aria-selected', 'true'));
+    await waitFor(() => expect(screen.getByRole('option', { name: /^Product teasers/ })).toHaveAttribute('aria-selected', 'true'));
     // The preview renders the cards in order.
     expect(preview().indexOf('Yirgacheffe Konga 250 g')).toBeLessThan(preview().indexOf('Kaffee-Journal'));
     expect(preview()).toContain('New harvest');

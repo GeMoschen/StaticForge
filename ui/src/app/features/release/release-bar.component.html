@@ -1,4 +1,47 @@
 @if (subject(); as s) {
+  @if (layout() === 'header') {
+    <ul class="ra__pills" [attr.aria-label]="'pages.editor.release.statusLabel' | transloco">
+      @for (pill of pills(); track pill.key) {
+        <li>
+          <sf-status
+            size="sm"
+            [tone]="pillTone(pill.tone)"
+            [icon]="pill.icon"
+            [label]="pill.tag || pill.status"
+            [detail]="pill.title"
+            [iconOnly]="false"
+          />
+        </li>
+      }
+    </ul>
+    @if (permissions.canRelease()) {
+      <sf-button
+        icon="publish"
+        [disabled]="!canReleaseAny()"
+        [disabledReason]="canReleaseAny() ? null : ('pages.editor.release.nothingToRelease' | transloco)"
+        (click)="open('release')"
+        >{{ 'pages.editor.release.release' | transloco }}</sf-button
+      >
+      @if (permissions.canScheduleRelease() && scheduleTypes().length > 0) {
+        <sf-button variant="secondary" icon="schedule" (click)="scheduling.set(true)">{{
+          'pages.editor.release.schedule' | transloco
+        }}</sf-button>
+      }
+      <sf-menu variant="secondary" [label]="'pages.editor.release.more' | transloco: { name: name() }" [items]="moreItems()" />
+    }
+    @if (pending().length > 0) {
+      <ul class="ra__pending">
+        @for (line of pending(); track line.id) {
+          <li>
+            <a [routerLink]="['/p', projectKey(), 'schedules']" [queryParams]="{ id: line.id }">
+              <sf-icon name="schedule" />
+              {{ line.text }}
+            </a>
+          </li>
+        }
+      </ul>
+    }
+  } @else {
   <div class="bar" role="region" aria-label="Release state">
     <div class="bar__status">
       <sf-release-badge [release]="s.release" [scheduled]="detail()?.scheduled" />
@@ -49,6 +92,7 @@
       </ul>
     }
   </div>
+  }
 
   @if (scheduling()) {
     <sf-schedule-dialog

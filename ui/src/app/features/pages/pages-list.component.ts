@@ -1,64 +1,106 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  Injector,
+  afterNextRender,
   computed,
   effect,
   inject,
   input,
   signal,
   untracked,
+  viewChild,
 } from '@angular/core';
+import { toSignal } from '@angular/core/rxjs-interop';
+import { NavigationEnd, Router, RouterOutlet } from '@angular/router';
+import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
+import { filter, firstValueFrom, map, tap, type Observable, type Subscription } from 'rxjs';
+import { ApiClient } from '../../core/api/api.client';
+import type { components } from '../../core/api/generated/schema.d.ts';
+import { FAVORITES_NODE, FavoriteTreeService, isFavoriteNode } from '../../core/assets/favorite-tree.service';
+import { FavoritesService } from '../../core/assets/favorites.service';
+import { DeveloperModeService } from '../../core/frame/developer-mode.service';
+import { EditingLocaleStore } from '../../core/project/editing-locale.store';
+import { ProjectAccessStore } from '../../core/project/project-access.store';
+import { ProjectContextStore } from '../../core/project/project-context.store';
+import { ProjectPermissionsStore } from '../../core/project/project-permissions.store';
 import { createShortcut } from '../../core/ui/documented-shortcuts';
 import { ShortcutService } from '../../core/ui/shortcut.service';
-import { ActivatedRoute, Router, RouterOutlet } from '@angular/router';
-import { tap, type Subscription } from 'rxjs';
-import { consumeQueryParam } from '../../shared/deep-link';
-import { ApiClient } from '../../core/api/api.client';
-import { ProjectContextStore } from '../../core/project/project-context.store';
 import { ToastService } from '../../core/ui/toast.service';
 import { UndoService } from '../../core/ui/undo.service';
-import { ContextMenuItem, ContextMenuService } from '../../shared/services/context-menu.service';
-import { TreeClipboardService } from '../../shared/services/tree-clipboard.service';
-import { SfButtonComponent } from '../../shared/components/sf-button.component';
-import { SfCreateAssetDialogComponent, type CreateAssetFormValue } from '../../shared/components/sf-create-asset-dialog.component';
+import { ConfirmService } from '../../shared/components/dialog/confirm.service';
+import { typeToConfirmFor } from '../../shared/components/dialog/delete-confirm';
 import { SfEmptyStateComponent } from '../../shared/components/sf-empty-state.component';
-import type { components } from '../../core/api/generated/schema.d.ts';
-import { findFolderByPath, findParentFolder, moveBackBody } from '../../shared/folder-tree.util';
-import { FolderDetailComponent } from './folder-detail.component';
-import { FolderNodeComponent } from './folder-node.component';
-import { PageNavNodeComponent } from './page-nav-node.component';
-import { SfIconComponent } from '../../shared/components/sf-icon.component';
-import type { FolderMoveEvent } from './types';
-import { sortByDisplayName, sortFolderTree } from '../../shared/tree-sort.util';
-import { ProjectAccessStore } from '../../core/project/project-access.store';
-import { PagesTreeRefresh } from './pages-tree-refresh.service';
-import { TimeTravelStore } from '../revisions/time-travel.store';
+import { SfCreateAssetDialogComponent, type CreateAssetFormValue } from '../../shared/components/sf-create-asset-dialog.component';
+import { SfMenuComponent } from '../../shared/components/menu/sf-menu.component';
+import type { SfMenuItem } from '../../shared/components/menu/sf-menu-item';
+import { SfSplitterComponent } from '../../shared/components/splitter/sf-splitter.component';
+import {
+  type SfTreeAction,
+  SfTreeComponent,
+  type SfTreeCreateRequest,
+  type SfTreeDeleteRequest,
+  type SfTreeMoveRequest,
+  type SfTreeNameContext,
+  type SfTreeRenameRequest,
+} from '../../shared/components/sf-tree.component';
+import type { SfTreeLoader, SfTreeNode } from '../../shared/components/tree/tree-model';
+import { restoreDeletedAsset } from '../../shared/restore-deleted-asset';
+import type { ContextMenuItem } from '../../shared/services/context-menu.service';
+import { sortFolderTree } from '../../shared/tree-sort.util';
+import { FavoritesViewComponent } from '../favorites/favorites-view.component';
+import { isOnline } from '../release/release-status.util';
 import { ReleaseEventsStore, withObservedRelease } from '../release/release-events.store';
+import { TimeTravelStore } from '../revisions/time-travel.store';
+import { FolderMoveDialogComponent } from './folder-move-dialog.component';
+import { FolderViewComponent } from './folder-view.component';
+import { PageDeleteDialogComponent } from './page-delete-dialog.component';
+import { PagesTreeRefresh } from './pages-tree-refresh.service';
+import {
+  EMPTY_INDEX,
+  type PageNodeData,
+  type TreeNodeOptions,
+  buildIndex,
+  childNodes,
+  idPath,
+  isEmptyIndex,
+  pageUuidFromUrl,
+  searchPaths,
+} from './pages-tree.util';
 
 type AssetSummaryView = components['schemas']['AssetSummaryView'];
-type TemplateSummary = components['schemas']['TemplateSummary'];
 type FolderView = components['schemas']['FolderView'];
 
+const TREE_WIDTH = 280;
+const TREE_WIDTH_NARROW = 240;
+const WIDE_QUERY = '(min-width: 1280px)';
+
 /**
- * Pages list: one unified navigation tree — folders contain pages, pages
- * contain bodies, bodies contain their currently assigned sections.
- * Clicking a page/body/section navigates to `PageEditorComponent` (see
- * `PageNavNodeComponent`). Supports search; "All pages" is the project's
- * page root.
+ * The Pages area (M35.18): the page tree on the left, and in the main pane the open page (the router outlet), the open
+ * folder's table, or the Favorites list. The tree (`sf-tree`) holds folders and pages only — a page's bodies and sections
+ * are the editor's outline — and loads lazily from the folder tree and page list this screen keeps in memory, so its
+ * filter is answered locally. A *Favorites* node is pinned on top while the project has favorites (any store, folders
+ * expand into their real contents).
+ *
+ * Every change — create, rename, delete, move, duplicate — goes through here and offers Undo (M35.13); the tree and the
+ * folder table re-read when anything changed (`PagesTreeRefresh`).
  */
 @Component({
   selector: 'sf-pages-list',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
-    FolderDetailComponent,
-    FolderNodeComponent,
-    PageNavNodeComponent,
-    SfButtonComponent,
+    FavoritesViewComponent,
+    FolderMoveDialogComponent,
+    FolderViewComponent,
+    PageDeleteDialogComponent,
+    RouterOutlet,
     SfCreateAssetDialogComponent,
     SfEmptyStateComponent,
-    SfIconComponent,
-    RouterOutlet,
+    SfMenuComponent,
+    SfSplitterComponent,
+    SfTreeComponent,
+    TranslocoPipe,
   ],
   templateUrl: './pages-list.component.html',
   styleUrl: './pages-list.component.scss',
@@ -66,128 +108,251 @@ type FolderView = components['schemas']['FolderView'];
 export class PagesListComponent {
   private readonly api = inject(ApiClient);
   private readonly store = inject(ProjectContextStore);
-  private readonly toast = inject(ToastService);
+  private readonly toasts = inject(ToastService);
   private readonly undo = inject(UndoService);
+  private readonly confirms = inject(ConfirmService);
+  private readonly transloco = inject(TranslocoService);
+  private readonly router = inject(Router);
+  private readonly injector = inject(Injector);
   private readonly treeRefresh = inject(PagesTreeRefresh);
-  private readonly menu = inject(ContextMenuService);
-  protected readonly clipboard = inject(TreeClipboardService);
+  private readonly timeTravel = inject(TimeTravelStore);
+  private readonly releaseEvents = inject(ReleaseEventsStore);
+  private readonly favorites = inject(FavoritesService);
+  private readonly favoriteTree = inject(FavoriteTreeService);
+  private readonly editingLocale = inject(EditingLocaleStore);
+  private readonly permissions = inject(ProjectPermissionsStore);
+  private readonly developerMode = inject(DeveloperModeService);
 
   /** Time travel or an archived project (M26). */
   protected readonly readOnly = inject(ProjectAccessStore).readOnly;
 
   readonly projectKey = input.required<string>();
-  /** `?folder=<uuid>` selects that folder (search deep link, M23.4.1). */
+  /** `?folder=<uuid>` is the open folder (kept in the URL, so recents and deep links find it). */
   readonly folder = input<string | undefined>();
-  private readonly router = inject(Router);
-  private readonly releaseEvents = inject(ReleaseEventsStore);
-  private readonly route = inject(ActivatedRoute);
+  /** `?favorites=1` shows the Favorites list. */
+  readonly favoritesParam = input<string | undefined>(undefined, { alias: 'favorites' });
 
-  private readonly timeTravel = inject(TimeTravelStore);
+  private readonly tree = viewChild<SfTreeComponent<PageNodeData>>(SfTreeComponent);
+
+  protected readonly treeWidth =
+    typeof matchMedia !== 'function' || matchMedia(WIDE_QUERY).matches ? TREE_WIDTH : TREE_WIDTH_NARROW;
+  protected readonly treeActions: readonly SfTreeAction[] = ['rename', 'delete', 'move', 'copy', 'create'];
+
+  // ── Data ───────────────────────────────────────────────────────────────────
+
   /** The folder tree as it was at the revision being viewed (time travel); `null` until that read returns. */
   private readonly travelTree = signal<FolderView[] | null>(null);
-  /** The store's tree, or while travelling the one of that revision — none meanwhile, never the present one. */
-  protected readonly tree = computed<FolderView[]>(() =>
+  protected readonly folderTree = computed<FolderView[]>(() =>
     this.timeTravel.isTimeTravel() ? (this.travelTree() ?? []) : this.store.pageFolderTree(),
   );
-  protected readonly pageTemplates = computed<TemplateSummary[]>(() => this.store.pageTemplates());
-
-  /** The project's fixed, protected "All Pages" wrapper root (mirrors `NAVIGATION`'s own fixed
-   * root) — always the tree's sole top-level entry now, but this screen already has its own
-   * "All pages" affordance (the `pages__clear` button below), so it's unwrapped here rather than
-   * rendered a second time as an ordinary folder row. */
-  protected readonly pagesRoot = computed<FolderView | null>(() => this.tree()[0] ?? null);
-  /** The store's real top-level folders — the wrapper root's children. */
-  protected readonly topLevelFolders = computed<FolderView[]>(() => this.pagesRoot()?.children ?? []);
-
-  protected readonly selectedFolder = signal<string | null>(null);
-  protected readonly search = signal('');
   private readonly loadedPages = signal<AssetSummaryView[]>([]);
-  protected readonly pages = this.loadedPages.asReadonly();
-  protected readonly loading = signal(false);
+  /** The first read of the pages returned (until then the tree and the empty state say nothing). */
+  protected readonly loaded = signal(false);
+  protected readonly index = computed(() => (this.loaded() ? buildIndex(this.folderTree(), this.loadedPages()) : EMPTY_INDEX));
 
-  /** Pages grouped by their canonical folder path, for the unified tree. */
-  protected readonly pagesByFolder = computed<Map<string, AssetSummaryView[]>>(() => {
-    const map = new Map<string, AssetSummaryView[]>();
-    for (const page of this.pages()) {
-      const path = page.folderPath ?? '/';
-      const list = map.get(path);
-      if (list) {
-        list.push(page);
-      } else {
-        map.set(path, [page]);
+  private readonly language = toSignal(this.transloco.langChanges$, { initialValue: this.transloco.getActiveLang() });
+  private readonly nodeOptions = computed<TreeNodeOptions>(() => {
+    this.language();
+    const t = (key: string) => this.transloco.translate(`pages.tree.status.${key}`);
+    return {
+      dev: this.developerMode.enabled(),
+      locale: this.editingLocale.locale(),
+      labels: {
+        released: t('released'),
+        changed: t('changed'),
+        draft: t('draft'),
+        scheduled: t('scheduled'),
+        unpublished: t('unpublished'),
+        deletion: t('deletion'),
+      },
+    };
+  });
+
+  // ── What is open ───────────────────────────────────────────────────────────
+
+  private readonly url = toSignal(
+    this.router.events.pipe(
+      filter((event): event is NavigationEnd => event instanceof NavigationEnd),
+      map((event) => event.urlAfterRedirects),
+    ),
+    { initialValue: this.router.url },
+  );
+  protected readonly pageUuid = computed(() => pageUuidFromUrl(this.url()));
+  protected readonly mode = computed<'page' | 'favorites' | 'folder'>(() =>
+    this.pageUuid() ? 'page' : this.favoritesParam() ? 'favorites' : 'folder',
+  );
+  protected readonly folderUuid = computed(() => (this.mode() === 'folder' ? (this.folder() ?? null) : null));
+
+  protected readonly treeSelection = computed<string[]>(() => {
+    const page = this.pageUuid();
+    if (page) {
+      return [page];
+    }
+    if (this.mode() === 'favorites') {
+      return [FAVORITES_NODE];
+    }
+    const folder = this.folder();
+    return folder ? [folder] : [];
+  });
+
+  /** A project with no pages and no folders: the main pane explains what to do (decision 87). */
+  protected readonly emptyProject = computed(() => this.loaded() && isEmptyIndex(this.index()));
+  protected readonly hasTemplates = computed(() => this.store.pageTemplates().length > 0);
+  protected readonly isDeveloper = computed(() => this.developerMode.enabled() && this.permissions.canEditTemplates());
+  protected readonly pageTemplates = computed(() => this.store.pageTemplates());
+  /** The empty state's primary action: a developer without templates goes to create one; with templates anyone creates a page; an editor without templates is told to ask. */
+  protected readonly primaryLabel = computed<string | null>(() => {
+    this.language();
+    if (this.readOnly()) {
+      return null;
+    }
+    if (this.hasTemplates()) {
+      return this.transloco.translate('pages.empty.createPage');
+    }
+    return this.isDeveloper() ? this.transloco.translate('pages.empty.goTemplates') : null;
+  });
+
+  // ── Tree wiring ────────────────────────────────────────────────────────────
+
+  protected readonly loader = computed<SfTreeLoader<PageNodeData>>(() => {
+    const index = this.index();
+    const options = this.nodeOptions();
+    const favorites = this.favorites.list();
+    const key = this.projectKey();
+    const label = this.transloco.translate('pages.tree.favorites');
+    return (parent) => {
+      if (parent === null) {
+        const nodes = childNodes(index, null, options);
+        return favorites.length > 0 ? [this.favoriteTree.rootNode<PageNodeData>(label), ...nodes] : nodes;
       }
-    }
-    for (const [path, list] of map) {
-      map.set(path, sortByDisplayName(list));
-    }
-    return map;
+      if (parent.id === FAVORITES_NODE) {
+        return this.favoriteTree.nodes<PageNodeData>(favorites);
+      }
+      if (isFavoriteNode(parent.id)) {
+        return this.favoriteTree.children<PageNodeData>(key, parent);
+      }
+      return childNodes(index, parent.id, options);
+    };
   });
 
-  /** The currently selected folder's own node, for the metadata panel. */
-  protected readonly selectedFolderNode = computed<FolderView | null>(() => {
-    const uuid = this.selectedFolder();
-    return uuid ? findFolder(this.tree(), uuid) : null;
+  protected readonly search = (query: string): readonly (readonly string[])[] => searchPaths(this.index(), query);
+
+  /** The *Favorites* branch is a view: nothing in it is renamed, deleted, moved or created. */
+  protected readonly allowAction = (action: SfTreeAction, nodes: readonly SfTreeNode<PageNodeData>[]): boolean => {
+    if (this.readOnly() || nodes.some((node) => isFavoriteNode(node.id))) {
+      return false;
+    }
+    // Pages are copied (a duplicate); a folder is only moved.
+    return action !== 'copy' || nodes.every((node) => node.data?.kind === 'page');
+  };
+
+  /** A page cannot go into a favorite, only into a real folder (the tree's own rules cover the rest). */
+  protected readonly canDrop = (_dragged: readonly SfTreeNode<PageNodeData>[], target: SfTreeNode<PageNodeData> | null): boolean =>
+    target === null || !isFavoriteNode(target.id);
+
+  /** A name is free among the siblings of its kind (the server enforces it for UIDs; this answers before the round trip). */
+  protected readonly validateName = (name: string, context: SfTreeNameContext<PageNodeData>): string | null => {
+    const kind = context.node?.data?.kind ?? (context.kind === 'folder' ? 'folder' : 'page');
+    const siblings = childNodes(this.index(), context.parent?.id ?? null, this.nodeOptions());
+    const taken = siblings.some(
+      (sibling) =>
+        sibling.id !== context.node?.id && sibling.data?.kind === kind && sibling.label.toLowerCase() === name.toLowerCase(),
+    );
+    return taken ? this.transloco.translate('pages.tree.nameTaken') : null;
+  };
+
+  protected readonly confirmDelete = async (nodes: readonly SfTreeNode<PageNodeData>[]): Promise<boolean> => {
+    const single = nodes.length === 1 ? nodes[0] : null;
+    const page = single?.data?.kind === 'page' ? this.index().pages.get(single.id) : undefined;
+    // A page that is online may be redirected: its own dialog asks and deletes (decision 51).
+    if (page && isOnline(page.release) && this.permissions.canRedirectOldUrls()) {
+      this.deleting.set(page);
+      return false;
+    }
+    const folders = nodes.some((node) => node.data?.kind === 'folder');
+    const online = nodes.some((node) => isOnline(node.data?.release));
+    const messages = [
+      folders ? this.transloco.translate('pages.tree.delete.folderMessage') : null,
+      online ? this.transloco.translate('pages.tree.toast.onlinePages') : null,
+    ].filter((message): message is string => message !== null);
+    const params = { count: nodes.length, name: nodes[0]?.label ?? '' };
+    return this.confirms.confirm({
+      title: this.transloco.translate('shared.tree.deleteTitle', params),
+      message: messages.join(' ') || undefined,
+      confirmLabel: this.transloco.translate('shared.tree.deleteConfirm', params),
+      tone: 'danger',
+      typeToConfirm: typeToConfirmFor(nodes.length),
+      injector: this.injector,
+    });
+  };
+
+  protected readonly menuItems = (nodes: readonly SfTreeNode<PageNodeData>[]): ContextMenuItem[] => {
+    const node = nodes.length === 1 ? nodes[0] : null;
+    const data = node?.data;
+    if (!node || !data || isFavoriteNode(node.id)) {
+      return [];
+    }
+    const items: ContextMenuItem[] = [];
+    if (data.kind === 'folder' && !this.readOnly() && this.hasTemplates()) {
+      items.push({ label: this.transloco.translate('pages.tree.newPageHere'), icon: 'note_add', action: () => this.openNewPage(node.id) });
+    }
+    if (data.kind === 'page' && !this.readOnly()) {
+      items.push({ label: this.transloco.translate('pages.tree.duplicate'), icon: 'content_copy', action: () => void this.duplicate(node) });
+    }
+    const on = this.favorites.isFavorite(node.id);
+    items.push({
+      label: this.transloco.translate(on ? 'shared.favorite.remove' : 'shared.favorite.add', { name: node.label }),
+      icon: 'star',
+      action: () => this.toggleFavorite(node),
+    });
+    return items;
+  };
+
+  protected readonly newItems = computed<SfMenuItem[]>(() => {
+    this.language();
+    return [
+      {
+        id: 'page',
+        label: this.transloco.translate('pages.tree.newPage'),
+        icon: 'note_add',
+        disabled: !this.hasTemplates(),
+        disabledReason: this.hasTemplates() ? undefined : this.transloco.translate('pages.tree.noTemplates'),
+        action: () => this.openNewPage(this.openFolderUuid()),
+      },
+      {
+        id: 'folder',
+        label: this.transloco.translate('pages.tree.newFolder'),
+        icon: 'create_new_folder',
+        action: () => void this.tree()?.startCreate(this.openFolderUuid(), 'folder'),
+      },
+    ];
   });
 
-  protected readonly selectedFolderPageCount = computed<number>(
-    () => (this.pagesByFolder().get(this.selectedFolderNode()?.path ?? '') ?? []).length,
-  );
-
-  protected readonly selectedFolderSubfolderCount = computed<number>(
-    () => (this.selectedFolderNode()?.children ?? []).length,
-  );
-
-  /** Pages living directly in the "All Pages" wrapper root, keyed by its own canonical path
-   * (no longer the bare project root path — see `pagesRoot`). */
-  protected readonly rootPages = computed<AssetSummaryView[]>(
-    () => this.pagesByFolder().get(this.pagesRoot()?.path ?? '/') ?? [],
-  );
+  // ── Dialogs ────────────────────────────────────────────────────────────────
 
   protected readonly newPageOpen = signal(false);
   protected readonly creatingPage = signal(false);
-  protected readonly newFolderOpen = signal(false);
-  protected readonly creatingFolder = signal(false);
-  /** Parent folder targeted by the currently open "New subfolder" dialog — captured at open time since context-menu actions (e.g. "New subfolder" on the root) may target a folder other than whatever is currently selected. */
-  private folderParentUuid: string | undefined = undefined;
+  /** The folder the open "New page" dialog creates into (`null` = the root). */
+  private newPageFolder: string | null = null;
+  protected readonly deleting = signal<AssetSummaryView | null>(null);
+  protected readonly moving = signal<readonly SfTreeNode<PageNodeData>[] | null>(null);
 
   constructor() {
     effect(() => {
       const key = this.projectKey();
-      if (!key) {
-        return;
+      if (key) {
+        untracked(() => this.store.loadFor(key).subscribe());
       }
-      this.store.loadFor(key).subscribe();
     });
 
+    // The pages again whenever something changed: a release, another revision, an undo that restored something.
     effect(() => {
-      const uuid = this.folder();
-      if (!uuid || !findFolder(this.tree(), uuid)) {
-        return;
-      }
-      untracked(() => {
-        this.selectFolder(uuid);
-        consumeQueryParam(this.router, this.route, 'folder');
-      });
-    });
-
-    effect(
-      () => {
-        const key = this.projectKey();
-        if (!key) {
-          return;
-        }
-        const q = this.search();
-        this.releaseEvents.version();
-        this.timeTravel.activeRevision();
-        this.reload(key, q);
-      },
-      { allowSignalWrites: true },
-    );
-
-    // An undo restored or moved something back (M35.13): re-read the folder tree and the pages.
-    effect(() => {
-      if (this.treeRefresh.version() > 0) {
-        untracked(() => this.onTreeChanged());
+      const key = this.projectKey();
+      this.releaseEvents.version();
+      this.timeTravel.activeRevision();
+      this.treeRefresh.version();
+      if (key) {
+        untracked(() => this.reload(key));
       }
     });
 
@@ -220,230 +385,373 @@ export class PagesListComponent {
       },
       { allowSignalWrites: true },
     );
-  }
 
-  /** The read of the list in flight: a newer one (another search, another revision) replaces it. */
-  private pagesRead: Subscription | null = null;
-
-  protected reload(key: string, q: string): void {
-    this.loading.set(true);
-    this.pagesRead?.unsubscribe();
-    this.pagesRead = this.api
-      .listPages(key, {
-        q: q.trim() || undefined,
-        revision: this.timeTravel.activeRevision() ?? undefined,
-      })
-      .subscribe({
-        next: (pages) => {
-          this.loadedPages.set(pages ?? []);
-          this.loading.set(false);
-        },
-        error: () => this.loading.set(false),
-      });
-  }
-
-  protected newFolder(): void {
-    this.createFolderUnder(this.selectedFolder() ?? undefined);
-  }
-
-  private createFolderUnder(parentUuid: string | undefined): void {
-    if (this.readOnly()) {
-      return;
-    }
-    this.folderParentUuid = parentUuid;
-    this.newFolderOpen.set(true);
-  }
-
-  protected closeNewFolder(): void {
-    this.newFolderOpen.set(false);
-  }
-
-  protected submitNewFolder(value: CreateAssetFormValue): void {
-    if (this.readOnly()) {
-      return;
-    }
-    const key = this.projectKey();
-    this.creatingFolder.set(true);
-    this.api
-      .createFolder(key, {
-        displayName: value.displayName,
-        parentFolderUuid: this.folderParentUuid,
-        scope: 'PAGES',
-      })
-      .subscribe({
-        next: () => {
-          this.creatingFolder.set(false);
-          this.newFolderOpen.set(false);
-          this.toast.show('Folder created', 'success');
-          this.onTreeChanged();
-        },
-        error: () => {
-          this.creatingFolder.set(false);
-          this.toast.show('Could not create folder — a folder with that name may already exist here.', 'error');
-        },
-      });
+    // Keep the open page or folder visible in the tree (expanding its ancestors).
+    effect(() => {
+      this.pageUuid();
+      this.folder();
+      this.mode();
+      if (this.loaded()) {
+        untracked(() => afterNextRender(() => void this.revealOpen(), { injector: this.injector }));
+      }
+    });
   }
 
   /** `n` creates a page (M35.14). */
   private readonly newPageShortcut = inject(ShortcutService).use([
     createShortcut({
-      handler: () => (this.readOnly() ? false : this.openNewPage()),
+      handler: () => (this.readOnly() || !this.hasTemplates() ? false : this.openNewPage(this.openFolderUuid())),
       palette: { label: 'frame.shortcuts.items.createPage' },
     }),
   ]);
 
-  protected openNewPage(): void {
-    if (this.readOnly()) {
-      return;
-    }
-    this.newPageOpen.set(true);
+  // ── Reading ────────────────────────────────────────────────────────────────
+
+  private pagesRead: Subscription | null = null;
+
+  /** The read of the list in flight: a newer one (another revision) replaces it. */
+  private reload(key: string): void {
+    this.pagesRead?.unsubscribe();
+    this.pagesRead = this.api.listPages(key, { revision: this.timeTravel.activeRevision() ?? undefined }).subscribe({
+      next: (pages) => {
+        this.loadedPages.set(pages ?? []);
+        this.loaded.set(true);
+      },
+      error: () => {
+        this.loaded.set(true);
+        this.toasts.show(this.transloco.translate('pages.tree.toast.loadFailed'), 'error');
+      },
+    });
   }
 
-  protected closeNewPage(): void {
-    this.newPageOpen.set(false);
+  /** Re-reads the folder tree and the pages after a change (the folder table follows through `PagesTreeRefresh`). */
+  private changed(): void {
+    this.store.loadFor(this.projectKey(), true).subscribe();
+    this.treeRefresh.notify();
+  }
+
+  /** The folder an action without a target aims at: the open folder, the folder of the open page, else the root. */
+  private openFolderUuid(): string | null {
+    const page = this.pageUuid();
+    if (page) {
+      return this.index().parentOf.get(page) ?? null;
+    }
+    return this.mode() === 'folder' ? (this.folder() ?? null) : null;
+  }
+
+  private async revealOpen(): Promise<void> {
+    const tree = this.tree();
+    const index = this.index();
+    const page = this.pageUuid();
+    const id = page ?? (this.mode() === 'folder' ? this.folder() : null);
+    if (!tree || !id) {
+      return;
+    }
+    const path = idPath(index, id);
+    for (const ancestor of page ? path.slice(0, -1) : path) {
+      await tree.expand(ancestor);
+    }
+  }
+
+  // ── Opening ────────────────────────────────────────────────────────────────
+
+  protected onOpen(node: SfTreeNode<PageNodeData>): void {
+    const key = this.projectKey();
+    if (node.id === FAVORITES_NODE) {
+      void this.router.navigate(['/p', key, 'pages'], { queryParams: { favorites: 1 } });
+      return;
+    }
+    if (isFavoriteNode(node.id)) {
+      const route = this.favoriteTree.routeOf(key, node);
+      if (route) {
+        void this.router.navigate([...route.commands], { queryParams: route.queryParams });
+      }
+      return;
+    }
+    if (node.data?.kind === 'folder') {
+      void this.router.navigate(['/p', key, 'pages'], { queryParams: { folder: node.id } });
+    } else {
+      void this.router.navigate(['/p', key, 'pages', node.id]);
+    }
+  }
+
+  protected openPage(uuid: string): void {
+    void this.router.navigate(['/p', this.projectKey(), 'pages', uuid]);
+  }
+
+  protected openFolder(uuid: string | null): void {
+    void this.router.navigate(['/p', this.projectKey(), 'pages'], { queryParams: uuid ? { folder: uuid } : {} });
+  }
+
+  protected onEmptyPrimary(): void {
+    if (this.hasTemplates()) {
+      this.openNewPage(null);
+    } else {
+      void this.router.navigate(['/p', this.projectKey(), 'templates']);
+    }
+  }
+
+  protected createFolderAtRoot(): void {
+    void this.tree()?.startCreate(null, 'folder');
+  }
+
+  // ── Favorites ──────────────────────────────────────────────────────────────
+
+  private toggleFavorite(node: SfTreeNode<PageNodeData>): void {
+    const data = node.data;
+    if (!data) {
+      return;
+    }
+    const on = this.favorites.toggle({
+      type: data.kind === 'folder' ? 'FOLDER' : 'PAGE',
+      uuid: data.uuid,
+      displayName: data.name,
+      folderPath: data.path,
+    });
+    this.toasts.show(this.transloco.translate(on ? 'shared.favorite.added' : 'shared.favorite.removed', { name: node.label }), 'info');
+  }
+
+  // ── Create ─────────────────────────────────────────────────────────────────
+
+  protected onCreate(request: SfTreeCreateRequest<PageNodeData>): void {
+    if (request.kind !== 'folder' || this.readOnly()) {
+      return;
+    }
+    this.api.createFolder(this.projectKey(), { displayName: request.name, parentFolderUuid: request.parent?.id, scope: 'PAGES' }).subscribe({
+      next: (created) => {
+        this.toasts.show(this.transloco.translate('pages.tree.toast.folderCreated', { name: request.name }), 'success');
+        this.changed();
+        if (request.parent) {
+          void this.tree()?.expand(request.parent.id);
+        }
+        if (created.uuid) {
+          this.openFolder(created.uuid);
+        }
+      },
+      error: () => this.toasts.show(this.transloco.translate('pages.tree.toast.folderCreateFailed'), 'error'),
+    });
+  }
+
+  protected openNewPage(folderUuid: string | null): void {
+    if (this.readOnly() || !this.hasTemplates()) {
+      return;
+    }
+    this.newPageFolder = folderUuid;
+    this.newPageOpen.set(true);
   }
 
   protected submitNewPage(value: CreateAssetFormValue): void {
     if (this.readOnly()) {
       return;
     }
-    const key = this.projectKey();
     this.creatingPage.set(true);
     this.api
-      .createPage(key, {
+      .createPage(this.projectKey(), {
         displayName: value.displayName,
         templateUuid: value.templateUuid,
-        // Read live, at submit time — the folder targeted by the dialog is
-        // whichever one is selected right now, not whatever was selected
-        // when the dialog first opened.
-        folderUuid: this.selectedFolder() ?? undefined,
+        folderUuid: this.newPageFolder ?? undefined,
       })
       .subscribe({
         next: () => {
           this.creatingPage.set(false);
           this.newPageOpen.set(false);
-          this.toast.show('Page created', 'success');
-          this.reload(key, this.search());
+          this.toasts.show(this.transloco.translate('pages.tree.toast.pageCreated', { name: value.displayName }), 'success');
+          this.changed();
         },
         error: () => {
           this.creatingPage.set(false);
-          this.toast.show('Could not create page — check a template is selected and try again.', 'error');
+          this.toasts.show(this.transloco.translate('pages.tree.toast.pageCreateFailed'), 'error');
         },
       });
   }
 
-  protected selectFolder(uuid: string | null): void {
-    this.selectedFolder.set(uuid);
-  }
+  // ── Rename ─────────────────────────────────────────────────────────────────
 
-  protected onSearch(event: Event): void {
-    const value = (event.target as HTMLInputElement).value;
-    this.search.set(value);
-  }
-
-  /** Handles both folder-onto-folder and page-onto-folder drags — the generic move endpoint dispatches by asset type. */
-  protected moveItemTo(event: FolderMoveEvent): void {
-    if (!event.source || !event.target || this.readOnly()) {
+  protected onRename(request: SfTreeRenameRequest<PageNodeData>): void {
+    const data = request.node.data;
+    if (!data || this.readOnly()) {
       return;
     }
     const key = this.projectKey();
-    const back = this.moveBack(event.source);
-    const message = `Moved “${this.nameOf(event.source)}” to ${this.nameOf(event.target)}.`;
-    this.api.moveAsset(key, event.source, { folderUuid: event.target }).subscribe({
-      next: () => {
-        this.offerMoveUndo(key, event.source!, back, message);
-        this.onTreeChanged();
+    const from = data.name;
+    const rename = (name: string, etag?: number): Observable<{ revision?: number }> =>
+      data.kind === 'folder'
+        ? this.api.renameFolder(key, data.uuid, { displayName: name }, etag)
+        : this.api.renameAsset(key, data.uuid, { displayName: name }, etag);
+    rename(request.name).subscribe({
+      next: (renamed) => {
+        const message = this.transloco.translate('pages.tree.toast.renamed', { from, to: request.name });
+        // Undo renames back; the etag is the revision the rename produced.
+        this.undo.offer(message, () => rename(from, renamed.revision).pipe(tap(() => this.changed())));
+        this.changed();
       },
-      error: () => this.toast.show('Could not move — that may create a cycle.', 'error'),
+      error: () => this.toasts.show(this.transloco.translate('pages.tree.toast.renameFailed', { name: from }), 'error'),
     });
   }
 
-  /** Drop target for the "All pages" root button — moves the dragged item to the project root. */
-  protected onRootDragOver(event: DragEvent): void {
-    event.preventDefault();
-    event.dataTransfer && (event.dataTransfer.dropEffect = 'move');
-  }
+  // ── Delete ─────────────────────────────────────────────────────────────────
 
-  protected onRootDrop(event: DragEvent): void {
-    event.preventDefault();
-    const source = event.dataTransfer?.getData('text/plain');
-    if (!source || this.readOnly()) {
-      return;
-    }
+  protected onDelete(request: SfTreeDeleteRequest<PageNodeData>): void {
     const key = this.projectKey();
-    const back = this.moveBack(source);
-    const message = `Moved “${this.nameOf(source)}” to the root.`;
-    this.api.moveAsset(key, source, {}).subscribe({
-      next: () => {
-        this.offerMoveUndo(key, source, back, message);
-        this.onTreeChanged();
-      },
-      error: () => this.toast.show('Could not move — try again in a moment.', 'error'),
+    const items = request.nodes.flatMap((node) => (node.data ? [node.data] : []));
+    void (async () => {
+      try {
+        for (const item of items) {
+          await firstValueFrom(
+            item.kind === 'folder' ? this.api.deleteFolder(key, item.uuid, true) : this.api.deleteAsset(key, item.uuid),
+            { defaultValue: undefined },
+          );
+        }
+      } catch {
+        this.toasts.show(this.transloco.translate('pages.tree.toast.deleteFailed', { name: items[0]?.name ?? '' }), 'error');
+        this.changed();
+        return;
+      }
+      this.leaveDeleted(items.map((item) => item.uuid));
+      this.changed();
+      request.completed(() => void this.restore(items));
+    })();
+  }
+
+  /** The page dialog deleted a page itself. */
+  protected onPageDeleted(): void {
+    const page = this.deleting();
+    this.deleting.set(null);
+    if (page?.uuid) {
+      this.leaveDeleted([page.uuid]);
+    }
+    this.changed();
+  }
+
+  /** What is open was deleted: the area goes back to the folder it was in. */
+  private leaveDeleted(uuids: readonly string[]): void {
+    const index = this.index();
+    const open = this.pageUuid() ?? this.folder() ?? null;
+    if (open && uuids.some((uuid) => uuid === open || idPath(index, open).includes(uuid))) {
+      this.openFolder(null);
+    }
+  }
+
+  private async restore(items: readonly PageNodeData[]): Promise<void> {
+    const key = this.projectKey();
+    try {
+      for (const item of [...items].reverse()) {
+        await firstValueFrom(item.kind === 'folder' ? this.api.restoreFolder(key, item.uuid) : restoreDeletedAsset(this.api, key, item.uuid), {
+          defaultValue: undefined,
+        });
+      }
+      this.toasts.show(this.transloco.translate('shared.undo.done'), 'info');
+    } catch {
+      this.toasts.show(this.transloco.translate('shared.undo.failed'), 'error');
+    }
+    this.changed();
+  }
+
+  // ── Move and copy ──────────────────────────────────────────────────────────
+
+  protected onMove(request: SfTreeMoveRequest<PageNodeData>): void {
+    void this.transfer(request.nodes, request.target?.id ?? null, request.copy, (undo) => request.completed(undo));
+  }
+
+  protected openMoveDialog(nodes: SfTreeNode<PageNodeData>[]): void {
+    this.moving.set(nodes);
+  }
+
+  protected onMoveChosen(target: string | null): void {
+    const nodes = this.moving();
+    this.moving.set(null);
+    if (!nodes) {
+      return;
+    }
+    const message = (count: number, name: string) => this.transloco.translate('shared.tree.moved', { count, name });
+    void this.transfer(nodes, target, false, (undo) => {
+      const text = message(nodes.length, nodes[0]?.label ?? '');
+      if (undo) {
+        this.undo.offer(text, async () => undo());
+      } else {
+        this.toasts.show(text, 'success');
+      }
     });
   }
 
-  /** The display name of a page or folder in the tree, for the toast text. */
-  private nameOf(uuid: string): string {
-    const page = this.loadedPages().find((p) => p.uuid === uuid);
-    const folder = findFolder(this.tree(), uuid);
-    return page?.displayName ?? page?.uid ?? folder?.displayName ?? folder?.uid ?? 'item';
+  protected movingFolders(): string[] {
+    return (this.moving() ?? []).filter((node) => node.data?.kind === 'folder').map((node) => node.id);
   }
 
-  /** Where a page or folder lives now, as the body of the move that puts it back (`{}` = the project root). */
-  private moveBack(uuid: string): { folderUuid?: string } {
-    const root = this.pagesRoot();
-    const page = this.loadedPages().find((p) => p.uuid === uuid);
-    const parent = page
-      ? findFolderByPath(this.tree(), page.folderPath ?? '/')
-      : findParentFolder(this.tree(), uuid);
-    return moveBackBody(parent, root?.uuid);
-  }
-
-  /** One Undo for a move: moves the item back to the folder it came from. */
-  private offerMoveUndo(key: string, uuid: string, back: { folderUuid?: string }, message: string): void {
-    this.undo.offer(message, () => this.api.moveAsset(key, uuid, back).pipe(tap(() => this.treeRefresh.notify())));
-  }
-
-  /** "All pages" is the project's page root — it can't be renamed, deleted, cut, or pasted into, but you can create pages/subfolders directly in it. */
-  protected onRootContextMenu(event: MouseEvent): void {
-    if (this.readOnly()) {
+  /**
+   * Moves (or, for pages, duplicates into) the folder `target` (`null` = the root). Undo moves back, or deletes the copies.
+   * Stops at the first failure; what was done up to there stays and is announced.
+   */
+  private async transfer(
+    nodes: readonly SfTreeNode<PageNodeData>[],
+    target: string | null,
+    copy: boolean,
+    completed: (undo?: () => void) => void,
+  ): Promise<void> {
+    const key = this.projectKey();
+    const index = this.index();
+    const body = target === null ? {} : { folderUuid: target };
+    const undoSteps: (() => Observable<unknown>)[] = [];
+    try {
+      for (const node of nodes) {
+        const data = node.data;
+        if (!data) {
+          continue;
+        }
+        if (copy) {
+          const copied = await firstValueFrom(this.api.duplicatePage(key, data.uuid));
+          const uuid = copied.uuid;
+          if (uuid) {
+            if ((index.parentOf.get(data.uuid) ?? null) !== target) {
+              await firstValueFrom(this.api.moveAsset(key, uuid, body), { defaultValue: undefined });
+            }
+            undoSteps.push(() => this.api.deleteAsset(key, uuid));
+          }
+        } else {
+          const back = index.parentOf.get(data.uuid) ?? null;
+          await firstValueFrom(this.api.moveAsset(key, data.uuid, body), { defaultValue: undefined });
+          undoSteps.push(() => this.api.moveAsset(key, data.uuid, back === null ? {} : { folderUuid: back }));
+        }
+      }
+    } catch {
+      this.toasts.show(this.transloco.translate(copy ? 'pages.tree.toast.copyFailed' : 'pages.tree.toast.moveFailed', { name: nodes[0]?.label ?? '' }), 'error');
+      this.changed();
       return;
     }
-    const items: ContextMenuItem[] = [
-      {
-        label: 'New page',
-        icon: 'note_add',
-        action: () => {
-          this.selectFolder(null);
-          this.openNewPage();
-        },
-      },
-      { label: 'New subfolder', icon: 'create_new_folder', action: () => this.createFolderUnder(undefined) },
-    ];
-    this.menu.open(event, items);
+    this.changed();
+    completed(
+      undoSteps.length > 0
+        ? () => void this.runUndo(undoSteps)
+        : undefined,
+    );
   }
 
-  /** Reloads both the folder tree and the pages list — used after any create/rename/move/delete/duplicate. */
-  protected onTreeChanged(): void {
-    this.store.loadFor(this.projectKey(), true).subscribe();
-    this.reload(this.projectKey(), this.search());
-  }
-
-  protected onFolderDeleted(): void {
-    this.selectedFolder.set(null);
-    this.onTreeChanged();
-  }
-}
-
-function findFolder(nodes: FolderView[], uuid: string): FolderView | null {
-  for (const node of nodes) {
-    if (node.uuid === uuid) {
-      return node;
+  private async runUndo(steps: readonly (() => Observable<unknown>)[]): Promise<void> {
+    try {
+      for (const step of [...steps].reverse()) {
+        await firstValueFrom(step(), { defaultValue: undefined });
+      }
+      this.toasts.show(this.transloco.translate('shared.undo.done'), 'info');
+    } catch {
+      this.toasts.show(this.transloco.translate('shared.undo.failed'), 'error');
     }
-    const found = findFolder(node.children ?? [], uuid);
-    if (found) {
-      return found;
+    this.changed();
+  }
+
+  private async duplicate(node: SfTreeNode<PageNodeData>): Promise<void> {
+    const key = this.projectKey();
+    try {
+      const copy = await firstValueFrom(this.api.duplicatePage(key, node.id));
+      const uuid = copy.uuid;
+      this.changed();
+      const message = this.transloco.translate('pages.tree.toast.duplicated', { name: node.label });
+      if (uuid) {
+        this.undo.offer(message, () => this.api.deleteAsset(key, uuid).pipe(tap(() => this.changed())));
+      } else {
+        this.toasts.show(message, 'success');
+      }
+    } catch {
+      this.toasts.show(this.transloco.translate('pages.tree.toast.duplicateFailed', { name: node.label }), 'error');
     }
   }
-  return null;
 }

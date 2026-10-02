@@ -1,112 +1,64 @@
 import '@angular/compiler';
-import { NO_ERRORS_SCHEMA, signal } from '@angular/core';
-import { TestBed } from '@angular/core/testing';
-import { provideRouter } from '@angular/router';
-import { fireEvent, render, screen, waitFor } from '@testing-library/angular';
+import { fireEvent, screen, waitFor } from '@testing-library/angular';
 import { of, throwError } from 'rxjs';
-import { describe, expect, it, vi } from 'vitest';
-import { ApiClient } from '../../core/api/api.client';
-import type { components } from '../../core/api/generated/schema.d.ts';
-import { EditingLocaleStore } from '../../core/project/editing-locale.store';
-import { LocalesStore } from '../../core/project/locales.store';
-import { ProjectAccessStore } from '../../core/project/project-access.store';
-import { ProjectContextStore } from '../../core/project/project-context.store';
+import { describe, expect, it } from 'vitest';
 import { ToastService } from '../../core/ui/toast.service';
-import { SfButtonComponent } from '../../shared/components/sf-button.component';
-import { TimeTravelStore } from '../revisions/time-travel.store';
-import { PageEditorComponent } from './page-editor.component';
-import { PageEditorHeaderComponent } from './page-editor-header.component';
+import { PageEditorStore } from './page-editor.store';
+import { openSettings, renderPageEditorShell, testPage } from './page-editor.testing';
 
-type PageView = components['schemas']['PageView'];
+describe('PageEditorComponent: Page settings drawer', () => {
+  it('opens from the header button and closes with its ×, leaving the editor in place', async () => {
+    await renderPageEditorShell();
 
-function page(uuid: string, name: string): PageView {
-  return {
-    uuid,
-    uid: name.toLowerCase(),
-    displayName: name,
-    revision: 1,
-    folderPath: '/',
-    template: { uuid: 'tpl-1', uid: 'standard', displayName: 'Standard' },
-    content: {} as PageView['content'],
-    bodies: {} as PageView['bodies'],
-    nav: { visible: true, position: 0, noIndex: false } as unknown as PageView['nav'],
-    output: {} as PageView['output'],
-    meta: {} as PageView['meta'],
-  };
-}
+    await openSettings();
+    expect(screen.getByRole('button', { name: 'Page settings' }).getAttribute('aria-expanded')).toBe('true');
+    expect(screen.getByRole('heading', { name: 'Name' })).toBeTruthy();
 
-async function renderEditor() {
-  const pages: Record<string, PageView> = { 'page-1': page('page-1', 'About'), 'page-2': page('page-2', 'Contact') };
-  const api = {
-    pageDetail: vi.fn().mockImplementation((_key: string, uuid: string) => of(pages[uuid])),
-    evaluateRules: vi.fn().mockReturnValue(of({ findings: [], fills: [], fieldStates: [] })),
-    templateDetail: vi.fn().mockReturnValue(of({ uuid: 'tpl-1', effectiveDefinition: { editors: [], bodies: [] } })),
-    translationStatus: vi.fn().mockReturnValue(of({ locales: [] })),
-    renameAsset: vi.fn().mockReturnValue(of({ displayName: 'Renamed', revision: 2 })),
-  };
-  // Only the header is real here: the popover lives in it.
-  TestBed.overrideComponent(PageEditorComponent, {
-    set: { imports: [PageEditorHeaderComponent], schemas: [NO_ERRORS_SCHEMA] },
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Page settings' })).toBeNull());
+    expect(screen.getByRole('heading', { level: 1, name: 'About' })).toBeTruthy();
   });
-  TestBed.overrideComponent(PageEditorHeaderComponent, {
-    set: { imports: [SfButtonComponent], schemas: [NO_ERRORS_SCHEMA] },
-  });
-  const result = await render(PageEditorComponent, {
-    componentInputs: { projectKey: 'proj', uuid: 'page-1' },
-    providers: [
-      provideRouter([]),
-      { provide: ApiClient, useValue: api },
-      { provide: TimeTravelStore, useValue: new TimeTravelStore() },
-      { provide: ProjectAccessStore, useValue: { readOnly: signal(false) } },
-      { provide: EditingLocaleStore, useValue: { binding: signal(null) } },
-      { provide: LocalesStore, useValue: { locales: signal([]) } },
-      {
-        provide: ProjectContextStore,
-        useValue: {
-          loadFor: () => of(undefined),
-          setActivePage: vi.fn(),
-          notifyPageChanged: vi.fn(),
-          pageMutated: signal<string | null>(null),
-        },
-      },
-    ],
-  });
-  fireEvent.click(await screen.findByRole('button', { name: 'About' }));
-  await screen.findByText('Display name');
-  return { ...result, api };
-}
 
-describe('PageEditorComponent: page meta popover', () => {
+  it('is non-modal: the page behind it stays usable', async () => {
+    await renderPageEditorShell();
+
+    await openSettings();
+
+    expect(screen.getByRole('dialog', { name: 'Page settings' }).getAttribute('aria-modal')).toBeNull();
+  });
+
   it('closes on Escape', async () => {
-    await renderEditor();
+    await renderPageEditorShell();
+    await openSettings();
 
-    fireEvent.keyDown(document, { key: 'Escape' });
+    fireEvent.keyDown(screen.getByRole('dialog', { name: 'Page settings' }), { key: 'Escape' });
 
-    await waitFor(() => expect(screen.queryByText('Display name')).toBeNull());
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Page settings' })).toBeNull());
   });
 
-  it('closes on a press outside, but not on a press inside', async () => {
-    await renderEditor();
+  it('opens with the name in edit mode from ⋮ › Rename…', async () => {
+    await renderPageEditorShell();
 
-    fireEvent.mouseDown(screen.getByText('Display name'));
-    expect(screen.queryByText('Display name')).not.toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'More actions' }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Rename…' }));
 
-    fireEvent.mouseDown(document.body);
-    await waitFor(() => expect(screen.queryByText('Display name')).toBeNull());
+    expect(await screen.findByDisplayValue('About')).toBeTruthy();
   });
 
-  it('a rename offers Undo, which renames back on top of the page\'s current revision', async () => {
-    const { fixture, api } = await renderEditor();
+  it("a rename offers Undo, which renames back on top of the page's current revision", async () => {
+    const { fixture, api } = await renderPageEditorShell();
     const toasts = fixture.debugElement.injector.get(ToastService);
+    await openSettings();
 
     // The server's copy after the rename (the editor re-reads the page when it changes).
-    api.pageDetail.mockReturnValue(of({ ...page('page-1', 'Renamed'), revision: 2 }));
-    fireEvent.click(screen.getByRole('button', { name: 'Rename' }));
+    api.pageDetail.mockReturnValue(of({ ...testPage('page-1', 'Renamed'), revision: 2 }));
+    fireEvent.click(screen.getByRole('button', { name: 'Rename…' }));
     fireEvent.input(await screen.findByDisplayValue('About'), { target: { value: 'Renamed' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Rename' }));
 
-    await waitFor(() => expect(api.renameAsset).toHaveBeenCalledWith('proj', 'page-1', { displayName: 'Renamed' }, 1));
+    await waitFor(() => expect(api.renameAsset).toHaveBeenCalledWith('proj', 'page-1', { displayName: 'Renamed' }, 7));
     expect(toasts.toasts().at(-1)?.message).toBe('Renamed “About” to “Renamed”.');
+    await screen.findByRole('heading', { level: 1, name: 'Renamed' });
 
     api.renameAsset.mockReturnValue(of({ displayName: 'About', revision: 3 }));
     toasts.toasts().at(-1)!.action!.run();
@@ -114,11 +66,12 @@ describe('PageEditorComponent: page meta popover', () => {
   });
 
   it('shows the error toast when the rename back fails', async () => {
-    const { fixture, api } = await renderEditor();
+    const { fixture, api } = await renderPageEditorShell();
     const toasts = fixture.debugElement.injector.get(ToastService);
-    fireEvent.click(screen.getByRole('button', { name: 'Rename' }));
+    await openSettings();
+    fireEvent.click(screen.getByRole('button', { name: 'Rename…' }));
     fireEvent.input(await screen.findByDisplayValue('About'), { target: { value: 'Renamed' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Rename' }));
     await waitFor(() => expect(toasts.toasts().at(-1)?.action).toBeDefined());
     api.renameAsset.mockReturnValue(throwError(() => new Error('412')));
 
@@ -127,12 +80,58 @@ describe('PageEditorComponent: page meta popover', () => {
     await waitFor(() => expect(toasts.toasts().at(-1)?.kind).toBe('error'));
   });
 
+  it('keeps the name when the rename fails, and says so', async () => {
+    const { fixture, api } = await renderPageEditorShell();
+    const toasts = fixture.debugElement.injector.get(ToastService);
+    api.renameAsset.mockReturnValue(throwError(() => new Error('500')));
+    await openSettings();
+    fireEvent.click(screen.getByRole('button', { name: 'Rename…' }));
+    fireEvent.input(await screen.findByDisplayValue('About'), { target: { value: 'Renamed' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Rename' }));
+
+    await waitFor(() => expect(toasts.toasts().at(-1)?.kind).toBe('error'));
+    expect(screen.getByRole('heading', { level: 1, name: 'About' })).toBeTruthy();
+  });
+
+  it('requires a name', async () => {
+    await renderPageEditorShell();
+    await openSettings();
+    fireEvent.click(screen.getByRole('button', { name: 'Rename…' }));
+
+    fireEvent.input(await screen.findByDisplayValue('About'), { target: { value: '  ' } });
+
+    expect(await screen.findByText('A name is required.')).toBeTruthy();
+    expect((screen.getByRole('button', { name: 'Rename' }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('offers no rename while read-only', async () => {
+    await renderPageEditorShell({ readOnly: true });
+    await openSettings();
+
+    expect((screen.getByRole('button', { name: 'Rename…' }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByText('This page is read-only.')).toBeTruthy();
+  });
+
+  it('shows the UID only in developer mode', async () => {
+    await renderPageEditorShell();
+    await openSettings();
+    expect(screen.queryByRole('heading', { name: 'UID' })).toBeNull();
+  });
+
+  it('shows the UID in developer mode', async () => {
+    await renderPageEditorShell({ developerMode: true });
+    await openSettings();
+    expect(screen.getByRole('heading', { name: 'UID' })).toBeTruthy();
+  });
+
   it('does not stay open on the next page', async () => {
-    const { rerender } = await renderEditor();
+    const { rerender, fixture } = await renderPageEditorShell();
+    await openSettings();
 
     await rerender({ componentInputs: { projectKey: 'proj', uuid: 'page-2' } });
 
-    await screen.findByRole('button', { name: 'Contact' });
-    expect(screen.queryByText('Display name')).toBeNull();
+    await screen.findByRole('heading', { level: 1, name: 'Contact' });
+    expect(fixture.debugElement.injector.get(PageEditorStore).settingsOpen()).toBe(false);
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Page settings' })).toBeNull());
   });
 });

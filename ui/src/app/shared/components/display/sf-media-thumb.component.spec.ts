@@ -34,4 +34,32 @@ describe('SfMediaThumbComponent', () => {
     await waitFor(() => expect(document.querySelector('.sf-media-thumb__fallback')).not.toBeNull());
     expect(screen.queryByRole('img')).toBeNull();
   });
+
+  it('asks for no thumbnail of a file that is not a raster image — the server refuses it with 422 — and shows its icon', async () => {
+    const mediaThumbnailBlob = vi.fn().mockReturnValue(of(new Blob(['x'])));
+    await render(SfMediaThumbComponent, {
+      componentInputs: { projectKey: 'acme', uuid: 'm-2', fileName: 'price-list.pdf' },
+      providers: [{ provide: ApiClient, useValue: { mediaThumbnailBlob } }],
+    });
+    expect(mediaThumbnailBlob).not.toHaveBeenCalled();
+    expect(document.querySelector('.sf-media-thumb__fallback')).not.toBeNull();
+  });
+
+  it('asks for the thumbnail of a raster image by its name', async () => {
+    const mediaThumbnailBlob = vi.fn().mockReturnValue(of(new Blob(['x'])));
+    await render(SfMediaThumbComponent, {
+      componentInputs: { projectKey: 'acme', uuid: 'm-3', fileName: 'beans.JPG' },
+      providers: [{ provide: ApiClient, useValue: { mediaThumbnailBlob } }],
+    });
+    await waitFor(() => expect(mediaThumbnailBlob).toHaveBeenCalledWith('acme', 'm-3'));
+  });
+
+  it('trusts an explicit image flag over the file name', async () => {
+    const mediaThumbnailBlob = vi.fn();
+    await render(SfMediaThumbComponent, {
+      componentInputs: { projectKey: 'acme', uuid: 'm-4', fileName: 'beans.jpg', image: false },
+      providers: [{ provide: ApiClient, useValue: { mediaThumbnailBlob } }],
+    });
+    expect(mediaThumbnailBlob).not.toHaveBeenCalled();
+  });
 });

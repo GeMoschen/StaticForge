@@ -9,7 +9,7 @@
   <div class="media">
     @if (uuid(); as id) {
       <div class="media__card" data-sf-media-card>
-        <sf-media-thumb class="media__thumb" [projectKey]="projectKey() ?? ''" [uuid]="id" />
+        <sf-media-thumb class="media__thumb" [projectKey]="projectKey() ?? ''" [uuid]="id" [image]="media() ? !!media()!.image : null" [fileName]="name()" />
         <div class="media__info">
           @if (missing()) {
             <span class="media__name">{{ 'forms.media.missing' | transloco }}</span>

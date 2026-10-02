@@ -74,17 +74,14 @@ describe('page issues util', () => {
       return root;
     }
 
-    it('waits for the section scope: the body scope card with the same id is about to be replaced', () => {
-      // Right after `?section=sec-1`: the body scope (every card of the body) is still on screen.
-      const bodyScope = centre(`<section class="page-editor__body">${card('sec-1')}${card('sec-2')}</section>`);
-      expect(issueFocusTarget(bodyScope, 'sec-1', null)).toBeNull();
-      expect(issueFocusTarget(bodyScope, 'sec-1', 'image')).toBeNull();
-
-      const sectionScope = centre(`<section class="page-editor__body" data-sf-section-scope="sec-1">${card('sec-1')}</section>`);
-      expect(issueFocusTarget(sectionScope, 'sec-1', null)?.getAttribute('data-sf-section')).toBe('sec-1');
-      expect(issueFocusTarget(sectionScope, 'sec-1', 'image')?.getAttribute('data-sf-editor')).toBe('image');
+    it('finds a section card and the field in it, in a form that shows every section', () => {
+      const form = centre(`<div class="form">${card('sec-1')}${card('sec-2')}</div>`);
+      expect(issueFocusTarget(form, 'sec-1', null)?.getAttribute('data-sf-section')).toBe('sec-1');
+      expect(issueFocusTarget(form, 'sec-2', 'image')?.getAttribute('data-sf-editor')).toBe('image');
       // A field the card doesn't show (collapsed, conditional): the card itself.
-      expect(issueFocusTarget(sectionScope, 'sec-1', 'caption')?.getAttribute('data-sf-section')).toBe('sec-1');
+      expect(issueFocusTarget(form, 'sec-1', 'caption')?.getAttribute('data-sf-section')).toBe('sec-1');
+      // A section that isn't there (not rendered yet).
+      expect(issueFocusTarget(form, 'sec-9', null)).toBeNull();
     });
 
     it("finds a field of the page's own form, and nothing while that form isn't shown", () => {

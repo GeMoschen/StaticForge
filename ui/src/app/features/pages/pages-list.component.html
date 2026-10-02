@@ -1,108 +1,76 @@
-<div class="pages">
-  <h1 class="sf-sr-only">Pages</h1>
-  <aside class="pages__tree">
-    <div class="pages__tree-head">
-      <h2>Pages</h2>
-      <button type="button" class="pages__icon-btn" title="New folder" [disabled]="readOnly()" (click)="newFolder()">
-        +
-      </button>
-    </div>
-
-    <button
-      type="button"
-      class="pages__clear"
-      [class.pages__clear--active]="!selectedFolder()"
-      (click)="selectFolder(null)"
-      (dragover)="onRootDragOver($event)"
-      (drop)="onRootDrop($event)"
-      (contextmenu)="onRootContextMenu($event)"
-    >
-      <sf-icon name="home" />
-      All pages
-    </button>
-
-    <div class="pages__tree-body">
-      @if (!loading() && topLevelFolders().length === 0 && pages().length === 0) {
-        <sf-empty-state
-          title="No pages"
-          description="Create a page to see it listed here."
-        />
-      } @else {
-        @for (folder of topLevelFolders(); track folder.uuid) {
-          <sf-folder-node
-            [node]="folder"
-            [depth]="0"
-            [selectedUuid]="selectedFolder()"
-            [projectKey]="projectKey()"
-            [pagesByFolder]="pagesByFolder()"
-            (select)="selectFolder($event)"
-            (move)="moveItemTo($event)"
-            (newPage)="openNewPage()"
-            (changed)="onTreeChanged()"
-          />
-        }
-        @for (page of rootPages(); track page.uuid) {
-          <sf-page-nav-node
-            [projectKey]="projectKey()"
-            [summary]="page"
-            [depth]="0"
-            (changed)="onTreeChanged()"
-          />
-        }
-      }
-    </div>
-  </aside>
-
-  <section class="pages__content">
-    <div class="pages__toolbar">
-      <input
-        type="search"
-        class="pages__search"
-        placeholder="Search pages"
-        [value]="search()"
-        (input)="onSearch($event)"
+<sf-splitter
+  class="pages"
+  collapsible
+  paneId="pages-tree"
+  [defaultSize]="treeWidth"
+  [min]="200"
+  [max]="440"
+  [label]="'pages.tree.resize' | transloco"
+>
+  <section sfSplitterStart class="pages__pane pages__tree" aria-labelledby="pages-tree-title">
+    <div class="pages__head">
+      <span class="pages__title" id="pages-tree-title">{{ 'pages.tree.title' | transloco }}</span>
+      <sf-menu
+        variant="secondary"
+        size="sm"
+        align="end"
+        [text]="'pages.tree.new' | transloco"
+        [label]="'pages.tree.newLabel' | transloco"
+        [items]="newItems()"
+        [disabled]="readOnly()"
       />
-      <span class="pages__toolbar-spacer"></span>
-      <sf-button variant="primary" [disabled]="readOnly()" (click)="openNewPage()">New page</sf-button>
     </div>
+    <sf-tree
+      class="pages__treebody"
+      treeId="pages"
+      filterMode="server"
+      rootDroppable
+      [label]="'pages.tree.title' | transloco"
+      [projectKey]="projectKey()"
+      [loadChildren]="loader()"
+      [selection]="treeSelection()"
+      [actions]="treeActions"
+      [createKinds]="['folder']"
+      [allowAction]="allowAction"
+      [canDrop]="canDrop"
+      [validateName]="validateName"
+      [confirmDelete]="confirmDelete"
+      [menuItems]="menuItems"
+      [search]="search"
+      (open)="onOpen($event)"
+      (create)="onCreate($event)"
+      (rename)="onRename($event)"
+      (delete)="onDelete($event)"
+      (move)="onMove($event)"
+      (moveTo)="openMoveDialog($event)"
+    />
+  </section>
 
-    <div
-      class="pages__detail"
-      [class.pages__detail--active]="pageOutlet.isActivated || !!selectedFolderNode()"
-    >
-      @if (!pageOutlet.isActivated) {
-        @if (selectedFolderNode(); as folder) {
-          <sf-folder-detail
-            [projectKey]="projectKey()"
-            [folder]="folder"
-            [pageCount]="selectedFolderPageCount()"
-            [folderCount]="selectedFolderSubfolderCount()"
-            (close)="selectFolder(null)"
-            (renamed)="onTreeChanged()"
-            (deleted)="onFolderDeleted()"
+  <div sfSplitterEnd class="pages__pane pages__content">
+    @switch (mode()) {
+      @case ('favorites') {
+        <sf-favorites-view />
+      }
+      @case ('folder') {
+        @if (emptyProject()) {
+          <sf-empty-state
+            icon="note_add"
+            [title]="'pages.empty.title' | transloco"
+            [description]="('pages.empty.' + (hasTemplates() ? 'templates' : isDeveloper() ? 'developer' : 'editor')) | transloco"
+            [primaryLabel]="primaryLabel()"
+            [primaryIcon]="hasTemplates() ? 'note_add' : 'code_blocks'"
+            [secondaryLabel]="readOnly() ? null : ('pages.empty.createFolder' | transloco)"
+            (primary)="onEmptyPrimary()"
+            (secondary)="createFolderAtRoot()"
           />
-        } @else {
-          <p class="pages__hint">
-            Browse the tree to open a page, jump to one of its bodies, or open a section directly.
-            Select a folder to see its details. New pages and folders are created inside whichever
-            folder is selected in the tree ("All pages" targets the project root).
-          </p>
+        } @else if (loaded()) {
+          <sf-folder-view [projectKey]="projectKey()" [folderUuid]="folderUuid()" (openPage)="openPage($event)" (openFolder)="openFolder($event)" />
         }
       }
-      <router-outlet #pageOutlet="outlet" />
-    </div>
-  </section>
-</div>
-
-<sf-create-asset-dialog
-  kind="FOLDER"
-  scope="PAGES"
-  [open]="newFolderOpen()"
-  [submitting]="creatingFolder()"
-  [projectKey]="projectKey()"
-  (create)="submitNewFolder($event)"
-  (closed)="closeNewFolder()"
-/>
+    }
+    <router-outlet />
+  </div>
+</sf-splitter>
 
 <sf-create-asset-dialog
   kind="PAGE"
@@ -111,5 +79,19 @@
   [projectKey]="projectKey()"
   [templates]="pageTemplates()"
   (create)="submitNewPage($event)"
-  (closed)="closeNewPage()"
+  (closed)="newPageOpen.set(false)"
 />
+
+@if (deleting(); as page) {
+  <sf-page-delete-dialog [projectKey]="projectKey()" [page]="page" (deleted)="onPageDeleted()" (closed)="deleting.set(null)" />
+}
+
+@if (moving()) {
+  <sf-folder-move-dialog
+    [tree]="folderTree()"
+    [excluded]="movingFolders()"
+    [count]="moving()!.length"
+    (chosen)="onMoveChosen($event)"
+    (cancelled)="moving.set(null)"
+  />
+}

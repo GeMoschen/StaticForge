@@ -47,18 +47,21 @@ public class PageController {
     private final SecuritySupport securitySupport;
     private final ReleaseBlocks releaseBlocks;
     private final CompactedReads compactedReads;
+    private final RevisionViews revisionViews;
 
     public PageController(
             ProjectService projectService,
             PageService pageService,
             SecuritySupport securitySupport,
             ReleaseBlocks releaseBlocks,
-            CompactedReads compactedReads) {
+            CompactedReads compactedReads,
+            RevisionViews revisionViews) {
         this.projectService = projectService;
         this.pageService = pageService;
         this.securitySupport = securitySupport;
         this.releaseBlocks = releaseBlocks;
         this.compactedReads = compactedReads;
+        this.revisionViews = revisionViews;
     }
 
     /**
@@ -78,8 +81,15 @@ public class PageController {
         List<UUID> uuids = pages.stream().map(AssetVersionView::uuid).toList();
         var release = revision == null ? releaseBlocks.of(projectId, uuids) : releaseBlocks.ofAt(projectId, uuids, revision);
         var scheduled = revision == null ? releaseBlocks.scheduled(projectId, uuids) : Map.<UUID, List<ScheduledRefView>>of();
+        Map<Long, String> authors = revisionViews.displayNames(pages.stream().map(AssetVersionView::changedBy).toList());
+        Map<String, String> templateNames = new java.util.HashMap<>();
         ResponseEntity<List<AssetSummaryView>> response = ResponseEntity.ok(pages.stream()
-                .map(v -> toSummary(v, release.get(v.uuid()), scheduled.getOrDefault(v.uuid(), List.of())))
+                .map(v -> toSummary(
+                        v,
+                        release.get(v.uuid()),
+                        scheduled.getOrDefault(v.uuid(), List.of()),
+                        templateName(projectId, v, templateNames),
+                        v.changedBy() == null ? null : authors.get(v.changedBy())))
                 .toList());
         return revision == null ? response : compactedReads.markSnapshot(response, projectId, revision);
     }
@@ -234,8 +244,23 @@ public class PageController {
     private static AssetSummaryView toSummary(
             AssetVersionView v,
             java.util.Map<String, com.acme.staticforge.api.dto.LocaleReleaseView> release,
-            List<ScheduledRefView> scheduled) {
+            List<ScheduledRefView> scheduled,
+            String templateName,
+            String changedByName) {
         return new AssetSummaryView(
-                v.uuid(), v.uid(), v.type().name(), v.displayName(), v.folderPath(), v.validFromRevision(), release, scheduled);
+                v.uuid(), v.uid(), v.type().name(), v.displayName(), v.folderPath(), v.validFromRevision(), release, scheduled,
+                templateName, v.changedAt(), v.changedBy(), changedByName);
+    }
+
+    /** The name of the page's template, looked up once per template for a listing. */
+    private String templateName(long projectId, AssetVersionView v, Map<String, String> cache) {
+        String templateRef = v.payload() != null ? v.payload().path("templateRef").asText() : "";
+        if (templateRef.isBlank()) {
+            return null;
+        }
+        return cache.computeIfAbsent(templateRef, ref -> {
+            TemplateRefView t = pageService.resolveTemplate(projectId, UUID.fromString(ref));
+            return t.displayName() != null ? t.displayName() : t.uid();
+        });
     }
 }

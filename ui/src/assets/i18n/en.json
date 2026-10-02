@@ -2314,7 +2314,12 @@
           "move": "Move",
           "release": "Release",
           "duplicate": "Duplicate",
-          "delete": "Delete"
+          "delete": "Delete",
+          "moveTarget": "Archive",
+          "moved": "{count, plural, one {“{name}” moved} other {# items moved}} to “{target}”.",
+          "movedBack": "Moved back.",
+          "duplicated": "{count, plural, one {# copy} other {# copies}} created next to the originals.",
+          "duplicatedBack": "The copies were removed."
         },
         "table": "Contents of {name}",
         "search": "Filter this folder",
@@ -2325,7 +2330,7 @@
         "newPage": "New page",
         "newFolder": "New folder",
         "release": "Release folder…",
-        "settings": "Folder settings",
+        "settings": "Folder settings…",
         "rename": "Rename",
         "move": "Move…",
         "copyLink": "Copy link",
@@ -2390,7 +2395,8 @@
         "deleteMessage": "The page can be restored from the history.",
         "deleteConfirm": "Delete page",
         "saveNow": "Save now",
-        "saveRefused": "the title is required"
+        "saveRefused": "the title is required",
+        "pageSettings": "Page settings…"
       },
       "history": {
         "projectTitle": "Project history",
@@ -3547,6 +3553,241 @@
           "originHint": "The page that tells the story of this coffee.",
           "tastingNotes": "Brewing tips"
         }
+      },
+      "pages": {
+        "settings": {
+          "pageTitle": "Page settings",
+          "folderTitle": "Folder settings",
+          "cancel": "Cancel",
+          "name": {
+            "heading": "Name",
+            "label": "Display name",
+            "save": "Rename",
+            "rename": "Rename…",
+            "renamed": "Renamed to “{name}”.",
+            "required": "A name is required."
+          },
+          "uid": {
+            "heading": "UID",
+            "label": "New UID",
+            "hint": "Lower case letters, digits and underscores; starts with a letter.",
+            "warning": "Changing the UID changes this page's address and breaks every link that uses the old one.",
+            "apply": "Change UID",
+            "change": "Change UID…",
+            "changed": "UID changed to “{uid}”."
+          },
+          "start": {
+            "heading": "Start page",
+            "hint": "The page that opens at this folder's address.",
+            "choose": "Choose a start page…",
+            "change": "Change…",
+            "remove": "Remove the start page",
+            "removed": "Start page removed."
+          },
+          "nav": {
+            "heading": "Navigation and search",
+            "visible": "Show in navigation",
+            "visibleFolder": "Show this folder in navigation",
+            "label": "Navigation label",
+            "labelHint": "Shown in menus instead of the name. Leave empty to use the name.",
+            "position": "Position",
+            "positionHint": "Where it sits among its siblings, starting at 1.",
+            "noIndex": "Hide from search engines",
+            "noIndexHint": "Leaves the page out of the sitemap; the template adds a robots “noindex” tag."
+          },
+          "facts": {
+            "heading": "Details",
+            "path": "Path",
+            "contains": "Contains",
+            "containsValue": "{pages, plural, one {# page} other {# pages}}, {folders, plural, one {# folder} other {# folders}}",
+            "template": "Template",
+            "address": "Address",
+            "changed": "Last change"
+          }
+        },
+        "issues": {
+          "title": "Issues",
+          "button": "Show the issues of this page",
+          "summary": {
+            "error": "{count, plural, one {# error} other {# errors}}",
+            "warning": "{count, plural, one {# warning} other {# warnings}}",
+            "info": "{count, plural, one {# note} other {# notes}}",
+            "hint": "{count, plural, one {# hint} other {# hints}}"
+          },
+          "scope": {
+            "label": "Checked when",
+            "edit": "Editing",
+            "save": "Saving",
+            "release": "Releasing",
+            "generation": "Building",
+            "legend": "Editing: while you type. Saving: when the page is saved. Releasing: before it goes live. Building: when the site is built. Turn a moment off to hide its findings."
+          },
+          "levels": {
+            "error": "Errors",
+            "warning": "Warnings",
+            "info": "Info",
+            "hint": "Hints"
+          },
+          "kind": {
+            "content": "Content rule",
+            "output": "Output check"
+          },
+          "checkedWhen": "Checked when {when}",
+          "when": {
+            "edit": "editing",
+            "save": "saving",
+            "release": "releasing",
+            "generation": "building"
+          },
+          "fix": {
+            "content": "Fix in the content",
+            "template": "Fix in the template",
+            "either": "Fix in the content or the template"
+          },
+          "jump": "Go to it",
+          "noneShown": "No findings are checked at the moments you turned on.",
+          "empty": {
+            "title": "No issues",
+            "description": "Nothing is wrong with this page. It is checked again whenever you change it."
+          },
+          "targets": {
+            "fields": "Page fields",
+            "s-hero": "Hero",
+            "s-text": "Text",
+            "s-product": "Product teaser",
+            "s-quote": "Quote",
+            "catalog": "Product teasers"
+          },
+          "fields": {
+            "image": "Image",
+            "metaDescription": "Meta description",
+            "teaser": "Teaser",
+            "product": "Product",
+            "title": "Title",
+            "headline": "Headline",
+            "canonical": "Canonical path"
+          },
+          "items": {
+            "altMissing": {
+              "message": "The image has no alternative text."
+            },
+            "metaTooLong": {
+              "message": "The meta description is 172 characters long; search engines show about 160."
+            },
+            "teaserLong": {
+              "message": "The teaser is longer than the recommended 140 characters."
+            },
+            "productUnreleased": {
+              "message": "“Kenya AA” is not released yet and will be left out of the live page."
+            },
+            "titleTag": {
+              "message": "The page has an empty <title>."
+            },
+            "noH1": {
+              "message": "The page has no first-level heading."
+            },
+            "teasersNoLink": {
+              "message": "Two of the teasers have no link target yet."
+            },
+            "htmlLang": {
+              "message": "The <html> element has no lang attribute."
+            },
+            "canonical": {
+              "message": "A canonical path tells search engines which address to list."
+            }
+          },
+          "impact": {
+            "title": "Pages affected by this change",
+            "headline": "Changing this page rebuilds {pages, plural, one {# page} other {# pages}} ({files} files).",
+            "reasons": {
+              "self": "This page",
+              "listed": "Lists this page",
+              "linked": "Links to this page",
+              "navigation": "Shows it in its menu"
+            }
+          }
+        },
+        "palette": {
+          "title": "Add a section",
+          "after": "Insert after: {name}",
+          "atStart": "Insert at the start of the body",
+          "filter": "Filter the templates",
+          "categories": "Categories",
+          "templates": "Section templates",
+          "category": {
+            "all": "All",
+            "headers": "Headers",
+            "content": "Content",
+            "commerce": "Commerce",
+            "social": "Social"
+          },
+          "items": {
+            "hero": {
+              "name": "Hero",
+              "description": "A large headline with an image and a button."
+            },
+            "banner": {
+              "name": "Banner",
+              "description": "A slim announcement strip."
+            },
+            "text": {
+              "name": "Text",
+              "description": "Running text with a heading."
+            },
+            "columns": {
+              "name": "Two columns",
+              "description": "Text and a picture side by side."
+            },
+            "gallery": {
+              "name": "Image gallery",
+              "description": "A grid of pictures with captions."
+            },
+            "faq": {
+              "name": "Questions and answers",
+              "description": "Collapsible questions with answers."
+            },
+            "product": {
+              "name": "Product teaser",
+              "description": "A product with its price and a link."
+            },
+            "tasting": {
+              "name": "Tasting note",
+              "description": "Flavours and brewing advice for a coffee."
+            },
+            "quote": {
+              "name": "Quote",
+              "description": "A pulled quote with its source."
+            },
+            "newsletter": {
+              "name": "Newsletter sign-up",
+              "description": "A short form to subscribe."
+            }
+          },
+          "full": "Maximum of {max} reached",
+          "empty": {
+            "title": "No template matches “{query}”",
+            "description": "Try another word or pick All categories.",
+            "clear": "Clear filter"
+          },
+          "hint": "Arrow keys choose, Enter inserts, Esc closes.",
+          "cancel": "Cancel",
+          "inserted": "Inserted {name} at position {position}.",
+          "insertedToast": "“{name}” was added.",
+          "insertAfter": "Insert a section after {name}"
+        },
+        "empty": {
+          "title": "No pages yet",
+          "developer": "A page is made from a page template, and this project has none. Create one in Templates, then come back to add pages.",
+          "editor": "A page is made from a page template, and this project has none yet. Ask a developer to create one, then you can add pages here.",
+          "goTemplates": "Go to Templates",
+          "createFolder": "Create a folder"
+        },
+        "preview": {
+          "title": "This page can't be previewed yet",
+          "description": "The preview needs the required fields below. Fill them in and it appears here.",
+          "goTo": "Go to {field}",
+          "missing": "Missing before the preview works"
+        }
       }
     },
     "forms": {
@@ -4474,6 +4715,332 @@
       "anchorPlaceholder": "section-name",
       "mail": "E-mail address",
       "mailPlaceholder": "name@example.com"
+    }
+  },
+  "pages": {
+    "editor": {
+      "title": "Page",
+      "loading": "Loading page…",
+      "loadError": "Could not load page",
+      "outline": {
+        "heading": "Outline",
+        "fields": "Page fields",
+        "hint": "Alt+↑/↓ moves the selected section.",
+        "moved": "{name} moved to position {position} of {count}."
+      },
+      "header": {
+        "issues": "Issues",
+        "issuesTooltip": "Show what is wrong with this page",
+        "settings": "Page settings",
+        "preview": "Preview",
+        "previewTooltip": "Show or hide the preview"
+      },
+      "status": {
+        "revision": "Viewing revision {revision}",
+        "archived": "Archived — read-only"
+      },
+      "menu": {
+        "saveNow": "Save now",
+        "duplicate": "Duplicate",
+        "rename": "Rename…",
+        "copyLink": "Copy link",
+        "delete": "Delete…",
+        "settings": "Page settings…"
+      },
+      "toast": {
+        "duplicated": "Created “{name}”.",
+        "duplicateFailed": "Could not duplicate the page — try again in a moment.",
+        "linkCopied": "Link copied.",
+        "linkFailed": "Could not copy the link."
+      },
+      "fields": {
+        "heading": "Page fields"
+      },
+      "body": {
+        "addSection": "Add section",
+        "empty": "No sections yet.",
+        "insertAfter": "Add a section after {name}",
+        "insertAtStart": "Add a section at the start of {body}"
+      },
+      "section": {
+        "actions": "Actions for {name}",
+        "moveUp": "Move up",
+        "moveDown": "Move down",
+        "remove": "Remove",
+        "toggle": "Show or hide the section"
+      },
+      "release": {
+        "statusLabel": "Status per language",
+        "release": "Release…",
+        "schedule": "Schedule…",
+        "more": "More release actions for {name}",
+        "unpublish": "Unpublish…",
+        "discard": "Discard changes…",
+        "nothingToRelease": "There is nothing to release.",
+        "nothingToDiscard": "There are no changes to discard."
+      }
+    },
+    "settings": {
+      "title": "Page settings",
+      "cancel": "Cancel",
+      "name": {
+        "heading": "Name",
+        "label": "Display name",
+        "save": "Rename",
+        "rename": "Rename…",
+        "renamed": "Renamed “{old}” to “{name}”.",
+        "required": "A name is required.",
+        "failed": "Could not rename page — try again in a moment."
+      },
+      "uid": {
+        "heading": "UID"
+      },
+      "nav": {
+        "heading": "Navigation and search",
+        "visible": "Show in navigation",
+        "label": "Navigation label",
+        "labelHint": "Shown in menus instead of the name. Leave empty to use the name.",
+        "position": "Position",
+        "positionHint": "Where it sits among its siblings.",
+        "noIndex": "Hide from search engines",
+        "noIndexHint": "Leaves the page out of the sitemap; the template adds a robots “noindex” tag."
+      },
+      "facts": {
+        "heading": "Details",
+        "template": "Template",
+        "address": "Folder",
+        "changed": "Revision"
+      },
+      "readOnly": "This page is read-only."
+    },
+    "issues": {
+      "title": "Issues",
+      "button": "Show the issues of this page",
+      "checking": "Checking…",
+      "unavailable": "Checks unavailable — the draft could not be checked right now. Editing is not affected.",
+      "retry": "Check again",
+      "checkedAt": "checked at {time}",
+      "publishedNote": "The preview shows the published page; these checks cover the draft.",
+      "summary": {
+        "error": "{count, plural, one {# error} other {# errors}}",
+        "warning": "{count, plural, one {# warning} other {# warnings}}",
+        "info": "{count, plural, one {# note} other {# notes}}",
+        "hint": "{count, plural, one {# hint} other {# hints}}"
+      },
+      "scope": {
+        "label": "Checked when",
+        "edit": "Editing",
+        "save": "Saving",
+        "release": "Releasing",
+        "generation": "Building",
+        "legend": "Editing: while you type. Saving: when the page is saved. Releasing: before it goes live. Building: when the site is built. Turn a moment off to hide its findings."
+      },
+      "levels": {
+        "error": "Errors",
+        "warning": "Warnings",
+        "info": "Info",
+        "hint": "Hints"
+      },
+      "kind": {
+        "content": "Content rule",
+        "output": "Output check"
+      },
+      "checkedWhen": "Checked when {when}",
+      "when": {
+        "edit": "editing",
+        "save": "saving",
+        "release": "releasing",
+        "generation": "building"
+      },
+      "fix": {
+        "content": "Fix in the content",
+        "template": "Fix in the template",
+        "either": "Fix in the content or the template"
+      },
+      "jump": "Go to it",
+      "noneShown": "No findings are checked at the moments you turned on.",
+      "empty": {
+        "title": "No issues",
+        "description": "Nothing is wrong with this page. It is checked again whenever you change it."
+      },
+      "where": {
+        "page": "Page fields"
+      },
+      "skipped": "Not fully checked on a draft, a build checks them: {rules}.",
+      "impact": {
+        "title": "Pages affected by this change"
+      }
+    },
+    "palette": {
+      "title": "Add a section",
+      "after": "Insert after: {name}",
+      "atStart": "Insert at the start of {body}",
+      "atEnd": "Insert at the end of {body}",
+      "filter": "Filter the templates",
+      "categories": "Categories",
+      "templates": "Section templates",
+      "all": "All",
+      "other": "Other",
+      "empty": {
+        "title": "No template matches “{query}”",
+        "description": "Try another word or pick All.",
+        "clear": "Clear filter",
+        "none": "This body allows no section templates yet."
+      },
+      "hint": "Arrow keys choose, Enter inserts, Esc closes.",
+      "cancel": "Cancel",
+      "added": "Section added",
+      "addFailed": "Could not add section — someone may have edited this page, try reloading it."
+    },
+    "preview": {
+      "title": "This page can't be previewed yet",
+      "description": "The preview needs the required fields below. Fill them in and it appears here.",
+      "goTo": "Go to {field}",
+      "missing": "Missing before the preview works",
+      "pane": "Preview",
+      "resize": "Resize the preview"
+    },
+    "tree": {
+      "title": "Pages",
+      "new": "New",
+      "newLabel": "New page or folder",
+      "newPage": "Page",
+      "newFolder": "Folder",
+      "newPageHere": "New page",
+      "resize": "Resize the page tree",
+      "favorites": "Favorites",
+      "duplicate": "Duplicate",
+      "nameTaken": "A page or folder with this name already exists here.",
+      "status": {
+        "released": "Released",
+        "changed": "Changed",
+        "draft": "Draft",
+        "scheduled": "Scheduled",
+        "unpublished": "Unpublished",
+        "deletion": "Deletion pending"
+      },
+      "toast": {
+        "folderCreated": "Folder “{name}” created.",
+        "folderCreateFailed": "Could not create the folder — try again in a moment.",
+        "pageCreated": "Page “{name}” created.",
+        "pageCreateFailed": "Could not create the page — check that a template is selected and try again.",
+        "renamed": "Renamed “{from}” to “{to}”.",
+        "renameFailed": "Could not rename “{name}” — try again in a moment.",
+        "duplicated": "Duplicated “{name}”.",
+        "duplicateFailed": "Could not duplicate “{name}” — try again in a moment.",
+        "moveFailed": "Could not move — the target may be inside what you are moving.",
+        "copyFailed": "Could not copy “{name}” — try again in a moment.",
+        "deleteFailed": "Could not delete “{name}” — try again in a moment.",
+        "loadFailed": "Could not read the pages — try again in a moment.",
+        "onlinePages": "Deleted pages stay online until you release the deletion."
+      },
+      "delete": {
+        "folderMessage": "The folder and everything inside it is deleted."
+      },
+      "noTemplates": "Create a page template first"
+    },
+    "empty": {
+      "title": "No pages yet",
+      "developer": "A page is made from a page template, and this project has none. Create one in Templates, then come back to add pages.",
+      "editor": "A page is made from a page template, and this project has none yet. Ask a developer to create one, then you can add pages here.",
+      "templates": "A page is made from a page template. Add your first page, or start with a folder to organise the site.",
+      "goTemplates": "Go to Templates",
+      "createFolder": "Create a folder",
+      "createPage": "Create a page"
+    },
+    "favorites": {
+      "title": "Favorites",
+      "table": "Favorites",
+      "search": "Filter favorites",
+      "empty": "No favorites yet",
+      "emptyHint": "Star a page, folder or record to find it here.",
+      "columns": {
+        "name": "Name",
+        "type": "Type",
+        "location": "Location"
+      }
+    },
+    "folder": {
+      "root": "Pages",
+      "table": "Contents of {{name}}",
+      "search": "Search this folder",
+      "loadFailed": "The folder could not be loaded.",
+      "empty": "This folder is empty",
+      "emptyHint": "Create a page or a folder to get started.",
+      "folderType": "Folder",
+      "neverReleased": "Never released",
+      "newFolder": "New folder",
+      "newPage": "New page",
+      "release": "Release folder…",
+      "linkCopied": "Link copied.",
+      "linkFailed": "The link could not be copied.",
+      "pageCreated": "Page created",
+      "pageFailed": "Could not create page — check a template is selected and try again.",
+      "folderCreated": "Folder created",
+      "folderFailed": "Could not create folder — a folder with that name may already exist here.",
+      "columns": {
+        "name": "Name",
+        "template": "Template",
+        "status": "Status",
+        "modified": "Modified",
+        "released": "Released",
+        "path": "URL"
+      },
+      "menu": {
+        "settings": "Folder settings…",
+        "rename": "Rename folder",
+        "move": "Move…",
+        "copyLink": "Copy link",
+        "delete": "Delete folder"
+      },
+      "settings": {
+        "title": "Folder settings",
+        "name": "Name",
+        "nameLabel": "Folder name",
+        "nameRequired": "A folder needs a name.",
+        "save": "Save",
+        "rename": "Rename folder",
+        "renamed": "Renamed “{{from}}” to “{{to}}”.",
+        "renameFailed": "Could not rename the folder.",
+        "uid": "UID",
+        "addresses": "Addresses",
+        "facts": "Details",
+        "path": "Path",
+        "contains": "Contains",
+        "containsValue": "{{pages}} page(s), {{folders}} sub-folder(s)"
+      }
+    },
+    "bulk": {
+      "move": "Move…",
+      "release": "Release…",
+      "duplicate": "Duplicate",
+      "delete": "Delete",
+      "nothingToRelease": "Nothing here is waiting to be released.",
+      "moveFailed": "Could not move everything.",
+      "moved": "Moved {{count}} items.",
+      "movedOne": "Moved “{{name}}”.",
+      "foldersNotDuplicated": "Folders cannot be duplicated — select pages.",
+      "duplicateFailed": "Could not duplicate everything.",
+      "duplicated": "Duplicated {{count}} pages.",
+      "duplicatedOne": "Duplicated “{{name}}”.",
+      "duplicatedSkipped": "Duplicated {{count}} page(s); folders are not duplicated.",
+      "deleteTitle": "Delete {{count}} items?",
+      "deleteTitleOne": "Delete “{{name}}”?",
+      "deleteMessage": "The pages are deleted. Undo is offered afterwards.",
+      "deleteMessageFolders": "Folders are deleted with everything inside them. Undo is offered afterwards.",
+      "deleteConfirm": "Delete {{count}} items",
+      "deleteConfirmOne": "Delete",
+      "deleted": "Deleted {{count}} items.",
+      "deletedOne": "Deleted “{{name}}”.",
+      "deletedFolder": "Deleted “{{name}}” and everything inside it.",
+      "deleteFailed": "Could not delete everything.",
+      "moveDialog": {
+        "title": "Move {{count}} item(s) to…",
+        "lead": "Choose the folder to move the selection into.",
+        "tree": "Folders",
+        "choose": "Move here",
+        "blocked": "Can't move into itself"
+      }
     }
   }
 }

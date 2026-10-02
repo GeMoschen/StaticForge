@@ -75,18 +75,6 @@
     "colors": 3,
     "zIndex": 0
   },
-  "src/app/features/pages/folder-node.component.scss": {
-    "colors": 1,
-    "zIndex": 0
-  },
-  "src/app/features/pages/page-editor-header.component.scss": {
-    "colors": 2,
-    "zIndex": 1
-  },
-  "src/app/features/pages/section-palette.component.scss": {
-    "colors": 2,
-    "zIndex": 0
-  },
   "src/app/features/preview/preview.frame.component.scss": {
     "colors": 2,
     "zIndex": 1

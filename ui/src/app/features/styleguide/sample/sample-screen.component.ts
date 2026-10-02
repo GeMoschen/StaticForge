@@ -72,6 +72,9 @@ import { SampleHistoryDrawerComponent } from './history/sample-history-drawer.co
 import { SampleTimeTravelBannerComponent } from './history/sample-time-travel-banner.component';
 import { revisionById } from './history/history-data';
 import { SampleNavigationAreaComponent } from './navigation/sample-navigation-area.component';
+import { SamplePagesEmptyComponent } from './pages/sample-pages-empty.component';
+import { SampleIssuesDrawerComponent } from './pages/sample-issues-drawer.component';
+import { SamplePageSettingsComponent } from './pages/sample-page-settings.component';
 import { SampleAccountAreaComponent } from './account/sample-account-area.component';
 import { SampleAdminAreaComponent } from './admin/sample-admin-area.component';
 import { SampleAuthAreaComponent } from './auth/sample-auth-area.component';
@@ -89,7 +92,7 @@ function oneOf<T extends string>(value: string | null, allowed: readonly T[]): T
 }
 
 /** The query parameters the screen owns; every other parameter belongs to an area and is kept as it is. */
-const OWN_PARAMS = ['area', 'view', 'template', 'tab', 'channel', 'focus', 'dev', 'rail', 'theme', 'density', 'palette', 'hdrawer', 'travel', 'cmdk', 'sheet', 'sheetq'];
+const OWN_PARAMS = ['area', 'view', 'template', 'tab', 'channel', 'focus', 'dev', 'rail', 'theme', 'density', 'palette', 'hdrawer', 'travel', 'cmdk', 'sheet', 'sheetq', 'psettings', 'issues', 'empty', 'preview', 'secpalette'];
 
 /**
  * The M35.9 sample screen: a clickable prototype of the new frame (dark top bar, rail) around the working areas —
@@ -112,6 +115,9 @@ const OWN_PARAMS = ['area', 'view', 'template', 'tab', 'channel', 'focus', 'dev'
   selector: 'sf-sample-screen',
   standalone: true,
   imports: [
+    SampleIssuesDrawerComponent,
+    SamplePageSettingsComponent,
+    SamplePagesEmptyComponent,
     SampleAccountAreaComponent,
     SampleAdminAreaComponent,
     SampleAuthAreaComponent,
@@ -172,6 +178,9 @@ export class SampleScreenComponent {
     this.state.t('status.released'); // tracks the language file
     const favorites = this.state.favorites();
     const label = this.state.t('favorites.node');
+    if (this.state.emptyProject()) {
+      return () => [];
+    }
     return (parent) => {
       if (parent?.id === FAVORITES_NODE) {
         return favoriteNodes<SampleEntry>(favorites);
@@ -399,6 +408,21 @@ export class SampleScreenComponent {
     if (palette) {
       this.state.palette.set(palette);
     }
+    const pageSettings = oneOf(params.get('psettings'), ['page', 'folder'] as const);
+    if (pageSettings) {
+      this.state.pageSettings.set(pageSettings);
+    }
+    const issues = params.get('issues');
+    if (issues === '1' || issues === 'empty') {
+      this.state.issues.set(true);
+      this.state.issuesReview.set(issues === 'empty' ? 'empty' : 'live');
+    }
+    if (params.get('empty') === '1') {
+      this.state.emptyProject.set(true);
+    }
+    if (params.get('preview') === 'incomplete') {
+      this.state.previewIncomplete.set(true);
+    }
     const drawer = oneOf(params.get('hdrawer'), ['page', 'record', 'project'] as const);
     if (drawer) {
       this.state.history.set(drawer);
@@ -451,6 +475,18 @@ export class SampleScreenComponent {
     }
     if (this.state.history()) {
       query.set('hdrawer', this.state.history()!);
+    }
+    if (this.state.pageSettings()) {
+      query.set('psettings', this.state.pageSettings()!);
+    }
+    if (this.state.issues()) {
+      query.set('issues', this.state.issuesReview() === 'empty' ? 'empty' : '1');
+    }
+    if (this.state.emptyProject()) {
+      query.set('empty', '1');
+    }
+    if (this.state.previewIncomplete()) {
+      query.set('preview', 'incomplete');
     }
     if (this.state.travel() !== null) {
       query.set('travel', String(this.state.travel()));

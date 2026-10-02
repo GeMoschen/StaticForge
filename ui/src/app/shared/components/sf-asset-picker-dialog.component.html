@@ -123,7 +123,7 @@
                   (dblclick)="pick(item)"
                 >
                   @if (item.type === 'MEDIA') {
-                    <sf-media-thumb class="picker__thumb" [projectKey]="projectKey()" [uuid]="item.uuid!" />
+                    <sf-media-thumb class="picker__thumb" [projectKey]="projectKey()" [uuid]="item.uuid!" [fileName]="item.displayName ?? item.uid" />
                   } @else {
                     <span class="picker__icon"><sf-icon [name]="iconOf(item)" /></span>
                   }

@@ -1,6 +1,6 @@
 ---
 id: M35.18
-status: todo
+status: done
 depends: [M35.11, M35.12, M35.13, M35.14, M35.15, M35.17]
 epic: m35-ui-ux-overhaul
 feature: screens
@@ -68,9 +68,9 @@ and list + detail panes are bordered cards with the splitter handle centred in a
 
 ## Acceptance criteria
 
-- [ ] Screen definition of done met (README).
-- [ ] Bulk actions in the folder table, each with undo where decision 10 applies.
-- [ ] Vitest specs updated. `npx vitest run` and `npx ng build` green.
+- [x] Screen definition of done met (README).
+- [x] Bulk actions in the folder table, each with undo where decision 10 applies.
+- [x] Vitest specs updated. `npx vitest run` and `npx ng build` green.
 
 ## Notes (M35.9 / M35.10)
 
@@ -91,3 +91,28 @@ and list + detail panes are bordered cards with the splitter handle centred in a
   not store-bound: the node lists them from every store.
 - Put the open item in the URL (`?asset=` / `?folder=`, or the route's UUID) so it is recorded as a recent.
 
+
+## Review (2026-10-02)
+
+Design signed off in the sample first (gate round 8, decisions 82–89, plus rounds 1–2, 5 and 6). Built as signed off; deviations below.
+
+- **Area shell and tree** (`pages-list`, `pages-tree.util.ts`, `core/assets/favorite-tree.service.ts`, `features/favorites/`): `sf-tree` of folders and pages
+  in a splitter with the folder view / page editor beside it; filter, one *New* menu, status badges with text, UIDs only in developer mode, rename
+  (F2), delete (confirm, typed word from 25 items, Undo), cut/copy/paste, duplicate, move by drag and keyboard (Undo), the pinned *Favorites* node
+  and list (favorite folders expand lazily, any store), ☆ in the context menu, the empty-project state.
+- **Folder view** (`folder-view`, `folder-settings-drawer`, `folder-move-dialog`): `sf-page-header` with folder breadcrumb, `sf-data-table`
+  (`twoLine`, status per language, modified, released, URL in developer mode), bulk Move / Release / Duplicate / Delete with Undo, Folder
+  settings drawer. Backend: `AssetSummaryView` carries `templateName`, `changedAt`, `changedBy(Name)`.
+- **Page editor:** header (breadcrumb, h1, ☆, save status, Issues with count, Page settings, Preview, release group as the header action
+  group, ⋮ menu), Page settings drawer, outline with finding markers, single scrolling form (M35.17), collapsible preview in a splitter
+  with the incomplete-page state, Issues drawer (levels, "Checked when" filter, *Pages affected by this change*), Section palette dialog.
+- **Cross-area fix:** an import cycle in `features/forms` made every content form render blank in the dev bundle (vitest and `ngc` cannot
+  see it); `field-diff.component.ts` now imports through the `forms` barrel.
+- **Checks:** 292 test files / 2,700 tests, `ng build` and `npm run lint` green (baselines updated); the Pages area and a page editor checked
+  in headless Chrome against the dev backend (no console errors).
+- **Deviations:** no start-page mark/picker (pages folders have no start-page field in the backend — needs backend work); folder rows show
+  no template/modified (the folder tree does not carry them); the URL column is derived from folder path + UID; Duplicate skips folders;
+  ⋮ has no *Move…* / F2 on the page (needs a folder picker and a shortcut key); no History button in the page header (the top bar has it);
+  palette categories are the template folders, no max/thumbnail data in the API; Issues and Page settings close each other.
+- **Open:** Playwright journeys `m21`, `m27`, `m28` still use the old tree and title-popover DOM; the section service's toast strings are
+  English; `pages-tree-refresh.service.ts` stays until folder-view/drawers stop using it.

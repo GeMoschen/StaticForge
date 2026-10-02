@@ -1,68 +1,76 @@
-<header class="page-editor__top">
-  @if (editor.page(); as p) {
-    <div class="page-editor__meta-anchor">
-      <button
-        type="button"
-        class="page-editor__title page-editor__title-button"
-        (click)="toggleMeta()"
-        aria-haspopup="true"
-        [attr.aria-expanded]="metaOpen()"
-      >
-        {{ p.displayName ?? p.uid }}
-      </button>
-      @if (metaOpen()) {
-        <div class="page-editor__meta-popover">
-          <section class="page-editor__meta-section">
-            <h3 class="page-editor__meta-title">Display name</h3>
-            @if (editingDisplayName()) {
-              <div class="page-editor__meta-row">
-                <input
-                  class="page-editor__meta-input"
-                  type="text"
-                  [value]="displayNameDraft()"
-                  (input)="onDisplayNameInput($event)"
-                  (keydown.enter)="saveDisplayName()"
-                  (keydown.escape)="cancelEditDisplayName()"
-                  autofocus
-                />
-                <sf-button variant="primary" [disabled]="savingDisplayName()" (click)="saveDisplayName()">Save</sf-button>
-                <sf-button variant="ghost" (click)="cancelEditDisplayName()">Cancel</sf-button>
-              </div>
-            } @else {
-              <div class="page-editor__meta-row">
-                <span class="page-editor__meta-value">{{ p.displayName ?? '—' }}</span>
-                <sf-button variant="ghost" (click)="startEditDisplayName()">Rename</sf-button>
-              </div>
-            }
-          </section>
-          <section class="page-editor__meta-section">
-            <h3 class="page-editor__meta-title">UID</h3>
-            <sf-uid-rename
-              [projectKey]="editor.projectKey()"
-              [uuid]="editor.uuid()"
-              [uid]="p.uid ?? ''"
-              [undoable]="true"
-              (uidChanged)="onUidChanged($event)"
-            />
-          </section>
-          <section class="page-editor__meta-section">
-            <h3 class="page-editor__meta-title">Navigation and search</h3>
-            <sf-page-nav-settings [nav]="navOf(p)" [disabled]="editor.readOnly()" (navChange)="onNavChange($event)" />
-          </section>
-          <div class="page-editor__meta-footer">
-            <sf-button variant="ghost" (click)="closeMeta()">Close</sf-button>
-          </div>
-        </div>
+<div class="page-editor__head">
+  <sf-page-header [title]="title()" [secondaryActions]="moreActions()" (secondaryAction)="onMore($event)">
+    <span sfPageHeaderStatus class="page-editor__title-extras">
+      @if (editor.page(); as p) {
+        <sf-asset-favorite type="PAGE" [uuid]="editor.uuid()" [name]="p.displayName ?? p.uid" [folderPath]="p.folderPath" />
       }
-    </div>
-    <sf-asset-favorite type="PAGE" [uuid]="editor.uuid()" [name]="p.displayName ?? p.uid" [folderPath]="p.folderPath" />
+      @if (editor.fields.translationSummary(); as summary) {
+        <span class="page-editor__translation" aria-live="polite">{{ summary }}</span>
+      }
+    </span>
+    <ng-container sfPageHeaderActions>
+      @if (readOnlyLabel()) {
+        <span class="page-editor__status" aria-live="polite">{{ readOnlyLabel() }}</span>
+      } @else {
+        <sf-save-status class="page-editor__status" [state]="status().state" [savedAt]="savedAt()" [errorCount]="status().errorCount" />
+      }
+      <sf-button
+        variant="secondary"
+        icon="fact_check"
+        data-sf-issues-button
+        [aria-expanded]="editor.issuesOpen()"
+        [tooltip]="'pages.editor.header.issuesTooltip' | transloco"
+        (click)="editor.toggleIssues()"
+      >
+        {{ 'pages.editor.header.issues' | transloco }}
+        @if (editor.issueSummary().count > 0) {
+          <sf-badge [tone]="editor.issueSummary().errors > 0 ? 'danger' : 'warning'" [label]="'' + editor.issueSummary().count" />
+        }
+      </sf-button>
+      <sf-button
+        variant="ghost"
+        icon="tune"
+        [aria-expanded]="editor.settingsOpen()"
+        [label]="'pages.editor.header.settings' | transloco"
+        (click)="editor.toggleSettings()"
+      />
+      <sf-button
+        variant="secondary"
+        icon="visibility"
+        [aria-pressed]="editor.previewOpen()"
+        [tooltip]="'pages.editor.header.previewTooltip' | transloco"
+        (click)="editor.setPreviewOpen(!editor.previewOpen())"
+        >{{ 'pages.editor.header.preview' | transloco }}</sf-button
+      >
+      <sf-release-bar
+        class="page-editor__release"
+        layout="header"
+        [projectKey]="editor.projectKey()"
+        [assetUuid]="editor.uuid()"
+        [refreshKey]="editor.releaseRefresh()"
+        (changed)="editor.onReleaseChanged($event)"
+      />
+    </ng-container>
+  </sf-page-header>
+
+  @if (developerMode() && editor.page(); as p) {
+    <dl class="page-editor__meta">
+      <div class="page-editor__meta-item">
+        <dt>{{ 'pages.settings.facts.template' | transloco }}</dt>
+        <dd>{{ p.template?.displayName ?? p.template?.uid }}</dd>
+      </div>
+      <div class="page-editor__meta-item">
+        <dt>{{ 'pages.settings.uid.heading' | transloco }}</dt>
+        <dd><code>{{ p.uid }}</code></dd>
+      </div>
+      <div class="page-editor__meta-item">
+        <dt>{{ 'pages.settings.facts.address' | transloco }}</dt>
+        <dd><code>{{ p.folderPath }}</code></dd>
+      </div>
+    </dl>
   }
-  @if (editor.fields.translationSummary(); as summary) {
-    <span class="page-editor__translation" aria-live="polite">{{ summary }}</span>
-  }
-  @if (readOnlyLabel()) {
-    <span class="page-editor__status" aria-live="polite">{{ readOnlyLabel() }}</span>
-  } @else {
-    <sf-save-status class="page-editor__status" [state]="status().state" [savedAt]="savedAt()" [errorCount]="status().errorCount" />
-  }
-</header>
+</div>
+
+@if (deleting() && summary(); as page) {
+  <sf-page-delete-dialog [projectKey]="editor.projectKey()" [page]="page" (deleted)="onDeleted()" (closed)="deleting.set(false)" />
+}

@@ -1,21 +1,54 @@
-import { ChangeDetectionStrategy, Component, inject, input, viewChild } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, viewChild } from '@angular/core';
+import { TranslocoPipe } from '@jsverse/transloco';
+import { SfEmptyStateComponent } from '../../shared/components/sf-empty-state.component';
+import { SfIconComponent } from '../../shared/components/sf-icon.component';
 import { SfPreviewFrameComponent } from '../preview';
+import { PageEditorFocusService } from './page-editor-focus.service';
 import { PageEditorStore } from './page-editor.store';
+import { issueTarget, type IssueTarget } from './page-issues.util';
 
-/** The draggable divider and the preview beside the editor's centre pane. */
+/** A field the preview still needs, and where it is. */
+interface MissingField {
+  readonly key: string;
+  readonly label: string;
+  readonly target: IssueTarget;
+}
+
+/**
+ * The preview beside the form (M35.18): the preview frame — or, while the page lacks what a preview needs (its required
+ * fields), an empty state that says so, lists what is missing and takes the editor to the first of them. It fills the
+ * end pane of the editor's splitter, which owns the size.
+ */
 @Component({
   selector: 'sf-page-editor-preview',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [SfPreviewFrameComponent],
+  imports: [SfEmptyStateComponent, SfIconComponent, SfPreviewFrameComponent, TranslocoPipe],
   templateUrl: './page-editor-preview.component.html',
   styleUrl: './page-editor-preview.component.scss',
 })
 export class PageEditorPreviewComponent {
   protected readonly editor = inject(PageEditorStore);
-  /** The element the split is measured against (the editor's main row). */
-  readonly container = input.required<HTMLElement>();
+  private readonly focus = inject(PageEditorFocusService);
   private readonly frame = viewChild(SfPreviewFrameComponent);
+
+  /** The required fields that are still empty: what the preview waits for. */
+  protected readonly missing = computed<MissingField[]>(() => {
+    const seen = new Set<string>();
+    const fields: MissingField[] = [];
+    for (const issue of this.editor.shownIssues()) {
+      if (issue.severity !== 'ERROR' || issue.kind !== 'COMPLETENESS') {
+        continue;
+      }
+      const target = issueTarget(issue);
+      const label = this.focus.describe(target) ?? issue.message ?? issue.path ?? '';
+      if (label !== '' && !seen.has(label)) {
+        seen.add(label);
+        fields.push({ key: issue.path ?? label, label, target });
+      }
+    }
+    return fields;
+  });
 
   /** Outlines a section — or an element of it — in the preview. */
   focusSection(instanceId: string | null, selector: string | null = null): void {
@@ -30,20 +63,10 @@ export class PageEditorPreviewComponent {
     void instanceId;
   }
 
-  protected onDividerPointerDown(event: PointerEvent): void {
-    event.preventDefault();
-    const el = this.container();
-    const move = (e: PointerEvent) => {
-      const rect = el.getBoundingClientRect();
-      const ratio = (e.clientX - rect.left) / rect.width;
-      this.editor.splitRatio.set(Math.min(0.85, Math.max(0.15, ratio)));
-    };
-    const up = () => {
-      this.editor.persistSplitRatio();
-      document.removeEventListener('pointermove', move);
-      document.removeEventListener('pointerup', up);
-    };
-    document.addEventListener('pointermove', move);
-    document.addEventListener('pointerup', up);
+  protected jumpToMissing(): void {
+    const first = this.missing()[0];
+    if (first) {
+      this.focus.goTo(first.target);
+    }
   }
 }

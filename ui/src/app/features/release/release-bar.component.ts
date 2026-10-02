@@ -10,6 +10,7 @@ import {
   signal,
   untracked,
 } from '@angular/core';
+import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
 import type { Subscription } from 'rxjs';
 import { ApiClient } from '../../core/api/api.client';
 import type { components } from '../../core/api/generated/schema.d.ts';
@@ -17,6 +18,10 @@ import { EditingLocaleStore } from '../../core/project/editing-locale.store';
 import { LocalesStore } from '../../core/project/locales.store';
 import { RouterLink } from '@angular/router';
 import { ProjectMembersStore } from '../../core/project/project-members.store';
+import { SfStatusComponent } from '../../shared/components/display/sf-status.component';
+import { SfMenuComponent } from '../../shared/components/menu/sf-menu.component';
+import type { SfMenuItem } from '../../shared/components/menu/sf-menu-item';
+import { SfButtonComponent } from '../../shared/components/sf-button.component';
 import { SfIconComponent } from '../../shared/components/sf-icon.component';
 import { ScheduleDialogComponent } from '../schedules/schedule-dialog.component';
 import type { ScheduleType } from '../schedules/schedule.util';
@@ -43,7 +48,8 @@ type AssetDetailView = components['schemas']['AssetDetailView'];
   selector: 'sf-release-bar',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterLink, SfIconComponent, ReleaseBadgeComponent, ReleaseDialogComponent, ScheduleDialogComponent],
+  imports: [RouterLink, SfButtonComponent, SfIconComponent, SfMenuComponent, SfStatusComponent, TranslocoPipe, ReleaseBadgeComponent, ReleaseDialogComponent, ScheduleDialogComponent],
+  host: { '[class.is-header]': "layout() === 'header'" },
   templateUrl: './release-bar.component.html',
   styleUrl: './release-bar.component.scss',
 })
@@ -54,11 +60,18 @@ export class ReleaseBarComponent implements OnDestroy {
   private readonly events = inject(ReleaseEventsStore);
   protected readonly permissions = inject(ProjectPermissionsStore);
   private readonly members = inject(ProjectMembersStore);
+  private readonly transloco = inject(TranslocoService);
 
   readonly projectKey = input.required<string>();
   readonly assetUuid = input.required<string | null | undefined>();
   /** Changes whenever the editor saved (its revision): the bar re-reads the status. Never sent to the server. */
   readonly refreshKey = input<unknown>(null);
+  /**
+   * `bar`: the region at the top of an editor. `header`: the release action group of a page header (M35.18, decision 34) —
+   * per-language status pills, a primary **Release…**, **Schedule…** and, in ⋮, Unpublish and Discard changes — without
+   * the region around it; the dialogs and the rules are the same.
+   */
+  readonly layout = input<'bar' | 'header'>('bar');
 
   /** A release action succeeded. After `discard` the draft changed underneath the editor: it reloads. */
   readonly changed = output<ReleaseMode>();
@@ -127,6 +140,55 @@ export class ReleaseBarComponent implements OnDestroy {
       return { id: ref.actionId, text: `${scheduledTypeLabel(ref.type)} scheduled for ${when}${owner}${locale}` };
     }),
   );
+
+  /** The header layout's status pills: one per language, or the shared status for a project without languages. */
+  protected readonly pills = computed(() => {
+    const entries = localeStatuses(this.subject()?.release);
+    return entries.map((entry) => ({
+      key: entry.key,
+      tag: entry.key ? localeTag(entry.key) : '',
+      icon: statusIcon(entry.status),
+      tone: statusTone(entry.status),
+      status: statusLabel(entry.status),
+      title: `${entry.key ? this.locales.labelOf(entry.key) : 'All languages'}: ${statusLabel(entry.status)}`,
+    }));
+  });
+
+  /** The status tone of the design system for a release status (`published`, `changed`, `new`, `deletion-pending`). */
+  protected pillTone(tone: string): 'success' | 'warning' | 'info' | 'danger' | 'neutral' {
+    switch (tone) {
+      case 'published':
+      case 'released':
+        return 'success';
+      case 'changed':
+        return 'warning';
+      case 'new':
+        return 'info';
+      case 'deletion-pending':
+        return 'danger';
+      default:
+        return 'neutral';
+    }
+  }
+
+  /** Unpublish and Discard changes, in the header layout's ⋮ menu. */
+  protected readonly moreItems = computed<SfMenuItem[]>(() => [
+    {
+      id: 'unpublish',
+      label: this.transloco.translate('pages.editor.release.unpublish'),
+      icon: 'cloud_off',
+      disabled: !this.canUnpublishAny(),
+      action: () => this.open('unpublish'),
+    },
+    {
+      id: 'discard',
+      label: this.transloco.translate('pages.editor.release.discard'),
+      icon: 'undo',
+      danger: true,
+      disabledReason: this.canDiscardAny() ? undefined : this.transloco.translate('pages.editor.release.nothingToDiscard'),
+      action: () => this.open('discard'),
+    },
+  ]);
 
   protected readonly canReleaseAny = computed(() => this.choices().release.length > 0);
   protected readonly canUnpublishAny = computed(() => this.choices().unpublish.length > 0);

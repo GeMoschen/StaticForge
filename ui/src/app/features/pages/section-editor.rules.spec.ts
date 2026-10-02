@@ -4,6 +4,7 @@ import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { CUSTOM_ELEMENTS_SCHEMA } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { FormGroup } from '@angular/forms';
+import { TranslocoPipe } from '@jsverse/transloco';
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { ContentDefinition } from '../forms/form.model';
 import { RuleHub } from '../forms/rules/rule-hub';
@@ -29,7 +30,7 @@ describe('SectionEditorComponent — live rules (M33)', () => {
       providers: [provideHttpClient(), provideHttpClientTesting()],
     });
     // The form engine isn't under test: the section's own wiring is.
-    TestBed.overrideComponent(SectionEditorComponent, { set: { imports: [], schemas: [CUSTOM_ELEMENTS_SCHEMA] } });
+    TestBed.overrideComponent(SectionEditorComponent, { set: { imports: [TranslocoPipe], schemas: [CUSTOM_ELEMENTS_SCHEMA] } });
     fixture = TestBed.createComponent(SectionEditorComponent);
     hub = new RuleHub();
     filled = [];

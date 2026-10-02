@@ -26,7 +26,7 @@ import { SfPlanEntriesTableComponent } from './sf-plan-entries-table.component';
       <h3 class="impact__heading" [id]="headingId">
         <button type="button" class="impact__toggle" [attr.aria-expanded]="open()" (click)="toggle()">
           <span aria-hidden="true">{{ open() ? '▾' : '▸' }}</span>
-          Impact
+          {{ heading() }}
           <span class="impact__asof">{{ asOf() }}</span>
         </button>
       </h3>
@@ -98,6 +98,8 @@ export class SfAssetImpactComponent {
   readonly assetUuid = input.required<string>();
   /** Changing it reloads the impact (pass the asset's revision after a save). */
   readonly refreshKey = input<unknown>(null);
+  /** The panel's heading; "Impact" unless the host words it for its audience (the page editor: "Pages affected by this change"). */
+  readonly heading = input('Impact');
 
   private readonly api = inject(GenerationService);
   private readonly timeTravel = inject(TimeTravelStore);
