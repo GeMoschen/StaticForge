@@ -54,6 +54,22 @@ and list + detail panes are bordered cards with the splitter handle centred in a
 - [ ] Screen definition of done met (README).
 - [ ] Vitest specs updated (grid selection and bulk). `npx vitest run` and `npx ng build` green.
 
+## Implementation plan (M35.20)
+
+Reference: the sample in `features/styleguide/sample/` (`sample-content-*`, `sample-record-set`, `sample-record-editor`,
+`sample-query-panel`), gate rounds 1, 5 and 6, and the finished Pages (M35.18) and Media (M35.19) screens.
+
+- [ ] **A. Shell, tree, folder view:** `content.component` on `sf-splitter` + `sf-tree` (filter, one menu, cut/copy/paste/move, F2, Del,
+      pinned Favorites node, `?folder=`), folder view = `sf-page-header` + `sf-data-table` of record sets with the dataset filter chip
+      group and bulk Move/Delete (undo). The *New record set* dialog is **not covered by the sample**: add it to the sample first
+      (no preselected dataset, note that the dataset can't change later), get sign-off, then build it.
+- [ ] **B. Record set view:** `sf-page-header` (breadcrumb, New record, Release…, ⋮), collapsed query panel with a readable summary,
+      filter builder for editors, expression editor in developer mode only, `record-grid` on `sf-data-table` with selection and
+      bulk delete (undo), move, release.
+- [ ] **C. Record editor:** header like the page editor (display name, save status, Release group, History, ⋮ with Delete), display
+      name never the UUID, same top layout as the set view.
+- [ ] **D. Finish:** i18n, specs, `npx vitest run`, `npx ng build`, `npm run lint`, Chrome check, review section.
+
 ## Notes (M35.9)
 
 - The sample's Content area (decision 12) is the reference: a tree of folders and record sets, a record set view and a
@@ -72,3 +88,19 @@ and list + detail panes are bordered cards with the splitter handle centred in a
   not store-bound: the node lists them from every store.
 - Put the open item in the URL (`?asset=` / `?folder=`, or the route's UUID) so it is recorded as a recent.
 
+
+## Notes (M35.20 A — shell, tree, folder view)
+
+- Built: `content.component` (splitter, `sf-tree`, one menu, Favorites node, `?folder=`, `?favorites=1`), `content-folder-view.component`
+  (page header + `sf-data-table`, dataset filter chips via `urlSync` so `?dataset=<uuid>` still works, bulk Move/Delete with Undo),
+  `content-item-actions.service` (confirm/delete/move/undo shared by tree and table), `content-tree.util` (index, nodes, search, trail).
+- **Deviations to approve:** (1) the table has a *Status* column (release chips per language, as in Pages) that the sample lacks;
+  (2) *Modified* needs `RecordSetSummaryView.changedAt` — added to the DTO, controller and `schema.d.ts` (time only, no user name; not
+  compiled here, Gradle not run); (3) the header ⋮ of a folder has Rename / Move… / Delete… without the sample's *Used by* (folders have
+  none); (4) the tree menu also offers *New record*, *History*, *Used by* on a record set (child-route params `newRecord=1`, `panel=…`).
+- **New record set dialog:** the app still uses `sf-create-asset-dialog` (first dataset preselected). The new design is in the sample
+  (gate round 10, decisions 108–110) and **awaits user sign-off** before the app switches to it.
+- **Sample catch-up (gate round 11, decisions 111-127, awaiting sign-off):** the sample now shows everything the app does beyond rounds 1-10: the folder *Status* column, *Shown by the
+  filter / All records*, the filter extras (offset/limit, several sort keys, date and Yes/No values, an expression the builder cannot show, Save filter / Revert), *Use as set filter*,
+  the record set's and folder's menus with Rename and Move, the records' Move, the tree's menu, and the record editor's menu, Checks and Used by drawer, deleted-record banner and
+  error states. Review links are in the round's table. Change the app only as far as the user's sign-off says.

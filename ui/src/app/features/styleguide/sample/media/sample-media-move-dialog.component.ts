@@ -7,7 +7,7 @@ import { SfTreeLoader, SfTreeNode } from '../../../../shared/components/tree/tre
 import { injectSampleText } from '../changes/sample-area.util';
 import { SampleMediaFolder, mediaFolderChildren } from './sample-media-data';
 
-/** The id of the top level in the picker (only offered when a folder is moved). */
+/** The id of the top level in the picker (offered for folders and, as the library's top level holds files too, for files). */
 export const MEDIA_ROOT = '__root__';
 
 export interface SampleMoveDialogData {

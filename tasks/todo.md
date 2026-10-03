@@ -111,6 +111,7 @@ every screen. Screen migration starts only after the style guide (M35.9) is sign
     (314 test files / 3,161 tests, build + lint + backend media tests green, 169 states checked in headless Chrome). Open: journeys m16/m18/m22/m27/m29 need the
     release flow and the new pages tree/account menu (M35.31), text-media tabs sit in "More" at the default drawer width.
 - [ ] M35.20 content: record sets and records
+  - Built (shell/tree/folder view, record set view + grid + filter builder, record editor); 318 test files / 3,331 tests, build + lint green. **Open:** the New record set dialog awaits sign-off in the sample (gate round 10); no Chrome check yet; journey m25 needs the new UI (M35.31).
 - [ ] M35.21 templates IDE
 - [ ] M35.22 navigation and globals
 - [ ] M35.23 changes, schedules, release dialogs

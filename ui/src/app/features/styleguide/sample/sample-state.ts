@@ -1,7 +1,8 @@
-import { Injectable, computed, inject, signal } from '@angular/core';
+import { Injectable, Injector, computed, inject, signal } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { HashMap, TranslocoService } from '@jsverse/transloco';
 import { ToastService } from '../../../core/ui/toast.service';
+import { DialogService } from '../../../shared/components/dialog/dialog.service';
 import {
   FIXED_CONTENT_FILTER,
   FIXED_CONTENT_FOLDER,
@@ -19,7 +20,22 @@ import {
   templateEntry,
   templatePath,
 } from './sample-content-data';
+import {
+  CONTENT_ROOT,
+  SampleContentMoveData,
+  SampleContentMoveDialogComponent,
+} from './sample-content-move-dialog.component';
+import {
+  SampleContentRenameData,
+  SampleContentRenameDialogComponent,
+  SampleContentRenameResult,
+} from './sample-content-rename-dialog.component';
 import { FAVORITE_SEED, SampleFavorite, favoriteKey, pageFavorite } from './sample-favorites';
+import {
+  SampleNewRecordSetData,
+  SampleNewRecordSetDialogComponent,
+  SampleNewRecordSetResult,
+} from './sample-new-record-set-dialog.component';
 import {
   FIXED_FOLDER,
   FIXED_PAGE,
@@ -195,6 +211,8 @@ function initialRecords(): ReadonlyMap<string, readonly SampleRecord[]> {
 export class SampleState {
   private readonly transloco = inject(TranslocoService);
   private readonly toasts = inject(ToastService);
+  private readonly dialogs = inject(DialogService);
+  private readonly injector = inject(Injector);
   /** Re-evaluates the translated labels once the language file is in. */
   private readonly translation = toSignal(this.transloco.selectTranslation(), { initialValue: null });
 
@@ -226,6 +244,16 @@ export class SampleState {
   readonly presetFilter = signal<string | null>(null);
   /** Whether the record set's query panel starts expanded (`view=recordset`). */
   readonly queryExpanded = signal(false);
+  /** `show=all`: the record table starts on *All records* instead of *Shown by the filter*. */
+  readonly showAll = signal(false);
+  /** `filter=custom`: the open record set stores a filter the builder cannot show (applied once on arrival). */
+  readonly queryPreset = signal<'custom' | null>(null);
+  /** `dialog=rename|move|bulkmove`: a Content dialog open on arrival (on the open folder, record set or the preselected records). */
+  readonly contentDialog = signal<'rename' | 'move' | 'bulkmove' | null>(null);
+  /** `panel=checks|usedby`: the record editor's Checks and Used by drawer, or the record set's Used by drawer, open on arrival. */
+  readonly contentPanel = signal<'checks' | 'usedby' | null>(null);
+  /** `state=notfound|revision|error|deleted` on the record editor: no such record, none at that revision, not loadable, or deleted. */
+  readonly recordReview = signal<'notfound' | 'revision' | 'error' | 'deleted' | null>(null);
   /** The records of every record set, by set id: edits and deletes change them (in memory only). */
   readonly records = signal<ReadonlyMap<string, readonly SampleRecord[]>>(initialRecords());
 
@@ -608,6 +636,102 @@ export class SampleState {
 
   private setRecords(setId: string, list: readonly SampleRecord[]): void {
     this.records.update((all) => new Map(all).set(setId, list));
+  }
+
+  /**
+   * The New record set dialog (M35.20, gate round 10 — awaiting sign-off): a name and a dataset, none preselected. Creating
+   * only says what would happen: nothing is saved in the prototype. `folderId` is where the set would go (`null`: the top level).
+   */
+  async newRecordSet(folderId: string | null): Promise<void> {
+    const folder = contentEntry(folderId)?.name ?? this.t('content.title');
+    const result = await this.dialogs.open<SampleNewRecordSetResult, SampleNewRecordSetData>(
+      SampleNewRecordSetDialogComponent,
+      { folder },
+      { injector: this.injector },
+    ).result;
+    if (result) {
+      this.notice('content.newSet.created', { name: result.name, folder });
+    }
+  }
+
+  /** The Rename dialog of a record set or folder; what it returns is only announced (nothing is saved). */
+  async renameContent(entry: SampleContentEntry): Promise<void> {
+    const result = await this.dialogs.open<SampleContentRenameResult, SampleContentRenameData>(
+      SampleContentRenameDialogComponent,
+      { name: entry.name, uid: entry.uid, developer: this.devMode() },
+      { injector: this.injector },
+    ).result;
+    if (result?.name) {
+      this.notice('contentRename.renamed', { name: result.name });
+    } else if (result?.uid) {
+      this.toasts.undo(this.t('contentRename.uidChanged', { uid: result.uid }), () => this.notice('contentRename.uidRestored'));
+    }
+  }
+
+  /** The folder Move dialog for record sets and folders; the move is only announced, with an Undo that says so. */
+  async moveContent(entries: readonly SampleContentEntry[]): Promise<boolean> {
+    const first = entries[0];
+    const target = await this.dialogs.open<string, SampleContentMoveData>(
+      SampleContentMoveDialogComponent,
+      {
+        mode: 'folder',
+        title: this.t('contentMove.titleFolder', { count: entries.length, name: first.name }),
+        current: contentParentOf(first.id) ?? CONTENT_ROOT,
+        blocked: entries.filter((entry) => entry.kind === 'folder').flatMap((entry) => this.folderIds(entry)),
+      },
+      { injector: this.injector },
+    ).result;
+    if (!target) {
+      return false;
+    }
+    const name = target === CONTENT_ROOT ? this.t('content.title') : (contentEntry(target)?.name ?? '');
+    this.toasts.undo(this.t('contentMove.moved', { count: entries.length, name: first.name, target: name }), () =>
+      this.notice('contentMove.movedBack'),
+    );
+    return true;
+  }
+
+  private folderIds(entry: SampleContentEntry): string[] {
+    return [entry.id, ...(entry.children ?? []).filter((child) => child.kind === 'folder').flatMap((child) => this.folderIds(child))];
+  }
+
+  /**
+   * The Move dialog for records: another record set of the same dataset. The records move in memory (and Undo moves them
+   * back); resolves with the target set's id, or `null` when nothing was moved.
+   */
+  async moveRecordsToSet(fromSet: string, ids: readonly string[]): Promise<string | null> {
+    const dataset = contentEntry(fromSet)?.dataset;
+    const sets = recordSets()
+      .filter((set) => set.dataset === dataset && set.id !== fromSet)
+      .map((set) => ({ id: set.id, name: set.name, folder: contentEntry(contentParentOf(set.id))?.name ?? this.t('content.title') }));
+    const first = this.recordsOf(fromSet).find((record) => ids.includes(record.id)) ?? null;
+    const target = await this.dialogs.open<string, SampleContentMoveData>(
+      SampleContentMoveDialogComponent,
+      {
+        mode: 'records',
+        title: this.t('contentMove.titleRecords', { count: ids.length, name: this.recordName(first) }),
+        current: fromSet,
+        sets,
+      },
+      { injector: this.injector },
+    ).result;
+    if (!target) {
+      return null;
+    }
+    const moved = this.recordsOf(fromSet).filter((record) => ids.includes(record.id));
+    const restoreSource = this.removeRecords(fromSet, ids);
+    this.setRecords(target, [...this.recordsOf(target), ...moved]);
+    this.toasts.undo(
+      this.t('contentMove.movedRecords', { count: ids.length, name: this.recordName(first), target: contentEntry(target)?.name ?? '' }),
+      () => {
+        this.removeRecords(target, ids);
+        restoreSource();
+        if (this.view() === 'record' && ids.includes(this.recordId())) {
+          this.recordSetId.set(fromSet);
+        }
+      },
+    );
+    return target;
   }
 
   /** Every action that would change something says so instead: nothing is saved in the prototype. */

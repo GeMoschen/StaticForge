@@ -36,19 +36,19 @@ describe('Source tab of a text file (decisions 102-106)', () => {
   afterEach(() => vi.restoreAllMocks());
 
   describe('completion names (102)', () => {
-    it('lists global values, the library’s media UIDs and page paths, without the generated Archive photos', () => {
+    it('lists global values, the library’s media UIDs and page UIDs in the project’s syntax, without the generated Archive photos', () => {
       const names = completionNames();
       expect(names).toEqual(
-        expect.arrayContaining(['#global.brand.roastColor', '#global.brand.accentColor', 'media:hero_texture', 'media:logo', 'page:/shop']),
+        expect.arrayContaining(['CMS_GLOBAL.brand.roastColor', 'CMS_GLOBAL.brand.accentColor', 'media:hero_texture', 'media:logo', 'page:shop']),
       );
-      expect(names).toContain('page:/news/spring-harvest');
+      expect(names).toContain('page:spring_harvest');
       const archive = MEDIA_FILES.find((f) => f.folderId === 'm-archive')!;
       expect(names).not.toContain(`media:${archive.uid}`);
       expect(new Set(names).size).toBe(names.length);
     });
 
     it('does not offer the brand.accent global that the Processing tab warns about', () => {
-      expect(completionNames()).not.toContain('#global.brand.accent');
+      expect(completionNames()).not.toContain('CMS_GLOBAL.brand.accent');
     });
   });
 
@@ -173,7 +173,7 @@ describe('Source tab of a text file (decisions 102-106)', () => {
       fireEvent.click(within(guard).getByRole('button', { name: 'Cancel' }));
       await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Unsaved changes' })).toBeNull());
       expect(codeOf(await editor(detail))).toContain('Language: English');
-      expect(codeOf(await editor(detail))).toContain('$CMS_VALUE(#global.br');
+      expect(codeOf(await editor(detail))).toContain('$CMS_VALUE(CMS_GLOBAL.br');
     });
   });
 
@@ -181,7 +181,7 @@ describe('Source tab of a text file (decisions 102-106)', () => {
     it('`complete=1` ends the text with an unfinished global reference and marks the file unsaved', async () => {
       await setup({ asset: 'a-brand-css', mtab: 'source', complete: '1' });
       const detail = await drawer('brand.css');
-      expect(codeOf(await editor(detail)).endsWith('$CMS_VALUE(#global.br')).toBe(true);
+      expect(codeOf(await editor(detail)).endsWith('$CMS_VALUE(CMS_GLOBAL.br')).toBe(true);
       expect(within(detail).getByText('Unsaved changes')).toBeInTheDocument();
     });
   });

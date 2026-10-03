@@ -68,6 +68,7 @@
                     [text]="'styleguide.sample.tree.new' | transloco"
                     [label]="'styleguide.sample.tree.newLabel' | transloco"
                     [items]="newItems()"
+                    [disabled]="review.readOnly()"
                   />
                 </div>
                 <sf-tree
@@ -84,6 +85,8 @@
                   (rename)="state.notice()"
                   (create)="state.notice()"
                   (delete)="onDelete($event)"
+                  (move)="onMove($event)"
+                  (moveTo)="moveTo($event)"
                 />
               </section>
             }
@@ -138,6 +141,10 @@
 
 @if (state.issues()) {
   <sf-sample-issues-drawer (closed)="state.issues.set(false)" />
+}
+
+@if (review.move(); as move) {
+  <sf-sample-pages-move-dialog [move]="move" (closed)="review.move.set(null)" />
 }
 
 @if (state.shortcutsOpen()) {

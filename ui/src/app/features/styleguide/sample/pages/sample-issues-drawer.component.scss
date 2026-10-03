@@ -169,6 +169,15 @@
   font-family: var(--sf-font-mono);
 }
 
+.issues__note,
+.issues__status,
+.issues__skipped {
+  margin: 0 0 var(--sf-space-3);
+  color: var(--sf-text-muted);
+  font-size: var(--sf-fs-13);
+  line-height: var(--sf-lh-13);
+}
+
 .issues__none {
   margin: 0 0 var(--sf-space-4);
   color: var(--sf-text-muted);

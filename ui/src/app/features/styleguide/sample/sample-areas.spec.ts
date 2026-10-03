@@ -132,6 +132,80 @@ describe('areas', () => {
     expect(within(grid).getByText('Single origins')).toBeInTheDocument();
   });
 
+  describe('the New record set dialog (gate round 10, awaiting sign-off)', () => {
+    const dialog = () => screen.getByRole('dialog', { name: 'New record set' });
+
+    it('opens from the folder header with no dataset chosen: Create stays disabled, saying why, until a name and a dataset are given', async () => {
+      await setup({ area: 'content', view: 'contentfolder' });
+
+      fireEvent.click(screen.getByRole('button', { name: 'New record set' }));
+      await screen.findByRole('dialog', { name: 'New record set' });
+
+      const dataset = within(dialog()).getByLabelText(/Dataset/) as HTMLSelectElement;
+      expect(dataset.options[dataset.selectedIndex].textContent?.trim()).toBe('Choose a dataset');
+      expect(within(dialog()).getByText(/The dataset can’t be changed after the set is created/)).toBeInTheDocument();
+      const create = within(dialog()).getByRole('button', { name: 'Create' });
+      expect(create).toHaveAttribute('aria-disabled', 'true');
+
+      fireEvent.input(within(dialog()).getByLabelText(/Name/), { target: { value: 'Spring specials' } });
+      await waitFor(() => expect(create).toHaveAttribute('aria-disabled', 'true'));
+
+      fireEvent.change(dataset, { target: { value: '0' } });
+      await waitFor(() => expect(create).not.toHaveAttribute('aria-disabled', 'true'));
+      fireEvent.click(create);
+
+      await waitFor(() => expect(screen.queryByRole('dialog', { name: 'New record set' })).not.toBeInTheDocument());
+      expect(lastToast()?.message).toBe('“Spring specials” would be created in Shop — nothing is saved in the prototype.');
+    });
+
+    it('asks for a name once the field was touched, and a chosen dataset alone does not enable Create', async () => {
+      await setup({ area: 'content', view: 'contentfolder' });
+      fireEvent.click(screen.getByRole('button', { name: 'New record set' }));
+      await screen.findByRole('dialog', { name: 'New record set' });
+
+      fireEvent.change(within(dialog()).getByLabelText(/Dataset/), { target: { value: '1' } });
+      expect(within(dialog()).getByRole('button', { name: 'Create' })).toHaveAttribute('aria-disabled', 'true');
+      expect(within(dialog()).queryByText('A name is required.')).not.toBeInTheDocument();
+      fireEvent.input(within(dialog()).getByLabelText(/Name/), { target: { value: 'x' } });
+      fireEvent.input(within(dialog()).getByLabelText(/Name/), { target: { value: '' } });
+
+      expect(await within(dialog()).findByText('A name is required.')).toBeInTheDocument();
+    });
+
+    it('closes without creating on Cancel', async () => {
+      await setup({ area: 'content', view: 'contentfolder' });
+      fireEvent.click(screen.getByRole('button', { name: 'New record set' }));
+      await screen.findByRole('dialog', { name: 'New record set' });
+
+      fireEvent.click(within(dialog()).getByRole('button', { name: 'Cancel' }));
+
+      await waitFor(() => expect(screen.queryByRole('dialog', { name: 'New record set' })).not.toBeInTheDocument());
+      expect(lastToast()).toBeUndefined();
+    });
+
+    it('opens from the tree’s New menu and creates in the open folder', async () => {
+      await setup({ area: 'content', view: 'contentfolder' });
+
+      fireEvent.click(screen.getByRole('button', { name: 'New' }));
+      fireEvent.click(await screen.findByRole('menuitem', { name: 'New record set' }));
+      await screen.findByRole('dialog', { name: 'New record set' });
+
+      fireEvent.input(within(dialog()).getByLabelText(/Name/), { target: { value: 'Autumn' } });
+      fireEvent.change(within(dialog()).getByLabelText(/Dataset/), { target: { value: '0' } });
+      fireEvent.click(await waitFor(() => {
+        const create = within(dialog()).getByRole('button', { name: 'Create' });
+        expect(create).not.toHaveAttribute('aria-disabled', 'true');
+        return create;
+      }));
+      await waitFor(() => expect(lastToast()?.message).toContain('in Shop'));
+    });
+
+    it('is open on arrival with newset=1, for review', async () => {
+      await setup({ area: 'content', newset: '1' });
+      expect(await screen.findByRole('dialog', { name: 'New record set' })).toBeInTheDocument();
+    });
+  });
+
   it('keeps the Templates area to developer mode', async () => {
     await setup({ area: 'templates', view: 'dataset', dev: '0' });
 

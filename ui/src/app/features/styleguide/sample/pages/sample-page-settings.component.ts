@@ -15,9 +15,11 @@ import { SfIconComponent } from '../../../../shared/components/sf-icon.component
 import { injectSampleText, minutesAgo } from '../changes/sample-area.util';
 import { PICKER_PAGES, PickerItem } from '../forms/picker-data';
 import { SampleAssetPickerComponent } from '../forms/sample-asset-picker.component';
-import { childrenOf, pathTo } from '../sample-data';
+import { LANGUAGE_NAMES, childrenOf, pathTo } from '../sample-data';
 import { SampleState } from '../sample-state';
 import { FOLDER_NAV, PAGE_NAV, SampleNavSettings } from './pages-data';
+import { SampleAssetUrl, SampleAssetUrlsComponent } from './sample-asset-urls.component';
+import { SamplePagesReview } from './sample-pages-review';
 
 const SAVE_MS = 700;
 
@@ -41,6 +43,7 @@ const SAVE_MS = 700;
   standalone: true,
   imports: [
     SampleAssetPickerComponent,
+    SampleAssetUrlsComponent,
     SfBannerComponent,
     SfButtonComponent,
     SfCopyableComponent,
@@ -58,6 +61,10 @@ const SAVE_MS = 700;
   styleUrl: './sample-page-settings.component.scss',
   template: `
     <sf-drawer [title]="t(isFolder() ? 'settings.folderTitle' : 'settings.pageTitle')" [width]="440" (closed)="closed.emit()">
+      @if (review.readOnly()) {
+        <p class="settings__hint">{{ t(isFolder() ? 'settings.readOnlyFolder' : 'settings.readOnly') }}</p>
+      }
+
       <section class="settings__section" aria-labelledby="settings-name-heading">
         <h3 class="settings__heading" id="settings-name-heading">{{ t('settings.name.heading') }}</h3>
         @if (renaming()) {
@@ -71,7 +78,7 @@ const SAVE_MS = 700;
         } @else {
           <div class="settings__row is-spread">
             <span class="settings__value">{{ name() }}</span>
-            <sf-button variant="secondary" size="sm" icon="edit" (click)="startRename()">{{ t('settings.name.rename') }}</sf-button>
+            <sf-button variant="secondary" size="sm" icon="edit" [disabled]="review.readOnly()" (click)="startRename()">{{ t('settings.name.rename') }}</sf-button>
           </div>
         }
       </section>
@@ -142,6 +149,13 @@ const SAVE_MS = 700;
         }
       </section>
 
+      @if (isFolder()) {
+        <section class="settings__section" aria-labelledby="settings-urls-heading">
+          <h3 class="settings__heading" id="settings-urls-heading">{{ t('settings.urls.heading') }}</h3>
+          <sf-sample-asset-urls [urls]="urls()" />
+        </section>
+      }
+
       <section class="settings__section" aria-labelledby="settings-facts-heading">
         <h3 class="settings__heading" id="settings-facts-heading">{{ t('settings.facts.heading') }}</h3>
         <dl class="settings__facts">
@@ -174,6 +188,7 @@ const SAVE_MS = 700;
 export class SamplePageSettingsComponent {
   protected readonly state = inject(SampleState);
   private readonly toasts = inject(ToastService);
+  protected readonly review = inject(SamplePagesReview);
   protected readonly t = injectSampleText('styleguide.sample.pages');
 
   readonly kind = input.required<'page' | 'folder'>();
@@ -201,6 +216,15 @@ export class SamplePageSettingsComponent {
   protected readonly template = computed(() => this.state.page().template ?? '');
   protected readonly url = computed(() => this.state.page().url);
   protected readonly path = computed(() => `/${pathTo(this.state.folderId()).map((e) => e.uid).join('/')}/`.replace('//', '/'));
+  /** The folder's registered URLs: the build's output per language and the preview's. */
+  protected readonly urls = computed<SampleAssetUrl[]>(() => {
+    const path = this.path();
+    return [
+      { area: 'build', where: this.t('settings.urls.html', { language: LANGUAGE_NAMES.de }), url: path },
+      { area: 'build', where: this.t('settings.urls.html', { language: LANGUAGE_NAMES.en }), url: `/en${path}` },
+      { area: 'preview', where: this.t('settings.urls.html', { language: LANGUAGE_NAMES.de }), url: `/preview${path}` },
+    ];
+  });
   protected readonly modifiedBy = computed(() => this.entry()?.modifiedBy.name ?? '');
   private readonly now = Date.now();
   protected readonly changedAt = computed(() => minutesAgo(this.entry()?.modifiedMinutes ?? 0, this.now));

@@ -1,172 +1,248 @@
-<section class="query-panel" aria-labelledby="set-query-heading">
-  <header class="query-panel__head">
-    <h3 id="set-query-heading" class="query-panel__title">
-      <button
-        type="button"
-        class="query-panel__toggle"
-        aria-controls="set-query-body"
-        [attr.aria-expanded]="expanded()"
-        (click)="toggle()"
-      >
-        <sf-icon [name]="expanded() ? 'expand_more' : 'chevron_right'" />
-        Set query
-      </button>
-    </h3>
-    @if (dirty()) {
-      <span class="query-panel__chip">Unsaved</span>
-    }
-    @if (!expanded()) {
-      <code class="query-panel__summary">{{ summary() }}</code>
-    }
-    <span
-      class="query-panel__status"
-      [class.query-panel__status--invalid]="state() === 'invalid'"
-      role="status"
-      aria-live="polite"
+<section class="query" [attr.aria-labelledby]="headingId">
+  <div class="query__bar">
+    <h2 class="sf-sr-only" [id]="headingId">{{ 'content.recordSet.query.title' | transloco }}</h2>
+    <sf-button
+      class="query__toggle"
+      variant="ghost"
+      size="sm"
+      icon="filter_list"
+      [iconTrailing]="expanded() ? 'expand_less' : 'expand_more'"
+      [aria-expanded]="expanded()"
+      [aria-controls]="bodyId"
+      (click)="toggle()"
+      >{{ 'content.recordSet.query.title' | transloco }}</sf-button
     >
-      {{ status() }}
-    </span>
-  </header>
+    <span class="query__summary" [class.query__summary--code]="custom()">{{ summary() }}</span>
+    @if (dirty()) {
+      <span class="query__unsaved">{{ 'content.recordSet.query.unsaved' | transloco }}</span>
+    }
+    <span class="query__count" [class.is-invalid]="invalid()" role="status" aria-live="polite">{{ status() }}</span>
+  </div>
 
-  @if (expanded()) {
-    <div id="set-query-body" class="query-panel__body">
-      <div class="query-panel__field query-panel__field--where">
-        <span class="query-panel__label" aria-hidden="true">Where</span>
+  <div class="query__body" [id]="bodyId" [hidden]="!expanded()">
+    @if (custom()) {
+      <div class="query__custom">
+        <sf-finding level="info" [message]="'content.recordSet.query.customNote' | transloco" />
+        <div class="query__custom-row">
+          @if (!developerMode()) {
+            <code class="query__custom-code">{{ draft().where }}</code>
+          }
+          <sf-button variant="secondary" size="sm" icon="filter_alt_off" [disabled]="readOnly()" (click)="clearFilter()">{{
+            'content.recordSet.query.clearFilter' | transloco
+          }}</sf-button>
+        </div>
+      </div>
+    } @else {
+      <div class="query__rows" role="group" [attr.aria-label]="'content.recordSet.query.conditions' | transloco">
+        @for (row of rows(); track row.condition.id; let first = $first; let n = $index) {
+          <div class="query__row">
+            <span class="query__join">{{ (first ? 'content.recordSet.query.whereLabel' : 'content.recordSet.query.andLabel') | transloco }}</span>
+            <sf-select
+              class="query__field"
+              [options]="fieldOptions()"
+              [value]="row.condition.field"
+              [disabled]="readOnly()"
+              [aria-label]="'content.recordSet.query.fieldLabel' | transloco: { n: n + 1 }"
+              (valueChange)="setField(row.condition, $event)"
+            />
+            <sf-select
+              class="query__op"
+              [options]="row.operators"
+              [value]="row.condition.op"
+              [disabled]="readOnly()"
+              [aria-label]="'content.recordSet.query.opLabel' | transloco: { n: n + 1 }"
+              (valueChange)="setOperator(row.condition, $event)"
+            />
+            @switch (row.kind) {
+              @case ('select') {
+                <sf-select
+                  class="query__value"
+                  [options]="row.values"
+                  [value]="row.condition.value"
+                  [disabled]="readOnly()"
+                  [aria-label]="'content.recordSet.query.valueLabel' | transloco: { n: n + 1 }"
+                  (valueChange)="setValue(row.condition, $event)"
+                />
+              }
+              @case ('boolean') {
+                <sf-select
+                  class="query__value"
+                  [options]="booleanOptions()"
+                  [value]="row.condition.value"
+                  [disabled]="readOnly()"
+                  [aria-label]="'content.recordSet.query.valueLabel' | transloco: { n: n + 1 }"
+                  (valueChange)="setValue(row.condition, $event)"
+                />
+              }
+              @case ('number') {
+                <sf-number-input
+                  class="query__value"
+                  [value]="numberOf(row.condition.value)"
+                  [disabled]="readOnly()"
+                  [aria-label]="'content.recordSet.query.valueLabel' | transloco: { n: n + 1 }"
+                  (valueChange)="setValue(row.condition, $event)"
+                />
+              }
+              @case ('date') {
+                <sf-date-input
+                  class="query__value"
+                  [mode]="row.field?.dateMode ?? 'date'"
+                  [value]="row.condition.value || null"
+                  [disabled]="readOnly()"
+                  [aria-label]="'content.recordSet.query.valueLabel' | transloco: { n: n + 1 }"
+                  (valueChange)="setValue(row.condition, $event)"
+                />
+              }
+              @default {
+                <sf-input
+                  class="query__value"
+                  [value]="row.condition.value"
+                  [disabled]="readOnly()"
+                  [aria-label]="'content.recordSet.query.valueLabel' | transloco: { n: n + 1 }"
+                  (valueChange)="setValue(row.condition, $event)"
+                />
+              }
+            }
+            @if (!readOnly()) {
+              <sf-button
+                variant="ghost"
+                size="sm"
+                icon="close"
+                [label]="'content.recordSet.query.remove' | transloco: { n: n + 1, field: row.field?.label ?? row.condition.field }"
+                (click)="removeCondition(row.condition.id)"
+              />
+            }
+          </div>
+        } @empty {
+          <p class="query__empty">{{ 'content.recordSet.query.noConditions' | transloco }}</p>
+        }
+      </div>
+      @if (!readOnly()) {
+        <div>
+          <sf-button variant="secondary" size="sm" icon="add" (click)="addCondition()">{{ 'content.recordSet.query.add' | transloco }}</sf-button>
+        </div>
+      }
+    }
+
+    <div class="query__sort" role="group" [attr.aria-label]="'content.recordSet.query.sortGroup' | transloco">
+      @for (row of sortRows(); track $index; let n = $index; let first = $first; let last = $last) {
+        <div class="query__row">
+          <span class="query__join">{{ (first ? 'content.recordSet.query.sortLabel' : 'content.recordSet.query.thenLabel') | transloco }}</span>
+          <sf-select
+            class="query__field"
+            [options]="row.options"
+            [value]="row.key.field"
+            [disabled]="readOnly()"
+            [aria-label]="'content.recordSet.query.sortField' | transloco: { n: n + 1 }"
+            (valueChange)="setSortField(n, $event)"
+          />
+          <sf-segmented
+            size="sm"
+            [options]="directionOptions()"
+            [value]="row.key.direction"
+            [disabled]="readOnly()"
+            [aria-label]="'content.recordSet.query.sortDirection' | transloco: { n: n + 1 }"
+            (valueChange)="setSortDirection(n, $event)"
+          />
+          @if (!readOnly()) {
+            <sf-button
+              variant="ghost"
+              size="sm"
+              icon="arrow_upward"
+              [disabled]="first"
+              [label]="'content.recordSet.query.moveUp' | transloco: { n: n + 1 }"
+              (click)="moveSortKey(n, -1)"
+            />
+            <sf-button
+              variant="ghost"
+              size="sm"
+              icon="arrow_downward"
+              [disabled]="last"
+              [label]="'content.recordSet.query.moveDown' | transloco: { n: n + 1 }"
+              (click)="moveSortKey(n, 1)"
+            />
+            <sf-button
+              variant="ghost"
+              size="sm"
+              icon="close"
+              [label]="'content.recordSet.query.removeSort' | transloco: { n: n + 1 }"
+              (click)="removeSortKey(n)"
+            />
+          }
+        </div>
+      } @empty {
+        <p class="query__empty">{{ 'content.recordSet.query.defaultOrder' | transloco }}</p>
+      }
+      @if (!readOnly()) {
+        <div>
+          <sf-button variant="ghost" size="sm" icon="add" [disabled]="!canAddSortKey()" (click)="addSortKey()">{{
+            'content.recordSet.query.addSort' | transloco
+          }}</sf-button>
+        </div>
+      }
+    </div>
+
+    <div class="query__numbers">
+      <div class="query__number">
+        <span class="query__join" [id]="bodyId + '-offset'">{{ 'content.recordSet.query.offset' | transloco }}</span>
+        <sf-number-input
+          min="0"
+          step="1"
+          [value]="numberOf(draft().offset)"
+          [disabled]="readOnly()"
+          [aria-labelledby]="bodyId + '-offset'"
+          [placeholder]="'content.recordSet.query.offsetPlaceholder' | transloco"
+          (valueChange)="setOffset($event)"
+        />
+      </div>
+      <div class="query__number">
+        <span class="query__join" [id]="bodyId + '-limit'">{{ 'content.recordSet.query.limit' | transloco }}</span>
+        <sf-number-input
+          min="0"
+          step="1"
+          [value]="numberOf(draft().limit)"
+          [disabled]="readOnly()"
+          [aria-labelledby]="bodyId + '-limit'"
+          [placeholder]="'content.recordSet.query.limitPlaceholder' | transloco"
+          (valueChange)="setLimit($event)"
+        />
+      </div>
+    </div>
+
+    @if (developerMode()) {
+      <div class="query__expression">
+        <span class="query__join">{{ 'content.recordSet.query.expression' | transloco }}</span>
         <sf-code-editor
-          class="query-panel__where"
+          class="query__where"
           language="where"
-          label="Where"
+          [label]="'content.recordSet.query.expression' | transloco"
           [compact]="true"
-          placeholder="e.g. role == 'lead' && joined > '2022-01-01' — empty: every record"
+          [placeholder]="'content.recordSet.query.expressionPlaceholder' | transloco"
           [value]="draft().where"
           [readOnly]="readOnly()"
           [names]="whereFields()"
           [diagnostics]="whereDiagnostics()"
-          aria-describedby="set-query-diagnostics"
           [invalid]="whereInvalid()"
+          [attr.aria-describedby]="bodyId + '-diagnostics'"
           (valueChange)="onWhereInput($event)"
         />
       </div>
+    }
 
-      <div class="query-panel__field">
-        <span class="query-panel__label" id="set-query-sort-label">Sort</span>
-        @if (draft().sort.length === 0) {
-          <p class="query-panel__hint">Default order: by name, then uid.</p>
-        }
-        <ol class="query-panel__sort" aria-labelledby="set-query-sort-label">
-          @for (key of draft().sort; track key.field; let keyIndex = $index, first = $first, last = $last) {
-            <li class="query-panel__sort-key">
-              <span class="query-panel__sort-pos" aria-hidden="true">{{ keyIndex + 1 }}</span>
-              <select
-                [attr.aria-label]="'Sort key ' + (keyIndex + 1) + ' field'"
-                [value]="key.field"
-                [disabled]="readOnly()"
-                (change)="onSortField(keyIndex, $event)"
-              >
-                @for (option of sortOptions(); track option.field) {
-                  <option
-                    [value]="option.field"
-                    [selected]="option.field === key.field"
-                    [disabled]="option.field !== key.field && isSorted(option.field)"
-                  >
-                    {{ option.label }}
-                  </option>
-                }
-              </select>
-              <select
-                [attr.aria-label]="'Sort key ' + (keyIndex + 1) + ' direction'"
-                [value]="key.direction"
-                [disabled]="readOnly()"
-                (change)="onSortDirection(keyIndex, $event)"
-              >
-                <option value="asc" [selected]="key.direction === 'asc'">Ascending</option>
-                <option value="desc" [selected]="key.direction === 'desc'">Descending</option>
-              </select>
-              @if (!readOnly()) {
-                <button
-                  type="button"
-                  class="query-panel__icon-button"
-                  [attr.aria-label]="'Move sort key ' + (keyIndex + 1) + ' up'"
-                  [disabled]="first"
-                  (click)="moveSortKey(keyIndex, -1)"
-                >
-                  <sf-icon name="arrow_upward" />
-                </button>
-                <button
-                  type="button"
-                  class="query-panel__icon-button"
-                  [attr.aria-label]="'Move sort key ' + (keyIndex + 1) + ' down'"
-                  [disabled]="last"
-                  (click)="moveSortKey(keyIndex, 1)"
-                >
-                  <sf-icon name="arrow_downward" />
-                </button>
-                <button
-                  type="button"
-                  class="query-panel__icon-button"
-                  [attr.aria-label]="'Remove sort key ' + (keyIndex + 1)"
-                  (click)="removeSortKey(keyIndex)"
-                >
-                  <sf-icon name="close" />
-                </button>
-              }
-            </li>
-          }
-        </ol>
-        @if (!readOnly()) {
-          <div>
-            <sf-button variant="ghost" [disabled]="!canAddSortKey()" (click)="addSortKey()">Add sort key</sf-button>
-          </div>
-        }
-      </div>
-
-      <div class="query-panel__numbers">
-        <label class="query-panel__field">
-          <span class="query-panel__label">Offset</span>
-          <input
-            type="number"
-            min="0"
-            step="1"
-            inputmode="numeric"
-            placeholder="0"
-            [value]="draft().offset"
-            [disabled]="readOnly()"
-            (input)="onOffsetInput($event)"
-          />
-        </label>
-        <label class="query-panel__field">
-          <span class="query-panel__label">Limit</span>
-          <input
-            type="number"
-            min="0"
-            step="1"
-            inputmode="numeric"
-            placeholder="No limit"
-            [value]="draft().limit"
-            [disabled]="readOnly()"
-            (input)="onLimitInput($event)"
-          />
-        </label>
-      </div>
-
-      <div id="set-query-diagnostics" class="query-panel__diagnostics" aria-live="polite">
-        @for (diag of diagnostics(); track $index) {
-          <div class="diagnostic" [class.diagnostic--error]="diag.severity === 'ERROR'" [class.diagnostic--warning]="diag.severity !== 'ERROR'">
-            <span class="diagnostic__where">{{ diag.field }}{{ diagnosticPosition(diag) }}</span>
-            @if (diag.code) {
-              <code>{{ diag.code }}</code>
-            }
-            <span>{{ diag.message }}</span>
-          </div>
-        }
-      </div>
-
-      @if (!readOnly()) {
-        <div class="query-panel__actions">
-          <sf-button variant="primary" [disabled]="!canSave()" (click)="save()">Save query</sf-button>
-          <sf-button variant="ghost" [disabled]="!dirty() || saving()" (click)="revert()">Revert</sf-button>
-        </div>
+    <div class="query__diagnostics" [id]="bodyId + '-diagnostics'">
+      @for (diag of diagnostics(); track $index) {
+        <sf-finding
+          [level]="diag.severity === 'ERROR' ? 'error' : 'warning'"
+          [message]="diag.field + diagnosticPosition(diag) + (diag.code ? ' · ' + diag.code : '') + ' — ' + diag.message"
+        />
       }
     </div>
-  }
+
+    @if (!readOnly()) {
+      <div class="query__actions">
+        <sf-button variant="primary" [disabled]="!canSave()" [loading]="saving()" (click)="save()">{{ 'content.recordSet.query.save' | transloco }}</sf-button>
+        <sf-button variant="ghost" [disabled]="!dirty() || saving()" (click)="revert()">{{ 'content.recordSet.query.revert' | transloco }}</sf-button>
+      </div>
+    }
+  </div>
 </section>

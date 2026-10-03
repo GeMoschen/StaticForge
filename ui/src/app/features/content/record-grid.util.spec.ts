@@ -1,15 +1,6 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import type { ContentDefinition } from '../forms/form.model';
-import {
-  ariaSort,
-  deriveColumns,
-  formatCell,
-  readHiddenColumns,
-  sanitizeSort,
-  sortIndicator,
-  toggleSort,
-  writeHiddenColumns,
-} from './record-grid.util';
+import { deriveColumns, formatCell, sanitizeSort, toRecordSort } from './record-grid.util';
 
 const TEAM: ContentDefinition = {
   bodies: [],
@@ -53,40 +44,6 @@ describe('deriveColumns', () => {
   });
 });
 
-describe('toggleSort', () => {
-  it('cycles a single column ascending, descending, unsorted', () => {
-    const asc = toggleSort([], 'name', false);
-    expect(asc).toEqual([{ field: 'name', direction: 'asc' }]);
-    const desc = toggleSort(asc, 'name', false);
-    expect(desc).toEqual([{ field: 'name', direction: 'desc' }]);
-    expect(toggleSort(desc, 'name', false)).toEqual([]);
-  });
-
-  it('replaces a multi-key sort on a plain activation', () => {
-    const multi = [
-      { field: 'role', direction: 'desc' as const },
-      { field: 'name', direction: 'asc' as const },
-    ];
-    expect(toggleSort(multi, 'joined', false)).toEqual([{ field: 'joined', direction: 'asc' }]);
-  });
-
-  it('adds, cycles and removes keys with shift', () => {
-    let sort = toggleSort([], 'role', true);
-    sort = toggleSort(sort, 'name', true);
-    expect(sort).toEqual([
-      { field: 'role', direction: 'asc' },
-      { field: 'name', direction: 'asc' },
-    ]);
-    sort = toggleSort(sort, 'role', true);
-    expect(sort).toEqual([
-      { field: 'role', direction: 'desc' },
-      { field: 'name', direction: 'asc' },
-    ]);
-    sort = toggleSort(sort, 'role', true);
-    expect(sort).toEqual([{ field: 'name', direction: 'asc' }]);
-  });
-});
-
 describe('sanitizeSort', () => {
   it('drops fields the schema no longer has but keeps meta fields', () => {
     const columns = deriveColumns(TEAM);
@@ -106,44 +63,47 @@ describe('sanitizeSort', () => {
   });
 });
 
-describe('sort indicators', () => {
-  const sort = [
-    { field: 'role', direction: 'desc' as const },
-    { field: 'name', direction: 'asc' as const },
-  ];
-
-  it('reports position and direction per column', () => {
-    expect(sortIndicator(sort, 'name')).toEqual({ position: 2, direction: 'asc' });
-    expect(sortIndicator(sort, 'joined')).toBeNull();
-  });
-
-  it('reports only the primary key through aria-sort', () => {
-    expect(ariaSort(sort, 'role')).toBe('descending');
-    expect(ariaSort(sort, 'name')).toBe('none');
+describe('toRecordSort', () => {
+  it('maps the table sort onto the wire sort, keeping the order of the keys', () => {
+    expect(
+      toRecordSort([
+        { id: 'role', direction: 'desc' },
+        { id: '_displayName', direction: 'asc' },
+      ]),
+    ).toEqual([
+      { field: 'role', direction: 'desc' },
+      { field: '_displayName', direction: 'asc' },
+    ]);
+    expect(toRecordSort([])).toEqual([]);
   });
 });
 
 describe('formatCell', () => {
+  const labels = { yes: 'Yes', no: 'No' };
+
   it('formats booleans, date-times and blanks', () => {
-    expect(formatCell(true, 'BOOLEAN')).toBe('Yes');
-    expect(formatCell(false, 'BOOLEAN')).toBe('No');
-    expect(formatCell('2026-05-01T10:30:00Z', 'DATETIME')).toBe('2026-05-01 10:30:00 UTC');
-    expect(formatCell(null, 'TEXT')).toBe('');
-    expect(formatCell(3, 'NUMBER')).toBe('3');
+    expect(formatCell(true, { type: 'BOOLEAN' }, labels)).toBe('Yes');
+    expect(formatCell(false, { type: 'BOOLEAN' }, labels)).toBe('No');
+    expect(formatCell('2026-05-01T10:30:00Z', { type: 'DATETIME' }, labels)).toBe('2026-05-01 10:30:00 UTC');
+    expect(formatCell(null, { type: 'TEXT' }, labels)).toBe('');
+    expect(formatCell(3, { type: 'NUMBER' }, labels)).toBe('3');
+  });
+
+  it("shows a select's option label, and the stored value when the option is gone", () => {
+    const column = { type: 'SELECT' as const, options: [{ value: 'lead', label: 'Team lead' }] };
+
+    expect(formatCell('lead', column, labels)).toBe('Team lead');
+    expect(formatCell('old', column, labels)).toBe('old');
   });
 });
 
-describe('hidden column persistence', () => {
-  afterEach(() => localStorage.clear());
+describe('select columns', () => {
+  it('carry their options for the filter builder', () => {
+    const definition: ContentDefinition = {
+      bodies: [],
+      editors: [{ name: 'role', type: 'SELECT', options: [{ value: 'lead', label: 'Lead' }] }],
+    };
 
-  it('round-trips per project and dataset', () => {
-    writeHiddenColumns('p1', 'd1', new Set(['notes']));
-    expect(readHiddenColumns('p1', 'd1')).toEqual(new Set(['notes']));
-    expect(readHiddenColumns('p1', 'd2')).toBeNull();
-  });
-
-  it('ignores garbage in storage', () => {
-    localStorage.setItem('sf-record-grid-hidden:p1:d1', '{not json');
-    expect(readHiddenColumns('p1', 'd1')).toBeNull();
+    expect(deriveColumns(definition)[0].options).toEqual([{ value: 'lead', label: 'Lead' }]);
   });
 });

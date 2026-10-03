@@ -52,7 +52,7 @@ describe('en.json', () => {
 
   it('keeps every key under common, enum, shared or shell', () => {
     for (const key of keys(en)) {
-      expect(key).toMatch(/^(common|enum|shared|shell|[a-z]+\.[a-z]+)\./);
+      expect(key).toMatch(/^(common|enum|shared|shell|[a-z][a-zA-Z]*\.[a-z][a-zA-Z]*)\./);
     }
     expect(Object.keys(en)).toEqual(expect.arrayContaining(['common', 'enum']));
   });

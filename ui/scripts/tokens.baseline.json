@@ -11,18 +11,6 @@
     "colors": 1,
     "zIndex": 0
   },
-  "src/app/features/content/record-editor.component.scss": {
-    "colors": 1,
-    "zIndex": 0
-  },
-  "src/app/features/content/record-grid.component.scss": {
-    "colors": 1,
-    "zIndex": 1
-  },
-  "src/app/features/content/record-side-panel.component.scss": {
-    "colors": 1,
-    "zIndex": 0
-  },
   "src/app/features/dashboard/dashboard.component.scss": {
     "colors": 1,
     "zIndex": 0

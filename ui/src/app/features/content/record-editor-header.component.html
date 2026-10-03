@@ -1,0 +1,66 @@
+<div class="record-header">
+  <sf-page-header [title]="title()" [secondaryActions]="moreActions()" (secondaryAction)="onMore($event)">
+    <span sfPageHeaderStatus class="record-header__title-extras">
+      <sf-asset-favorite type="RECORD" [uuid]="record().uuid" [name]="title()" [folderPath]="record().folderPath" />
+    </span>
+    <ng-container sfPageHeaderActions>
+      @if (readOnlyLabel()) {
+        <span class="record-header__status" role="status" aria-live="polite">{{ readOnlyLabel() }}</span>
+      } @else {
+        <sf-save-status class="record-header__status" [state]="saveState()" [savedAt]="savedAt()" [errorCount]="errorCount()" />
+      }
+      @if (canRestore()) {
+        <sf-button variant="primary" icon="restore_from_trash" (click)="restore.emit()">{{ 'content.record.header.restore' | transloco }}</sf-button>
+      }
+      <sf-button
+        variant="secondary"
+        icon="fact_check"
+        data-sf-checks-button
+        [aria-expanded]="checksOpen()"
+        [tooltip]="'content.record.header.checksTooltip' | transloco"
+        (click)="toggleChecks.emit()"
+      >
+        {{ 'content.record.header.checks' | transloco }}
+        @if (checks().count > 0) {
+          <sf-badge [tone]="checks().errors > 0 ? 'danger' : 'warning'" [label]="'' + checks().count" />
+        }
+      </sf-button>
+      <sf-button
+        variant="ghost"
+        icon="history"
+        [aria-expanded]="historyDrawer.isOpen()"
+        [label]="'content.record.header.history' | transloco"
+        (click)="historyDrawer.toggle()"
+      />
+      <sf-release-bar
+        class="record-header__release"
+        layout="header"
+        [projectKey]="projectKey()"
+        [assetUuid]="record().uuid"
+        [refreshKey]="releaseRefresh()"
+        (changed)="released.emit($event)"
+      />
+    </ng-container>
+  </sf-page-header>
+
+  @if (developerMode()) {
+    <dl class="record-header__meta">
+      <div class="record-header__meta-item">
+        <dt>{{ 'content.record.dev.dataset' | transloco }}</dt>
+        <dd>{{ datasetName() }}</dd>
+      </div>
+      <div class="record-header__meta-item">
+        <dt>{{ 'content.record.dev.uid' | transloco }}</dt>
+        <dd><sf-copyable [value]="record().uid ?? ''" [label]="'content.record.dev.uid' | transloco" /></dd>
+      </div>
+      <div class="record-header__meta-item">
+        <dt>{{ 'content.record.dev.uuid' | transloco }}</dt>
+        <dd><sf-copyable [value]="record().uuid ?? ''" [label]="'content.record.dev.uuid' | transloco" /></dd>
+      </div>
+      <div class="record-header__meta-item">
+        <dt>{{ 'content.record.dev.snippet' | transloco }}</dt>
+        <dd><sf-copyable [value]="snippet()" [label]="'content.record.dev.snippet' | transloco" /></dd>
+      </div>
+    </dl>
+  }
+</div>

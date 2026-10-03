@@ -231,6 +231,7 @@
               [description]="'styleguide.sample.media.usedBy.noneHint' | transloco"
             />
           }
+          <sf-sample-asset-urls class="urls" [urls]="urls()" [failed]="state.urlsFailed()" (retry)="state.urlsFailed.set(false)" />
         }
 
         @case ('versions') {

@@ -1,4 +1,4 @@
-import type { ContentDefinition, EditorDefinition, EditorType } from '../forms/form.model';
+import type { ContentDefinition, EditorDefinition, EditorType, SelectOption } from '../forms/form.model';
 import type { RecordSort } from './content.service';
 
 /**
@@ -26,6 +26,8 @@ export interface RecordColumn {
   type: EditorType;
   /** Shown unless the viewer hid it; long text starts hidden. */
   defaultVisible: boolean;
+  /** A SELECT editor's choices (value and label), for the filter builder and the cell's text. */
+  options?: SelectOption[];
 }
 
 /**
@@ -49,30 +51,13 @@ export function deriveColumns(
           label: editor.label?.trim() || editor.name,
           type: editor.type,
           defaultVisible: editor.type !== 'TEXTAREA' && editor.name !== titleEditor,
+          ...(editor.type === 'SELECT' && editor.options?.length ? { options: editor.options } : {}),
         });
       }
     }
   };
   walk(definition?.editors);
   return columns;
-}
-
-/**
- * The next sort after a header activation. A plain activation sorts by that column alone, cycling
- * ascending → descending → unsorted; with `additive` (shift-click) the column is added to, cycled
- * within, or removed from the existing keys and the others keep their order.
- */
-export function toggleSort(current: RecordSort[], field: string, additive: boolean): RecordSort[] {
-  const existing = current.find((s) => s.field === field);
-  const next: RecordSort | null =
-    !existing ? { field, direction: 'asc' } : existing.direction === 'asc' ? { field, direction: 'desc' } : null;
-  if (!additive) {
-    return next ? [next] : [];
-  }
-  if (!existing) {
-    return [...current, next!];
-  }
-  return next ? current.map((s) => (s.field === field ? next : s)) : current.filter((s) => s.field !== field);
 }
 
 /**
@@ -84,57 +69,30 @@ export function sanitizeSort(sort: RecordSort[], columns: RecordColumn[]): Recor
   return sort.filter((s) => META_SORT_FIELDS.has(s.field) || allowed.has(s.field));
 }
 
-/** The position (1-based) and direction of a column in a multi-key sort, for the header indicator. */
-export function sortIndicator(sort: RecordSort[], field: string): { position: number; direction: 'asc' | 'desc' } | null {
-  const index = sort.findIndex((s) => s.field === field);
-  return index < 0 ? null : { position: index + 1, direction: sort[index].direction };
+/** The words a cell shows for a boolean (translated by the caller). */
+export interface BooleanLabels {
+  yes: string;
+  no: string;
 }
 
-/** `aria-sort` for a column header; multi-key sorts report only the primary key as sorted. */
-export function ariaSort(sort: RecordSort[], field: string): 'ascending' | 'descending' | 'none' {
-  if (sort[0]?.field !== field) {
-    return 'none';
-  }
-  return sort[0].direction === 'asc' ? 'ascending' : 'descending';
-}
-
-/** A cell's text: booleans as Yes/No, absent values empty, everything else as-is. */
-export function formatCell(value: unknown, type: EditorType): string {
+/** A cell's text: booleans as Yes/No, a select's value as its option's label, absent values empty, everything else as-is. */
+export function formatCell(value: unknown, column: Pick<RecordColumn, 'type' | 'options'>, labels: BooleanLabels): string {
   if (value === null || value === undefined || value === '') {
     return '';
   }
-  if (type === 'BOOLEAN') {
-    return value === true ? 'Yes' : value === false ? 'No' : String(value);
+  if (column.type === 'BOOLEAN') {
+    return value === true ? labels.yes : value === false ? labels.no : String(value);
   }
-  if (type === 'DATETIME' && typeof value === 'string') {
+  if (column.type === 'SELECT') {
+    return column.options?.find((option) => option.value === value)?.label ?? String(value);
+  }
+  if (column.type === 'DATETIME' && typeof value === 'string') {
     return value.replace('T', ' ').replace(/(:\d\d)(\.\d+)?Z$/, '$1 UTC');
   }
   return String(value);
 }
 
-const HIDDEN_COLUMNS_KEY = 'sf-record-grid-hidden';
-
-/**
- * The columns a viewer hid for one dataset, remembered in `localStorage` (a per-viewer convenience:
- * storage may be unavailable, so every access is guarded and the default is "nothing hidden").
- */
-export function readHiddenColumns(projectKey: string, datasetUuid: string): Set<string> | null {
-  try {
-    const raw = localStorage.getItem(`${HIDDEN_COLUMNS_KEY}:${projectKey}:${datasetUuid}`);
-    if (!raw) {
-      return null;
-    }
-    const parsed: unknown = JSON.parse(raw);
-    return Array.isArray(parsed) ? new Set(parsed.filter((v): v is string => typeof v === 'string')) : null;
-  } catch {
-    return null;
-  }
-}
-
-export function writeHiddenColumns(projectKey: string, datasetUuid: string, hidden: ReadonlySet<string>): void {
-  try {
-    localStorage.setItem(`${HIDDEN_COLUMNS_KEY}:${projectKey}:${datasetUuid}`, JSON.stringify([...hidden]));
-  } catch {
-    // Storage unavailable (private mode, quota): the choice just isn't remembered.
-  }
+/** The wire sort of a data-table sort: the column ids are the field names (`_displayName`, `_changedAt`, a dataset field). */
+export function toRecordSort(sort: readonly { id: string; direction: 'asc' | 'desc' }[]): RecordSort[] {
+  return sort.map((key) => ({ field: key.id, direction: key.direction }));
 }

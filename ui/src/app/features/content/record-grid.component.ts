@@ -2,7 +2,6 @@ import { HttpErrorResponse } from '@angular/common/http';
 import {
   ChangeDetectionStrategy,
   Component,
-  ElementRef,
   computed,
   effect,
   inject,
@@ -10,28 +9,43 @@ import {
   output,
   signal,
   untracked,
-  viewChildren,
+  viewChild,
 } from '@angular/core';
-import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { debounceTime, distinctUntilChanged, Subject, Subscription } from 'rxjs';
+import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
+import { type Subscription, firstValueFrom } from 'rxjs';
+import { DeveloperModeService } from '../../core/frame/developer-mode.service';
+import { EditingLocaleStore } from '../../core/project/editing-locale.store';
+import { LocalesStore } from '../../core/project/locales.store';
+import { ProjectPermissionsStore } from '../../core/project/project-permissions.store';
+import { ToastService } from '../../core/ui/toast.service';
+import type {
+  SfDataTableBulkAction,
+  SfDataTableColumn,
+  SfDataTableQuery,
+  SfDataTableSelection,
+} from '../../shared/components/data-table/data-table.types';
+import { SfDataTableCellDirective } from '../../shared/components/data-table/sf-data-table-templates.directive';
+import { SfDataTableComponent } from '../../shared/components/data-table/sf-data-table.component';
+import { SfRelativeTimeComponent } from '../../shared/components/display/sf-relative-time.component';
+import { SfStatusComponent } from '../../shared/components/display/sf-status.component';
+import { SfFindingComponent } from '../../shared/components/forms/sf-finding.component';
+import { SfInputComponent } from '../../shared/components/forms/sf-input.component';
+import { SfSegmentedComponent, type SfSegmentedOption } from '../../shared/components/forms/sf-segmented.component';
+import { SfAssetFavoriteComponent } from '../../shared/components/sf-asset-favorite.component';
 import { SfButtonComponent } from '../../shared/components/sf-button.component';
 import { SfIconComponent } from '../../shared/components/sf-icon.component';
-import { SfRelativeTimePipe } from '../../shared/pipes/sf-relative-time.pipe';
-import { ReleaseBadgeComponent } from '../release/release-badge.component';
-import { ReleaseEventsStore } from '../release/release-events.store';
+import { SfTooltipDirective } from '../../shared/directives/sf-tooltip.directive';
 import type { ContentDefinition } from '../forms/form.model';
+import { releaseTone } from '../pages/folder-view.util';
+import { ReleaseDialogComponent } from '../release/release-dialog.component';
+import { ReleaseEventsStore } from '../release/release-events.store';
+import { type ReleaseChoice, choicesFor } from '../release/release-choice.util';
+import { localeStatuses, localeTag, statusLabel } from '../release/release-status.util';
+import type { MoveTarget } from './content-tree.util';
 import { ContentService, type DatasetDetailView, type RecordRowView, type RecordSort } from './content.service';
-import {
-  ariaSort,
-  deriveColumns,
-  formatCell,
-  readHiddenColumns,
-  sanitizeSort,
-  sortIndicator,
-  toggleSort,
-  writeHiddenColumns,
-  type RecordColumn,
-} from './record-grid.util';
+import { MoveTargetDialogComponent } from './move-target-dialog.component';
+import { type BulkRecord, RecordSetActions } from './record-set-actions.service';
+import { deriveColumns, formatCell, sanitizeSort, toRecordSort, type RecordColumn } from './record-grid.util';
 
 /** The problem body of a rejected `where`/`sort` (`400`, with `column` for a syntax error). */
 interface QueryProblem {
@@ -40,53 +54,70 @@ interface QueryProblem {
 }
 
 /**
- * `all`: every record of the set, those the set query leaves out dimmed; `rendered`: only what the
- * set shows, in its order.
+ * `rendered`: only what the set shows, in its order (the default); `all`: every record of the set, those the set query
+ * leaves out marked.
  */
 export type RecordGridMode = 'all' | 'rendered';
 
-/** The grid's own filter and sort, handed to the set query panel ("Use current filter as set query"). */
+/** The grid's own filter and sort, handed to the set query panel ("Use as set filter"). */
 export interface GridFilter {
   where: string;
   sort: RecordSort[];
 }
 
-/** Tooltip of a row the set query leaves out. */
-export const EXCLUDED_BY_QUERY = 'Not shown on the site: the set query leaves this record out.';
-/** Tooltip of every row while the stored set query is invalid (the set shows nothing then). */
-export const EXCLUDED_INVALID_QUERY = 'Not shown on the site: the set query is invalid, so the set shows no records.';
+/** The page size of "select all N matching" reads: the server's largest. */
+const FETCH_ALL_SIZE = 500;
+
+/** Column ids that are not dataset fields start with an underscore, so a dataset field can never share one. */
+const NAME_COLUMN = '_displayName';
+const STATUS_COLUMN = '_status';
+const CHANGED_COLUMN = '_changedAt';
+const UID_COLUMN = '_uid';
 
 /**
- * The records of one record set as a table (M19.4.2, scoped to a set in M25.5.1), paged, sorted
- * and filtered on the server so a set of any size never loads more than one page of rows.
+ * The records of one record set as a table (M19.4.2, scoped to a set in M25.5.1, on `sf-data-table` since M35.20), paged,
+ * sorted and searched on the server so a set of any size never loads more than one page of rows.
  *
- * <p>Two views of the set: **All records** (the default) lists every record and dims the ones the
- * stored set query leaves out — each row's `selectedBySet` flag, which the server computes over the
- * whole set; **Show as rendered** applies the set query first, so rows appear in render order and
- * excluded records are hidden. With `revision` (time travel) the server lists the set as of that
- * revision: its records, their values and its stored query then. The quick search, filter box and header sort only narrow what
- * the grid shows: they never change the set query. "Use as set query" hands them to the query panel
- * as an unsaved draft.
+ * <p>Two views of the set: **Shown by the filter** (the default) applies the stored set query first, so rows appear in
+ * render order and excluded records are hidden; **All records** lists every record and marks the ones the stored set
+ * query leaves out — each row's `selectedBySet` flag, which the server computes over the whole set. With `revision`
+ * (time travel) the server lists the set as of that revision: its records, their values and its stored query then. The
+ * quick search, the expression box and the header sort only narrow what the grid shows: they never change the set query.
+ * "Use as set filter" hands them to the query panel as an unsaved draft.
  *
- * <p>Columns come from the dataset schema's scalar editors; a viewer can hide columns (remembered per
- * dataset in this browser). Clicking a header sorts by it, shift-click adds it as a further key. The
- * filter box takes an OCTL expression over field names ({@code role == 'lead'}), evaluated by the
- * server, which reports where an invalid one goes wrong.
+ * <p>Columns come from the dataset schema's scalar editors (the table remembers the viewer's choice of columns); the
+ * header sorts by a column, Shift adds a further key. Developer mode adds an expression box over field names
+ * ({@code role == 'lead'}), evaluated by the server, which reports where an invalid one goes wrong.
  *
- * <p>Keyboard: arrow keys move between rows, Enter opens one; headers are buttons, so Enter/Space
- * sorts and Shift+Enter adds a key.
+ * <p>Rows are selectable: **Release…**, **Move…** (into another set of the dataset) and **Delete** (the word `delete` from
+ * 25 records on; one Undo for the group) work on the selection, and "select all N matching" reaches records on other
+ * pages. Opening a row emits `open`.
  */
 @Component({
   selector: 'sf-record-grid',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [SfButtonComponent, SfIconComponent, SfRelativeTimePipe, ReleaseBadgeComponent],
+  imports: [
+    MoveTargetDialogComponent,
+    ReleaseDialogComponent,
+    SfAssetFavoriteComponent,
+    SfButtonComponent,
+    SfDataTableCellDirective,
+    SfDataTableComponent,
+    SfFindingComponent,
+    SfIconComponent,
+    SfInputComponent,
+    SfRelativeTimeComponent,
+    SfSegmentedComponent,
+    SfStatusComponent,
+    SfTooltipDirective,
+    TranslocoPipe,
+  ],
   templateUrl: './record-grid.component.html',
   styleUrl: './record-grid.component.scss',
 })
 export class RecordGridComponent {
   readonly projectKey = input.required<string>();
-  private readonly releaseEvents = inject(ReleaseEventsStore);
   /** The set's dataset: its schema gives the columns. */
   readonly dataset = input.required<DatasetDetailView>();
   readonly recordSetUuid = input.required<string>();
@@ -94,64 +125,127 @@ export class RecordGridComponent {
   readonly queryValid = input<boolean>(true);
   /** Time travel: list the set as of this revision (`null`: current). */
   readonly revision = input<number | null>(null);
-  /** Whether "Use as set query" is offered (an editor, not time travelling). */
+  /** Whether "Use as set filter" is offered (an editor, not time travelling). */
   readonly canEditQuery = input<boolean>(false);
+  /** No selection, no bulk actions (time travel, a viewer). */
+  readonly readOnly = input<boolean>(false);
   readonly pageSize = input<number>(50);
   /** Bumped by the parent after a record or the set query changed elsewhere, to reload the current page. */
   readonly refreshKey = input<number>(0);
+  /** Which records are listed; the set view keeps it in the URL. */
+  readonly mode = input<RecordGridMode>('rendered');
 
   readonly open = output<string>();
   readonly total = output<number>();
   readonly useAsSetQuery = output<GridFilter>();
+  readonly modeChange = output<RecordGridMode>();
+  /** A bulk action changed records (deleted, moved): the set's count and the tree are stale. */
+  readonly changed = output<void>();
 
   private readonly content = inject(ContentService);
-  private readonly rowElements = viewChildren<ElementRef<HTMLTableRowElement>>('row');
+  private readonly actions = inject(RecordSetActions);
+  private readonly toasts = inject(ToastService);
+  private readonly transloco = inject(TranslocoService);
+  private readonly releaseEvents = inject(ReleaseEventsStore);
+  private readonly locales = inject(LocalesStore);
+  private readonly editingLocale = inject(EditingLocaleStore);
+  protected readonly permissions = inject(ProjectPermissionsStore);
+  protected readonly developerMode = inject(DeveloperModeService).enabled;
+  private readonly table = viewChild.required<SfDataTableComponent<RecordRowView>>(SfDataTableComponent);
 
-  protected readonly mode = signal<RecordGridMode>('all');
   protected readonly rows = signal<RecordRowView[]>([]);
   protected readonly totalElements = signal(0);
-  protected readonly totalPages = signal(0);
-  protected readonly page = signal(0);
-  protected readonly sort = signal<RecordSort[]>([]);
-  protected readonly q = signal('');
+  /** The table's query (search, sort, page): `null` until it has reported its first. */
+  private readonly query = signal<SfDataTableQuery | null>(null);
   protected readonly whereDraft = signal('');
   protected readonly where = signal('');
   protected readonly whereError = signal<QueryProblem | null>(null);
-  protected readonly loading = signal(false);
-  protected readonly activeRow = signal(0);
-  protected readonly chooserOpen = signal(false);
-  private readonly hidden = signal<Set<string>>(new Set());
+  protected readonly loading = signal(true);
+  protected readonly loadFailed = signal(false);
+  protected readonly releaseChoices = signal<ReleaseChoice[] | null>(null);
+  protected readonly moveDialog = signal<{ records: BulkRecord[]; targets: MoveTarget[] } | null>(null);
+  protected readonly moving = signal(false);
 
-  private readonly search$ = new Subject<string>();
+  /** Every record seen in a loaded page, so a selection that spans pages still has names to show. */
+  private seen = new Map<string, RecordRowView>();
   private request: Subscription | null = null;
 
-  protected readonly columns = computed<RecordColumn[]>(() =>
+  private readonly columns = computed<RecordColumn[]>(() =>
     deriveColumns(this.dataset().compiledDefinition as unknown as ContentDefinition, this.dataset().titleEditor),
   );
-  protected readonly visibleColumns = computed(() => this.columns().filter((c) => !this.hidden().has(c.field)));
-  /** Something to hand to the set query: an applied filter or a header sort. */
-  protected readonly hasGridFilter = computed(() => this.where() !== '' || this.sort().length > 0);
 
-  protected readonly format = formatCell;
-  protected readonly indicator = sortIndicator;
-  protected readonly ariaSortOf = ariaSort;
+  protected readonly tableColumns = computed<SfDataTableColumn<RecordRowView>[]>(() => {
+    const t = (id: string) => this.transloco.translate(`content.recordSet.grid.columns.${id}`);
+    const labels = { yes: this.transloco.translate('content.recordSet.grid.yes'), no: this.transloco.translate('content.recordSet.grid.no') };
+    const fields = this.columns().map<SfDataTableColumn<RecordRowView>>((column) => {
+      const numeric = column.type === 'NUMBER';
+      return {
+        id: column.field,
+        header: column.label,
+        value: (row) => formatCell((row.values as Record<string, unknown> | undefined)?.[column.field], column, labels),
+        sortable: true,
+        hidden: !column.defaultVisible,
+        align: numeric ? 'end' : 'start',
+        width: numeric ? 110 : 150,
+      };
+    });
+    const columns: SfDataTableColumn<RecordRowView>[] = [
+      { id: NAME_COLUMN, header: t('name'), value: (row) => row.displayName ?? '', sortable: true, hideable: false, width: 260 },
+      ...fields,
+      { id: STATUS_COLUMN, header: t('status'), value: (row) => localeStatuses(row.release).map((e) => e.status).join(), width: 160, searchable: false },
+      { id: CHANGED_COLUMN, header: t('modified'), value: (row) => row.changedAt ?? '', sortable: true, width: 150, searchable: false },
+    ];
+    // The uid is a developer's detail.
+    if (this.developerMode()) {
+      columns.push({ id: UID_COLUMN, header: t('uid'), value: (row) => row.uid ?? '', sortable: true, width: 200, searchable: false });
+    }
+    return columns;
+  });
+
+  protected readonly modeOptions = computed<SfSegmentedOption<RecordGridMode>[]>(() => [
+    { value: 'rendered', label: this.transloco.translate('content.recordSet.grid.mode.rendered') },
+    { value: 'all', label: this.transloco.translate('content.recordSet.grid.mode.all') },
+  ]);
+
+  protected readonly bulkActions = computed<SfDataTableBulkAction<RecordRowView>[]>(() => {
+    if (this.readOnly()) {
+      return [];
+    }
+    const t = (id: string) => this.transloco.translate(`content.recordSet.bulk.${id}`);
+    const actions: SfDataTableBulkAction<RecordRowView>[] = [];
+    if (this.permissions.canRelease()) {
+      actions.push({ id: 'release', label: t('release'), icon: 'publish', action: (s) => void this.releaseSelection(s) });
+    }
+    actions.push(
+      { id: 'move', label: t('move'), icon: 'drive_file_move', action: (s) => void this.moveSelection(s) },
+      { id: 'delete', label: t('delete'), icon: 'delete', variant: 'danger', action: (s) => void this.deleteSelection(s) },
+    );
+    return actions;
+  });
+
+  /** Something to hand to the set query: an applied filter or a header sort. */
+  protected readonly hasGridFilter = computed(() => this.where() !== '' || (this.query()?.sort.length ?? 0) > 0);
+
+  protected readonly tableError = computed(() =>
+    this.loadFailed() ? this.transloco.translate('content.recordSet.grid.loadFailed') : null,
+  );
+
+  protected readonly emptyTitle = computed(() =>
+    this.transloco.translate(
+      this.mode() === 'rendered' && !this.queryValid() ? 'content.recordSet.grid.emptyInvalid' : 'content.recordSet.grid.empty',
+    ),
+  );
+
+  protected readonly rowKey = (row: RecordRowView): string => row.uuid ?? '';
+  protected readonly rowLabel = (row: RecordRowView): string => row.displayName ?? row.uid ?? '';
 
   constructor() {
-    // Hidden columns are per dataset: re-read whenever the dataset changes.
-    effect(
-      () => {
-        const key = this.projectKey();
-        const dataset = this.dataset();
-        const columns = this.columns();
-        untracked(() => {
-          const remembered = dataset.uuid ? readHiddenColumns(key, dataset.uuid) : null;
-          this.hidden.set(remembered ?? new Set(columns.filter((c) => !c.defaultVisible).map((c) => c.field)));
-          // A schema change can remove a sorted column: fall back to the default order silently.
-          this.sort.update((sort) => sanitizeSort(sort, columns));
-        });
-      },
-      { allowSignalWrites: true },
-    );
+    // Another set or another revision: the rows seen so far belong to something else.
+    effect(() => {
+      this.recordSetUuid();
+      this.revision();
+      untracked(() => (this.seen = new Map()));
+    });
 
     effect(
       () => {
@@ -160,135 +254,46 @@ export class RecordGridComponent {
         this.revision();
         this.mode();
         this.queryValid();
-        this.q();
         this.where();
-        this.sort();
         this.refreshKey();
         // Release actions change the rows' statuses (M27.6.1).
         this.releaseEvents.version();
-        const page = this.page();
-        untracked(() => this.reload(page));
+        const query = this.query();
+        if (query) {
+          untracked(() => this.reload(query, query.page));
+        }
       },
       { allowSignalWrites: true },
     );
-
-    this.search$
-      .pipe(debounceTime(250), distinctUntilChanged(), takeUntilDestroyed())
-      .subscribe((value) => {
-        this.page.set(0);
-        this.q.set(value);
-      });
   }
 
-  /** Whether a shown row is one the set query leaves out (`all` mode; the server's `selectedBySet`). */
-  protected isExcluded(row: RecordRowView): boolean {
-    return this.mode() === 'all' && row.selectedBySet === false;
+  protected onQuery(query: SfDataTableQuery): void {
+    this.query.set(query);
   }
 
-  protected excludedTooltip(): string {
-    return this.queryValid() ? EXCLUDED_BY_QUERY : EXCLUDED_INVALID_QUERY;
-  }
-
-  protected setMode(mode: RecordGridMode): void {
-    if (this.mode() !== mode) {
-      this.page.set(0);
-      this.mode.set(mode);
+  protected setMode(mode: RecordGridMode | null): void {
+    if (mode && mode !== this.mode()) {
+      this.modeChange.emit(mode);
     }
   }
 
-  protected useFilterAsSetQuery(): void {
-    this.useAsSetQuery.emit({ where: this.where(), sort: this.sort().map((s) => ({ ...s })) });
-  }
+  // ── The expression filter (developer mode) ────────────────────────────────
 
-  protected onSearch(event: Event): void {
-    this.search$.next((event.target as HTMLInputElement).value);
-  }
-
-  protected onWhereInput(event: Event): void {
-    this.whereDraft.set((event.target as HTMLInputElement).value);
+  protected onWhereInput(value: string): void {
+    this.whereDraft.set(value);
   }
 
   protected applyWhere(): void {
-    this.page.set(0);
     this.where.set(this.whereDraft().trim());
   }
 
   protected clearWhere(): void {
     this.whereDraft.set('');
-    this.page.set(0);
     this.where.set('');
   }
 
-  protected onWhereKeydown(event: KeyboardEvent): void {
-    if (event.key === 'Enter') {
-      event.preventDefault();
-      this.applyWhere();
-    }
-  }
-
-  protected onHeader(field: string, event: MouseEvent | KeyboardEvent): void {
-    this.page.set(0);
-    this.sort.update((sort) => toggleSort(sort, field, event.shiftKey));
-  }
-
-  protected toggleColumn(field: string): void {
-    const next = new Set(this.hidden());
-    if (next.has(field)) {
-      next.delete(field);
-    } else {
-      next.add(field);
-    }
-    this.hidden.set(next);
-    const uuid = this.dataset().uuid;
-    if (uuid) {
-      writeHiddenColumns(this.projectKey(), uuid, next);
-    }
-  }
-
-  protected isHidden(field: string): boolean {
-    return this.hidden().has(field);
-  }
-
-  protected toggleChooser(): void {
-    this.chooserOpen.update((v) => !v);
-  }
-
-  protected previousPage(): void {
-    if (this.page() > 0) {
-      this.page.update((p) => p - 1);
-    }
-  }
-
-  protected nextPage(): void {
-    if (this.page() + 1 < this.totalPages()) {
-      this.page.update((p) => p + 1);
-    }
-  }
-
-  protected openRow(row: RecordRowView): void {
-    if (row.uuid) {
-      this.open.emit(row.uuid);
-    }
-  }
-
-  protected onRowKeydown(event: KeyboardEvent, index: number, row: RecordRowView): void {
-    const count = this.rows().length;
-    if (event.key === 'ArrowDown' && index + 1 < count) {
-      event.preventDefault();
-      this.focusRow(index + 1);
-    } else if (event.key === 'ArrowUp' && index > 0) {
-      event.preventDefault();
-      this.focusRow(index - 1);
-    } else if (event.key === 'Home') {
-      event.preventDefault();
-      this.focusRow(0);
-    } else if (event.key === 'End') {
-      event.preventDefault();
-      this.focusRow(count - 1);
-    } else if (event.key === 'Enter' || event.key === ' ') {
-      event.preventDefault();
-      this.openRow(row);
-    }
+  protected useFilterAsSetQuery(): void {
+    this.useAsSetQuery.emit({ where: this.where(), sort: this.sortOf(this.query()) });
   }
 
   /** A caret under the applied filter pointing at the 1-based column the server reported. */
@@ -296,17 +301,57 @@ export class RecordGridComponent {
     return ' '.repeat(Math.max(0, column - 1)) + '^';
   }
 
-  protected valueOf(row: RecordRowView, column: RecordColumn): string {
-    const values = (row.values ?? {}) as Record<string, unknown>;
-    return formatCell(values[column.field], column.type);
+  // ── Rows ───────────────────────────────────────────────────────────────────
+
+  protected openRow(row: RecordRowView): void {
+    if (row.uuid) {
+      this.open.emit(row.uuid);
+    }
   }
 
-  private focusRow(index: number): void {
-    this.activeRow.set(index);
-    queueMicrotask(() => this.rowElements()[index]?.nativeElement.focus());
+  protected isExcluded(row: RecordRowView): boolean {
+    return this.mode() === 'all' && row.selectedBySet === false;
   }
 
-  private reload(page: number): void {
+  protected excludedTooltip(): string {
+    return this.transloco.translate(
+      this.queryValid() ? 'content.recordSet.grid.excluded' : 'content.recordSet.grid.excludedInvalid',
+    );
+  }
+
+  protected statuses(row: RecordRowView) {
+    return localeStatuses(row.release).map((entry) => ({
+      key: entry.key,
+      tag: localeTag(entry.key),
+      label: statusLabel(entry.status),
+      tone: releaseTone(entry.status),
+    }));
+  }
+
+  protected retry(): void {
+    const query = this.query();
+    if (query) {
+      this.reload(query, query.page);
+    }
+  }
+
+  private sortOf(query: SfDataTableQuery | null): RecordSort[] {
+    return sanitizeSort(toRecordSort(query?.sort ?? []), this.columns());
+  }
+
+  private params(query: SfDataTableQuery, page: number, size: number) {
+    return {
+      page,
+      size,
+      sort: this.sortOf(query),
+      q: query.search,
+      where: this.where(),
+      applySetQuery: this.mode() === 'rendered',
+      revision: this.revision(),
+    };
+  }
+
+  private reload(query: SfDataTableQuery, page: number): void {
     const key = this.projectKey();
     const uuid = this.recordSetUuid();
     if (!key || !uuid) {
@@ -314,39 +359,150 @@ export class RecordGridComponent {
     }
     this.request?.unsubscribe();
     this.loading.set(true);
-    this.request = this.content
-      .listSetRecords(key, uuid, {
-        page,
-        size: this.pageSize(),
-        sort: this.sort(),
-        q: this.q(),
-        where: this.where(),
-        applySetQuery: this.mode() === 'rendered',
-        revision: this.revision(),
-      })
-      .subscribe({
-        next: (result) => {
-          const rows = result.content ?? [];
-          this.loading.set(false);
-          this.whereError.set(null);
-          this.rows.set(rows);
-          this.totalElements.set(result.page?.totalElements ?? 0);
-          this.totalPages.set(result.page?.totalPages ?? 0);
-          this.activeRow.set(0);
-          this.total.emit(result.page?.totalElements ?? 0);
-        },
-        error: (err: unknown) => {
-          this.loading.set(false);
-          this.rows.set([]);
-          this.totalElements.set(0);
-          this.totalPages.set(0);
-          if (err instanceof HttpErrorResponse && err.status === 400) {
-            const body = (err.error ?? {}) as QueryProblem;
-            this.whereError.set({ detail: body.detail ?? 'The filter is invalid.', column: body.column });
-          } else {
-            this.whereError.set({ detail: 'Could not load records — try again in a moment.' });
+    this.request = this.content.listSetRecords(key, uuid, this.params(query, page, this.pageSize())).subscribe({
+      next: (result) => {
+        const rows = result.content ?? [];
+        const total = result.page?.totalElements ?? 0;
+        if (rows.length === 0 && total > 0 && page > 0) {
+          // Records went away under the page the table is on (a bulk delete, a search): read the last page that exists.
+          this.reload(query, Math.max(0, Math.ceil(total / this.pageSize()) - 1));
+          return;
+        }
+        this.loading.set(false);
+        this.loadFailed.set(false);
+        this.whereError.set(null);
+        for (const row of rows) {
+          if (row.uuid) {
+            this.seen.set(row.uuid, row);
           }
-        },
-      });
+        }
+        this.rows.set(rows);
+        this.totalElements.set(total);
+        this.total.emit(total);
+      },
+      error: (err: unknown) => {
+        this.loading.set(false);
+        this.rows.set([]);
+        this.totalElements.set(0);
+        if (err instanceof HttpErrorResponse && err.status === 400) {
+          const body = (err.error ?? {}) as QueryProblem;
+          this.loadFailed.set(false);
+          this.whereError.set({ detail: body.detail ?? this.transloco.translate('content.recordSet.grid.filterInvalid'), column: body.column });
+        } else {
+          this.whereError.set(null);
+          this.loadFailed.set(true);
+        }
+      },
+    });
+  }
+
+  // ── Bulk actions ───────────────────────────────────────────────────────────
+
+  /**
+   * The records a selection stands for: the ones seen in a loaded page, or — with "select all N matching" — every record
+   * of the current query, read page by page.
+   */
+  private async recordsOf(selection: SfDataTableSelection<RecordRowView>): Promise<RecordRowView[]> {
+    const query = this.query();
+    if (!selection.allMatching || !query) {
+      return selection.keys.map((key) => this.seen.get(key)).filter((row): row is RecordRowView => !!row);
+    }
+    const all: RecordRowView[] = [];
+    for (let page = 0; ; page++) {
+      const result = await firstValueFrom(
+        this.content.listSetRecords(this.projectKey(), this.recordSetUuid(), this.params(query, page, FETCH_ALL_SIZE)),
+      );
+      all.push(...(result.content ?? []));
+      if (all.length >= (result.page?.totalElements ?? 0) || (result.content ?? []).length === 0) {
+        return all;
+      }
+    }
+  }
+
+  private async resolve(selection: SfDataTableSelection<RecordRowView>): Promise<RecordRowView[]> {
+    try {
+      return await this.recordsOf(selection);
+    } catch {
+      this.toasts.show(this.transloco.translate('content.recordSet.bulk.readFailed'), 'error');
+      return [];
+    }
+  }
+
+  private bulkRecord(row: RecordRowView): BulkRecord {
+    return { uuid: row.uuid ?? '', name: row.displayName ?? row.uid ?? '', release: row.release };
+  }
+
+  private async releaseSelection(selection: SfDataTableSelection<RecordRowView>): Promise<void> {
+    const rows = await this.resolve(selection);
+    const labelOf = (code: string) => this.locales.labelOf(code);
+    const locale = this.editingLocale.locale();
+    const choices = rows.flatMap((row) =>
+      choicesFor(
+        { uuid: row.uuid ?? '', type: 'RECORD', uid: row.uid, displayName: row.displayName, folderPath: row.folderPath, release: row.release },
+        'release',
+        locale,
+        labelOf,
+      ).map((choice) => ({ ...choice, label: `${row.displayName ?? row.uid} · ${choice.label}`, checked: true })),
+    );
+    if (choices.length === 0) {
+      this.toasts.show(this.transloco.translate('content.recordSet.bulk.nothingToRelease'), 'info');
+      return;
+    }
+    this.releaseChoices.set(choices);
+  }
+
+  protected releaseDone(): void {
+    this.releaseChoices.set(null);
+    this.table().clearSelection();
+  }
+
+  private async moveSelection(selection: SfDataTableSelection<RecordRowView>): Promise<void> {
+    const records = (await this.resolve(selection)).map((row) => this.bulkRecord(row));
+    const datasetUuid = this.dataset().uuid;
+    if (records.length === 0 || !datasetUuid) {
+      return;
+    }
+    try {
+      const targets = await firstValueFrom(this.actions.moveTargets(this.projectKey(), datasetUuid, this.recordSetUuid()));
+      this.moveDialog.set({ records, targets });
+    } catch {
+      this.toasts.show(this.transloco.translate('content.recordSet.bulk.targetsFailed'), 'error');
+    }
+  }
+
+  protected closeMove(): void {
+    this.moveDialog.set(null);
+  }
+
+  protected async onMoveChosen(uuid: string | null): Promise<void> {
+    const dialog = this.moveDialog();
+    const target = dialog?.targets.find((t) => t.uuid === uuid);
+    if (!dialog || !target) {
+      return;
+    }
+    this.moving.set(true);
+    const moved = await this.actions.moveRecords(this.projectKey(), dialog.records, this.recordSetUuid(), target, () => this.afterChange());
+    this.moving.set(false);
+    this.moveDialog.set(null);
+    if (moved) {
+      this.afterChange();
+    }
+  }
+
+  private async deleteSelection(selection: SfDataTableSelection<RecordRowView>): Promise<void> {
+    const records = (await this.resolve(selection)).map((row) => this.bulkRecord(row));
+    if (await this.actions.deleteRecords(this.projectKey(), records, () => this.afterChange())) {
+      this.afterChange();
+    }
+  }
+
+  /** A bulk action (or its Undo) changed records: reload, drop the selection, and let the set view refresh its count. */
+  private afterChange(): void {
+    this.table().clearSelection();
+    const query = this.query();
+    if (query) {
+      this.reload(query, query.page);
+    }
+    this.changed.emit();
   }
 }

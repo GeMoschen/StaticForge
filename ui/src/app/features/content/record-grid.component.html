@@ -1,175 +1,126 @@
-<div class="record-grid">
-  <div class="record-grid__toolbar">
-    <div class="record-grid__modes" role="radiogroup" aria-label="Records shown">
-      <button
-        type="button"
-        role="radio"
-        class="record-grid__mode"
-        [class.record-grid__mode--active]="mode() === 'all'"
-        [attr.aria-checked]="mode() === 'all'"
-        (click)="setMode('all')"
-      >
-        All records
-      </button>
-      <button
-        type="button"
-        role="radio"
-        class="record-grid__mode"
-        [class.record-grid__mode--active]="mode() === 'rendered'"
-        [attr.aria-checked]="mode() === 'rendered'"
-        (click)="setMode('rendered')"
-      >
-        Show as rendered
-      </button>
-    </div>
-    <label class="record-grid__search">
-      <sf-icon name="search" />
-      <span class="sf-sr-only">Search records by name</span>
-      <input type="search" placeholder="Search by name…" (input)="onSearch($event)" />
-    </label>
-    <div class="record-grid__filter">
-      <label class="sf-sr-only" [attr.for]="'where-' + recordSetUuid()">Filter expression</label>
-      <input
-        [id]="'where-' + recordSetUuid()"
-        type="text"
-        spellcheck="false"
-        placeholder="Filter, e.g. role == 'lead' && joined > '2022-01-01'"
-        [value]="whereDraft()"
-        [attr.aria-invalid]="whereError() ? true : null"
-        [attr.aria-describedby]="whereError() ? 'where-error-' + recordSetUuid() : null"
-        (input)="onWhereInput($event)"
-        (keydown)="onWhereKeydown($event)"
-      />
-      <sf-button variant="secondary" (click)="applyWhere()">Apply</sf-button>
-      @if (where()) {
-        <sf-button variant="ghost" (click)="clearWhere()">Clear</sf-button>
-      }
-    </div>
+@if (whereError(); as problem) {
+  <div class="grid__problem" [id]="'where-error-' + recordSetUuid()">
+    <sf-finding level="error" [message]="problem.detail ?? ''" />
+    @if (problem.column) {
+      <code class="grid__caret">{{ where() }}<br />{{ caretLine(problem.column) }}</code>
+    }
+  </div>
+}
+
+<sf-data-table
+  class="grid__table"
+  mode="server"
+  paging="pager"
+  urlSync=""
+  searchable
+  [selectable]="!readOnly()"
+  [tableId]="'records-' + dataset().uuid"
+  [pageSize]="pageSize()"
+  [total]="totalElements()"
+  [columns]="tableColumns()"
+  [rows]="rows()"
+  [rowKey]="rowKey"
+  [rowLabel]="rowLabel"
+  [label]="'content.recordSet.grid.table' | transloco: { name: dataset().displayName ?? dataset().uid }"
+  [searchPlaceholder]="'content.recordSet.grid.search' | transloco"
+  [bulkActions]="bulkActions()"
+  [loading]="loading()"
+  [error]="tableError()"
+  [emptyTitle]="emptyTitle()"
+  (queryChange)="onQuery($event)"
+  (rowOpen)="openRow($event)"
+  (retry)="retry()"
+>
+  <div sfDataTableToolbar class="grid__tools">
+    <sf-segmented
+      size="sm"
+      [options]="modeOptions()"
+      [value]="mode()"
+      [aria-label]="'content.recordSet.grid.mode.label' | transloco"
+      (valueChange)="setMode($event)"
+    />
+    @if (developerMode()) {
+      <span class="grid__expression">
+        <sf-input
+          monospace
+          icon="code"
+          class="grid__where"
+          [value]="whereDraft()"
+          [spellcheck]="false"
+          [invalid]="!!whereError()"
+          [aria-label]="'content.recordSet.grid.where' | transloco"
+          [placeholder]="'content.recordSet.grid.wherePlaceholder' | transloco"
+          (valueChange)="onWhereInput($event)"
+          (keydown.enter)="applyWhere()"
+        />
+        <sf-button variant="secondary" (click)="applyWhere()">{{ 'content.recordSet.grid.apply' | transloco }}</sf-button>
+        @if (where()) {
+          <sf-button variant="ghost" (click)="clearWhere()">{{ 'content.recordSet.grid.clear' | transloco }}</sf-button>
+        }
+      </span>
+    }
     @if (canEditQuery()) {
       <sf-button
         variant="ghost"
+        icon="filter_alt"
         [disabled]="!hasGridFilter()"
-        tooltip="Copy this filter and sort into the set query (not saved until you save the query)"
+        [tooltip]="'content.recordSet.grid.useTooltip' | transloco"
         (click)="useFilterAsSetQuery()"
       >
-        Use as set query
+        {{ 'content.recordSet.grid.use' | transloco }}
       </sf-button>
     }
-    <div class="record-grid__chooser">
-      <button type="button" class="record-grid__chooser-toggle" [attr.aria-expanded]="chooserOpen()" (click)="toggleChooser()">
-        <sf-icon name="view_column" /> Columns
-      </button>
-      @if (chooserOpen()) {
-        <div class="record-grid__chooser-menu" role="group" aria-label="Visible columns">
-          @for (column of columns(); track column.field) {
-            <label>
-              <input type="checkbox" [checked]="!isHidden(column.field)" (change)="toggleColumn(column.field)" />
-              {{ column.label }}
-            </label>
-          }
-        </div>
-      }
-    </div>
-  </div>
-  @if (whereError(); as problem) {
-    <p class="record-grid__error" role="alert" [id]="'where-error-' + recordSetUuid()">
-      {{ problem.detail }}
-      @if (problem.column) {
-        <code class="record-grid__caret">{{ where() }}<br />{{ caretLine(problem.column) }}</code>
-      }
-    </p>
-  }
-
-  <div class="record-grid__table-wrap">
-    <table class="record-grid__table" [attr.aria-busy]="loading()" [attr.aria-rowcount]="totalElements()">
-      <caption class="sf-sr-only">Records of {{ dataset().displayName }}</caption>
-      <thead>
-        <tr>
-          <th scope="col" [attr.aria-sort]="ariaSortOf(sort(), '_displayName')">
-            <button type="button" class="record-grid__sort" (click)="onHeader('_displayName', $event)">
-              Name
-              @if (indicator(sort(), '_displayName'); as ind) {
-                <sf-icon [name]="ind.direction === 'asc' ? 'arrow_upward' : 'arrow_downward'" />
-                @if (sort().length > 1) {
-                  <span class="record-grid__sort-pos">{{ ind.position }}</span>
-                }
-              }
-            </button>
-          </th>
-          @for (column of visibleColumns(); track column.field) {
-            <th scope="col" [attr.aria-sort]="ariaSortOf(sort(), column.field)">
-              <button type="button" class="record-grid__sort" (click)="onHeader(column.field, $event)">
-                {{ column.label }}
-                @if (indicator(sort(), column.field); as ind) {
-                  <sf-icon [name]="ind.direction === 'asc' ? 'arrow_upward' : 'arrow_downward'" />
-                  @if (sort().length > 1) {
-                    <span class="record-grid__sort-pos">{{ ind.position }}</span>
-                  }
-                }
-              </button>
-            </th>
-          }
-          <th scope="col" [attr.aria-sort]="ariaSortOf(sort(), '_changedAt')">
-            <button type="button" class="record-grid__sort" (click)="onHeader('_changedAt', $event)">
-              Changed
-              @if (indicator(sort(), '_changedAt'); as ind) {
-                <sf-icon [name]="ind.direction === 'asc' ? 'arrow_upward' : 'arrow_downward'" />
-              }
-            </button>
-          </th>
-        </tr>
-      </thead>
-      <tbody>
-        @for (row of rows(); track row.uuid; let rowIndex = $index) {
-          <tr
-            #row
-            class="record-grid__row"
-            [class.record-grid__row--excluded]="isExcluded(row)"
-            [attr.title]="isExcluded(row) ? excludedTooltip() : null"
-            [attr.tabindex]="rowIndex === activeRow() ? 0 : -1"
-            (click)="openRow(row)"
-            (keydown)="onRowKeydown($event, rowIndex, row)"
-            (focus)="activeRow.set(rowIndex)"
-          >
-            <td class="record-grid__name">
-              {{ row.displayName }}
-              <sf-release-badge [release]="row.release" [scheduled]="row.scheduled" [compact]="true" />
-              @if (isExcluded(row)) {
-                <span class="record-grid__excluded">
-                  <sf-icon name="visibility_off" />
-                  <span class="sf-sr-only">{{ excludedTooltip() }}</span>
-                </span>
-              }
-            </td>
-            @for (column of visibleColumns(); track column.field) {
-              <td>{{ valueOf(row, column) }}</td>
-            }
-            <td class="record-grid__muted">{{ row.changedAt | sfRelativeTime }}</td>
-          </tr>
-        } @empty {
-          <tr>
-            <td class="record-grid__empty" [attr.colspan]="visibleColumns().length + 2">
-              @if (loading()) {
-                Loading…
-              } @else if (mode() === 'rendered' && !queryValid()) {
-                The set query is invalid, so the set shows no records.
-              } @else {
-                No records match.
-              }
-            </td>
-          </tr>
-        }
-      </tbody>
-    </table>
   </div>
 
-  @if (totalPages() > 1) {
-    <nav class="record-grid__pager" aria-label="Record pages">
-      <sf-button variant="ghost" [disabled]="page() === 0" (click)="previousPage()">Previous</sf-button>
-      <span aria-live="polite">Page {{ page() + 1 }} of {{ totalPages() }} · {{ totalElements() }} records</span>
-      <sf-button variant="ghost" [disabled]="page() + 1 >= totalPages()" (click)="nextPage()">Next</sf-button>
-    </nav>
-  } @else {
-    <p class="record-grid__summary" aria-live="polite">{{ totalElements() }} records</p>
-  }
-</div>
+  <ng-template sfDataTableCell="_displayName" [sfDataTableCellRows]="rows()" let-row>
+    <span class="cell-name" [class.is-excluded]="isExcluded(row)">
+      <span class="cell-name__text">{{ row.displayName }}</span>
+      @if (isExcluded(row)) {
+        <sf-icon class="cell-name__excluded" name="visibility_off" [sfTooltip]="excludedTooltip()" />
+        <span class="sf-sr-only">{{ excludedTooltip() }}</span>
+      }
+      <sf-asset-favorite
+        class="cell-fav"
+        type="RECORD"
+        [uuid]="row.uuid"
+        [name]="row.displayName"
+        [folderPath]="row.folderPath"
+        (click)="$event.stopPropagation()"
+      />
+    </span>
+  </ng-template>
+  <ng-template sfDataTableCell="_status" [sfDataTableCellRows]="rows()" let-row>
+    <span class="cell-status">
+      @for (entry of statuses(row); track entry.key) {
+        <sf-status size="sm" [tone]="entry.tone" [label]="entry.tag" [detail]="entry.label" />
+      } @empty {
+        <span class="cell-muted">—</span>
+      }
+    </span>
+  </ng-template>
+  <ng-template sfDataTableCell="_changedAt" [sfDataTableCellRows]="rows()" let-row>
+    @if (row.changedAt) {
+      <sf-relative-time [value]="row.changedAt" />
+    } @else {
+      <span class="cell-muted">—</span>
+    }
+  </ng-template>
+  <ng-template sfDataTableCell="_uid" [sfDataTableCellRows]="rows()" let-row>
+    <code class="cell-code">{{ row.uid }}</code>
+  </ng-template>
+</sf-data-table>
+
+@if (releaseChoices(); as choices) {
+  <sf-release-dialog [projectKey]="projectKey()" mode="release" [choices]="choices" (done)="releaseDone()" (closed)="releaseChoices.set(null)" />
+}
+
+<sf-move-target-dialog
+  [open]="moveDialog() !== null"
+  [title]="'content.recordSet.bulk.moveTitle' | transloco: { count: moveDialog()?.records?.length ?? 0 }"
+  [description]="'content.recordSet.bulk.moveLead' | transloco"
+  [targets]="moveDialog()?.targets ?? []"
+  [emptyText]="'content.recordSet.bulk.moveEmpty' | transloco"
+  [submitting]="moving()"
+  (chosen)="onMoveChosen($event)"
+  (closed)="closeMove()"
+/>

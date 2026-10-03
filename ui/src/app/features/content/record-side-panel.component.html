@@ -1,85 +1,69 @@
-<aside class="record-editor__side">
-  <div class="record-editor__tabs" role="tablist">
-    <button type="button" role="tab" [attr.aria-selected]="panel() === 'issues'" [class.record-editor__tab--active]="panel() === 'issues'" (click)="panel.set('issues')">
-      Checks
-      @if (counted().length > 0) {
-        <span class="record-editor__count">{{ counted().length }}</span>
-      }
-    </button>
-    <button type="button" role="tab" [attr.aria-selected]="panel() === 'history'" [class.record-editor__tab--active]="panel() === 'history'" (click)="panel.set('history')">
-      History
-    </button>
-    <button type="button" role="tab" [attr.aria-selected]="panel() === 'usages'" [class.record-editor__tab--active]="panel() === 'usages'" (click)="panel.set('usages')">
-      Used by
-      @if (usages().length > 0) {
-        <span class="record-editor__count">{{ usages().length }}</span>
-      }
-    </button>
-  </div>
+@if (tab(); as current) {
+  <sf-drawer [title]="'content.record.panel.title' | transloco" [width]="420" (closed)="tab.set(null)">
+    <sf-tabs
+      [tabs]="tabs()"
+      [selected]="current"
+      idPrefix="record-panel"
+      [label]="'content.record.panel.tabs' | transloco"
+      (selectTab)="select($event)"
+    />
 
-  @switch (panel()) {
-    @case ('issues') {
-      <div role="tabpanel" aria-label="Checks" aria-live="polite">
-        @if (listed().length === 0) {
-          <p class="record-editor__hint">No problems found.</p>
-        } @else {
-          <ul class="record-editor__list">
-            @for (issue of listed(); track $index) {
-              <li
-                class="record-editor__issue"
-                [class.record-editor__issue--blocking]="issue.kind === 'STRUCTURAL' || issue.severity === 'ERROR'"
-                [attr.data-level]="issue.severity"
-              >
-                <code>{{ issue.path }}</code>
-                <span>{{ issue.message }}</span>
-              </li>
-            }
-          </ul>
-        }
-      </div>
-    }
-    @case ('history') {
-      <div role="tabpanel" aria-label="History">
-        <ul class="record-editor__list">
-          @for (entry of history(); track entry.revision) {
-            <li>
-              <button
-                type="button"
-                class="record-editor__revision"
-                [class.record-editor__revision--current]="entry.revision === revision()"
-                (click)="viewRevision(entry.revision)"
-              >
-                <span>rev {{ entry.revision }}</span>
-                <span>{{ entry.displayName }}@if (entry.deleted) { (deleted) }</span>
-                <span class="record-editor__muted">{{ entry.changedAt | sfRelativeTime }}</span>
-              </button>
-            </li>
+    @switch (current) {
+      @case ('issues') {
+        <div class="panel__body" role="tabpanel" id="record-panel-panel-issues" aria-live="polite" tabindex="-1">
+          @if (listed().length === 0) {
+            <sf-empty-state
+              icon="task_alt"
+              [level]="3"
+              [title]="'content.record.panel.checksEmpty.title' | transloco"
+              [description]="'content.record.panel.checksEmpty.description' | transloco"
+            />
+          } @else {
+            <ul class="panel__list" [attr.aria-label]="'content.record.panel.checks' | transloco">
+              @for (issue of listed(); track $index) {
+                <li class="panel__issue" [class.panel__issue--blocking]="isBlocking(issue)" [attr.data-level]="issue.severity">
+                  <span class="panel__message">
+                    <span class="sf-sr-only">{{ levelLabel(issue) }}: </span>{{ issue.message }}
+                  </span>
+                  @if (issue.path) {
+                    <code class="panel__path">{{ issue.path }}</code>
+                  }
+                </li>
+              }
+            </ul>
           }
-        </ul>
-      </div>
+        </div>
+      }
+      @case ('usages') {
+        <div class="panel__body" role="tabpanel" id="record-panel-panel-usages" tabindex="-1">
+          @if (usages().length === 0) {
+            <sf-empty-state
+              icon="account_tree"
+              [level]="3"
+              [title]="'content.record.panel.usedByEmpty.title' | transloco"
+              [description]="'content.record.panel.usedByEmpty.description' | transloco"
+            />
+          } @else {
+            <ul class="panel__list" [attr.aria-label]="'content.record.panel.usedBy' | transloco">
+              @for (usage of usages(); track $index) {
+                <li class="panel__usage">
+                  <sf-badge tone="neutral" [label]="typeLabel(usage.fromType)" />
+                  @if (usage.fromType === 'PAGE') {
+                    <a [routerLink]="['/p', projectKey(), 'pages', usage.fromUuid]">{{ usage.fromUid }}</a>
+                  } @else if (usage.fromType === 'RECORD') {
+                    <a [routerLink]="['/p', projectKey(), 'content', 'records', usage.fromUuid]">{{ usage.fromUid }}</a>
+                  } @else {
+                    <span>{{ usage.fromUid }}</span>
+                  }
+                  @if (usage.sourcePath) {
+                    <code class="panel__path">{{ usage.sourcePath }}</code>
+                  }
+                </li>
+              }
+            </ul>
+          }
+        </div>
+      }
     }
-    @case ('usages') {
-      <div role="tabpanel" aria-label="Used by">
-        @if (usages().length === 0) {
-          <p class="record-editor__hint">No page, template or record references this record.</p>
-        } @else {
-          <ul class="record-editor__list">
-            @for (usage of usages(); track $index) {
-              <li class="record-editor__usage">
-                <span class="record-editor__badge">{{ usage.fromType }}</span>
-                @if (usage.fromType === 'PAGE') {
-                  <a [routerLink]="['/p', projectKey(), 'pages', usage.fromUuid]">{{ usage.fromUid }}</a>
-                } @else if (usage.fromType === 'RECORD') {
-                  <a [routerLink]="['/p', projectKey(), 'content', 'records', usage.fromUuid]">{{ usage.fromUid }}</a>
-                } @else {
-                  <span>{{ usage.fromUid }}</span>
-                }
-                <code class="record-editor__muted">{{ usage.sourcePath }}</code>
-              </li>
-            }
-          </ul>
-        }
-      </div>
-    }
-  }
-</aside>
+  </sf-drawer>
+}

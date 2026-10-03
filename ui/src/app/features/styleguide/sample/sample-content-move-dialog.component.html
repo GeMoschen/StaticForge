@@ -1,0 +1,26 @@
+<sf-dialog size="md" [title]="data.title">
+  <p class="move__lead">{{ t(data.mode === 'folder' ? 'leadFolder' : 'leadRecords') }}</p>
+  @if (data.mode === 'folder') {
+    <div class="move__tree">
+      <sf-tree
+        [label]="t('tree')"
+        [loadChildren]="loader()"
+        [selection]="selection()"
+        [multiselect]="false"
+        [filterable]="false"
+        [expandActions]="false"
+        (open)="onOpen($event)"
+      />
+    </div>
+  } @else if (setOptions().length === 0) {
+    <p class="move__empty">{{ t('empty') }}</p>
+  } @else {
+    <sf-radio-group [aria-label]="t('sets')" [options]="setOptions()" [value]="selected()" (valueChange)="selected.set($event)" />
+  }
+  <ng-container sfDialogFooter>
+    <sf-button variant="ghost" (click)="cancel()">{{ t('cancel') }}</sf-button>
+    <sf-button [disabled]="selected() === null" [disabledReason]="selected() === null ? t('chooseFirst') : null" (click)="choose()">{{
+      t('confirm')
+    }}</sf-button>
+  </ng-container>
+</sf-dialog>

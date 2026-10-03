@@ -128,7 +128,7 @@ export class SampleMediaLibraryComponent {
   protected readonly error = computed(() => (this.state.review() === 'error' ? this.state.t('library.error', { folder: this.state.folderName() }) : null));
 
   protected readonly folderActions = computed<SfMenuItem[]>(() => this.state.review() === 'empty' ? [] : [
-    { id: 'rename', label: this.state.t('library.rename'), icon: 'edit', shortcut: 'F2' },
+    { id: 'rename', label: this.state.t('library.rename'), icon: 'edit' },
     { id: 'move', label: this.state.t('library.move'), icon: 'drive_file_move' },
     { id: 'delete', label: this.state.t('library.delete'), icon: 'delete', danger: true, separatorBefore: true },
   ]);
@@ -180,7 +180,7 @@ export class SampleMediaLibraryComponent {
 
   protected folderAction(item: SfMenuItem): void {
     if (item.id === 'rename') {
-      this.state.folderRequest.set('rename');
+      void this.state.renameFolder();
     } else if (item.id === 'move') {
       void this.state.moveFolder();
     } else {

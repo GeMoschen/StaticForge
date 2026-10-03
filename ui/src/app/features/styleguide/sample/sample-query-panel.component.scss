@@ -32,6 +32,22 @@
   text-overflow: ellipsis;
 }
 
+// An expression the builder cannot show is quoted as it is: monospace says it is code.
+.query__summary--code {
+  font-family: var(--sf-font-mono);
+  font-size: var(--sf-fs-12);
+}
+
+.query__unsaved {
+  flex-shrink: 0;
+  padding: 0 var(--sf-space-2);
+  border-radius: var(--sf-radius-pill);
+  background: var(--sf-warning-subtle);
+  color: var(--sf-warning-text);
+  font-size: var(--sf-fs-12);
+  line-height: var(--sf-lh-12);
+}
+
 .query__count {
   flex-shrink: 0;
   color: var(--sf-text-muted);
@@ -47,14 +63,15 @@
   border-top: 1px solid var(--sf-border);
 }
 
-.query__rows {
+.query__rows,
+.query__sort {
   display: flex;
   flex-direction: column;
   gap: var(--sf-space-2);
 }
 
 .query__row,
-.query__sort {
+.query__number {
   display: flex;
   align-items: center;
   gap: var(--sf-space-2);
@@ -90,12 +107,42 @@
   line-height: var(--sf-lh-13);
 }
 
+.query__custom {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sf-space-2);
+}
+
+.query__custom-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sf-space-3);
+}
+
+.query__custom-code {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--sf-text);
+  font-family: var(--sf-font-mono);
+  font-size: var(--sf-fs-12);
+}
+
+.query__numbers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sf-space-4);
+}
+
+.query__number sf-number-input {
+  width: 8rem;
+}
+
 .query__actions {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
-  gap: var(--sf-space-3);
+  gap: var(--sf-space-2);
 }
 
 .query__expression {

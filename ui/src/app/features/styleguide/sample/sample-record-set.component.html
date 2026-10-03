@@ -20,7 +20,15 @@
   </ng-container>
 </sf-page-header>
 
-<sf-sample-query-panel [dataset]="dataset()" [matching]="rows().length" [total]="all().length" [(query)]="query" [(expanded)]="expanded" />
+<sf-sample-query-panel
+  [dataset]="dataset()"
+  [matching]="matching()"
+  [shown]="shown()"
+  [total]="all().length"
+  [(query)]="query"
+  [(saved)]="saved"
+  [(expanded)]="expanded"
+/>
 
 <sf-data-table
   class="view__table"
@@ -35,9 +43,55 @@
   [bulkActions]="bulkActions()"
   [emptyTitle]="'styleguide.sample.recordSet.empty' | transloco"
   (rowOpen)="state.openRecord($event.id)"
+  (sortChange)="onSort($event)"
 >
+  <div sfDataTableToolbar class="grid__tools">
+    <sf-segmented
+      size="sm"
+      [options]="modeOptions()"
+      [value]="mode()"
+      [aria-label]="'styleguide.sample.recordSet.mode.label' | transloco"
+      (valueChange)="setMode($event)"
+    />
+    @if (state.devMode()) {
+      <span class="grid__expression">
+        <sf-input
+          monospace
+          icon="code"
+          class="grid__where"
+          [value]="whereDraft()"
+          [spellcheck]="false"
+          [invalid]="whereInvalid()"
+          [aria-label]="'styleguide.sample.recordSet.where' | transloco"
+          [placeholder]="'styleguide.sample.recordSet.wherePlaceholder' | transloco"
+          (valueChange)="whereDraft.set($event)"
+          (keydown.enter)="applyWhere()"
+        />
+        <sf-button variant="secondary" (click)="applyWhere()">{{ 'styleguide.sample.recordSet.apply' | transloco }}</sf-button>
+        @if (where()) {
+          <sf-button variant="ghost" (click)="clearWhere()">{{ 'styleguide.sample.recordSet.clear' | transloco }}</sf-button>
+        }
+      </span>
+    }
+    <sf-button
+      variant="ghost"
+      icon="filter_alt"
+      [disabled]="!hasGridFilter()"
+      [tooltip]="'styleguide.sample.recordSet.useTooltip' | transloco"
+      (click)="useAsSetFilter()"
+    >
+      {{ 'styleguide.sample.recordSet.use' | transloco }}
+    </sf-button>
+  </div>
+
   <ng-template sfDataTableCell="name" [sfDataTableCellRows]="rows()" let-row let-value="value">
-    <span class="cell-name">{{ value }}</span>
+    <span class="cell-name" [class.is-excluded]="isExcluded(row)">
+      <span class="cell-name__text">{{ value }}</span>
+      @if (isExcluded(row)) {
+        <sf-icon class="cell-name__excluded" name="visibility_off" [sfTooltip]="'styleguide.sample.recordSet.excluded' | transloco" />
+        <span class="sf-sr-only">{{ 'styleguide.sample.recordSet.excluded' | transloco }}</span>
+      }
+    </span>
   </ng-template>
   <ng-template sfDataTableCell="status" [sfDataTableCellRows]="rows()" let-row>
     <span class="cell-status">
@@ -62,3 +116,10 @@
     <code class="cell-code">{{ row.uid }}</code>
   </ng-template>
 </sf-data-table>
+
+<sf-sample-content-panel
+  tabs="usages"
+  [title]="'styleguide.sample.contentPanel.setTitle' | transloco: { name: set().name }"
+  [usages]="usages()"
+  [(tab)]="panelTab"
+/>

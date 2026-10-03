@@ -1,9 +1,30 @@
 <sf-dialog size="sm" [title]="t('rename.title', { name: data.name })">
   <form (submit)="$event.preventDefault(); apply()">
-    <sf-field [label]="t('rename.label')" [hint]="t('rename.hint')" required [error]="error()">
+    <sf-field [label]="t(isFolder ? 'rename.folderLabel' : 'rename.label')" [hint]="t(isFolder ? 'rename.folderHint' : 'rename.hint')" required [error]="error()">
       <sf-input autocomplete="off" [spellcheck]="false" [value]="value()" (valueChange)="value.set($event)" />
     </sf-field>
   </form>
+  @if (dev() && data.uid) {
+    <section class="uid" aria-labelledby="sample-rename-uid">
+      <h3 class="uid__heading" id="sample-rename-uid">{{ t('rename.uid.heading') }}</h3>
+      <p class="uid__hint">{{ t('rename.uid.hint') }}</p>
+      @if (changingUid()) {
+        <sf-banner tone="warning">{{ t('rename.uid.warning') }}</sf-banner>
+        <sf-field [label]="t('rename.uid.label')" [hint]="t('rename.uid.fieldHint')">
+          <sf-input class="uid__input" [spellcheck]="false" [value]="uidDraft()" (valueChange)="uidDraft.set($event)" (keydown.enter)="applyUid()" />
+        </sf-field>
+        <div class="uid__row">
+          <sf-button variant="ghost" size="sm" (click)="changingUid.set(false)">{{ t('rename.cancel') }}</sf-button>
+          <sf-button size="sm" [disabled]="!uidValid()" (click)="applyUid()">{{ t('rename.uid.apply') }}</sf-button>
+        </div>
+      } @else {
+        <div class="uid__row is-spread">
+          <sf-copyable [value]="uid()" [label]="t('rename.uid.heading')" />
+          <sf-button variant="secondary" size="sm" (click)="startUid()">{{ t('rename.uid.change') }}</sf-button>
+        </div>
+      }
+    </section>
+  }
   <ng-container sfDialogFooter>
     <sf-button variant="ghost" (click)="cancel()">{{ t('rename.cancel') }}</sf-button>
     <sf-button [disabled]="!valid()" (click)="apply()">{{ t('rename.apply') }}</sf-button>

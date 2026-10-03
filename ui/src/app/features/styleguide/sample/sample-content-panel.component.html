@@ -1,0 +1,59 @@
+@if (tab(); as current) {
+  <sf-drawer [title]="title()" [width]="420" (closed)="tab.set(null)">
+    <sf-tabs
+      [tabs]="tabList()"
+      [selected]="current"
+      idPrefix="sample-content-panel"
+      [label]="'styleguide.sample.contentPanel.tabs' | transloco"
+      (selectTab)="select($event)"
+    />
+
+    @switch (current) {
+      @case ('issues') {
+        <div class="panel__body" role="tabpanel" id="sample-content-panel-panel-issues" aria-live="polite" tabindex="-1">
+          @if (issues().length === 0) {
+            <sf-empty-state
+              icon="task_alt"
+              [level]="3"
+              [title]="'styleguide.sample.contentPanel.checksEmpty.title' | transloco"
+              [description]="'styleguide.sample.contentPanel.checksEmpty.description' | transloco"
+            />
+          } @else {
+            <ul class="panel__list" [attr.aria-label]="'styleguide.sample.contentPanel.checks' | transloco">
+              @for (issue of issues(); track issue.path + issue.message) {
+                <li class="panel__issue" [class.panel__issue--blocking]="issue.level === 'error'" [attr.data-level]="issue.level">
+                  <span class="panel__message">
+                    <span class="sf-sr-only">{{ levelLabel(issue) }}: </span>{{ issue.message }}
+                  </span>
+                  <code class="panel__path">{{ issue.path }}</code>
+                </li>
+              }
+            </ul>
+          }
+        </div>
+      }
+      @case ('usages') {
+        <div class="panel__body" role="tabpanel" id="sample-content-panel-panel-usages" tabindex="-1">
+          @if (usages().length === 0) {
+            <sf-empty-state
+              icon="account_tree"
+              [level]="3"
+              [title]="'styleguide.sample.contentPanel.usedByEmpty.title' | transloco"
+              [description]="'styleguide.sample.contentPanel.usedByEmpty.description' | transloco"
+            />
+          } @else {
+            <ul class="panel__list" [attr.aria-label]="'styleguide.sample.contentPanel.usedBy' | transloco">
+              @for (usage of usages(); track usage.name + usage.path) {
+                <li class="panel__usage">
+                  <sf-badge tone="neutral" [label]="typeLabel(usage)" />
+                  <span>{{ usage.name }}</span>
+                  <code class="panel__path">{{ usage.path }}</code>
+                </li>
+              }
+            </ul>
+          }
+        </div>
+      }
+    }
+  </sf-drawer>
+}

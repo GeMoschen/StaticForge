@@ -5,6 +5,7 @@ import { fireEvent, render, screen } from '@testing-library/angular';
 import { describe, expect, it } from 'vitest';
 import { ISSUES, SECTION_TEMPLATES } from './pages-data';
 import { SampleState } from '../sample-state';
+import { SamplePagesReview } from './sample-pages-review';
 import { SampleIssuesDrawerComponent } from './sample-issues-drawer.component';
 import { SamplePagesEmptyComponent } from './sample-pages-empty.component';
 import { SampleSectionPaletteComponent } from './sample-section-palette.component';
@@ -14,6 +15,7 @@ const providers = [
   provideHttpClientTesting(),
   provideRouter([]),
   SampleState,
+  SamplePagesReview,
   { provide: ActivatedRoute, useValue: { snapshot: { queryParamMap: convertToParamMap({}) } } },
 ];
 

@@ -1,231 +1,105 @@
 :host {
-  display: block;
-}
-
-.record-grid {
   display: flex;
   flex-direction: column;
-  gap: var(--sf-2);
+  gap: var(--sf-space-3);
+  min-height: 0;
 }
 
-.record-grid__toolbar {
+.grid__table {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.grid__tools {
   display: flex;
-  align-items: center;
-  gap: var(--sf-2);
   flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sf-space-2);
 }
 
-.record-grid__modes {
-  display: inline-flex;
-  padding: 2px;
-  border: 1px solid var(--sf-line);
-  border-radius: 999px;
-  background: var(--sf-surface);
-}
-
-.record-grid__mode {
-  padding: var(--sf-1) var(--sf-3);
-  border: none;
-  border-radius: 999px;
-  background: transparent;
-  color: var(--sf-slate);
-  font-size: var(--sf-text-sm);
-  cursor: pointer;
-}
-
-.record-grid__mode--active {
-  background: color-mix(in srgb, var(--sf-signal) 12%, transparent);
-  color: var(--sf-ink);
-}
-
-.record-grid__search {
+.grid__expression {
   display: inline-flex;
   align-items: center;
-  gap: var(--sf-1);
-  padding: 0 var(--sf-2);
-  border: 1px solid var(--sf-line);
-  border-radius: var(--sf-radius-md);
-  background: var(--sf-surface);
+  gap: var(--sf-space-2);
 }
 
-.record-grid__search input,
-.record-grid__filter input {
-  padding: var(--sf-1) var(--sf-2);
-  border: none;
-  background: transparent;
-  color: var(--sf-ink);
-  font-size: var(--sf-text-sm);
+.grid__where {
+  inline-size: 22rem;
+  max-inline-size: 100%;
 }
 
-.record-grid__filter {
-  display: flex;
-  align-items: center;
-  gap: var(--sf-1);
-  flex: 1;
-  min-width: 260px;
-}
-
-.record-grid__filter input {
-  flex: 1;
-  border: 1px solid var(--sf-line);
-  border-radius: var(--sf-radius-md);
-  background: var(--sf-surface);
-  font-family: var(--sf-font-mono, monospace);
-}
-
-.record-grid__filter input[aria-invalid='true'] {
-  border-color: var(--sf-rust);
-}
-
-.record-grid__chooser {
-  position: relative;
-}
-
-.record-grid__chooser-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--sf-1);
-  padding: var(--sf-1) var(--sf-2);
-  border: 1px solid transparent;
-  border-radius: var(--sf-radius-md);
-  background: transparent;
-  color: var(--sf-ink);
-  font-size: var(--sf-text-sm);
-  cursor: pointer;
-}
-
-.record-grid__chooser-toggle:hover,
-.record-grid__chooser-toggle[aria-expanded='true'] {
-  border-color: var(--sf-line);
-}
-
-.record-grid__chooser-menu {
-  position: absolute;
-  right: 0;
-  z-index: 5;
+.grid__problem {
   display: flex;
   flex-direction: column;
-  gap: var(--sf-1);
-  min-width: 200px;
-  padding: var(--sf-2);
-  border: 1px solid var(--sf-line);
-  border-radius: var(--sf-radius-md);
-  background: var(--sf-paper, var(--sf-surface));
-  box-shadow: 0 6px 20px rgb(0 0 0 / 12%);
-  font-size: var(--sf-text-sm);
+  gap: var(--sf-space-1);
 }
 
-.record-grid__error {
-  margin: 0;
-  padding: var(--sf-1) var(--sf-2);
-  border-radius: var(--sf-radius-sm);
-  background: color-mix(in srgb, var(--sf-rust) 12%, transparent);
-  color: var(--sf-rust);
-  font-size: var(--sf-text-xs);
-}
-
-.record-grid__caret {
-  display: block;
-  margin-top: var(--sf-1);
+.grid__caret {
+  color: var(--sf-danger-text);
+  font-family: var(--sf-font-mono);
+  font-size: var(--sf-fs-12);
   white-space: pre;
-  font-family: var(--sf-font-mono, monospace);
 }
 
-.record-grid__table-wrap {
-  overflow-x: auto;
-  border: 1px solid var(--sf-line);
-  border-radius: var(--sf-radius-md);
-}
-
-.record-grid__table {
+.cell-name {
+  display: flex;
   width: 100%;
-  border-collapse: collapse;
-  font-size: var(--sf-text-sm);
+  align-items: center;
+  gap: var(--sf-space-2);
+  min-width: 0;
+
+  // A record the set query leaves out is dimmed; the eye icon says why.
+  &.is-excluded .cell-name__text {
+    color: var(--sf-text-muted);
+    font-weight: var(--sf-weight-regular);
+  }
 }
 
-.record-grid__table th,
-.record-grid__table td {
-  padding: var(--sf-1) var(--sf-2);
-  border-bottom: 1px solid var(--sf-line);
-  text-align: left;
+.cell-name__text {
+  overflow: hidden;
+  color: var(--sf-text);
+  font-weight: var(--sf-weight-medium);
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.record-grid__table th {
-  background: var(--sf-surface);
-  font-weight: 600;
+.cell-name__excluded {
+  flex-shrink: 0;
+  color: var(--sf-text-subtle);
+  font-size: var(--sf-fs-16);
 }
 
-.record-grid__sort {
+// The star shows on the name cell's hover and focus, and stays while the record is a favorite (M35.15).
+.cell-fav {
+  margin-inline-start: auto;
+  opacity: 0;
+  color: var(--sf-text-muted);
+  // The row's own hover and selection tints are close to the ghost button's hover: tint with the text colour instead.
+  --sf-hover: color-mix(in srgb, var(--sf-text) 16%, transparent);
+
+  &:has(.is-on) {
+    opacity: 1;
+  }
+}
+
+.cell-name:hover .cell-fav,
+.cell-name:focus-within .cell-fav,
+.cell-fav:focus-within {
+  opacity: 1;
+}
+
+.cell-muted {
+  color: var(--sf-text-muted);
+}
+
+.cell-status {
   display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  padding: 0;
-  border: none;
-  background: none;
-  color: inherit;
-  font: inherit;
-  cursor: pointer;
+  flex-wrap: nowrap;
+  gap: var(--sf-space-1);
 }
 
-.record-grid__sort-pos {
-  font-size: var(--sf-text-xs);
-  color: var(--sf-muted);
-}
-
-.record-grid__row {
-  cursor: pointer;
-}
-
-.record-grid__row:hover,
-.record-grid__row:focus-visible {
-  background: color-mix(in srgb, var(--sf-signal) 8%, transparent);
-  outline: none;
-}
-
-.record-grid__row:focus-visible td:first-child {
-  box-shadow: inset 3px 0 0 var(--sf-signal);
-}
-
-.record-grid__name {
-  font-weight: 500;
-}
-
-/* A record the set query leaves out: still listed (All records), visibly not on the site. */
-.record-grid__row--excluded td {
-  color: var(--sf-slate);
-  opacity: 0.6;
-}
-
-.record-grid__row--excluded .record-grid__name {
-  font-weight: 400;
-  font-style: italic;
-}
-
-.record-grid__excluded {
-  display: inline-flex;
-  margin-left: var(--sf-1);
-  vertical-align: middle;
-}
-
-.record-grid__muted {
-  color: var(--sf-muted);
-  font-size: var(--sf-text-xs);
-}
-
-.record-grid__empty {
-  padding: var(--sf-4) !important;
-  text-align: center !important;
-  color: var(--sf-muted);
-}
-
-.record-grid__pager,
-.record-grid__summary {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: var(--sf-2);
-  margin: 0;
-  color: var(--sf-slate);
-  font-size: var(--sf-text-xs);
+.cell-code {
+  color: var(--sf-text-muted);
+  font-family: var(--sf-font-mono);
+  font-size: var(--sf-fs-12);
 }

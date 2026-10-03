@@ -9,7 +9,7 @@
     <sf-button variant="secondary" icon="create_new_folder" (click)="state.notice('folder.newFolderNotice')">{{
       'styleguide.sample.content.newFolder' | transloco
     }}</sf-button>
-    <sf-button icon="playlist_add" (click)="state.notice('content.newRecordSetNotice')">{{
+    <sf-button icon="playlist_add" (click)="state.newRecordSet(state.contentFolderId())">{{
       'styleguide.sample.content.newRecordSet' | transloco
     }}</sf-button>
   </ng-container>
@@ -43,6 +43,21 @@
     @if (row.kind === 'recordset') {
       {{ count(row) }}
     }
+  </ng-template>
+  <ng-template sfDataTableCell="status" [sfDataTableCellRows]="rows()" let-row>
+    <span class="cell-status">
+      @for (entry of statuses(row); track entry.lang) {
+        <sf-status
+          size="sm"
+          [tone]="entry.tone"
+          [icon]="entry.icon"
+          [label]="entry.lang.toUpperCase()"
+          [detail]="state.statusLabel(entry.status)"
+        />
+      } @empty {
+        <span class="cell-muted">—</span>
+      }
+    </span>
   </ng-template>
   <ng-template sfDataTableCell="modified" [sfDataTableCellRows]="rows()" let-row>
     <span class="cell-modified">

@@ -12,85 +12,179 @@
       (click)="toggle()"
       >{{ 'styleguide.sample.query.title' | transloco }}</sf-button
     >
-    <span class="query__summary">{{ summary() }}</span>
-    <span class="query__count">{{ 'styleguide.sample.query.matching' | transloco: { count: matching(), total: total() } }}</span>
+    <span class="query__summary" [class.query__summary--code]="custom()">{{ summary() }}</span>
+    @if (dirty()) {
+      <span class="query__unsaved">{{ 'styleguide.sample.query.unsaved' | transloco }}</span>
+    }
+    <span class="query__count" role="status" aria-live="polite">{{ status() }}</span>
   </div>
 
   <div class="query__body" [id]="bodyId" [hidden]="!expanded()">
-    <div class="query__rows" role="group" [attr.aria-label]="'styleguide.sample.query.conditions' | transloco">
-      @for (row of rows(); track row.condition.id; let first = $first; let n = $index) {
+    @if (custom()) {
+      <div class="query__custom">
+        <sf-finding level="info" [message]="'styleguide.sample.query.customNote' | transloco" />
+        <div class="query__custom-row">
+          @if (!state.devMode()) {
+            <code class="query__custom-code">{{ expression() }}</code>
+          }
+          <sf-button variant="secondary" size="sm" icon="filter_alt_off" (click)="clearFilter()">{{
+            'styleguide.sample.query.clearFilter' | transloco
+          }}</sf-button>
+        </div>
+      </div>
+    } @else {
+      <div class="query__rows" role="group" [attr.aria-label]="'styleguide.sample.query.conditions' | transloco">
+        @for (row of rows(); track row.condition.id; let first = $first; let n = $index) {
+          <div class="query__row">
+            <span class="query__join">{{ (first ? 'styleguide.sample.query.whereLabel' : 'styleguide.sample.query.andLabel') | transloco }}</span>
+            <sf-select
+              class="query__field"
+              [options]="fieldOptions()"
+              [value]="row.condition.field"
+              [aria-label]="'styleguide.sample.query.fieldLabel' | transloco: { n: n + 1 }"
+              (valueChange)="setField(row.condition, $event)"
+            />
+            <sf-select
+              class="query__op"
+              [options]="row.operators"
+              [value]="row.condition.op"
+              [aria-label]="'styleguide.sample.query.opLabel' | transloco: { n: n + 1 }"
+              (valueChange)="setOperator(row.condition, $event)"
+            />
+            @switch (row.kind) {
+              @case ('select') {
+                <sf-select
+                  class="query__value"
+                  [options]="row.values"
+                  [value]="$any(row.condition.value)"
+                  [aria-label]="'styleguide.sample.query.valueLabel' | transloco: { n: n + 1 }"
+                  (valueChange)="setValue(row.condition, $event)"
+                />
+              }
+              @case ('boolean') {
+                <sf-select
+                  class="query__value"
+                  [options]="booleanOptions()"
+                  [value]="$any(row.condition.value)"
+                  [aria-label]="'styleguide.sample.query.valueLabel' | transloco: { n: n + 1 }"
+                  (valueChange)="setValue(row.condition, $event)"
+                />
+              }
+              @case ('date') {
+                <sf-date-input
+                  class="query__value"
+                  [value]="$any(row.condition.value) || null"
+                  [aria-label]="'styleguide.sample.query.valueLabel' | transloco: { n: n + 1 }"
+                  (valueChange)="setValue(row.condition, $event)"
+                />
+              }
+              @case ('number') {
+                <sf-number-input
+                  class="query__value"
+                  [value]="$any(row.condition.value)"
+                  [aria-label]="'styleguide.sample.query.valueLabel' | transloco: { n: n + 1 }"
+                  (valueChange)="setValue(row.condition, $event)"
+                />
+              }
+              @default {
+                <sf-input
+                  class="query__value"
+                  [value]="$any(row.condition.value) ?? ''"
+                  [aria-label]="'styleguide.sample.query.valueLabel' | transloco: { n: n + 1 }"
+                  (valueChange)="setValue(row.condition, $event)"
+                />
+              }
+            }
+            <sf-button
+              variant="ghost"
+              size="sm"
+              icon="close"
+              [label]="'styleguide.sample.query.remove' | transloco: { n: n + 1, field: row.fieldLabel }"
+              (click)="removeCondition(row.condition.id)"
+            />
+          </div>
+        } @empty {
+          <p class="query__empty">{{ 'styleguide.sample.query.noConditions' | transloco }}</p>
+        }
+      </div>
+      <div>
+        <sf-button variant="secondary" size="sm" icon="add" (click)="addCondition()">{{ 'styleguide.sample.query.add' | transloco }}</sf-button>
+      </div>
+    }
+
+    <div class="query__sort" role="group" [attr.aria-label]="'styleguide.sample.query.sortGroup' | transloco">
+      @for (row of sortRows(); track $index; let n = $index; let first = $first; let last = $last) {
         <div class="query__row">
-          <span class="query__join">{{ (first ? 'styleguide.sample.query.whereLabel' : 'styleguide.sample.query.andLabel') | transloco }}</span>
+          <span class="query__join">{{ (first ? 'styleguide.sample.query.sortLabel' : 'styleguide.sample.query.thenLabel') | transloco }}</span>
           <sf-select
             class="query__field"
-            [options]="fieldOptions()"
-            [value]="row.condition.field"
-            [aria-label]="'styleguide.sample.query.fieldLabel' | transloco: { n: n + 1 }"
-            (valueChange)="setField(row.condition, $event)"
+            [options]="row.options"
+            [value]="row.key.field"
+            [aria-label]="'styleguide.sample.query.sortField' | transloco: { n: n + 1 }"
+            (valueChange)="setSortField(n, $event)"
           />
-          <sf-select
-            class="query__op"
-            [options]="row.operators"
-            [value]="row.condition.op"
-            [aria-label]="'styleguide.sample.query.opLabel' | transloco: { n: n + 1 }"
-            (valueChange)="setOperator(row.condition, $event)"
+          <sf-segmented
+            size="sm"
+            [options]="directionOptions()"
+            [value]="row.key.direction"
+            [aria-label]="'styleguide.sample.query.sortDirection' | transloco: { n: n + 1 }"
+            (valueChange)="setSortDirection(n, $event)"
           />
-          @switch (row.kind) {
-            @case ('select') {
-              <sf-select
-                class="query__value"
-                [options]="row.values"
-                [value]="$any(row.condition.value)"
-                [aria-label]="'styleguide.sample.query.valueLabel' | transloco: { n: n + 1 }"
-                (valueChange)="setValue(row.condition, $event)"
-              />
-            }
-            @case ('number') {
-              <sf-number-input
-                class="query__value"
-                [value]="$any(row.condition.value)"
-                [aria-label]="'styleguide.sample.query.valueLabel' | transloco: { n: n + 1 }"
-                (valueChange)="setValue(row.condition, $event)"
-              />
-            }
-            @default {
-              <sf-input
-                class="query__value"
-                [value]="$any(row.condition.value) ?? ''"
-                [aria-label]="'styleguide.sample.query.valueLabel' | transloco: { n: n + 1 }"
-                (valueChange)="setValue(row.condition, $event)"
-              />
-            }
-          }
+          <sf-button
+            variant="ghost"
+            size="sm"
+            icon="arrow_upward"
+            [disabled]="first"
+            [label]="'styleguide.sample.query.moveUp' | transloco: { n: n + 1 }"
+            (click)="moveSortKey(n, -1)"
+          />
+          <sf-button
+            variant="ghost"
+            size="sm"
+            icon="arrow_downward"
+            [disabled]="last"
+            [label]="'styleguide.sample.query.moveDown' | transloco: { n: n + 1 }"
+            (click)="moveSortKey(n, 1)"
+          />
           <sf-button
             variant="ghost"
             size="sm"
             icon="close"
-            [label]="'styleguide.sample.query.remove' | transloco: { n: n + 1, field: row.fieldLabel }"
-            (click)="removeCondition(row.condition.id)"
+            [label]="'styleguide.sample.query.removeSort' | transloco: { n: n + 1 }"
+            (click)="removeSortKey(n)"
           />
         </div>
       } @empty {
-        <p class="query__empty">{{ 'styleguide.sample.query.noConditions' | transloco }}</p>
+        <p class="query__empty">{{ 'styleguide.sample.query.defaultOrder' | transloco }}</p>
       }
+      <div>
+        <sf-button variant="ghost" size="sm" icon="add" [disabled]="!canAddSortKey()" (click)="addSortKey()">{{
+          'styleguide.sample.query.addSort' | transloco
+        }}</sf-button>
+      </div>
     </div>
-    <div class="query__actions">
-      <sf-button variant="secondary" size="sm" icon="add" (click)="addCondition()">{{ 'styleguide.sample.query.add' | transloco }}</sf-button>
-      <div class="query__sort">
-        <span class="query__join">{{ 'styleguide.sample.query.sortLabel' | transloco }}</span>
-        <sf-select
-          class="query__field"
-          [options]="fieldOptions()"
-          [value]="query().sortField"
-          [aria-label]="'styleguide.sample.query.sortField' | transloco"
-          (valueChange)="setSortField($event)"
+
+    <div class="query__numbers">
+      <div class="query__number">
+        <span class="query__join" [id]="bodyId + '-offset'">{{ 'styleguide.sample.query.offset' | transloco }}</span>
+        <sf-number-input
+          min="0"
+          step="1"
+          [value]="query().offset"
+          [aria-labelledby]="bodyId + '-offset'"
+          [placeholder]="'styleguide.sample.query.offsetPlaceholder' | transloco"
+          (valueChange)="setOffset($event)"
         />
-        <sf-segmented
-          size="sm"
-          [options]="directionOptions()"
-          [value]="query().sortDirection"
-          [aria-label]="'styleguide.sample.query.sortDirection' | transloco"
-          (valueChange)="setSortDirection($event)"
+      </div>
+      <div class="query__number">
+        <span class="query__join" [id]="bodyId + '-limit'">{{ 'styleguide.sample.query.limit' | transloco }}</span>
+        <sf-number-input
+          min="0"
+          step="1"
+          [value]="query().limit"
+          [aria-labelledby]="bodyId + '-limit'"
+          [placeholder]="'styleguide.sample.query.limitPlaceholder' | transloco"
+          (valueChange)="setLimit($event)"
         />
       </div>
     </div>
@@ -99,5 +193,10 @@
         <sf-input monospace readonly icon="code" [value]="expression()" [placeholder]="'styleguide.sample.query.expressionEmpty' | transloco" />
       </sf-field>
     }
+
+    <div class="query__actions">
+      <sf-button [disabled]="!dirty()" (click)="save()">{{ 'styleguide.sample.query.save' | transloco }}</sf-button>
+      <sf-button variant="ghost" [disabled]="!dirty()" (click)="revert()">{{ 'styleguide.sample.query.revert' | transloco }}</sf-button>
+    </div>
   </div>
 </section>

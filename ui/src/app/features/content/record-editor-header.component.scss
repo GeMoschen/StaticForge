@@ -1,0 +1,65 @@
+:host {
+  display: block;
+}
+
+.record-header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sf-space-2);
+  padding: var(--sf-space-4) var(--sf-space-6) var(--sf-space-3);
+  border-bottom: 1px solid var(--sf-border);
+  background: var(--sf-surface);
+}
+
+.record-header__title-extras {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sf-space-1);
+}
+
+.record-header__status {
+  align-self: center;
+  margin-inline-end: var(--sf-space-2);
+  color: var(--sf-text-muted);
+  font-size: var(--sf-fs-12);
+  line-height: var(--sf-lh-12);
+}
+
+// The release actions are their own group: a divider sets them apart from the record's own ⋮, which sf-page-header
+// renders right after them (decision 34).
+.record-header__release {
+  margin-inline-end: var(--sf-space-1);
+  padding-inline-end: var(--sf-space-3);
+  border-inline-end: 1px solid var(--sf-border-strong);
+}
+
+.record-header__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sf-space-1) var(--sf-space-6);
+  margin: 0;
+  font-size: var(--sf-fs-12);
+  line-height: var(--sf-lh-12);
+}
+
+.record-header__meta-item {
+  display: flex;
+  align-items: center;
+  gap: var(--sf-space-2);
+
+  dt {
+    color: var(--sf-text-subtle);
+  }
+
+  dd {
+    margin: 0;
+    color: var(--sf-text-muted);
+  }
+}
+
+@media (max-width: 1279px) {
+  .record-header {
+    padding-inline: var(--sf-space-4);
+  }
+}

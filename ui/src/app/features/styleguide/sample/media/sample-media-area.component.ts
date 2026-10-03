@@ -23,6 +23,7 @@ import {
   SfTreeDeleteRequest,
 } from '../../../../shared/components/sf-tree.component';
 import { SfSplitterComponent } from '../../../../shared/components/splitter/sf-splitter.component';
+import type { ContextMenuItem } from '../../../../shared/services/context-menu.service';
 import { SfTreeLoader, SfTreeNode } from '../../../../shared/components/tree/tree-model';
 import { SAMPLE_LANGS, SampleLang } from '../sample-data';
 import {
@@ -66,6 +67,7 @@ const OWN_PARAMS = [
   'type',
   'sort',
   'dirty',
+  'urls',
   'dialog',
   'menu',
   'banner',
@@ -111,11 +113,12 @@ function oneOf<T extends string>(value: string | null, allowed: readonly T[]): T
  *   and no files);
  * - `upload=1` (the panel mid-upload) or `upload=errors` (every kind of refusal);
  * - review shortcuts, applied once on load: `dirty=1` (the open file has unsaved edits, so stepping, switching folder
- *   or closing asks), `dialog=rename|move|folder-move|delete` (that dialog opens), `menu=<fileId>` (that file's menu);
+ *   or closing asks), `dialog=rename|rename-folder|move|folder-move|delete` (that dialog opens), `menu=<fileId>` (that file's menu),
+ *   `urls=error` (the Used by tab's URL registry is unavailable);
  * - the Source tab of a text file (`asset=a-brand-css&mtab=source`, or `a-logo` for SVG), applied once on load:
  *   `banner=large|utf8|eol` (too large to edit / not valid UTF-8 / mixed line endings), `highlight=auto|css|javascript|
  *   json|xml|markdown|plain` (the project's highlight override for the open file's type), `lang=de|en` (the file has one
- *   file per language, shown in that language), `complete=1` (ends the text with an unfinished `$CMS_VALUE(#global.br`
+ *   file per language, shown in that language), `complete=1` (ends the text with an unfinished `$CMS_VALUE(CMS_GLOBAL.br`
  *   to try completion on: Ctrl+End, Ctrl+Space).
  */
 @Component({
@@ -148,6 +151,11 @@ export class SampleMediaAreaComponent {
     typeof matchMedia !== 'function' || matchMedia(WIDE_QUERY).matches ? TREE_WIDTH : TREE_WIDTH_NARROW;
   protected readonly treeActions: readonly SfTreeAction[] = ['rename', 'delete', 'create'];
   protected readonly createKinds: readonly SfTreeCreateKind[] = ['folder'];
+  /** *Rename…* opens the dialog (name and, in developer mode, UID); the menu's own *Rename* and F2 edit the name in place. */
+  protected readonly menuItems = (nodes: readonly SfTreeNode<SampleMediaFolder>[]): ContextMenuItem[] => {
+    const folder = nodes.length === 1 ? nodes[0].data : null;
+    return folder ? [{ label: this.state.t('folders.renameDialog'), icon: 'edit', action: () => void this.state.renameFolder(folder) }] : [];
+  };
 
   /** The filter, lower case and trimmed. */
   private readonly query = computed(() => this.state.treeFilter().trim().toLowerCase());
@@ -411,6 +419,7 @@ export class SampleMediaAreaComponent {
       this.state.folderId.set(file.folderId);
       this.state.openAsset(file.id, oneOf<SampleMediaTab>(params.get('mtab'), MEDIA_TABS) ?? 'details');
       this.readSourceParams(params, file);
+      this.state.urlsFailed.set(params.get('urls') === 'error');
       if (params.get('dirty') === '1') {
         this.state.edit(
           file.kind === 'image' || file.format === 'SVG'

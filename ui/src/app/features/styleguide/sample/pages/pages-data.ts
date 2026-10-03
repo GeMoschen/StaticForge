@@ -63,6 +63,9 @@ export const AFFECTED: readonly SampleAffected[] = [
 ];
 export const AFFECTED_FILES = 9;
 
+/** Rules a draft cannot be checked against completely; a build checks them (the drawer's last note). */
+export const SKIPPED_RULES: readonly string[] = ['SF-CHK-0301', 'SF-CHK-0302'];
+
 // ── Section palette ──────────────────────────────────────────────────────────────────────────────────────────────
 
 export type PaletteCategory = 'headers' | 'content' | 'commerce' | 'social';
@@ -106,3 +109,32 @@ export interface SampleNavSettings {
 
 export const PAGE_NAV: SampleNavSettings = { visible: true, noIndex: false, label: 'Spring harvest', position: 3 };
 export const FOLDER_NAV: SampleNavSettings = { visible: true, noIndex: false, label: '', position: 2 };
+
+// ── Revision conflict (M35.18, gate round 12) ────────────────────────────────────────────────────────────────────
+
+/** A field both the person and someone else changed since the page was loaded. */
+export interface SampleConflictField {
+  readonly id: 'title' | 'teaser' | 'description';
+  /** The person's value. */
+  readonly mine: string;
+  /** The server's (the other person's) value. */
+  readonly theirs: string;
+}
+
+export const CONFLICT_FIELDS: readonly SampleConflictField[] = [
+  { id: 'title', mine: 'Spring harvest 2026', theirs: 'Spring harvest: the new crop is here' },
+  { id: 'teaser', mine: 'Fresh beans from Yirgacheffe.', theirs: 'Fresh beans from Yirgacheffe and Huila.' },
+  { id: 'description', mine: 'Our spring harvest, roasted this week.', theirs: 'Our spring harvest, roasted this week and shipped fresh.' },
+];
+
+/** Who saved the newer revision, which revisions are involved and how long ago. */
+export const CONFLICT_FACTS = { by: 'Jonas Weber', yours: 12, current: 14, minutes: 8 } as const;
+
+// ── Deleting a page (M35.18, gate round 12) ──────────────────────────────────────────────────────────────────────
+
+/** The pages a redirect can point to (the picker's content in the sample). */
+export const REDIRECT_TARGETS: readonly { readonly id: string; readonly name: string; readonly url: string }[] = [
+  { id: 'p-espresso', name: 'Espresso blends', url: '/shop/espresso' },
+  { id: 'p-single-origins', name: 'Single origins', url: '/shop/single-origins' },
+  { id: 'p-home', name: 'Home', url: '/' },
+];

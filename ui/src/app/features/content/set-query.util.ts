@@ -50,7 +50,10 @@ export function draftOf(query: RecordSetQuery | null | undefined): SetQueryDraft
  * Local findings the server never needs to see: `limit`/`offset` must be whole numbers, 0 or more.
  * Same shape as the server's diagnostics so the panel lists both the same way.
  */
-export function localDiagnostics(draft: SetQueryDraft): RecordSetQueryDiagnostic[] {
+export function localDiagnostics(
+  draft: SetQueryDraft,
+  message: (field: 'limit' | 'offset') => string,
+): RecordSetQueryDiagnostic[] {
   const findings: RecordSetQueryDiagnostic[] = [];
   for (const field of ['limit', 'offset'] as const) {
     const text = draft[field].trim();
@@ -58,7 +61,7 @@ export function localDiagnostics(draft: SetQueryDraft): RecordSetQueryDiagnostic
       findings.push({
         field,
         severity: 'ERROR',
-        message: `${field === 'limit' ? 'Limit' : 'Offset'} must be a whole number, 0 or more.`,
+        message: message(field),
         line: 0,
         column: 0,
       });
@@ -121,12 +124,4 @@ export function moveSortKey(sort: readonly RecordSort[], index: number, delta: n
   const next = [...sort];
   [next[index], next[target]] = [next[target], next[index]];
   return next;
-}
-
-/** "3 of 12 records match" wording for the panel's live count. */
-export function matchSummary(matchCount: number, total: number, selectedCount: number): string {
-  const noun = total === 1 ? 'record' : 'records';
-  const verb = matchCount === 1 ? 'matches' : 'match';
-  const base = `${matchCount} of ${total} ${noun} ${verb}`;
-  return selectedCount !== matchCount ? `${base} · the set shows ${selectedCount}` : base;
 }

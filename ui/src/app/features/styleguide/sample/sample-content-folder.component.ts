@@ -12,21 +12,25 @@ import { SfDataTableComponent } from '../../../shared/components/data-table/sf-d
 import { ConfirmService } from '../../../shared/components/dialog/confirm.service';
 import { SfAvatarComponent } from '../../../shared/components/display/sf-avatar.component';
 import { SfRelativeTimeComponent } from '../../../shared/components/display/sf-relative-time.component';
+import { SfStatusComponent } from '../../../shared/components/display/sf-status.component';
 import { SfPageHeaderComponent } from '../../../shared/components/layout/sf-page-header.component';
 import { SfMenuItem } from '../../../shared/components/menu/sf-menu.component';
 import { SfButtonComponent } from '../../../shared/components/sf-button.component';
 import { SfIconComponent } from '../../../shared/components/sf-icon.component';
 import { SfTooltipDirective } from '../../../shared/directives/sf-tooltip.directive';
 import { SampleBreadcrumbComponent } from './sample-breadcrumb.component';
-import { DATASETS, SampleContentEntry, contentChildren, datasetById } from './sample-content-data';
-import { SampleState } from './sample-state';
+import { DATASETS, SampleContentEntry, combinedStatus, contentChildren, datasetById, recordsInside } from './sample-content-data';
+import { SAMPLE_LANGS } from './sample-data';
+import { STATUS_ICONS, STATUS_TONES, SampleState } from './sample-state';
 
 const DATASET_FILTER = 'dataset';
 
 /**
  * The Content folder view (M35.20 mocked): page header with the folder's actions and a table of its folders and record
- * sets — dataset, record count, last change — with a dataset filter ("Dataset: Products" chips), multi-select and bulk
- * actions. Nothing is changed: Delete confirms and offers Undo.
+ * sets — dataset, record count, release status per language, last change — with a dataset filter ("Dataset: Products"
+ * chips), multi-select and bulk actions. Nothing is changed: Delete confirms and offers Undo; Move (bulk and the folder's
+ * menu) asks for the target folder and only announces the move. The folder's menu is Rename, Move and Delete (the store's
+ * top level has none). Gate round 11 added the Status column and the Rename and Move dialogs.
  */
 @Component({
   selector: 'sf-sample-content-folder',
@@ -40,6 +44,7 @@ const DATASET_FILTER = 'dataset';
     SfIconComponent,
     SfPageHeaderComponent,
     SfRelativeTimeComponent,
+    SfStatusComponent,
     SfTooltipDirective,
     TranslocoPipe,
   ],
@@ -56,6 +61,9 @@ export class SampleContentFolderComponent {
 
   protected readonly title = computed(() => this.state.contentFolder()?.name ?? this.state.t('content.title'));
   protected readonly rows = computed(() => contentChildren(this.state.contentFolderId()));
+  protected readonly langs = SAMPLE_LANGS;
+  protected readonly tones = STATUS_TONES;
+  protected readonly icons = STATUS_ICONS;
   protected readonly rowKey = (row: SampleContentEntry) => row.id;
   protected readonly rowLabel = (row: SampleContentEntry) => row.name;
 
@@ -73,6 +81,13 @@ export class SampleContentFolderComponent {
         align: 'end',
         width: 110,
       },
+      {
+        id: 'status',
+        header: header('status'),
+        value: (r) => this.statuses(r).map((entry) => entry.status).join(),
+        width: 150,
+        searchable: false,
+      },
       { id: 'modified', header: header('modified'), value: (r) => r.modifiedMinutes, sortable: true, width: 170 },
     ];
   });
@@ -87,25 +102,49 @@ export class SampleContentFolderComponent {
   ]);
 
   protected readonly bulkActions = computed<SfDataTableBulkAction<SampleContentEntry>[]>(() => [
-    { id: 'move', label: this.state.t('folder.bulk.move'), icon: 'drive_file_move', action: () => this.state.notice() },
+    { id: 'move', label: this.state.t('folder.bulk.move'), icon: 'drive_file_move', action: (s) => void this.move(s.rows) },
     { id: 'delete', label: this.state.t('folder.bulk.delete'), icon: 'delete', variant: 'danger', action: (s) => void this.delete(s) },
   ]);
 
-  protected readonly moreActions = computed<SfMenuItem[]>(() => [
-    { id: 'rename', label: this.state.t('folder.rename'), icon: 'edit', shortcut: 'F2' },
-    { id: 'move', label: this.state.t('folder.move'), icon: 'drive_file_move' },
-    { id: 'usedBy', label: this.state.t('content.usedBy'), icon: 'link' },
-    { id: 'delete', label: this.state.t('folder.delete'), icon: 'delete', danger: true, separatorBefore: true },
-  ]);
+  /** The folder's menu; the top level of the store has none (it cannot be renamed, moved or deleted). */
+  protected readonly moreActions = computed<SfMenuItem[]>(() =>
+    this.state.contentFolder()
+      ? [
+          { id: 'rename', label: this.state.t('folder.rename'), icon: 'edit', shortcut: 'F2' },
+          { id: 'move', label: this.state.t('folder.move'), icon: 'drive_file_move' },
+          { id: 'delete', label: this.state.t('folder.delete'), icon: 'delete', danger: true, separatorBefore: true },
+        ]
+      : [],
+  );
 
   constructor() {
-    // The scripted `view=contentfolder` state: one dataset filter applied, so its chip shows.
+    // The scripted `view=contentfolder` state: one dataset filter applied, so its chip shows; `dialog=rename|move` opens
+    // that dialog on the open folder, `dialog=bulkmove` the Move dialog for the folder's first two entries.
     afterNextRender(() => {
       const dataset = this.state.presetFilter();
       if (dataset) {
         this.table().toggleFilterValue(DATASET_FILTER, dataset);
         this.state.presetFilter.set(null);
       }
+      const dialog = this.state.contentDialog();
+      this.state.contentDialog.set(null);
+      const folder = this.state.contentFolder();
+      if (dialog === 'rename' && folder) {
+        void this.state.renameContent(folder);
+      } else if (dialog === 'move' && folder) {
+        void this.state.moveContent([folder]);
+      } else if (dialog === 'bulkmove') {
+        void this.state.moveContent(this.rows().slice(0, 2));
+      }
+    });
+  }
+
+  /** The release status per language of what the row holds: its records, or those of every set inside the folder. */
+  protected statuses(row: SampleContentEntry) {
+    const records = recordsInside(row, (id) => this.state.recordsOf(id));
+    return this.langs.flatMap((lang) => {
+      const status = combinedStatus(records, lang);
+      return status ? [{ lang, status, tone: this.tones[status], icon: this.icons[status] }] : [];
     });
   }
 
@@ -130,10 +169,17 @@ export class SampleContentFolderComponent {
   }
 
   protected secondary(item: SfMenuItem): void {
+    const folder = this.state.contentFolder();
     if (item.id === 'delete') {
       void this.deleteEntries([this.title()]);
-    } else {
-      this.state.notice();
+    } else if (folder) {
+      void (item.id === 'rename' ? this.state.renameContent(folder) : this.state.moveContent([folder]));
+    }
+  }
+
+  private async move(entries: readonly SampleContentEntry[]): Promise<void> {
+    if (await this.state.moveContent(entries)) {
+      this.table().clearSelection();
     }
   }
 

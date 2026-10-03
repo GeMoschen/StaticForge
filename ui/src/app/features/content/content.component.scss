@@ -1,164 +1,53 @@
-@use '../../design/table';
-
 :host {
-  display: block;
+  display: flex;
   height: 100%;
+  min-height: 0;
 }
 
 .content {
-  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  // Both panes are bordered cards: no hairline between them, and the handle sits centred in the gap.
+  --sf-splitter-handle: transparent;
+  --sf-splitter-gap: var(--sf-space-2);
+  padding: var(--sf-space-2);
+}
+
+.content__pane {
   height: 100%;
+  min-height: 0;
+  border: 1px solid var(--sf-border);
+  border-radius: var(--sf-radius-md);
+  background: var(--sf-surface);
 }
 
 .content__tree {
-  flex-shrink: 0;
-  width: 300px;
-  padding: var(--sf-4) var(--sf-3);
-  border-right: 1px solid var(--sf-line);
-  overflow-y: auto;
-}
-
-.content__toolbar {
   display: flex;
-  gap: var(--sf-2);
-  margin-bottom: var(--sf-3);
-}
-
-.content__clear {
-  display: flex;
-  align-items: center;
-  gap: var(--sf-2);
-  width: 100%;
-  text-align: left;
-  padding: var(--sf-1) var(--sf-2);
-  margin-bottom: var(--sf-1);
-  background: transparent;
-  border: none;
-  border-radius: var(--sf-radius-sm);
-  color: var(--sf-slate);
-  cursor: pointer;
-  font-family: var(--sf-font-ui);
-  font-size: var(--sf-text-sm);
-}
-
-.content__clear--active {
-  background: var(--sf-surface);
-  color: var(--sf-ink);
-}
-
-.content__hint {
-  margin: var(--sf-2) 0 0;
-  color: var(--sf-muted);
-  font-size: var(--sf-text-xs);
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .content__main {
-  display: flex;
-  flex-direction: column;
-  gap: var(--sf-3);
-  flex: 1;
   min-width: 0;
-  padding: var(--sf-4);
-  overflow-y: auto;
 }
 
-.content__chips {
+.content__head {
   display: flex;
-  flex-wrap: wrap;
-  gap: var(--sf-2);
-}
-
-.content__chip {
-  display: inline-flex;
   align-items: center;
-  gap: var(--sf-1);
-  padding: var(--sf-1) var(--sf-3);
-  border: 1px solid var(--sf-line);
-  border-radius: 999px;
-  background: transparent;
-  color: var(--sf-ink);
-  font-size: var(--sf-text-sm);
-  cursor: pointer;
+  justify-content: space-between;
+  gap: var(--sf-space-2);
+  padding: var(--sf-space-2) var(--sf-space-2) var(--sf-space-2) var(--sf-space-3);
+  border-bottom: 1px solid var(--sf-border);
 }
 
-.content__chip--active {
-  border-color: var(--sf-signal);
-  background: color-mix(in srgb, var(--sf-signal) 12%, transparent);
+.content__title {
+  color: var(--sf-text);
+  font-size: var(--sf-fs-14);
+  line-height: var(--sf-lh-14);
+  font-weight: var(--sf-weight-semibold);
 }
 
-.content__chip-count {
-  color: var(--sf-muted);
-  font-size: var(--sf-text-xs);
-}
-
-.content__badge {
-  padding: 0 var(--sf-2);
-  border: 1px solid var(--sf-line);
-  border-radius: 999px;
-  background: var(--sf-surface);
-  font-weight: 500;
-}
-
-.content__cta {
-  text-align: center;
-  font-size: var(--sf-text-sm);
-}
-
-.content__sets {
-  overflow-x: auto;
-  border: 1px solid var(--sf-line);
-  border-radius: var(--sf-radius-md);
-  background: var(--sf-surface);
-  @include table.sf-table-base;
-}
-
-.content__set-row {
-  cursor: pointer;
-}
-
-.content__set-link {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--sf-1);
-  color: var(--sf-ink);
-  font-weight: 500;
-  text-decoration: none;
-}
-
-.content__set-link sf-icon {
-  color: var(--sf-amber);
-}
-
-.content__set-link:hover,
-.content__set-link:focus-visible {
-  text-decoration: underline;
-}
-
-.content__warning {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--sf-1);
-  margin-left: var(--sf-2);
-  padding: 0 var(--sf-2);
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--sf-amber) 14%, transparent);
-  color: var(--sf-ink);
-  font-size: var(--sf-text-xs);
-}
-
-.content__muted {
-  color: var(--sf-slate);
-  font-family: var(--sf-font-mono);
-  font-size: var(--sf-text-xs);
-}
-
-.content__num {
-  text-align: right !important;
-  font-variant-numeric: tabular-nums;
-}
-
-.content__empty {
-  padding: var(--sf-4) !important;
-  text-align: center;
-  color: var(--sf-slate);
+.content__treebody {
+  flex: 1 1 auto;
+  min-height: 0;
 }

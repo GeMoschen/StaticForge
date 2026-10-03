@@ -20,9 +20,16 @@
       >
         <sf-icon class="editor__favorite-icon" name="star" />
       </sf-button>
+      @if (translationSummary(); as summary) {
+        <span class="editor__translation" aria-live="polite">{{ summary }}</span>
+      }
     </span>
     <ng-container sfPageHeaderActions>
-      <sf-save-status class="editor__save" [state]="saveState()" [savedAt]="savedAt()" [errorCount]="titleBlank() ? 1 : 0" />
+      @if (readOnlyLabel(); as label) {
+        <span class="editor__save editor__readonly" aria-live="polite">{{ label }}</span>
+      } @else {
+        <sf-save-status class="editor__save" [state]="saveState()" [savedAt]="savedAt()" [errorCount]="titleBlank() ? 1 : 0" />
+      }
       <sf-button
         variant="secondary"
         icon="fact_check"
@@ -319,6 +326,14 @@
     </div>
   </div>
 </ng-template>
+
+@if (review.deletePage()) {
+  <sf-sample-page-delete-dialog (closed)="review.deletePage.set(false)" />
+}
+
+@if (review.conflict(); as mode) {
+  <sf-sample-conflict-drawer [mode]="mode" (closed)="review.conflict.set(null)" />
+}
 
 @if (paletteAfter(); as where) {
   <sf-sample-section-palette [after]="where.name" [counts]="templateCounts()" (insert)="insertSection($event)" (cancelled)="paletteAfter.set(null)" />

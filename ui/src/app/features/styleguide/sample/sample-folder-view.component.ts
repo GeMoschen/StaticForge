@@ -19,6 +19,7 @@ import { SfButtonComponent } from '../../../shared/components/sf-button.componen
 import { SfIconComponent } from '../../../shared/components/sf-icon.component';
 import { SfTooltipDirective } from '../../../shared/directives/sf-tooltip.directive';
 import { SampleBreadcrumbComponent } from './sample-breadcrumb.component';
+import { SamplePagesReview } from './pages/sample-pages-review';
 import { SAMPLE_LANGS, SampleEntry, childrenOf } from './sample-data';
 import { STATUS_ICONS, STATUS_TONES, SampleState } from './sample-state';
 
@@ -51,6 +52,7 @@ export class SampleFolderViewComponent {
   protected readonly state = inject(SampleState);
   private readonly confirms = inject(ConfirmService);
   private readonly toasts = inject(ToastService);
+  protected readonly review = inject(SamplePagesReview);
   private readonly table = viewChild.required<SfDataTableComponent<SampleEntry>>(SfDataTableComponent);
 
   protected readonly langs = SAMPLE_LANGS;
@@ -59,7 +61,12 @@ export class SampleFolderViewComponent {
   private readonly now = Date.now();
 
   protected readonly title = computed(() => this.state.folder()?.name ?? this.state.t('rail.pages'));
-  protected readonly rows = computed(() => childrenOf(this.state.folderId()));
+  protected readonly rows = computed(() => (['empty', 'loading', 'error'].includes(this.review.folder()) ? [] : childrenOf(this.state.folderId())));
+  /** The table is reading (`fstate=loading`) or the read failed (`fstate=error`, with Retry). */
+  protected readonly loading = computed(() => this.review.folder() === 'loading');
+  protected readonly failed = computed(() => this.review.folder() === 'error');
+  /** The Pages root has no rename, move or delete. */
+  protected readonly isRoot = computed(() => this.state.folderId() === null);
   protected readonly rowKey = (row: SampleEntry) => row.id;
   protected readonly rowLabel = (row: SampleEntry) => row.name;
 
@@ -78,29 +85,40 @@ export class SampleFolderViewComponent {
     return columns;
   });
 
-  protected readonly bulkActions = computed<SfDataTableBulkAction<SampleEntry>[]>(() => [
-    { id: 'move', label: this.state.t('folder.bulk.move'), icon: 'drive_file_move', action: (s) => this.bulkMove(s) },
-    { id: 'release', label: this.state.t('folder.bulk.release'), icon: 'publish', action: () => this.state.notice() },
-    { id: 'duplicate', label: this.state.t('folder.bulk.duplicate'), icon: 'content_copy', action: (s) => this.bulkDuplicate(s) },
-    { id: 'delete', label: this.state.t('folder.bulk.delete'), icon: 'delete', variant: 'danger', action: (s) => void this.delete(s) },
-  ]);
-
-  protected readonly moreActions = computed<SfMenuItem[]>(() => [
-    ...(this.state.folderId() === null
+  /** Time travel and an archived project are read-only: nothing that changes something is offered. */
+  protected readonly bulkActions = computed<SfDataTableBulkAction<SampleEntry>[]>(() =>
+    this.review.readOnly()
       ? []
       : [
-          {
-            id: 'favorite',
-            label: this.state.t(this.state.isFavorite(this.state.folderId()!) ? 'favorites.remove' : 'favorites.add'),
-            icon: 'star',
-          },
-        ]),
-    { id: 'settings', label: this.state.t('folder.settings'), icon: 'settings' },
-    { id: 'rename', label: this.state.t('folder.rename'), icon: 'edit', shortcut: 'F2' },
-    { id: 'move', label: this.state.t('folder.move'), icon: 'drive_file_move' },
-    { id: 'copyLink', label: this.state.t('folder.copyLink'), icon: 'link' },
-    { id: 'delete', label: this.state.t('folder.delete'), icon: 'delete', danger: true, separatorBefore: true },
-  ]);
+          { id: 'move', label: this.state.t('folder.bulk.move'), icon: 'drive_file_move', action: (s) => this.review.openMove(s.rows) },
+          { id: 'release', label: this.state.t('folder.bulk.release'), icon: 'publish', action: (s) => this.bulkRelease(s) },
+          { id: 'duplicate', label: this.state.t('folder.bulk.duplicate'), icon: 'content_copy', action: (s) => this.bulkDuplicate(s) },
+          { id: 'delete', label: this.state.t('folder.bulk.delete'), icon: 'delete', variant: 'danger', action: (s) => void this.delete(s) },
+        ],
+  );
+
+  protected readonly moreActions = computed<SfMenuItem[]>(() => {
+    const locked = this.review.readOnly();
+    if (this.isRoot()) {
+      // The root cannot be renamed, moved or deleted: settings and the link are all it has.
+      return [
+        { id: 'settings', label: this.state.t('folder.settings'), icon: 'settings' },
+        { id: 'copyLink', label: this.state.t('folder.copyLink'), icon: 'link' },
+      ];
+    }
+    return [
+      {
+        id: 'favorite',
+        label: this.state.t(this.state.isFavorite(this.state.folderId()!) ? 'favorites.remove' : 'favorites.add'),
+        icon: 'star',
+      },
+      { id: 'settings', label: this.state.t('folder.settings'), icon: 'settings' },
+      { id: 'rename', label: this.state.t('folder.rename'), icon: 'edit', shortcut: 'F2', disabled: locked },
+      { id: 'move', label: this.state.t('folder.move'), icon: 'drive_file_move', disabled: locked },
+      { id: 'copyLink', label: this.state.t('folder.copyLink'), icon: 'link' },
+      { id: 'delete', label: this.state.t('folder.delete'), icon: 'delete', danger: true, separatorBefore: true, disabled: locked },
+    ];
+  });
 
   constructor() {
     // The scripted `view=folder` state: select the fixed rows once the table is there.
@@ -148,36 +166,56 @@ export class SampleFolderViewComponent {
       this.state.pageSettings.set('folder');
     } else if (item.id === 'favorite') {
       this.state.toggleFavorite(this.state.folderId()!);
+    } else if (item.id === 'move') {
+      const own = this.state.folder();
+      if (own) {
+        this.review.openMove([own]);
+      }
     } else if (item.id === 'delete') {
-      void this.deleteEntries([this.title()]);
+      void this.deleteEntries([this.title()], undefined, true);
     } else {
       this.state.notice();
     }
   }
 
-  /** Bulk move: the move picker would ask for the target; the toast says what moved and offers Undo (decision 50). */
-  private bulkMove(selection: SfDataTableSelection<SampleEntry>): void {
-    const target = this.state.t('folder.bulk.moveTarget');
-    this.toasts.undo(this.state.t('folder.bulk.moved', { count: selection.rows.length, name: selection.rows[0]?.name, target }), () =>
-      this.toasts.show(this.state.t('folder.bulk.movedBack'), 'info'),
-    );
+  /** Bulk release: a selection with nothing waiting says so; otherwise the shared release dialog (M35.23) would open. */
+  private bulkRelease(selection: SfDataTableSelection<SampleEntry>): void {
+    const waiting = selection.rows.some((row) => SAMPLE_LANGS.some((lang) => row.status[lang] === 'changed' || row.status[lang] === 'draft'));
+    if (waiting) {
+      this.state.notice();
+    } else {
+      this.toasts.show(this.state.t('folder.bulk.nothingToRelease'), 'info');
+    }
   }
 
   /** Bulk duplicate: the copies appear next to the originals; Undo removes them. */
   private bulkDuplicate(selection: SfDataTableSelection<SampleEntry>): void {
-    this.toasts.undo(this.state.t('folder.bulk.duplicated', { count: selection.rows.length }), () =>
-      this.toasts.show(this.state.t('folder.bulk.duplicatedBack'), 'info'),
-    );
+    const pages = selection.rows.filter((row) => row.kind === 'page').length;
+    const skipped = selection.rows.length - pages;
+    if (pages === 0) {
+      this.toasts.show(this.state.t('folder.bulk.foldersNotDuplicated'), 'info');
+      return;
+    }
+    const message =
+      skipped > 0
+        ? this.state.t('folder.bulk.duplicatedSkipped', { count: pages })
+        : this.state.t('folder.bulk.duplicated', { count: pages });
+    this.toasts.undo(message, () => this.toasts.show(this.state.t('folder.bulk.duplicatedBack'), 'info'));
   }
 
   private delete(selection: SfDataTableSelection<SampleEntry>): Promise<void> {
-    return this.deleteEntries(selection.rows.map((row) => row.name), () => this.table().clearSelection());
+    return this.deleteEntries(
+      selection.rows.map((row) => row.name),
+      () => this.table().clearSelection(),
+      selection.rows.some((row) => row.kind === 'folder'),
+    );
   }
 
-  private async deleteEntries(names: readonly string[], done?: () => void): Promise<void> {
+  /** Confirms a delete; folders go with everything inside them, and the message says so. */
+  private async deleteEntries(names: readonly string[], done?: () => void, folders = false): Promise<void> {
     const confirmed = await this.confirms.confirm({
       title: this.state.t('folder.deleteTitle', { count: names.length, name: names[0] }),
-      message: this.state.t('folder.deleteMessage'),
+      message: this.state.t(folders ? 'folder.deleteMessageFolders' : 'folder.deleteMessage'),
       confirmLabel: this.state.t('folder.deleteConfirm', { count: names.length }),
       tone: 'danger',
       details: names,

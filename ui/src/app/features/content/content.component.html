@@ -1,183 +1,119 @@
-<div class="content">
-  <h1 class="sf-sr-only">Content</h1>
-  <aside class="content__tree">
-    <div class="content__toolbar">
-      <sf-button variant="secondary" [disabled]="!canEdit()" (click)="newFolder()">New folder</sf-button>
-      <sf-button variant="primary" [disabled]="!canEdit() || datasets().length === 0" (click)="newSet()">
-        New record set
-      </sf-button>
+<sf-splitter
+  class="content"
+  collapsible
+  paneId="content-tree"
+  [defaultSize]="treeWidth"
+  [min]="200"
+  [max]="440"
+  [label]="'content.tree.resize' | transloco"
+>
+  <section sfSplitterStart class="content__pane content__tree" aria-labelledby="content-tree-title">
+    <div class="content__head">
+      <span class="content__title" id="content-tree-title">{{ 'content.tree.title' | transloco }}</span>
+      <sf-menu
+        variant="secondary"
+        size="sm"
+        align="end"
+        [text]="'content.tree.new' | transloco"
+        [label]="'content.tree.newLabel' | transloco"
+        [items]="newItems()"
+        [disabled]="!canEdit()"
+      />
     </div>
+    <sf-tree
+      class="content__treebody"
+      treeId="content"
+      filterMode="server"
+      rootDroppable
+      [label]="'content.tree.title' | transloco"
+      [projectKey]="projectKey()"
+      [loadChildren]="loader()"
+      [selection]="treeSelection()"
+      [actions]="treeActions"
+      [createKinds]="['folder']"
+      [allowAction]="allowAction"
+      [canDrop]="canDrop"
+      [validateName]="validateName"
+      [confirmDelete]="confirmDelete"
+      [menuItems]="menuItems"
+      [search]="search"
+      (open)="onOpen($event)"
+      (create)="onCreate($event)"
+      (rename)="onRename($event)"
+      (delete)="onDelete($event)"
+      (move)="onMove($event)"
+      (moveTo)="openMoveDialog($event)"
+    />
+  </section>
 
-    <button
-      type="button"
-      class="content__clear"
-      [class.content__clear--active]="!selectedFolderUuid() && !activeSetUuid()"
-      (click)="clearFolder()"
-      (dragover)="onRootDragOver($event)"
-      (drop)="onRootDrop($event)"
-      (contextmenu)="onRootContextMenu($event)"
-    >
-      <sf-icon name="home" />
-      All content
-    </button>
-
-    @if (treeNodes().length > 0) {
-      <div>
-        @for (node of treeNodes(); track node.uuid) {
-          <sf-store-tree-node
-            [node]="node"
-            [depth]="0"
-            [selectedUuid]="activeSetUuid() ?? selectedFolderUuid()"
-            [projectKey]="projectKey()"
-            leafNoun="Record set"
-            [renameFolder]="renameFolder"
-            [menuItems]="nodeMenu"
-            [undoable]="true"
-            (select)="onTreeSelect($event)"
-            (move)="onMove($event)"
-            (changed)="onTreeChanged()"
-          />
-        }
-      </div>
-    } @else if (!loading()) {
-      <p class="content__hint">Folders group record sets; a record set holds the records of one dataset.</p>
-    }
-  </aside>
-
-  <section class="content__main">
-    <router-outlet (activate)="onChildActivated()" (deactivate)="onChildDeactivated()" />
-
-    @if (!childOpen()) {
-      @if (loading() && datasets().length === 0) {
-        <sf-spinner label="Loading content…" />
-      } @else if (datasets().length === 0) {
-        <sf-empty-state
-          title="No datasets yet"
-          description="Records belong to a dataset, and a developer defines datasets in the Templates store: the fields every record of it has, such as a team member's name and role."
-        />
-        @if (isDeveloper()) {
-          <p class="content__cta">
-            <a [routerLink]="['/p', projectKey(), 'templates']" [queryParams]="{ kind: 'DATASET' }">Define a dataset in Templates</a>
-          </p>
-        }
-      } @else {
-        <div class="content__chips" role="radiogroup" aria-label="Dataset">
-          <button
-            id="content-chip-0"
-            type="button"
-            role="radio"
-            class="content__chip"
-            [class.content__chip--active]="activeChip() === all"
-            [attr.aria-checked]="activeChip() === all"
-            [attr.tabindex]="activeChip() === all ? 0 : -1"
-            (click)="selectChip(all)"
-            (keydown)="onChipKeydown($event, 0)"
-          >
-            All
-          </button>
-          @for (ds of datasets(); track ds.uuid; let chipIndex = $index) {
-            <button
-              [id]="'content-chip-' + (chipIndex + 1)"
-              type="button"
-              role="radio"
-              class="content__chip"
-              [class.content__chip--active]="activeChip() === ds.uuid"
-              [attr.aria-checked]="activeChip() === ds.uuid"
-              [attr.tabindex]="activeChip() === ds.uuid ? 0 : -1"
-              (click)="selectChip(ds.uuid ?? all)"
-              (keydown)="onChipKeydown($event, chipIndex + 1)"
-            >
-              {{ ds.displayName ?? ds.uid }}
-              <span class="content__chip-count" [title]="(setCounts().get(ds.uuid ?? '') ?? 0) + ' record sets'">
-                {{ setCounts().get(ds.uuid ?? '') ?? 0 }}
-              </span>
-            </button>
-          }
-        </div>
-
-        @if (sets().length === 0) {
+  <div sfSplitterEnd class="content__pane content__main">
+    @switch (mode()) {
+      @case ('favorites') {
+        <sf-favorites-view />
+      }
+      @case ('folder') {
+        @if (emptyStore()) {
           <sf-empty-state
-            title="No record sets yet"
-            description="A record set holds the records of one dataset — say, the team members shown on the About page — and a query deciding which of them a page shows, in which order."
+            [icon]="noDatasets() ? 'code_blocks' : setIcon"
+            [title]="(noDatasets() ? 'content.shell.empty.noDatasets' : 'content.shell.empty.noRecordSets') | transloco"
+            [description]="('content.shell.empty.' + emptyKind()) | transloco"
+            [primaryLabel]="primaryLabel()"
+            [primaryIcon]="noDatasets() ? 'code_blocks' : 'playlist_add'"
+            [secondaryLabel]="canEdit() ? ('content.shell.empty.createFolder' | transloco) : null"
+            (primary)="onEmptyPrimary()"
+            (secondary)="createFolderAtRoot()"
           />
-          @if (canEdit()) {
-            <p class="content__cta">
-              <sf-button variant="primary" (click)="newSet()">New record set</sf-button>
-            </p>
-          }
         } @else {
-          <div class="content__sets">
-            <table class="content__table">
-              <caption class="sf-sr-only">Record sets in {{ folderPath() }}</caption>
-              <thead>
-                <tr>
-                  <th scope="col">Record set</th>
-                  <th scope="col">Dataset</th>
-                  <th scope="col">Folder</th>
-                  <th scope="col" class="content__num">Records</th>
-                </tr>
-              </thead>
-              <tbody>
-                @for (set of visibleSets(); track set.uuid) {
-                  <tr class="content__set-row" (click)="openSet(set.uuid ?? '')">
-                    <td>
-                      <a class="content__set-link" [routerLink]="['/p', projectKey(), 'content', 'sets', set.uuid]" (click)="$event.stopPropagation()">
-                        <sf-icon [name]="setIcon" />
-                        {{ set.displayName ?? set.uid }}
-                      </a>
-                      @if (set.queryValid === false) {
-                        <span class="content__warning" [title]="invalidQueryWarning">
-                          <sf-icon name="warning" />
-                          Query invalid
-                        </span>
-                      }
-                    </td>
-                    <td><span class="content__badge">{{ set.dataset?.displayName ?? set.dataset?.uid }}</span></td>
-                    <td class="content__muted">{{ setFolderPath(set.folderPath) }}</td>
-                    <td class="content__num">{{ set.recordCount ?? 0 }}</td>
-                  </tr>
-                } @empty {
-                  <tr>
-                    <td class="content__empty" colspan="4">No record sets match this folder and dataset.</td>
-                  </tr>
-                }
-              </tbody>
-            </table>
-          </div>
+          <sf-content-folder-view
+            [projectKey]="projectKey()"
+            [folderUuid]="folderUuid()"
+            [index]="index()"
+            [tree]="folders()"
+            [datasets]="datasets()"
+            [loading]="!loaded()"
+            [failed]="failed()"
+            (openSet)="openSet($event)"
+            (openFolder)="openFolder($event)"
+            (newFolder)="openNewFolder()"
+            (newRecordSet)="openNewSetHere()"
+            (rename)="renameInTree($event)"
+            (retry)="changed()"
+          />
         }
       }
     }
-  </section>
-</div>
+    <router-outlet />
+  </div>
+</sf-splitter>
 
 <sf-create-asset-dialog
   kind="FOLDER"
   scope="CONTENT"
   [open]="newFolderOpen()"
-  [submitting]="creatingFolder()"
+  [submitting]="creating()"
   [projectKey]="projectKey()"
   (create)="submitNewFolder($event)"
-  (closed)="closeNewFolder()"
+  (closed)="newFolderOpen.set(false)"
 />
 
 <sf-create-asset-dialog
   kind="RECORD_SET"
   scope="CONTENT"
   [open]="newSetOpen()"
-  [submitting]="creatingSet()"
+  [submitting]="creating()"
   [projectKey]="projectKey()"
   [datasets]="datasets()"
-  [initialDatasetUuid]="activeChip() === all ? null : activeChip()"
   (create)="submitNewSet($event)"
-  (closed)="closeNewSet()"
+  (closed)="newSetOpen.set(false)"
 />
 
-<sf-move-target-dialog
-  [open]="movingSet() !== null"
-  [title]="'Move “' + (movingSet()?.displayName ?? '') + '” to…'"
-  description="A record set lives in a Content folder; its records move with it."
-  [targets]="moveTargets()"
-  [submitting]="moving()"
-  (chosen)="submitMove($event)"
-  (closed)="closeMove()"
-/>
+@if (moving()) {
+  <sf-folder-move-dialog
+    [tree]="folderTree()"
+    [excluded]="movingFolders()"
+    [count]="moving()!.length"
+    [rootLabel]="'content.folder.root' | transloco"
+    (chosen)="onMoveChosen($event)"
+    (cancelled)="moving.set(null)"
+  />
+}

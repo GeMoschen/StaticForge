@@ -1,0 +1,86 @@
+<sf-page-header class="view__header" [title]="title()" [secondaryActions]="moreActions()" (secondaryAction)="onMenu($event)">
+  <ng-container sfPageHeaderActions>
+    <sf-button variant="secondary" icon="create_new_folder" [disabled]="!canEdit()" (click)="newFolder.emit()">{{ 'content.folder.newFolder' | transloco }}</sf-button>
+    <sf-button
+      icon="playlist_add"
+      [disabled]="!canEdit() || datasets().length === 0"
+      [disabledReason]="canEdit() && datasets().length === 0 ? ('content.tree.noDatasets' | transloco) : null"
+      (click)="newRecordSet.emit()"
+      >{{ 'content.folder.newRecordSet' | transloco }}</sf-button
+    >
+  </ng-container>
+</sf-page-header>
+
+<sf-data-table
+  class="view__table"
+  selectable
+  searchable
+  urlSync=""
+  [columns]="columns()"
+  [rows]="rows()"
+  [rowKey]="rowKey"
+  [rowLabel]="rowLabel"
+  [filters]="filters()"
+  [label]="'content.folder.table' | transloco: { name: title() }"
+  [searchPlaceholder]="'content.folder.search' | transloco"
+  [bulkActions]="bulkActions()"
+  [loading]="loading()"
+  [error]="failed() ? ('content.folder.loadFailed' | transloco) : null"
+  [emptyTitle]="'content.folder.empty' | transloco"
+  [emptyDescription]="'content.folder.emptyHint' | transloco"
+  (rowOpen)="open($event)"
+  (retry)="retry.emit()"
+>
+  <ng-template sfDataTableCell="name" [sfDataTableCellRows]="rows()" let-row>
+    <span class="cell-name">
+      <sf-icon class="cell-name__icon" [class.is-folder]="row.kind === 'folder'" [name]="icon(row)" />
+      <span class="cell-name__text">{{ row.name }}</span>
+      <sf-asset-favorite
+        class="cell-fav"
+        [type]="row.kind === 'folder' ? 'FOLDER' : 'RECORD_SET'"
+        [uuid]="row.uuid"
+        [name]="row.name"
+        [folderPath]="row.path"
+        (click)="$event.stopPropagation()"
+      />
+    </span>
+  </ng-template>
+  <ng-template sfDataTableCell="dataset" [sfDataTableCellRows]="rows()" let-row>
+    <span class="cell-muted">{{ row.kind === 'folder' ? ('content.folder.folderType' | transloco) : row.datasetName }}</span>
+  </ng-template>
+  <ng-template sfDataTableCell="records" [sfDataTableCellRows]="rows()" let-row>
+    @if (row.kind === 'set') {
+      {{ row.recordCount }}
+    }
+  </ng-template>
+  <ng-template sfDataTableCell="status" [sfDataTableCellRows]="rows()" let-row>
+    <span class="cell-status">
+      @for (entry of statuses(row); track entry.key) {
+        <sf-status size="sm" [tone]="entry.tone" [label]="entry.tag" [detail]="entry.label" />
+      } @empty {
+        <span class="cell-muted">—</span>
+      }
+      @if (row.kind === 'set' && !row.queryValid) {
+        <sf-status size="sm" tone="warning" icon="warning" [label]="'content.tree.invalidQuery' | transloco" />
+      }
+    </span>
+  </ng-template>
+  <ng-template sfDataTableCell="modified" [sfDataTableCellRows]="rows()" let-row>
+    @if (row.changedAt) {
+      <sf-relative-time [value]="row.changedAt" />
+    } @else {
+      <span class="cell-muted">—</span>
+    }
+  </ng-template>
+</sf-data-table>
+
+@if (moving(); as move) {
+  <sf-folder-move-dialog
+    [tree]="folderTree()"
+    [excluded]="excludedFolders(move.entries)"
+    [count]="move.entries.length"
+    [rootLabel]="'content.folder.root' | transloco"
+    (chosen)="onMoveChosen(move.entries, $event)"
+    (cancelled)="moving.set(null)"
+  />
+}

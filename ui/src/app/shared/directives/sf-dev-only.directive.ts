@@ -22,6 +22,6 @@ export class SfDevOnlyDirective {
       if (enabled) {
         this.container.createEmbeddedView(this.template);
       }
-    });
+    }, { allowSignalWrites: true });
   }
 }

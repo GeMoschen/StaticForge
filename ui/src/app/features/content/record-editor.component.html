@@ -1,125 +1,141 @@
-@if (loading() && !record()) {
-  <p class="record-editor__loading">Loading record…</p>
-} @else {
-  @if (record(); as rec) {
-    <div class="record-editor">
-      <nav class="record-editor__crumbs" aria-label="Breadcrumb">
-        <a [routerLink]="['/p', projectKey(), 'content']">All content</a>
-        @if (rec.folderUuid && folderPath() !== '/') {
-          <span aria-hidden="true">›</span>
-          <a [routerLink]="['/p', projectKey(), 'content']" [queryParams]="{ folder: rec.folderUuid }">{{ folderPath() }}</a>
-        }
-        @if (rec.recordSet; as set) {
-          <span aria-hidden="true">›</span>
-          <a [routerLink]="['/p', projectKey(), 'content', 'sets', set.uuid]">{{ set.displayName ?? set.uid }}</a>
-        }
-        <span aria-hidden="true">›</span>
-        <span aria-current="page">{{ rec.displayName ?? rec.uid }}</span>
-      </nav>
+@if (record(); as rec) {
+  <div class="record-editor" [class.record-editor--time-travel]="timeTravelling()">
+    <sf-record-editor-header
+      [projectKey]="projectKey()"
+      [record]="rec"
+      [title]="title()"
+      [datasetName]="datasetName()"
+      [snippet]="snippet()"
+      [readOnly]="readOnly()"
+      [timeTravelling]="timeTravelling()"
+      [readOnlyLabel]="readOnlyLabel()"
+      [saveState]="status().state"
+      [errorCount]="status().errorCount"
+      [savedAt]="autosave.lastSavedAt()"
+      [checks]="checks()"
+      [checksOpen]="panel() === 'issues'"
+      [releaseRefresh]="releaseRefresh()"
+      (saveNow)="saveNow()"
+      (move)="actions.openMove()"
+      (remove)="actions.remove()"
+      (restore)="actions.restore()"
+      (toggleChecks)="toggleChecks()"
+      (showUsedBy)="panel.set('usages')"
+      (released)="onReleaseChanged($event)"
+    />
 
-      <header class="record-editor__header">
-        <div class="record-editor__title">
-          <h2>{{ rec.displayName ?? rec.uid }}</h2>
-          <sf-asset-favorite type="RECORD" [uuid]="rec.uuid" [name]="rec.displayName ?? rec.uid" [folderPath]="rec.folderPath" />
-          <code class="record-editor__uid">{{ rec.uid }}</code>
-          @if (rec.datasetUid) {
-            <span class="record-editor__badge" title="Dataset">{{ dataset()?.displayName ?? rec.datasetUid }}</span>
-          }
-        </div>
-        @if (readOnlyLabel()) {
-          <span class="record-editor__status" role="status" aria-live="polite">{{ readOnlyLabel() }}</span>
-        } @else {
-          <sf-save-status class="record-editor__status" [state]="status().state" [savedAt]="autosave.lastSavedAt()" [errorCount]="status().errorCount" />
-        }
-        @if (!readOnly() && !rec.deleted) {
-          <sf-button variant="secondary" [disabled]="autosave.saveState() === 'saving'" (click)="saveNow()">Save now</sf-button>
-          <sf-button variant="secondary" (click)="actions.openMove()">Move…</sf-button>
-          <sf-button variant="danger" (click)="actions.remove()">Delete</sf-button>
-        }
+    <div class="record-editor__body">
+      <div class="record-editor__form" data-sf-record-form>
         @if (rec.deleted && !timeTravelling()) {
-          <sf-button variant="primary" [disabled]="readOnly()" (click)="actions.restore()">Restore</sf-button>
+          <sf-banner tone="warning" [title]="'content.record.banner.deletedTitle' | transloco">
+            {{ 'content.record.banner.deleted' | transloco }}
+          </sf-banner>
         }
-      </header>
-      <sf-release-bar
-        [projectKey]="projectKey()"
-        [assetUuid]="rec.uuid"
-        [refreshKey]="releaseRefresh()"
-        (changed)="onReleaseChanged($event)"
-      />
 
-      @if (timeTravelling()) {
-        <p class="record-editor__notice" role="status">
-          Viewing revision {{ rec.revision }} — the record is read-only until you leave time travel.
-          <button type="button" class="record-editor__link" (click)="leaveTimeTravel()">Back to now</button>
-        </p>
-      } @else if (rec.deleted) {
-        <p class="record-editor__notice" role="status">This record is deleted. Restore it to edit it again.</p>
-      }
-
-      <div class="record-editor__body">
-        <section class="record-editor__form" aria-label="Record values">
-          @if (titleEditor(); as title) {
-            <p class="record-editor__hint">The display name follows the “{{ title }}” field.</p>
+        <sf-section [heading]="'content.record.fields.heading' | transloco">
+          @if (titleEditor(); as titleField) {
+            <p class="record-editor__hint">{{ 'content.record.hint.titleField' | transloco: { field: titleField } }}</p>
           } @else {
-            <p class="record-editor__hint">The dataset has no title field, so the record is named by its UUID.</p>
+            <p class="record-editor__hint">{{ 'content.record.hint.noTitleField' | transloco }}</p>
           }
 
           @if (definition().editors.length === 0) {
-            <p class="record-editor__hint">The dataset declares no fields yet.</p>
-          } @else {
-            @if (form(); as group) {
-              <sf-content-form
-                [definition]="definition()"
-                [formGroup]="group"
-                [projectKey]="projectKey()"
-                [issues]="shownIssues()"
-                [fieldStates]="rules.fieldStates()"
-                [ruleHub]="rules.hub"
-                [editingLocale]="editingLocale()"
-                [storedValue]="storedContent()"
-                [localeLabels]="localeLabels()"
-              />
-            }
+            <sf-empty-state
+              icon="dataset"
+              [level]="3"
+              [title]="'content.record.fields.emptyTitle' | transloco"
+              [description]="'content.record.fields.empty' | transloco"
+            />
+          } @else if (form()) {
+            <sf-content-form
+              [definition]="definition()"
+              [formGroup]="form()!"
+              [projectKey]="projectKey()"
+              [issues]="shownIssues()"
+              [fieldStates]="rules.fieldStates()"
+              [ruleHub]="rules.hub"
+              [editingLocale]="editingLocale()"
+              [storedValue]="storedContent()"
+              [localeLabels]="localeLabels()"
+            />
           }
-
-          <p class="record-editor__snippet" title="Read this record in a template">
-            <span class="sf-sr-only">Template snippet: </span><code>{{ snippet() }}</code>
-          </p>
-        </section>
-
-        <sf-record-side-panel
-          [(panel)]="panel"
-          [projectKey]="projectKey()"
-          [issues]="shownIssues()"
-          [history]="history()"
-          [usages]="usages()"
-          [revision]="rec.revision"
-        />
+        </sf-section>
       </div>
+    </div>
 
-      <sf-move-target-dialog
-        [open]="actions.moveOpen()"
-        [title]="'Move “' + (rec.displayName ?? rec.uid) + '” to…'"
-        description="A record can move only to another record set of its dataset."
-        emptyText="This dataset has no other record set. Create one in the Content tree first."
-        [targets]="actions.moveTargets()"
-        [submitting]="actions.moving()"
-        (chosen)="actions.moveTo($event)"
-        (closed)="actions.closeMove()"
+    <sf-record-side-panel [(tab)]="panel" [projectKey]="projectKey()" [issues]="shownIssues()" [usages]="usages()" />
+
+    <sf-move-target-dialog
+      [open]="actions.moveOpen()"
+      [title]="'content.record.move.title' | transloco: { name: title() }"
+      [description]="'content.record.move.description' | transloco"
+      [emptyText]="'content.record.move.empty' | transloco"
+      [targets]="actions.moveTargets()"
+      [submitting]="actions.moving()"
+      (chosen)="actions.moveTo($event)"
+      (closed)="actions.closeMove()"
+    />
+
+    @if (autosave.conflict(); as conflict) {
+      <sf-conflict-drawer
+        subject="record"
+        [conflict]="conflict"
+        [changedKeys]="changedKeys()"
+        (keepMine)="onResolve('mine')"
+        (takeTheirs)="onResolve('theirs')"
+        (resolve)="onResolveFields($event)"
       />
-
-      @if (autosave.conflict(); as conflict) {
-        <sf-conflict-drawer
-          subject="record"
-          [conflict]="conflict"
-          [changedKeys]="changedKeys()"
-          (keepMine)="onResolve('mine')"
-          (takeTheirs)="onResolve('theirs')"
-          (resolve)="onResolveFields($event)"
+    }
+  </div>
+} @else if (loadError()) {
+  <div class="record-editor">
+    <div class="record-editor__plain-head">
+      <sf-page-header [title]="'content.record.title.page' | transloco" />
+    </div>
+    <div class="record-editor__state">
+    @switch (loadError()) {
+      @case ('notFound') {
+        <sf-empty-state
+          icon="search_off"
+          [level]="2"
+          [title]="'content.record.notFound.title' | transloco"
+          [description]="'content.record.notFound.description' | transloco"
+          [primaryLabel]="'content.record.notFound.action' | transloco"
+          (primary)="openContent()"
         />
       }
+      @case ('revision') {
+        <sf-empty-state
+          icon="history"
+          [level]="2"
+          [title]="'content.record.noRevision.title' | transloco"
+          [description]="'content.record.noRevision.description' | transloco"
+          [primaryLabel]="'content.record.noRevision.action' | transloco"
+          (primary)="leaveTimeTravel()"
+        />
+      }
+      @default {
+        <sf-empty-state
+          icon="error"
+          [level]="2"
+          [title]="'content.record.loadError.title' | transloco"
+          [description]="'content.record.loadError.description' | transloco"
+          [primaryLabel]="'content.record.loadError.retry' | transloco"
+          (primary)="retry()"
+        />
+      }
+    }
     </div>
-  } @else {
-    <p class="record-editor__loading">This record could not be loaded.</p>
-  }
+  </div>
+} @else {
+  <div class="record-editor">
+    <div class="record-editor__plain-head">
+      <sf-skeleton shape="text" [lines]="2" [label]="'content.record.loading' | transloco" />
+    </div>
+    <div class="record-editor__body">
+      <div class="record-editor__form">
+        <sf-skeleton shape="form" [rows]="5" />
+      </div>
+    </div>
+  </div>
 }

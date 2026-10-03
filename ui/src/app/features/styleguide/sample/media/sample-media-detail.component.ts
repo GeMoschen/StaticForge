@@ -26,6 +26,7 @@ import {
   renderedSource,
   variantsOf,
 } from './sample-media-data';
+import { SampleAssetUrl, SampleAssetUrlsComponent } from '../pages/sample-asset-urls.component';
 import { SampleMediaDetailsTabComponent } from './sample-media-details-tab.component';
 import { SampleMediaSourceComponent } from './sample-media-source.component';
 import { SampleMediaState, SampleMediaTab } from './sample-media-state';
@@ -55,6 +56,7 @@ const DEFAULT_LANG: SampleLang = 'de';
   selector: 'sf-sample-media-detail',
   standalone: true,
   imports: [
+    SampleAssetUrlsComponent,
     SampleMediaDetailsTabComponent,
     SampleMediaSourceComponent,
     SfAvatarComponent,
@@ -161,6 +163,14 @@ export class SampleMediaDetailComponent {
     return svg ? 'SVG · XML' : CODE_FORMAT_LABELS[format];
   });
   protected readonly rendered = computed(() => renderedSource(this.file()));
+  /** The URLs the build and the preview serve the file under (the Used by tab's panel). */
+  protected readonly urls = computed<SampleAssetUrl[]>(() => {
+    const name = this.file().name;
+    return [
+      { area: 'build', where: this.state.t('usedBy.urlsWhere'), url: `/media/${name}` },
+      { area: 'preview', where: this.state.t('usedBy.urlsWhere'), url: `/preview/media/${name}` },
+    ];
+  });
 
   protected selectTab(id: string): void {
     this.state.tab.set(id as SampleMediaTab);

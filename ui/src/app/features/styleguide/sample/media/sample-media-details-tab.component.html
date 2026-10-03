@@ -77,6 +77,9 @@
     <sf-field [label]="'styleguide.sample.media.details.caption' | transloco" optional>
       <sf-textarea [rows]="2" [value]="details().caption" (valueChange)="state.edit({ caption: $event })" />
     </sf-field>
+    <sf-field [label]="'styleguide.sample.media.details.copyright' | transloco" optional>
+      <sf-input [value]="details().copyright" (valueChange)="state.edit({ copyright: $event })" />
+    </sf-field>
   }
 </div>
 

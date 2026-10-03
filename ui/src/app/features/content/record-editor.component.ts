@@ -13,19 +13,21 @@ import {
   signal,
   untracked,
 } from '@angular/core';
-import { SfAssetFavoriteComponent } from '../../shared/components/sf-asset-favorite.component';
 import { FormGroup } from '@angular/forms';
-import { RouterLink } from '@angular/router';
+import { Router } from '@angular/router';
+import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
 import { forkJoin, Subscription } from 'rxjs';
 import type { components } from '../../core/api/generated/schema.d.ts';
 import { ApiClient } from '../../core/api/api.client';
 import { ProjectPermissionsStore } from '../../core/project/project-permissions.store';
 import { ToastService } from '../../core/ui/toast.service';
-import { SfButtonComponent } from '../../shared/components/sf-button.component';
-import { FormBuilderService } from '../forms/form-builder.service';
-import type { ContentDefinition } from '../forms/form.model';
-import type { EditingLocale } from '../forms/l10n.util';
-import { SfContentFormComponent } from '../forms/sf-content-form.component';
+import { SfBannerComponent } from '../../shared/components/layout/sf-banner.component';
+import { SfPageHeaderComponent } from '../../shared/components/layout/sf-page-header.component';
+import { SfSectionComponent } from '../../shared/components/layout/sf-section.component';
+import { SfSkeletonComponent } from '../../shared/components/layout/sf-skeleton.component';
+import { SfEmptyStateComponent } from '../../shared/components/sf-empty-state.component';
+// Through the barrel: the forms module is an import cycle that only evaluates when entered there.
+import { FormBuilderService, SfContentFormComponent, type ContentDefinition, type EditingLocale } from '../forms';
 import { RuleBinding, mergeFindings } from '../forms/rules/rule-binding';
 import { ConflictDrawerComponent } from '../pages/conflict-drawer.component';
 import { diffFields, mergePayload } from '../pages/conflict-util';
@@ -36,14 +38,18 @@ import { ContentStoreRefresh } from './content-store-refresh.service';
 import { ContentService, type DatasetDetailView, type RecordDetailView } from './content.service';
 import { MoveTargetDialogComponent } from './move-target-dialog.component';
 import { RecordAutosaveService, type RecordPayload } from './record-autosave.service';
-import { ReleaseBarComponent } from '../release/release-bar.component';
 import type { ReleaseMode } from '../release/release-choice.util';
 import { RecordActionsService } from './record-actions.service';
-import { RecordSidePanelComponent, type ContentIssue, type RecordSidePanelTab } from './record-side-panel.component';
+import { RecordEditorHeaderComponent } from './record-editor-header.component';
+import { RecordSidePanelComponent, checkCounts, type ContentIssue, type RecordSidePanelTab } from './record-side-panel.component';
+import { recordTitle } from './record-title.util';
 import { useFrameItem } from '../../core/frame/use-frame-item';
 import { ActiveEditorService } from '../../core/editor/active-editor.service';
 import { autosaveEditorState, autosaveStatus } from '../../core/editor/autosave-editor-state';
-import { SfSaveStatusComponent } from '../../shared/components/layout/sf-save-status.component';
+import type { Crumb } from '../../core/frame/breadcrumb.util';
+
+/** Why the record is not on screen: it does not exist, did not exist at the revision on screen, or could not be read. */
+type LoadError = 'notFound' | 'revision' | 'failed';
 
 type AssetHistoryEntry = components['schemas']['AssetHistoryEntry'];
 type UsageDto = components['schemas']['UsageDto'];
@@ -65,15 +71,17 @@ const EMPTY_DEF: ContentDefinition = { editors: [], bodies: [] };
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
-    SfAssetFavoriteComponent,
-    SfSaveStatusComponent,
-    RouterLink,
-    SfButtonComponent,
+    RecordEditorHeaderComponent,
     RecordSidePanelComponent,
+    SfBannerComponent,
     SfContentFormComponent,
+    SfEmptyStateComponent,
+    SfPageHeaderComponent,
+    SfSectionComponent,
+    SfSkeletonComponent,
     ConflictDrawerComponent,
     MoveTargetDialogComponent,
-    ReleaseBarComponent,
+    TranslocoPipe,
   ],
   providers: [RecordAutosaveService, RecordActionsService],
   templateUrl: './record-editor.component.html',
@@ -99,6 +107,8 @@ export class RecordEditorComponent implements OnDestroy {
   private readonly api = inject(ApiClient);
   private readonly forms = inject(FormBuilderService);
   private readonly toasts = inject(ToastService);
+  private readonly transloco = inject(TranslocoService);
+  private readonly router = inject(Router);
   private readonly timeTravel = inject(TimeTravelStore);
   private readonly refresh = inject(ContentStoreRefresh, { optional: true });
   protected readonly autosave = inject(RecordAutosaveService);
@@ -106,6 +116,7 @@ export class RecordEditorComponent implements OnDestroy {
 
   protected readonly timeTravelling = this.timeTravel.isTimeTravel;
   protected readonly loading = signal(false);
+  protected readonly loadError = signal<LoadError | null>(null);
   protected readonly record = signal<RecordDetailView | null>(null);
   protected readonly dataset = signal<DatasetDetailView | null>(null);
   protected readonly definition = signal<ContentDefinition>(EMPTY_DEF);
@@ -119,10 +130,52 @@ export class RecordEditorComponent implements OnDestroy {
   protected readonly issues = signal<ContentIssue[]>([]);
   protected readonly history = signal<AssetHistoryEntry[]>([]);
   protected readonly usages = signal<UsageDto[]>([]);
-  protected readonly panel = signal<RecordSidePanelTab>('issues');
+  /** The open tab of the Checks / Used by drawer; `null` while it is closed. */
+  protected readonly panel = signal<RecordSidePanelTab | null>(null);
 
   /** The record's Content folder, store-relative, for the breadcrumb (`/` at the store root). */
   protected readonly folderPath = computed(() => storeFolderPath(this.record()?.folderPath));
+
+  protected readonly datasetName = computed(() => this.dataset()?.displayName ?? this.record()?.datasetUid ?? '');
+
+  /** The record's name: its display name, never its UUID — a label with the dataset's name stands in for a nameless one. */
+  protected readonly title = computed(() => {
+    const dataset = this.datasetName();
+    const fallback = dataset
+      ? this.transloco.translate('content.record.title.untitledIn', { dataset })
+      : this.transloco.translate('content.record.title.untitled');
+    return recordTitle(this.record(), fallback);
+  });
+
+  /** The folder and record set above the record, for the breadcrumb (the area crumb stands for the store root). */
+  private readonly trail = computed<Crumb[]>(() => {
+    const record = this.record();
+    const key = this.projectKey();
+    if (!record) {
+      return [];
+    }
+    const crumbs: Crumb[] = [];
+    const path = this.folderPath();
+    if (record.folderUuid && path !== '/') {
+      crumbs.push({
+        id: `folder:${record.folderUuid}`,
+        label: path.replace(/^\/|\/$/g, ''),
+        link: ['/p', key, 'content'],
+        queryParams: { folder: record.folderUuid },
+      });
+    }
+    if (record.recordSet?.uuid) {
+      crumbs.push({
+        id: `set:${record.recordSet.uuid}`,
+        label: record.recordSet.displayName ?? record.recordSet.uid ?? '',
+        link: ['/p', key, 'content', 'sets', record.recordSet.uuid],
+      });
+    }
+    return crumbs;
+  });
+
+  /** What the Checks button counts. */
+  protected readonly checks = computed(() => checkCounts(this.shownIssues()));
 
   private formSubscription: Subscription | null = null;
 
@@ -142,7 +195,9 @@ export class RecordEditorComponent implements OnDestroy {
 
   /** Why the record cannot be edited; the save status is for a record that can. */
   protected readonly readOnlyLabel = computed(() =>
-    this.timeTravelling() ? 'Viewing revision ' + (this.timeTravel.activeRevision() ?? '—') : '',
+    this.timeTravelling()
+      ? this.transloco.translate('content.record.status.revision', { revision: this.timeTravel.activeRevision() ?? '—' })
+      : '',
   );
   /** The save status (M35.13): the same words and look in every editor. */
   protected readonly status = computed(() => autosaveStatus(this.autosave));
@@ -165,7 +220,7 @@ export class RecordEditorComponent implements OnDestroy {
     // be written asks first.
     const unregister = inject(ActiveEditorService).register(
       autosaveEditorState({
-        name: () => this.record()?.displayName || this.record()?.uid || '',
+        name: () => (this.record() ? this.title() : ''),
         autosave: this.autosave as never,
         reload: () => this.load(this.projectKey(), this.recordUuid(), null),
       }),
@@ -174,8 +229,7 @@ export class RecordEditorComponent implements OnDestroy {
     // The breadcrumb ends with the open record, and the History drawer shows its versions (M35.12).
     useFrameItem(() => {
       const record = this.record();
-      const label = record?.displayName || record?.uid;
-      return label ? { label, ...(record?.uuid ? { asset: { uuid: record.uuid } } : {}) } : null;
+      return record ? { label: this.title(), trail: this.trail(), ...(record.uuid ? { asset: { uuid: record.uuid } } : {}) } : null;
     });
     this.actions.bind({
       projectKey: this.projectKey,
@@ -184,6 +238,8 @@ export class RecordEditorComponent implements OnDestroy {
       history: this.history,
       usages: this.usages,
       reload: (uuid) => this.load(this.projectKey(), uuid, null),
+      title: this.title,
+      afterDelete: (record) => this.leaveAfterDelete(record),
     });
     this.autosave.setPayloadProvider(() => this.payload());
     this.autosave.setRefetchHandler((view, mode) => this.onRefetched(view, mode));
@@ -255,6 +311,25 @@ export class RecordEditorComponent implements OnDestroy {
     this.timeTravel.exit();
   }
 
+  protected toggleChecks(): void {
+    this.panel.update((tab) => (tab === 'issues' ? null : 'issues'));
+  }
+
+  /** A deleted record has nothing left to edit: back to its set, or the Content area for a record outside any set. */
+  private leaveAfterDelete(record: RecordDetailView): void {
+    const set = record.recordSet?.uuid;
+    void this.router.navigate(set ? ['/p', this.projectKey(), 'content', 'sets', set] : ['/p', this.projectKey(), 'content']);
+  }
+
+  /** Reads the record again after a failed read. */
+  protected retry(): void {
+    this.load(this.projectKey(), this.recordUuid(), this.timeTravel.activeRevision());
+  }
+
+  protected openContent(): void {
+    void this.router.navigate(['/p', this.projectKey(), 'content']);
+  }
+
   protected onResolve(mode: ResolveMode): void {
     this.autosave.resolveConflict(mode);
   }
@@ -281,6 +356,7 @@ export class RecordEditorComponent implements OnDestroy {
       return;
     }
     this.loading.set(true);
+    this.loadError.set(null);
     this.issues.set([]);
     this.content.getRecord(projectKey, uuid, revision).subscribe({
       next: (record) => {
@@ -302,18 +378,16 @@ export class RecordEditorComponent implements OnDestroy {
           },
           error: () => {
             this.loading.set(false);
-            this.apply(record, null);
+            this.record.set(null);
+            this.loadError.set('failed');
           },
         });
       },
       error: (err) => {
         this.loading.set(false);
         this.record.set(null);
-        const notThen = err instanceof HttpErrorResponse && err.status === 404 && revision != null;
-        this.toasts.show(
-          notThen ? 'This record did not exist at that revision.' : 'Could not load the record — try again in a moment.',
-          'error',
-        );
+        const missing = err instanceof HttpErrorResponse && err.status === 404;
+        this.loadError.set(missing ? (revision != null ? 'revision' : 'notFound') : 'failed');
       },
     });
   }
@@ -373,29 +447,25 @@ export class RecordEditorComponent implements OnDestroy {
 
   private onSaved(view: RecordDetailView): void {
     this.issues.set((view.issues ?? []) as ContentIssue[]);
-    if (view.issues && view.issues.length > 0) {
-      this.panel.set('issues');
-    }
     this.record.update((current) => (current ? { ...current, ...view } : view));
   }
 
   private onSaveError(err: unknown): void {
     if (!(err instanceof HttpErrorResponse)) {
-      this.toasts.show('Could not save the record — try again in a moment.', 'error');
+      this.toasts.show(this.transloco.translate('content.record.toast.saveFailed'), 'error');
       return;
     }
     const body = (err.error ?? {}) as { issues?: ContentIssue[]; detail?: string };
     if (err.status === 422 && Array.isArray(body.issues)) {
       this.issues.set(body.issues);
-      this.panel.set('issues');
-      this.toasts.show('Some values are invalid — see the messages next to the form.', 'error');
+      this.toasts.show(this.transloco.translate('content.record.toast.invalid'), 'error');
       return;
     }
     if (err.status === 403) {
-      this.toasts.show('You need the editor role to change records.', 'error');
+      this.toasts.show(this.transloco.translate('content.record.toast.forbidden'), 'error');
       return;
     }
-    this.toasts.show(body.detail ?? 'Could not save the record — try again in a moment.', 'error');
+    this.toasts.show(body.detail ?? this.transloco.translate('content.record.toast.saveFailed'), 'error');
   }
 
   private onRefetched(view: RecordDetailView, mode: ResolveMode): void {

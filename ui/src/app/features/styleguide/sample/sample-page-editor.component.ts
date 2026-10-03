@@ -14,8 +14,6 @@ import {
 import { SampleFieldTagsPipe } from './forms/sample-field-tags.pipe';
 import { DomSanitizer } from '@angular/platform-browser';
 import { TranslocoPipe } from '@jsverse/transloco';
-import { ToastService } from '../../../core/ui/toast.service';
-import { ConfirmService } from '../../../shared/components/dialog/confirm.service';
 import { SfCopyableComponent } from '../../../shared/components/display/sf-copyable.component';
 import { SfTagComponent } from '../../../shared/components/display/sf-tag.component';
 import { SfComboboxComponent } from '../../../shared/components/forms/sf-combobox.component';
@@ -71,6 +69,9 @@ import { HERO_SVG, buildPreviewDocument } from './sample-preview';
 import { SampleState } from './sample-state';
 import { injectSampleQuery } from './changes/sample-area.util';
 import { ISSUES, ISSUE_LEVELS, IssueLevel, SampleSectionTemplate } from './pages/pages-data';
+import { SampleConflictDrawerComponent } from './pages/sample-conflict-drawer.component';
+import { SamplePageDeleteDialogComponent } from './pages/sample-page-delete-dialog.component';
+import { SamplePagesReview } from './pages/sample-pages-review';
 import { SampleSectionPaletteComponent } from './pages/sample-section-palette.component';
 
 /** The article's texts that differ per language. */
@@ -105,6 +106,10 @@ const RELEASE_STATUS: Readonly<Record<SampleStatus, ReleaseActionStatus>> = {
   draft: 'new',
   scheduled: 'scheduled',
 };
+/** The language the fields are written in; the others are translations. */
+const DEFAULT_LANG: SampleLang = 'de';
+/** How many of the page's fields the other language has not translated yet. */
+const UNTRANSLATED = { missing: 2, total: 6 } as const;
 /** The outline entry (and `focus` query value) of the catalog field. */
 export const TEASERS_ROW = 'catalog';
 /** Wide enough for outline, form and preview side by side; below it the preview starts hidden. */
@@ -141,6 +146,8 @@ function localizedFor(pageId: string): Record<SampleLang, LocalizedValues> {
     SampleMediaFieldComponent,
     SampleReferenceFieldComponent,
     SampleReleaseActionsComponent,
+    SampleConflictDrawerComponent,
+    SamplePageDeleteDialogComponent,
     SampleSectionPaletteComponent,
     SfBadgeComponent,
     SfEmptyStateComponent,
@@ -169,9 +176,8 @@ function localizedFor(pageId: string): Record<SampleLang, LocalizedValues> {
 })
 export class SamplePageEditorComponent {
   protected readonly state = inject(SampleState);
-  private readonly confirms = inject(ConfirmService);
+  protected readonly review = inject(SamplePagesReview);
   private readonly unsaved = inject(UnsavedChangesService);
-  private readonly toasts = inject(ToastService);
   private readonly sanitizer = inject(DomSanitizer);
   private readonly injector = inject(Injector);
 
@@ -266,7 +272,23 @@ export class SamplePageEditorComponent {
   protected readonly preview = signal(typeof matchMedia === 'function' ? matchMedia(WIDE_QUERY).matches : true);
   protected readonly device = signal<Device>('desktop');
 
+  /** Why the page cannot be edited (time travel, archived project); the save status is for a page that can. */
+  protected readonly readOnlyLabel = computed<string | null>(() => {
+    const revision = this.state.travel();
+    if (revision !== null) {
+      return this.state.t('editor.revisionStatus', { revision });
+    }
+    return this.review.archived() ? this.state.t('editor.archivedStatus') : null;
+  });
+
+  /** The editing language has fields without a translation: how many, next to the star (the default language never has). */
+  protected readonly translationSummary = computed<string | null>(() => {
+    const lang = this.state.lang();
+    return lang === DEFAULT_LANG ? null : this.state.t('editor.translationSummary', { language: LANGUAGE_NAMES[lang], ...UNTRANSLATED });
+  });
+
   protected readonly moreActions = computed<SfMenuItem[]>(() => {
+    const locked = this.review.readOnly();
     const item = (id: string, icon: string, extra: Partial<SfMenuItem> = {}): SfMenuItem => ({
       id,
       icon,
@@ -274,13 +296,13 @@ export class SamplePageEditorComponent {
       ...extra,
     });
     return [
-      item('saveNow', 'save', { shortcut: 'Mod+S', disabled: this.saveState() === 'saved' || this.saveState() === 'saving' }),
+      item('saveNow', 'save', { shortcut: 'Mod+S', disabled: locked || this.saveState() === 'saved' || this.saveState() === 'saving' }),
       item('pageSettings', 'tune', { separatorBefore: true }),
-      item('duplicate', 'content_copy'),
-      item('move', 'drive_file_move'),
-      item('rename', 'edit', { shortcut: 'F2' }),
+      item('duplicate', 'content_copy', { disabled: locked }),
+      item('move', 'drive_file_move', { disabled: locked }),
+      item('rename', 'edit', { shortcut: 'F2', disabled: locked }),
       item('copyLink', 'link'),
-      item('delete', 'delete', { danger: true, separatorBefore: true }),
+      item('delete', 'delete', { danger: true, separatorBefore: true, disabled: locked }),
     ];
   });
 
@@ -449,7 +471,7 @@ export class SamplePageEditorComponent {
     this.localized.update((all) => ({ ...all, [lang]: { ...all[lang], [key]: value } }));
   }
 
-  protected async secondary(item: SfMenuItem): Promise<void> {
+  protected secondary(item: SfMenuItem): void {
     if (item.id === 'saveNow') {
       this.saveNow();
       return;
@@ -462,16 +484,8 @@ export class SamplePageEditorComponent {
       this.state.notice();
       return;
     }
-    const name = this.state.page().name;
-    const confirmed = await this.confirms.confirm({
-      title: this.state.t('editor.deleteTitle', { name }),
-      message: this.state.t('editor.deleteMessage'),
-      confirmLabel: this.state.t('editor.deleteConfirm'),
-      tone: 'danger',
-    });
-    if (confirmed) {
-      this.toasts.undo(this.state.t('folder.deleted', { count: 1, name }), () => this.toasts.show(this.state.t('folder.restored'), 'info'));
-    }
+    // The page delete dialog: what happens to an online page, and a redirect for its old address.
+    this.review.deletePage.set(true);
   }
 
   protected openSettings(): void {

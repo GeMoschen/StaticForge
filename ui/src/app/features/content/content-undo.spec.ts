@@ -31,7 +31,7 @@ describe('record actions undo', () => {
   let actions: RecordActionsService;
   const lastToast = () => toasts.toasts().at(-1)!;
 
-  function bind(usages: unknown[] = []) {
+  function bind(usages: unknown[] = [], extra: Partial<Parameters<RecordActionsService['bind']>[0]> = {}) {
     reload = vi.fn();
     actions.bind({
       projectKey: signal('proj'),
@@ -40,6 +40,7 @@ describe('record actions undo', () => {
       history: signal([]),
       usages: signal(usages as never),
       reload,
+      ...extra,
     });
   }
 
@@ -85,12 +86,24 @@ describe('record actions undo', () => {
     await vi.waitFor(() => expect(reload).toHaveBeenCalledWith('rec-1'));
   });
 
+  it('leaves the editor after a delete when it says how, and names the record by the title it gives', async () => {
+    const afterDelete = vi.fn();
+    bind([], { afterDelete, title: () => 'Untitled Staff record' });
+
+    await actions.remove();
+
+    expect(confirms.confirm.mock.calls[0][0].title).toBe('Delete “Untitled Staff record”?');
+    expect(afterDelete).toHaveBeenCalledWith(RECORD);
+    expect(reload).not.toHaveBeenCalled();
+    expect(lastToast().message).toBe('Deleted “Untitled Staff record”.');
+  });
+
   it('names the pages that use the record, and deletes with force', async () => {
     bind([{}, {}]);
 
     await actions.remove();
 
-    expect(confirms.confirm.mock.calls[0][0].message).toContain('used by 2 page(s) or template(s)');
+    expect(confirms.confirm.mock.calls[0][0].message).toContain('used by 2 pages or templates');
     expect(api['deleteAsset']).toHaveBeenCalledWith('proj', 'rec-1', true);
   });
 

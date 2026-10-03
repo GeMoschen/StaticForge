@@ -7,6 +7,7 @@ import { SfEmptyStateComponent } from '../../../../shared/components/sf-empty-st
 import { SfIconComponent } from '../../../../shared/components/sf-icon.component';
 import { injectSampleText } from '../changes/sample-area.util';
 import { SampleState } from '../sample-state';
+import { SamplePagesReview } from './sample-pages-review';
 import {
   AFFECTED,
   AFFECTED_FILES,
@@ -16,8 +17,12 @@ import {
   ISSUE_SCOPES,
   IssueLevel,
   IssueScopeKey,
+  SKIPPED_RULES,
   SampleIssue,
 } from './pages-data';
+
+/** The clock time of the last check, as the status line shows it. */
+const CHECKED_AT = '12:04';
 
 /** One group of the drawer: a level, its heading with the count, and its rows. */
 interface IssueGroup {
@@ -42,7 +47,19 @@ interface IssueGroup {
   styleUrl: './sample-issues-drawer.component.scss',
   template: `
     <sf-drawer [title]="t('issues.title')" [width]="460" (closed)="closed.emit()">
-      @if (empty()) {
+      @if (review.issuesPublished()) {
+        <p class="issues__note">{{ t('issues.publishedNote') }}</p>
+      }
+      <p class="issues__status" role="status">
+        {{ statusText() }}
+        @if (review.issuesStatus() === 'unavailable') {
+          <sf-button variant="ghost" size="sm" (click)="review.issuesStatus.set('checked')">{{ t('issues.retry') }}</sf-button>
+        }
+      </p>
+
+      @if (review.issuesStatus() !== 'checked') {
+        <!-- Nothing to list while the draft is being checked or the check failed. -->
+      } @else if (empty()) {
         <sf-empty-state icon="task_alt" [title]="t('issues.empty.title')" [description]="t('issues.empty.description')" [level]="3" />
       } @else {
         <p class="issues__summary" role="status">
@@ -113,6 +130,7 @@ interface IssueGroup {
         } @empty {
           <p class="issues__none">{{ t('issues.noneShown') }}</p>
         }
+        <p class="issues__skipped">{{ t('issues.skipped', { rules: skipped }) }}</p>
       }
 
       <section class="issues__impact" aria-labelledby="issues-impact-heading">
@@ -141,6 +159,7 @@ interface IssueGroup {
 })
 export class SampleIssuesDrawerComponent {
   protected readonly state = inject(SampleState);
+  protected readonly review = inject(SamplePagesReview);
   protected readonly t = injectSampleText('styleguide.sample.pages');
   readonly closed = output<void>();
 
@@ -155,6 +174,16 @@ export class SampleIssuesDrawerComponent {
   protected readonly impactOpen = signal(false);
 
   protected readonly empty = computed(() => this.state.issuesReview() === 'empty');
+  protected readonly skipped = SKIPPED_RULES.join(', ');
+  /** The status line under the title: when the draft was last checked, that it is being checked, or that the check failed. */
+  protected readonly statusText = computed(() => {
+    const status = this.review.issuesStatus();
+    return status === 'checking'
+      ? this.t('issues.checking')
+      : status === 'unavailable'
+        ? this.t('issues.unavailable')
+        : this.t('issues.checkedAt', { time: CHECKED_AT });
+  });
 
   private readonly visible = computed(() => ISSUES.filter((issue) => issue.scopes.some((scope) => this.shown().has(scope))));
   protected readonly groups = computed<IssueGroup[]>(() =>

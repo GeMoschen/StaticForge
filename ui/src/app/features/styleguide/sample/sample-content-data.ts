@@ -10,7 +10,7 @@ const { anna, jonas, mira, lukas, sofia } = PEOPLE;
 
 // ── Datasets ─────────────────────────────────────────────────────────────────
 
-export type SampleFieldType = 'text' | 'longtext' | 'select' | 'number' | 'money' | 'media' | 'catalog';
+export type SampleFieldType = 'text' | 'longtext' | 'select' | 'number' | 'money' | 'date' | 'boolean' | 'media' | 'catalog';
 
 export interface SampleDatasetField {
   readonly id: string;
@@ -152,6 +152,8 @@ const EVENTS: SampleDataset = {
     { id: 'city', label: 'City', type: 'select', rules: 0, options: CITY_OPTIONS, inTable: true },
     { id: 'seats', label: 'Seats', type: 'number', rules: 1, inTable: true },
     { id: 'price', label: 'Price', type: 'money', rules: 1, inTable: true },
+    { id: 'date', label: 'Date', type: 'date', rules: 0, inTable: true },
+    { id: 'soldOut', label: 'Sold out', type: 'boolean', rules: 0, inTable: true },
     { id: 'description', label: 'Description', type: 'longtext', localized: true, rules: 0 },
   ],
   rules: '',
@@ -174,6 +176,8 @@ const CDL_TYPES: Readonly<Record<SampleFieldType, string>> = {
   select: 'select',
   number: 'number',
   money: 'number',
+  date: 'date',
+  boolean: 'boolean',
   media: 'media',
   catalog: 'catalog',
 };
@@ -327,9 +331,10 @@ const SPRING: readonly SampleRecord[] = [
 ];
 
 const TOURS: readonly SampleRecord[] = [
-  record({ name: 'Roastery tour Hamburg', city: 'hamburg', seats: 12, price: 25, description: '' }, 'released/released', 8 * DAY, sofia),
-  record({ name: 'Cupping evening', city: 'berlin', seats: 16, price: 35, description: '' }, 'released/changed', DAY, mira),
-  record({ name: 'Home barista course', city: 'munich', seats: 8, price: 89, description: '' }, 'draft/draft', 3 * HOUR, sofia),
+  record({ name: 'Roastery tour Hamburg', city: 'hamburg', seats: 12, price: 25, date: '2026-11-07', soldOut: 'false', description: '' }, 'released/released', 8 * DAY, sofia),
+  record({ name: 'Cupping evening', city: 'berlin', seats: 16, price: 35, date: '2026-11-21', soldOut: 'false', description: '' }, 'released/changed', DAY, mira),
+  record({ name: 'Home barista course', city: 'munich', seats: 8, price: 89, date: '2026-12-05', soldOut: 'false', description: '' }, 'draft/draft', 3 * HOUR, sofia),
+  record({ name: 'Spring cupping', city: 'berlin', seats: 16, price: 30, date: '2026-03-14', soldOut: 'true', description: '' }, 'released/released', 40 * DAY, mira),
 ];
 
 const TEAM_RECORDS: readonly SampleRecord[] = [
@@ -357,10 +362,24 @@ export interface SampleCondition {
   readonly value: string | number | null;
 }
 
+/** One key of the sort order: the first key sorts, each further key breaks its ties. */
+export interface SampleSortKey {
+  readonly field: string;
+  readonly direction: 'asc' | 'desc';
+}
+
 export interface SampleQuery {
   readonly conditions: readonly SampleCondition[];
-  readonly sortField: string;
-  readonly sortDirection: 'asc' | 'desc';
+  readonly sort: readonly SampleSortKey[];
+  /** Skip this many records of the sorted selection (`null`: none). */
+  readonly offset: number | null;
+  /** Show at most this many (`null`: no limit). */
+  readonly limit: number | null;
+  /**
+   * A stored expression the builder cannot represent (`roast == 'dark' || stock > 50`): the builder steps aside, the
+   * expression is shown as it is and *Clear filter* returns to the builder. It counts instead of the conditions.
+   */
+  readonly custom?: string | null;
 }
 
 /** A folder or record set of the Content tree. */
@@ -378,7 +397,7 @@ export interface SampleContentEntry {
   readonly children?: readonly SampleContentEntry[];
 }
 
-const byName: SampleQuery = { conditions: [], sortField: 'name', sortDirection: 'asc' };
+const byName: SampleQuery = { conditions: [], sort: [{ field: 'name', direction: 'asc' }], offset: null, limit: null };
 
 function recordSet(
   id: string,
@@ -406,6 +425,8 @@ function contentFolder(
 export const FIXED_RECORD_SET = 'rs-single-origins';
 export const FIXED_RECORD_SELECTION: readonly string[] = ['r-yirgacheffe_konga_250_g', 'r-nyeri_gatomboya_250_g'];
 /** `view=contentfolder`: the folder that is opened, filtered to one dataset. */
+/** `view=recordset&filter=extras`: the record set whose stored filter uses a date, a Yes/No, two sort keys and a limit. */
+export const FIXED_EXTRAS_SET = 'rs-tours';
 export const FIXED_CONTENT_FOLDER = 'cf-shop';
 export const FIXED_CONTENT_FILTER = 'ds-products';
 
@@ -416,11 +437,23 @@ export const CONTENT: readonly SampleContentEntry[] = [
         { id: 'c-1', field: 'roast', op: 'is', value: 'light' },
         { id: 'c-2', field: 'stock', op: 'gt', value: 0 },
       ],
-      sortField: 'name',
-      sortDirection: 'asc',
+      sort: [{ field: 'name', direction: 'asc' }],
+      offset: null,
+      limit: null,
     }),
     recordSet('rs-espresso', 'Espresso blends', 'ds-products', ESPRESSO, 5 * HOUR, sofia),
-    recordSet('rs-tours', 'Roastery tours', 'ds-events', TOURS, DAY, mira),
+    recordSet('rs-tours', 'Roastery tours', 'ds-events', TOURS, DAY, mira, {
+      conditions: [
+        { id: 'c-3', field: 'date', op: 'gt', value: '2026-06-01' },
+        { id: 'c-4', field: 'soldOut', op: 'is', value: 'false' },
+      ],
+      sort: [
+        { field: 'date', direction: 'asc' },
+        { field: 'price', direction: 'desc' },
+      ],
+      offset: null,
+      limit: 10,
+    }),
   ]),
   contentFolder('cf-company', 'Company', 4 * HOUR, anna, [
     recordSet('rs-team', 'Team', 'ds-team', TEAM_RECORDS, 4 * HOUR, anna),
@@ -555,3 +588,48 @@ export function templatePath(id: string | null): SampleTemplateEntry[] {
   }
   return path;
 }
+
+/** The expression `filter=custom` stores in a set: it has an `||`, which the filter builder cannot write. */
+export const CUSTOM_EXPRESSION = "roast == 'dark' || stock > 50";
+
+/**
+ * A release status per language for records together: released when all are, draft when all are, otherwise changed —
+ * what a record set's or folder's *Status* column says about the records inside it.
+ */
+export function combinedStatus(records: readonly SampleRecord[], lang: SampleLang): SampleStatus | null {
+  if (records.length === 0) {
+    return null;
+  }
+  const all = new Set(records.map((record) => record.status[lang]));
+  return all.size === 1 ? [...all][0] : 'changed';
+}
+
+/** The records of a record set and, for a folder, of every set inside it. */
+export function recordsInside(entry: SampleContentEntry, recordsOf: (setId: string) => readonly SampleRecord[]): SampleRecord[] {
+  return entry.kind === 'recordset' ? [...recordsOf(entry.id)] : (entry.children ?? []).flatMap((child) => recordsInside(child, recordsOf));
+}
+
+// ── Usages ───────────────────────────────────────────────────────────────────
+
+/** Something that reads a record set or record (the *Used by* lists). */
+export interface SampleUsage {
+  readonly type: 'page' | 'template' | 'record';
+  readonly name: string;
+  /** Where in it the reference sits. */
+  readonly path: string;
+}
+
+/** What uses each record set; a set missing here is used by nothing. */
+export const SET_USAGES: Readonly<Record<string, readonly SampleUsage[]>> = {
+  'rs-single-origins': [
+    { type: 'page', name: 'Single origins', path: 'sections[1].teasers' },
+    { type: 'template', name: 'product_list', path: 'content.items' },
+  ],
+  'rs-team': [{ type: 'page', name: 'About us', path: 'sections[2].people' }],
+};
+
+/** What uses the fixed record (`view=record`); other records are used by nothing. */
+export const FIXED_RECORD_USAGES: readonly SampleUsage[] = [
+  { type: 'page', name: 'Spring harvest arrives', path: 'sections[3].teasers[0]' },
+  { type: 'record', name: 'Nyeri Gatomboya 250 g', path: 'related[0]' },
+];

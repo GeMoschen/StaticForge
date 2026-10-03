@@ -13,10 +13,49 @@
 }
 
 .cell-name {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: var(--sf-space-2);
+  min-width: 0;
+
+  // A record the set's filter leaves out is dimmed; the eye icon says why.
+  &.is-excluded .cell-name__text {
+    color: var(--sf-text-muted);
+    font-weight: var(--sf-weight-regular);
+  }
+}
+
+.cell-name__text {
   overflow: hidden;
   color: var(--sf-text);
   font-weight: var(--sf-weight-medium);
   text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cell-name__excluded {
+  flex-shrink: 0;
+  color: var(--sf-text-subtle);
+  font-size: var(--sf-fs-16);
+}
+
+.grid__tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sf-space-2);
+}
+
+.grid__expression {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sf-space-2);
+}
+
+.grid__where {
+  inline-size: 22rem;
+  max-inline-size: 100%;
 }
 
 .cell-status {

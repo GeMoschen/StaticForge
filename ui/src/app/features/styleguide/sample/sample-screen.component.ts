@@ -11,7 +11,7 @@ import {
   untracked,
   viewChild,
 } from '@angular/core';
-import { ActivatedRoute } from '@angular/router';
+import { ActivatedRoute, ParamMap } from '@angular/router';
 import { TranslocoPipe } from '@jsverse/transloco';
 import { DensityService } from '../../../core/ui/density.service';
 import { ShortcutService } from '../../../core/ui/shortcut.service';
@@ -23,9 +23,11 @@ import {
   SfTreeComponent,
   SfTreeCreateKind,
   SfTreeDeleteRequest,
+  SfTreeMoveRequest,
 } from '../../../shared/components/sf-tree.component';
 import { SfSplitterComponent } from '../../../shared/components/splitter/sf-splitter.component';
 import { SfTreeLoader, SfTreeNode } from '../../../shared/components/tree/tree-model';
+import { FIXED_EXTRAS_SET } from './sample-content-data';
 import { SampleContentFolderComponent } from './sample-content-folder.component';
 import { SampleContentTreeComponent } from './sample-content-tree.component';
 import { SampleDatasetViewComponent } from './sample-dataset-view.component';
@@ -74,6 +76,8 @@ import { revisionById } from './history/history-data';
 import { SampleNavigationAreaComponent } from './navigation/sample-navigation-area.component';
 import { SamplePagesEmptyComponent } from './pages/sample-pages-empty.component';
 import { SampleIssuesDrawerComponent } from './pages/sample-issues-drawer.component';
+import { SamplePagesMoveDialogComponent } from './pages/sample-pages-move-dialog.component';
+import { SamplePagesReview } from './pages/sample-pages-review';
 import { SamplePageSettingsComponent } from './pages/sample-page-settings.component';
 import { SampleAccountAreaComponent } from './account/sample-account-area.component';
 import { SampleAdminAreaComponent } from './admin/sample-admin-area.component';
@@ -92,7 +96,7 @@ function oneOf<T extends string>(value: string | null, allowed: readonly T[]): T
 }
 
 /** The query parameters the screen owns; every other parameter belongs to an area and is kept as it is. */
-const OWN_PARAMS = ['area', 'view', 'template', 'tab', 'channel', 'focus', 'dev', 'rail', 'theme', 'density', 'palette', 'hdrawer', 'travel', 'cmdk', 'sheet', 'sheetq', 'psettings', 'issues', 'empty', 'preview', 'secpalette'];
+const OWN_PARAMS = ['area', 'view', 'template', 'tab', 'channel', 'focus', 'dev', 'rail', 'theme', 'density', 'palette', 'hdrawer', 'travel', 'cmdk', 'sheet', 'sheetq', 'psettings', 'issues', 'empty', 'preview', 'secpalette', 'newset', 'fstate', 'access', 'pdialog', 'conflict', 'istatus', 'etemplates'];
 
 /**
  * The M35.9 sample screen: a clickable prototype of the new frame (dark top bar, rail) around the working areas —
@@ -109,13 +113,14 @@ const OWN_PARAMS = ['area', 'view', 'template', 'tab', 'channel', 'focus', 'dev'
  *   (Content), `dataset|template` (Templates); `template=article|teaser`; `tab` (the dataset tab, or the template's
  *   CDL tab `content|bodies|rules`); `channel=html|rss`; `focus=catalog` (the page editor's catalog field in view);
  *   `dev=1|0`, `rail=expanded|collapsed`, `theme=light|dark`, `density=compact|comfortable`,
- *   `palette=current|refined`.
+ *   `palette=current|refined`; `newset=1` (Content) opens the New record set dialog (gate round 10).
  */
 @Component({
   selector: 'sf-sample-screen',
   standalone: true,
   imports: [
     SampleIssuesDrawerComponent,
+    SamplePagesMoveDialogComponent,
     SamplePageSettingsComponent,
     SamplePagesEmptyComponent,
     SampleAccountAreaComponent,
@@ -151,13 +156,14 @@ const OWN_PARAMS = ['area', 'view', 'template', 'tab', 'channel', 'focus', 'dev'
     SfTreeComponent,
     TranslocoPipe,
   ],
-  providers: [SampleState],
+  providers: [SampleState, SamplePagesReview],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './sample-screen.component.html',
   styleUrls: ['./sample-screen.component.scss', './sample-tree-pane.scss'],
 })
 export class SampleScreenComponent {
   protected readonly state = inject(SampleState);
+  protected readonly review = inject(SamplePagesReview);
   private readonly location = inject(Location);
   private readonly root = inject(DOCUMENT).documentElement;
   private readonly injector = inject(Injector);
@@ -166,10 +172,10 @@ export class SampleScreenComponent {
 
   protected readonly treeWidth =
     typeof matchMedia !== 'function' || matchMedia(WIDE_QUERY).matches ? TREE_WIDTH : TREE_WIDTH_NARROW;
-  protected readonly treeActions: readonly SfTreeAction[] = ['rename', 'delete', 'create'];
+  protected readonly treeActions: readonly SfTreeAction[] = ['rename', 'delete', 'move', 'copy', 'create'];
   /** The *Favorites* branch is a view: nothing in it is renamed, deleted or created. */
   protected readonly allowAction = (_action: SfTreeAction, nodes: readonly SfTreeNode<SampleEntry>[]): boolean =>
-    !nodes.some((node) => isFavoriteNode(node.id));
+    !this.review.readOnly() && !nodes.some((node) => isFavoriteNode(node.id));
 
   /** Lazy children with status badges (only when not released) and, in developer mode, the UID. */
   protected readonly loader = computed<SfTreeLoader<SampleEntry>>(() => {
@@ -221,6 +227,10 @@ export class SampleScreenComponent {
     this.state.theme.set(theme.preference());
     this.state.density.set(density.density());
     this.readQueryParams();
+    // `newset=1`: the New record set dialog, open on arrival (a review state; it is not written back).
+    if (inject(ActivatedRoute).snapshot.queryParamMap.get('newset') === '1' && this.state.area() === 'content') {
+      afterNextRender(() => void this.state.newRecordSet(this.state.contentFolderId()), { injector: this.injector });
+    }
 
     // The sample has no app shell, so it registers the two keys the frame owns in the app (M35.14).
     inject(ShortcutService).use([
@@ -298,14 +308,32 @@ export class SampleScreenComponent {
     }
     const entry = node.data;
     const on = this.state.isFavorite(entry.id);
-    return [
-      {
-        label: this.state.t(on ? 'favorites.remove' : 'favorites.add'),
-        icon: 'star',
-        action: () => this.state.toggleFavorite(entry.id),
-      },
-    ];
+    const items: ContextMenuItem[] = [];
+    if (!this.review.readOnly()) {
+      // What the app adds to the tree's own cut / copy / paste / move: a page in this folder, a copy of this page.
+      items.push(
+        entry.kind === 'folder'
+          ? { label: this.state.t('tree.newPageHere'), icon: 'note_add', action: () => this.state.notice('folder.newPageNotice') }
+          : { label: this.state.t('tree.duplicate'), icon: 'content_copy', action: () => this.state.notice('pages.tree.duplicated', { name: entry.name }) },
+      );
+    }
+    items.push({
+      label: this.state.t(on ? 'favorites.remove' : 'favorites.add'),
+      icon: 'star',
+      action: () => this.state.toggleFavorite(entry.id),
+    });
+    return items;
   };
+
+  /** *Move to…* in the tree's context menu: the folder picker. */
+  protected moveTo(nodes: readonly SfTreeNode<SampleEntry>[]): void {
+    this.review.openMove(nodes.map((node) => node.data!).filter(Boolean));
+  }
+
+  /** A drag or a paste moved (or copied) nodes: the sample's tree stays as it is; the toast offers Undo. */
+  protected onMove(request: SfTreeMoveRequest<SampleEntry>): void {
+    request.completed(() => this.state.notice('pages.move.undone'));
+  }
 
   protected async onOpen(node: SfTreeNode<SampleEntry>): Promise<void> {
     if (isFavoriteNode(node.id)) {
@@ -401,6 +429,7 @@ export class SampleScreenComponent {
     if (channel) {
       this.state.templateChannel.set(channel);
     }
+    this.readContentParams(params);
     if (params.get('focus') === TEASERS_ROW && this.state.view() === 'editor') {
       this.state.focus.set(TEASERS_ROW);
     }
@@ -449,6 +478,30 @@ export class SampleScreenComponent {
     const density = oneOf<SampleDensity>(params.get('density'), ['compact', 'comfortable']);
     if (density) {
       this.state.density.set(density);
+    }
+  }
+
+  /**
+   * The Content review states (gate round 11): `show=all` (the record table lists every record), `filter=extras` (the
+   * *Roastery tours* set: a date, a Yes/No, two sort keys, a limit) or `filter=custom` (a stored expression the builder
+   * cannot show), `dialog=rename|move|bulkmove`, `panel=checks|usedby`, `state=notfound|revision|error|deleted` (record editor).
+   * They are only read; each part consumes its state when it shows.
+   */
+  private readContentParams(params: ParamMap): void {
+    if (this.state.area() !== 'content') {
+      return;
+    }
+    this.state.showAll.set(params.get('show') === 'all');
+    const preset = oneOf(params.get('filter'), ['extras', 'custom'] as const);
+    if (preset === 'extras' && this.state.view() === 'recordset') {
+      this.state.openRecordSet(FIXED_EXTRAS_SET);
+    } else if (preset === 'custom') {
+      this.state.queryPreset.set('custom');
+    }
+    this.state.contentDialog.set(oneOf(params.get('dialog'), ['rename', 'move', 'bulkmove'] as const));
+    this.state.contentPanel.set(oneOf(params.get('panel'), ['checks', 'usedby'] as const));
+    if (this.state.view() === 'record') {
+      this.state.recordReview.set(oneOf(params.get('state'), ['notfound', 'revision', 'error', 'deleted'] as const));
     }
   }
 

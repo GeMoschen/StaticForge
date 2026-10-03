@@ -4496,6 +4496,8 @@ export interface components {
             queryValid?: boolean;
             /** Format: int64 */
             revision?: number;
+            /** Format: date-time */
+            changedAt?: string;
             release?: {
                 [key: string]: components["schemas"]["LocaleReleaseView"];
             };

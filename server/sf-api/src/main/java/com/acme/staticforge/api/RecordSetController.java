@@ -91,7 +91,7 @@ public class RecordSetController {
         return sets.stream()
                 .map(v -> new RecordSetSummaryView(
                         v.uuid(), v.uid(), v.displayName(), datasetRef(v), v.folderUuid(), v.folderPath(),
-                        v.recordCount(), v.queryValid(), v.revision(), release.get(v.uuid()),
+                        v.recordCount(), v.queryValid(), v.revision(), v.changedAt(), release.get(v.uuid()),
                         scheduled.getOrDefault(v.uuid(), List.of())))
                 .toList();
     }

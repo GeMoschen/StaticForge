@@ -1,0 +1,14 @@
+<sf-dialog size="md" [title]="t('title')">
+  <form (submit)="$event.preventDefault(); create()">
+    <sf-field [label]="t('name.label')" required [error]="nameError()">
+      <sf-input autocomplete="off" [value]="name()" (valueChange)="setName($event)" />
+    </sf-field>
+    <sf-field [label]="t('dataset.label')" required [hint]="t('dataset.hint')">
+      <sf-select [options]="options()" [value]="dataset()" [placeholder]="t('dataset.placeholder')" (valueChange)="dataset.set($event)" />
+    </sf-field>
+  </form>
+  <ng-container sfDialogFooter>
+    <sf-button variant="ghost" (click)="cancel()">{{ t('cancel') }}</sf-button>
+    <sf-button [disabled]="!valid()" [disabledReason]="blockedReason()" (click)="create()">{{ t('create.label') }}</sf-button>
+  </ng-container>
+</sf-dialog>

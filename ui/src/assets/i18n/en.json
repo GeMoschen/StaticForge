@@ -1401,7 +1401,8 @@
           "emptyTitle": "No folders yet",
           "emptyHint": "Create a folder, then upload files into it.",
           "noMatch": "No folder matches “{query}”",
-          "clearFilter": "Clear filter"
+          "clearFilter": "Clear filter",
+          "renameDialog": "Rename…"
         },
         "toolbar": {
           "label": "Library tools",
@@ -1432,7 +1433,7 @@
         },
         "library": {
           "count": "{count, plural, =0 {No files} one {# file} other {# files}}",
-          "rename": "Rename folder",
+          "rename": "Rename folder…",
           "move": "Move folder…",
           "delete": "Delete folder…",
           "deleteNotice": "Deleting a folder is not part of the sample.",
@@ -1547,6 +1548,7 @@
           "alt": "Alt text",
           "altHint": "Describe the picture for people who can’t see it.",
           "caption": "Caption",
+          "copyright": "Copyright",
           "info": "File",
           "type": "Type",
           "dimensions": "Dimensions",
@@ -1640,6 +1642,7 @@
           "record": "Record",
           "none": "Not used anywhere",
           "noneHint": "Pages and records that use this file are listed here.",
+          "urlsWhere": "media",
           "openNotice": "Opening it is not part of the media sample."
         },
         "versions": {
@@ -1679,7 +1682,23 @@
           "cancel": "Cancel",
           "apply": "Apply",
           "done": "Renamed “{from}” to “{to}”",
-          "undone": "Rename undone."
+          "undone": "Rename undone.",
+          "folderLabel": "Folder name",
+          "folderHint": "Links to this folder keep working: they point to the folder, not to its name.",
+          "folderRequired": "Enter a folder name.",
+          "folderTaken": "A folder with this name already exists here.",
+          "folderDone": "Renamed the folder “{from}” to “{to}” (prototype — the sample’s folder tree keeps its names).",
+          "uid": {
+            "heading": "UID",
+            "hint": "Changing the UID breaks links that were written with it (for example media:uid in a template). The UID changes on its own, not with Apply.",
+            "change": "Change UID…",
+            "label": "New UID",
+            "fieldHint": "Lower case letters, digits and underscores; starts with a letter.",
+            "warning": "Links that use the old UID break. Pages and templates that name it have to be updated.",
+            "apply": "Change UID",
+            "changed": "UID changed to “{uid}”.",
+            "undone": "UID changed back to “{uid}”."
+          }
         },
         "move": {
           "title": "{count, plural, one {Move “{name}”} other {Move # files}}",
@@ -1694,6 +1713,7 @@
           "confirm": "Move",
           "done": "{count, plural, one {Moved “{name}” to {folder}} other {Moved # files to {folder}}}",
           "folderDone": "Moved the folder “{name}” into {folder} (prototype — the sample’s folder tree stays as it is).",
+          "rootDone": "{count, plural, one {Moved “{name}” to the top level} other {Moved # files to the top level}} (prototype — the sample has no files at the top level, so they stay where they are).",
           "undone": "Move undone."
         }
       },
@@ -2444,6 +2464,8 @@
         "newLabel": "New page or folder",
         "newPage": "Page",
         "newFolder": "Folder",
+        "newPageHere": "New page here",
+        "duplicate": "Duplicate",
         "resize": "Resize the page tree"
       },
       "folder": {
@@ -2464,11 +2486,17 @@
           "moved": "{count, plural, one {“{name}” moved} other {# items moved}} to “{target}”.",
           "movedBack": "Moved back.",
           "duplicated": "{count, plural, one {# copy} other {# copies}} created next to the originals.",
-          "duplicatedBack": "The copies were removed."
+          "duplicatedBack": "The copies were removed.",
+          "duplicatedSkipped": "{count, plural, one {# copy} other {# copies}} created; folders are not duplicated.",
+          "foldersNotDuplicated": "Folders cannot be duplicated — select pages.",
+          "nothingToRelease": "Nothing here is waiting to be released."
         },
         "table": "Contents of {name}",
         "search": "Filter this folder",
         "empty": "This folder is empty",
+        "emptyHint": "Create a page or a folder here, or move items in from another folder.",
+        "loadFailed": "The contents of this folder could not be loaded.",
+        "deleteMessageFolders": "Folders are deleted with everything inside them. Deleted items can be restored from the history.",
         "startPage": "Start page",
         "folderType": "Folder",
         "neverReleased": "Never",
@@ -2495,6 +2523,9 @@
       "editor": {
         "favorite": "Favorite",
         "unfavorite": "Remove from favorites",
+        "revisionStatus": "Revision {revision} — read-only",
+        "archivedStatus": "Archived project — read-only",
+        "translationSummary": "{language}: {missing} of {total} fields not translated",
         "saving": "Saving…",
         "saved": "Saved",
         "history": "History",
@@ -2832,7 +2863,25 @@
         "newLabel": "New folder or record set",
         "newFolder": "New folder",
         "newRecordSet": "New record set",
-        "newRecordSetNotice": "Creating a record set is not part of the sample — its dataset can’t be changed later.",
+        "newSet": {
+          "title": "New record set",
+          "name": {
+            "label": "Name",
+            "required": "A name is required."
+          },
+          "dataset": {
+            "label": "Dataset",
+            "placeholder": "Choose a dataset",
+            "hint": "Every record in the set has this dataset’s fields. The dataset can’t be changed after the set is created."
+          },
+          "cancel": "Cancel",
+          "create": {
+            "label": "Create",
+            "chooseDataset": "Choose a dataset first.",
+            "enterName": "Enter a name first."
+          },
+          "created": "“{name}” would be created in {folder} — nothing is saved in the prototype."
+        },
         "usedBy": "Used by"
       },
       "contentFolder": {
@@ -2840,7 +2889,8 @@
           "name": "Name",
           "dataset": "Dataset",
           "records": "Records",
-          "modified": "Modified"
+          "modified": "Modified",
+          "status": "Status"
         },
         "datasetFilter": "Dataset"
       },
@@ -2861,7 +2911,26 @@
         "releaseMessage": "The records are released in every language that has changes.",
         "releaseDone": "{count, plural, one {Released “{name}”} other {Released # records}} (prototype — nothing was published).",
         "deleteMessage": "Deleted records can be restored from the history.",
-        "deleteSetNotice": "Deleting a record set is not part of the sample."
+        "deleteSetNotice": "Deleting a record set is not part of the sample.",
+        "mode": {
+          "label": "Records shown",
+          "rendered": "Shown by the filter",
+          "all": "All records"
+        },
+        "excluded": "Not shown on the site: the filter leaves this record out.",
+        "where": "Expression filter",
+        "wherePlaceholder": "roast == 'light' && stock > 0",
+        "apply": "Apply",
+        "clear": "Clear",
+        "use": "Use as set filter",
+        "useTooltip": "Copy this filter and sort into the set’s filter (not saved until you save the filter)",
+        "menu": {
+          "history": "History",
+          "usedBy": "Used by",
+          "rename": "Rename…",
+          "move": "Move…",
+          "delete": "Delete…"
+        }
       },
       "record": {
         "untitled": "Untitled record",
@@ -2870,7 +2939,41 @@
         "fields": "Fields",
         "localized": "Per language — editing {lang}",
         "deleteMessage": "The record can be restored from the history.",
-        "deleteConfirm": "Delete record"
+        "deleteConfirm": "Delete record",
+        "page": "Record",
+        "checks": "Checks",
+        "checksTooltip": "Show what is wrong with this record",
+        "restore": "Restore",
+        "restored": "Record restored (prototype — nothing was deleted).",
+        "linkCopied": "Link copied.",
+        "linkFailed": "Could not copy the link.",
+        "deleteUsed": "{count, plural, one {It is used by # page or template. Delete it anyway? The record can be restored from the history.} other {It is used by # pages or templates. Delete it anyway? The record can be restored from the history.}}",
+        "menu": {
+          "saveNow": "Save now",
+          "move": "Move…",
+          "copyLink": "Copy link",
+          "usedBy": "Used by…",
+          "delete": "Delete…"
+        },
+        "deletedBanner": {
+          "title": "This record is deleted",
+          "text": "Restore it to edit it again."
+        },
+        "notFound": {
+          "title": "Record not found",
+          "description": "It may have been deleted, or the link is wrong.",
+          "action": "Back to content"
+        },
+        "noRevision": {
+          "title": "Not there yet",
+          "description": "This record did not exist at that revision.",
+          "action": "Back to now"
+        },
+        "loadError": {
+          "title": "Could not load the record",
+          "description": "Try again in a moment.",
+          "retry": "Try again"
+        }
       },
       "query": {
         "title": "Filter",
@@ -2885,8 +2988,8 @@
         "noConditions": "No conditions — the set shows every record.",
         "add": "Add condition",
         "sortLabel": "Sort by",
-        "sortField": "Sort field",
-        "sortDirection": "Sort direction",
+        "sortField": "Field of sort key {n}",
+        "sortDirection": "Direction of sort key {n}",
         "ascending": "Ascending",
         "descending": "Descending",
         "expression": "Expression",
@@ -2903,8 +3006,34 @@
           "isNot": "is not",
           "contains": "contains",
           "gt": "is greater than",
-          "lt": "is less than"
-        }
+          "lt": "is less than",
+          "after": "is after",
+          "before": "is before"
+        },
+        "yes": "yes",
+        "no": "no",
+        "shows": "the set shows {count}",
+        "unsaved": "Unsaved",
+        "thenLabel": "then by",
+        "sortGroup": "Sort order",
+        "moveUp": "Move sort key {n} up",
+        "moveDown": "Move sort key {n} down",
+        "removeSort": "Remove sort key {n}",
+        "defaultOrder": "Default order: by name.",
+        "addSort": "Add sort key",
+        "offset": "Skip first",
+        "offsetPlaceholder": "0",
+        "limit": "Show at most",
+        "limitPlaceholder": "No limit",
+        "skipping": "skipping the first {count}",
+        "atMost": "at most {count}",
+        "keyDesc": "{field} (descending)",
+        "then": ", then ",
+        "customNote": "This filter is an expression the builder can’t show, so it stays as it is. Clear it to build a filter here.",
+        "clearFilter": "Clear filter",
+        "save": "Save filter",
+        "revert": "Revert",
+        "savedNotice": "Filter saved (prototype — nothing was stored)."
       },
       "dataset": {
         "tabsLabel": "Dataset sections",
@@ -2929,7 +3058,9 @@
           "number": "Number",
           "money": "Price",
           "media": "Media",
-          "catalog": "Catalog"
+          "catalog": "Catalog",
+          "date": "Date",
+          "boolean": "Yes/No"
         },
         "yes": "Yes",
         "no": "No",
@@ -3719,6 +3850,12 @@
           "pageTitle": "Page settings",
           "folderTitle": "Folder settings",
           "cancel": "Cancel",
+          "readOnly": "This page is read-only: it shows an earlier revision, or the project is archived.",
+          "readOnlyFolder": "This folder is read-only: it shows an earlier revision, or the project is archived.",
+          "urls": {
+            "heading": "Addresses",
+            "html": "html · {language}"
+          },
           "name": {
             "heading": "Name",
             "label": "Display name",
@@ -3768,6 +3905,12 @@
         "issues": {
           "title": "Issues",
           "button": "Show the issues of this page",
+          "checking": "Checking…",
+          "unavailable": "Checks unavailable — the draft could not be checked right now. Editing is not affected.",
+          "retry": "Check again",
+          "checkedAt": "Checked at {time}",
+          "publishedNote": "The preview shows the published page; these checks cover the draft.",
+          "skipped": "Not fully checked on a draft, a build checks them: {rules}.",
           "summary": {
             "error": "{count, plural, one {# error} other {# errors}}",
             "warning": "{count, plural, one {# warning} other {# warnings}}",
@@ -3940,14 +4083,144 @@
           "developer": "A page is made from a page template, and this project has none. Create one in Templates, then come back to add pages.",
           "editor": "A page is made from a page template, and this project has none yet. Ask a developer to create one, then you can add pages here.",
           "goTemplates": "Go to Templates",
-          "createFolder": "Create a folder"
+          "createFolder": "Create a folder",
+          "templates": "A page is made from a page template. Choose one to create the first page, or start with a folder.",
+          "createPage": "Create a page"
         },
         "preview": {
           "title": "This page can't be previewed yet",
           "description": "The preview needs the required fields below. Fill them in and it appears here.",
           "goTo": "Go to {field}",
           "missing": "Missing before the preview works"
+        },
+        "tree": {
+          "duplicated": "“{name}” would be duplicated next to itself (prototype — nothing is copied)."
+        },
+        "move": {
+          "title": "{count, plural, one {Move “{name}” to…} other {Move # items to…}}",
+          "lead": "Choose the folder to move the selection into.",
+          "tree": "Folders",
+          "root": "Pages",
+          "blocked": "Inside the folder being moved",
+          "chooseFirst": "Choose a folder first",
+          "cancel": "Cancel",
+          "confirm": "Move here",
+          "done": "{count, plural, one {Moved “{name}” to “{target}”.} other {Moved # items to “{target}”.}}",
+          "undone": "Moved back."
+        },
+        "urls": {
+          "title": "URLs",
+          "unavailable": "The URLs of this item are not available yet.",
+          "retry": "Retry",
+          "none": "No URL yet — the next build or preview assigns one.",
+          "build": "Build",
+          "preview": "Preview",
+          "manual": "manual",
+          "override": "Override",
+          "setUrl": "Set URL",
+          "notice": "Changing a URL is not part of the sample."
+        },
+        "conflict": {
+          "title": "This page changed",
+          "summary": "{by} saved a newer version {minutes, plural, one {# minute} other {# minutes}} ago (revision {current}) while you were editing revision {yours}. Nothing of yours is lost yet.",
+          "leadFields": "Choose a value for each field that you and {by} both changed.",
+          "leadWhole": "The fields below changed on the server. Keep your version of the page or take the current one.",
+          "mine": "Yours",
+          "theirs": "Current",
+          "changedFields": "Fields that changed on the server",
+          "fields": {
+            "title": "Title",
+            "teaser": "Teaser",
+            "description": "Meta description"
+          },
+          "keepMine": "Keep mine",
+          "takeTheirs": "Take theirs",
+          "keepAllMine": "Keep all mine",
+          "takeAllTheirs": "Take all theirs",
+          "apply": "Apply changes",
+          "chooseEach": "Choose a value for every field first.",
+          "keptMine": "Kept your version (prototype — nothing was saved).",
+          "keptTheirs": "Took the current version (prototype — nothing was saved).",
+          "applied": "Applied your choices (prototype — nothing was saved)."
+        },
+        "delete": {
+          "title": "Delete “{name}”?",
+          "question": "The page is deleted. You can bring it back with Undo or from the history.",
+          "questionOnline": "The page is deleted. It stays online until you release the deletion. You can bring it back with Undo or from the history.",
+          "redirect": "Redirect the old address to another page",
+          "target": "Redirect to",
+          "targetHint": "Visitors of {url} are sent there once a build no longer contains the page.",
+          "choosePage": "Choose a page…",
+          "cancel": "Cancel",
+          "confirm": "Delete",
+          "chooseTarget": "Choose the page to redirect to first.",
+          "done": "Deleted “{name}”.",
+          "doneOnline": "Deleted “{name}”. It stays online until you release the deletion.",
+          "restored": "Restored (prototype — nothing was deleted)."
         }
+      },
+      "contentPanel": {
+        "tabs": "Record details",
+        "checks": "Checks",
+        "usedBy": "Used by",
+        "recordTitle": "Checks and usage",
+        "setTitle": "Used by",
+        "checksEmpty": {
+          "title": "No problems found",
+          "description": "The record is checked again whenever you change it."
+        },
+        "usedByEmpty": {
+          "title": "Not used yet",
+          "description": "No page, template or record references this."
+        },
+        "level": {
+          "error": "Error",
+          "warning": "Warning",
+          "info": "Note"
+        },
+        "type": {
+          "page": "Page",
+          "template": "Template",
+          "record": "Record"
+        },
+        "issues": {
+          "nameRequired": "The name is required.",
+          "priceRequired": "A product needs a price",
+          "lowStock": "Only {count} bags left"
+        }
+      },
+      "contentMove": {
+        "leadFolder": "Folders and record sets can move to another folder.",
+        "leadRecords": "Records can move to another record set of the same dataset.",
+        "tree": "Folders",
+        "current": "Current location",
+        "blocked": "Inside what you are moving",
+        "topLevel": "Content",
+        "inFolder": "In {folder}",
+        "empty": "There is no other record set of this dataset to move to.",
+        "sets": "Record sets",
+        "cancel": "Cancel",
+        "confirm": "Move",
+        "chooseFirst": "Choose where to move it first.",
+        "titleFolder": "{count, plural, one {Move “{name}” to…} other {Move # items to…}}",
+        "titleRecords": "{count, plural, one {Move “{name}” to…} other {Move # records to…}}",
+        "moved": "{count, plural, one {Moved “{name}” to {target}} other {Moved # items to {target}}} (prototype — nothing was moved).",
+        "movedBack": "Moved back (prototype — nothing was moved).",
+        "movedRecords": "{count, plural, one {Moved “{name}” to {target}.} other {Moved # records to {target}.}}"
+      },
+      "contentRename": {
+        "title": "Rename “{name}”",
+        "name": "Name",
+        "nameRequired": "A name is required.",
+        "save": "Save",
+        "uid": "UID",
+        "uidHint": "Pages and templates that refer to the UID stop working until they are updated. Undo is offered.",
+        "uidInvalid": "A UID starts with a letter and has only lower case letters, digits and underscores.",
+        "changeUid": "Change UID",
+        "close": "Close",
+        "renamed": "Renamed to “{name}” (prototype — nothing was saved).",
+        "uidChanged": "UID changed to {uid} (prototype — nothing was saved).",
+        "uidRestored": "UID restored (prototype — nothing was changed)."
       }
     },
     "forms": {
@@ -5200,6 +5473,376 @@
         "tree": "Folders",
         "choose": "Move here",
         "blocked": "Can't move into itself"
+      }
+    }
+  },
+  "content": {
+    "recordSet": {
+      "count": "{count, plural, one {# record} other {# records}}",
+      "dataset": "Dataset: {name}",
+      "filterInvalid": "Filter invalid",
+      "deletedBadge": "Deleted",
+      "restore": "Restore",
+      "newRecord": "New record",
+      "newRecordShortcut": "New record in this set",
+      "timeTravel": "Viewing revision {revision} — the set and its filter are read-only until you leave time travel.",
+      "backToNow": "Back to now",
+      "deletedNote": "This record set is deleted. Restore it to bring it and its records back.",
+      "snippet": "Template snippet",
+      "loadFailed": "Could not load the record set — try again in a moment.",
+      "datasetFailed": "Could not load the set’s dataset — try again in a moment.",
+      "errorHeading": "Record set",
+      "notThen": "This record set did not exist at that revision.",
+      "recordCreated": "Record created",
+      "recordFailed": "Could not create the record — you may need the editor role.",
+      "renamed": "Renamed to “{name}”.",
+      "renameConflict": "Someone else changed this record set — reloading the current version.",
+      "renameFailed": "Could not rename the record set — try again in a moment.",
+      "moveTitle": "Move “{name}” to…",
+      "moveFailed": "Could not move the record set — try again in a moment.",
+      "moved": "Moved “{name}” to {target}.",
+      "restored": "Record set restored",
+      "restoreFailed": "Could not restore the record set — try again in a moment.",
+      "menu": {
+        "history": "History",
+        "usedBy": "Used by",
+        "rename": "Rename…",
+        "move": "Move…",
+        "delete": "Delete…"
+      },
+      "usedBy": {
+        "title": "Used by",
+        "failed": "Could not load what uses this record set.",
+        "none": "No page, template or record references this set."
+      },
+      "deleteSet": {
+        "title": "Delete “{name}”?",
+        "message": "{count, plural, =0 {The set is deleted.} one {The set and its # record are deleted.} other {The set and its # records are deleted.}}",
+        "confirm": "Delete record set",
+        "done": "Deleted “{name}”{count, plural, =0 {} one { and its # record} other { and its # records}}.",
+        "changed": "The set has {count} records now — reload and try again.",
+        "failed": "Could not delete the record set — you may need the editor role."
+      },
+      "bulk": {
+        "release": "Release…",
+        "move": "Move…",
+        "delete": "Delete",
+        "readFailed": "Could not read the selected records — try again in a moment.",
+        "nothingToRelease": "Nothing in the selection is waiting to be released.",
+        "targetsFailed": "Could not load the record sets — try again in a moment.",
+        "moveTitle": "{count, plural, one {Move # record to…} other {Move # records to…}}",
+        "moveLead": "Records can move to another record set of the same dataset.",
+        "moveEmpty": "There is no other record set of this dataset to move to.",
+        "deleteTitleOne": "Delete “{name}”?",
+        "deleteTitle": "Delete {count} records?",
+        "deleteMessage": "The records are deleted. Undo is offered afterwards.",
+        "deleteConfirmOne": "Delete",
+        "deleteConfirm": "Delete {count} records",
+        "deleted": "{count, plural, one {Deleted “{name}”.} other {Deleted # records.}}",
+        "deleteFailed": "{count, plural, one {# record could not be deleted — pages or templates may still use it.} other {# records could not be deleted — pages or templates may still use them.}}",
+        "moved": "{count, plural, one {Moved “{name}” to {target}.} other {Moved # records to {target}.}}",
+        "moveFailed": "{count, plural, one {# record could not be moved.} other {# records could not be moved.}}"
+      },
+      "grid": {
+        "columns": {
+          "name": "Name",
+          "status": "Status",
+          "modified": "Modified",
+          "uid": "UID"
+        },
+        "yes": "Yes",
+        "no": "No",
+        "mode": {
+          "label": "Records shown",
+          "rendered": "Shown by the filter",
+          "all": "All records"
+        },
+        "loadFailed": "Could not load the records.",
+        "empty": "No records match",
+        "emptyInvalid": "The filter is invalid, so the set shows no records.",
+        "excluded": "Not shown on the site: the filter leaves this record out.",
+        "excludedInvalid": "Not shown on the site: the filter is invalid, so the set shows no records.",
+        "filterInvalid": "The filter is invalid.",
+        "table": "Records of {name}",
+        "search": "Search records by name",
+        "where": "Expression filter",
+        "wherePlaceholder": "role == 'lead' && joined > '2022-01-01'",
+        "apply": "Apply",
+        "clear": "Clear",
+        "use": "Use as set filter",
+        "useTooltip": "Copy this filter and sort into the set’s filter (not saved until you save the filter)"
+      },
+      "query": {
+        "title": "Filter",
+        "nameField": "Name",
+        "sortFields": {
+          "name": "Name",
+          "uid": "UID",
+          "changed": "Changed"
+        },
+        "ascending": "Ascending",
+        "descending": "Descending",
+        "ops": {
+          "is": "is",
+          "isNot": "is not",
+          "contains": "contains",
+          "gt": "is greater than",
+          "lt": "is less than",
+          "after": "is after",
+          "before": "is before"
+        },
+        "yes": "yes",
+        "no": "no",
+        "checking": "Checking the filter…",
+        "matching": "{count} of {total} records",
+        "shows": "the set shows {count}",
+        "invalid": "The filter has errors — a set with this filter shows no records.",
+        "unavailable": "Couldn’t check the filter — try again in a moment.",
+        "total": "{count, plural, one {# record} other {# records}} in this set",
+        "all": "All records",
+        "where": "Where {conditions}",
+        "condition": "{field} {op} {value}",
+        "and": " and ",
+        "sortedBy": "sorted by {field}",
+        "sortedDesc": "sorted by {field}, descending",
+        "keyDesc": "{field} (descending)",
+        "then": ", then ",
+        "skipping": "skipping the first {count}",
+        "atMost": "at most {count}",
+        "unknownField": "{field} (unknown field)",
+        "limitInvalid": "Limit must be a whole number, 0 or more.",
+        "offsetInvalid": "Offset must be a whole number, 0 or more.",
+        "unsaved": "Unsaved",
+        "conditions": "Conditions",
+        "whereLabel": "Where",
+        "andLabel": "and",
+        "fieldLabel": "Field of condition {n}",
+        "opLabel": "Operator of condition {n}",
+        "valueLabel": "Value of condition {n}",
+        "remove": "Remove condition {n} ({field})",
+        "noConditions": "No conditions — the set shows every record.",
+        "add": "Add condition",
+        "sortGroup": "Sort order",
+        "sortLabel": "Sort by",
+        "thenLabel": "then by",
+        "sortField": "Field of sort key {n}",
+        "sortDirection": "Direction of sort key {n}",
+        "moveUp": "Move sort key {n} up",
+        "moveDown": "Move sort key {n} down",
+        "removeSort": "Remove sort key {n}",
+        "defaultOrder": "Default order: by name, then uid.",
+        "addSort": "Add sort key",
+        "offset": "Skip first",
+        "offsetPlaceholder": "0",
+        "limit": "Show at most",
+        "limitPlaceholder": "No limit",
+        "expression": "Expression",
+        "expressionPlaceholder": "e.g. role == 'lead' && joined > '2022-01-01' — empty: every record",
+        "customNote": "This filter is an expression the builder can’t show, so it stays as it is. Clear it to build a filter here.",
+        "clearFilter": "Clear filter",
+        "save": "Save filter",
+        "revert": "Revert",
+        "saved": "Filter saved",
+        "saveInvalid": "The filter has errors — see the messages in the panel.",
+        "saveConflict": "Someone else changed this record set — reloading the current version.",
+        "saveForbidden": "You need the editor role to change a filter.",
+        "saveFailed": "Could not save the filter — try again in a moment."
+      }
+    },
+    "shell": {
+      "empty": {
+        "noDatasets": "No datasets yet",
+        "noRecordSets": "No record sets yet",
+        "developer": "Records belong to a dataset, and a developer defines datasets in Templates: the fields every record of it has, such as a team member’s name and role.",
+        "editor": "Records belong to a dataset, and a developer defines datasets: the fields every record of it has, such as a team member’s name and role. Ask a developer to define one, then you can add record sets here.",
+        "recordSets": "A record set holds the records of one dataset — say, the team members shown on the About page — and a query deciding which of them a page shows, in which order.",
+        "goTemplates": "Go to Templates",
+        "newRecordSet": "New record set",
+        "createFolder": "Create a folder"
+      }
+    },
+    "tree": {
+      "title": "Content",
+      "new": "New",
+      "newLabel": "New folder or record set",
+      "newFolder": "New folder",
+      "newRecordSet": "New record set",
+      "newRecord": "New record",
+      "history": "History",
+      "usedBy": "Used by",
+      "favorites": "Favorites",
+      "resize": "Resize the content tree",
+      "nameTaken": "A folder or record set with this name already exists here.",
+      "noDatasets": "Define a dataset in Templates first",
+      "invalidQuery": "Query invalid",
+      "status": {
+        "released": "Released",
+        "changed": "Changed",
+        "draft": "Draft",
+        "scheduled": "Scheduled",
+        "unpublished": "Unpublished",
+        "deletion": "Deletion pending"
+      },
+      "toast": {
+        "folderCreated": "Folder “{name}” created.",
+        "folderCreateFailed": "Could not create the folder — a folder with that name may already exist here.",
+        "recordSetCreated": "Record set “{name}” created.",
+        "recordSetCreateFailed": "Could not create the record set — you may need the editor role.",
+        "renamed": "Renamed “{from}” to “{to}”.",
+        "renameFailed": "Could not rename “{name}” — try again in a moment.",
+        "moveFailed": "Could not move “{name}” — the target may be inside what you are moving.",
+        "deleteFailed": "Could not delete “{name}” — try again in a moment.",
+        "loadFailed": "Could not load the Content store — check your connection and try again."
+      },
+      "delete": {
+        "folderMessage": "A folder is deleted with every record set and record inside it.",
+        "records": "{count, plural, one {Its # record is deleted with it.} other {The # records in the sets are deleted with them.}}",
+        "online": "Published items stay online until you release the deletion."
+      }
+    },
+    "folder": {
+      "root": "All content",
+      "table": "Contents of {name}",
+      "search": "Search this folder",
+      "loadFailed": "The folder could not be loaded.",
+      "empty": "This folder is empty",
+      "emptyHint": "Create a record set or a folder to get started.",
+      "folderType": "Folder",
+      "datasetFilter": "Dataset",
+      "newFolder": "New folder",
+      "newRecordSet": "New record set",
+      "columns": {
+        "name": "Name",
+        "dataset": "Dataset",
+        "records": "Records",
+        "status": "Status",
+        "modified": "Modified"
+      },
+      "menu": {
+        "rename": "Rename",
+        "move": "Move…",
+        "delete": "Delete…"
+      },
+      "bulk": {
+        "move": "Move…",
+        "delete": "Delete",
+        "moveFailed": "Could not move everything.",
+        "deleteFailed": "Could not delete everything."
+      }
+    },
+    "record": {
+      "loading": "Loading record…",
+      "title": {
+        "page": "Record",
+        "untitled": "Untitled record",
+        "untitledIn": "Untitled {dataset} record"
+      },
+      "header": {
+        "checks": "Checks",
+        "checksTooltip": "Show what is wrong with this record",
+        "history": "History",
+        "restore": "Restore"
+      },
+      "status": {
+        "revision": "Viewing revision {revision}"
+      },
+      "menu": {
+        "saveNow": "Save now",
+        "move": "Move…",
+        "copyLink": "Copy link",
+        "usedBy": "Used by…",
+        "delete": "Delete…"
+      },
+      "dev": {
+        "dataset": "Dataset",
+        "uid": "UID",
+        "uuid": "UUID",
+        "snippet": "Template snippet"
+      },
+      "banner": {
+        "deletedTitle": "This record is deleted",
+        "deleted": "Restore it to edit it again."
+      },
+      "fields": {
+        "heading": "Fields",
+        "emptyTitle": "No fields yet",
+        "empty": "The dataset declares no fields yet. Add them in the dataset's template."
+      },
+      "hint": {
+        "titleField": "The display name follows the “{field}” field.",
+        "noTitleField": "The dataset has no title field, so this record has no name of its own."
+      },
+      "panel": {
+        "title": "Checks and usage",
+        "tabs": "Record details",
+        "checks": "Checks",
+        "usedBy": "Used by",
+        "checksEmpty": {
+          "title": "No problems found",
+          "description": "The record is checked again whenever you change it."
+        },
+        "usedByEmpty": {
+          "title": "Not used yet",
+          "description": "No page, template or record references this record."
+        },
+        "level": {
+          "error": "Error",
+          "warning": "Warning",
+          "info": "Note"
+        },
+        "type": {
+          "PAGE": "Page",
+          "PAGE_TEMPLATE": "Template",
+          "RECORD": "Record",
+          "DATASET": "Dataset",
+          "GLOBAL_SET": "Global set",
+          "NAVIGATION": "Navigation"
+        }
+      },
+      "move": {
+        "title": "Move “{name}” to…",
+        "description": "A record can move only to another record set of its dataset.",
+        "empty": "This dataset has no other record set. Create one in the Content tree first.",
+        "undo": "Moved “{name}” to {target}."
+      },
+      "delete": {
+        "title": "Delete “{name}”?",
+        "message": "The record is deleted.",
+        "usedBy": "{count, plural, one {It is used by # page or template. Delete it anyway?} other {It is used by # pages or templates. Delete it anyway?}}",
+        "confirm": "Delete record",
+        "undo": "Deleted “{name}”.",
+        "failed": "Could not delete the record — try again in a moment."
+      },
+      "actions": {
+        "thisRecord": "this record",
+        "theRecordSet": "the record set"
+      },
+      "toast": {
+        "restored": "Record restored",
+        "restoreFailed": "Could not restore the record — try again in a moment.",
+        "moved": "Record moved",
+        "moveFailed": "Could not move the record — try again in a moment.",
+        "setsFailed": "Could not load the record sets — try again in a moment.",
+        "saveFailed": "Could not save the record — try again in a moment.",
+        "invalid": "Some values are invalid — see the messages next to the form.",
+        "forbidden": "You need the editor role to change records.",
+        "linkCopied": "Link copied.",
+        "linkFailed": "Could not copy the link."
+      },
+      "notFound": {
+        "title": "Record not found",
+        "description": "It may have been deleted, or the link is wrong.",
+        "action": "Back to content"
+      },
+      "noRevision": {
+        "title": "Not there yet",
+        "description": "This record did not exist at that revision.",
+        "action": "Back to now"
+      },
+      "loadError": {
+        "title": "Could not load the record",
+        "description": "Try again in a moment.",
+        "retry": "Try again"
       }
     }
   },

@@ -4,7 +4,6 @@ import {
   draftOf,
   EMPTY_DRAFT,
   localDiagnostics,
-  matchSummary,
   moveSortKey,
   parseSortSpec,
   queryOf,
@@ -42,8 +41,13 @@ describe('set query drafts', () => {
   });
 
   it('rejects limit/offset that are not whole numbers, 0 or more, before any request', () => {
-    expect(localDiagnostics({ ...EMPTY_DRAFT, limit: '-1', offset: '1.5' }).map((d) => d.field)).toEqual(['limit', 'offset']);
-    expect(localDiagnostics({ ...EMPTY_DRAFT, limit: '0', offset: '10' })).toEqual([]);
+    const message = (field: 'limit' | 'offset') => `${field} must be a whole number`;
+
+    expect(localDiagnostics({ ...EMPTY_DRAFT, limit: '-1', offset: '1.5' }, message)).toEqual([
+      { field: 'limit', severity: 'ERROR', message: 'limit must be a whole number', line: 0, column: 0 },
+      { field: 'offset', severity: 'ERROR', message: 'offset must be a whole number', line: 0, column: 0 },
+    ]);
+    expect(localDiagnostics({ ...EMPTY_DRAFT, limit: '0', offset: '10' }, message)).toEqual([]);
   });
 
   it("adopts the grid's filter and sort, keeping limit and offset", () => {
@@ -62,11 +66,5 @@ describe('set query drafts', () => {
 
     expect(moveSortKey(keys, 2, -1).map((k) => k.field)).toEqual(['a', 'c', 'b']);
     expect(moveSortKey(keys, 0, -1).map((k) => k.field)).toEqual(['a', 'b', 'c']);
-  });
-
-  it('says how many records match and how many the set shows', () => {
-    expect(matchSummary(3, 12, 3)).toBe('3 of 12 records match');
-    expect(matchSummary(8, 12, 5)).toBe('8 of 12 records match · the set shows 5');
-    expect(matchSummary(1, 1, 1)).toBe('1 of 1 record matches');
   });
 });

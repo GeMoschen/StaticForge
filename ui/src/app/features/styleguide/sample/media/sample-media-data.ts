@@ -88,6 +88,8 @@ export interface SampleMediaFile {
   readonly focal: SampleFocal | null;
   readonly alt: string;
   readonly caption: string;
+  /** Who owns the picture's rights (a free line under the caption; empty when nobody said). */
+  readonly copyright?: string;
   readonly status: SampleStatus;
   readonly uploadedBy: SamplePerson;
   readonly uploadedMinutes: number;
@@ -248,7 +250,7 @@ const SQUARE: readonly [number, number] = [3000, 3000];
 
 const BRAND_CSS = `/* Lumen Coffee Roasters — brand styles */
 :root {
-  --brand-roast: $CMS_VALUE(#global.brand.roastColor)$;
+  --brand-roast: $CMS_VALUE(CMS_GLOBAL.brand.roastColor)$;
   --brand-cream: #f2ebe0;
   --brand-font: "Inter", system-ui, sans-serif;
 }
@@ -259,7 +261,7 @@ const BRAND_CSS = `/* Lumen Coffee Roasters — brand styles */
 }
 
 .badge--new {
-  background: $CMS_VALUE(#global.brand.accent)$;
+  background: $CMS_VALUE(CMS_GLOBAL.brand.accent)$;
 }
 
 .price::before {
@@ -802,19 +804,19 @@ export const UPLOADED_FILE = 'a-cold-brew';
 
 // ── Source tab (decisions 102–106): completion names, damaged text, the highlight choices ──
 
-/** Global values the Source tab completes (`#global.brand.accentColor`); `brand.accent` is not one, as the Processing tab warns. */
+/** Global values the Source tab completes (`CMS_GLOBAL.brand.accentColor`); `brand.accent` is not one, as the Processing tab warns. */
 const GLOBAL_VALUES: readonly string[] = ['brand.name', 'brand.tagline', 'brand.roastColor', 'brand.creamColor', 'brand.accentColor', 'shop.currency'];
-/** Pages the Source tab completes besides the ones that use a file. */
-const PAGE_PATHS: readonly string[] = ['/', '/shop', '/about', '/wholesale', '/news/spring-harvest'];
+/** UIDs of the pages the Source tab completes (`page:shop`). */
+const PAGE_UIDS: readonly string[] = ['home', 'shop', 'about', 'wholesale', 'spring_harvest'];
 
 /**
- * The project names the Source tab's completion offers inside an instruction (Ctrl+Space): global values, the media
- * UIDs of the library (`media:hero_texture`, not the generated Archive photos) and page paths (`page:/shop`).
+ * The project names the Source tab's completion offers inside an instruction (Ctrl+Space), in the project's real syntax (gate
+ * round 12; the signed-off sample wrote `#global.…` and `page:/shop`): global values (`CMS_GLOBAL.brand.roastColor`), the media
+ * UIDs of the library (`media:hero_texture`, not the generated Archive photos) and page UIDs (`page:shop`).
  */
 export function completionNames(files: readonly SampleMediaFile[] = MEDIA_FILES): string[] {
   const media = files.filter((f) => f.folderId !== 'm-archive').map((f) => `media:${f.uid}`);
-  const pages = new Set([...PAGE_PATHS, ...files.flatMap((f) => f.usages.filter((u) => u.kind === 'page').map((u) => u.path))]);
-  return [...GLOBAL_VALUES.map((g) => `#global.${g}`), ...media, ...[...pages].map((p) => `page:${p}`)];
+  return [...GLOBAL_VALUES.map((g) => `CMS_GLOBAL.${g}`), ...media, ...PAGE_UIDS.map((uid) => `page:${uid}`)];
 }
 
 /** What the Source tab warns about (`banner=`): the file is too large to edit, is not valid UTF-8 or mixes line endings. */
@@ -839,6 +841,6 @@ export function languageVariant(source: string, language: string, extension: str
 /** The text of the unfinished instruction `complete=1` leaves at the end of the file, to try the completion on. */
 export function completionStub(extension: string): string {
   return extension === 'svg'
-    ? '\n<text fill="$CMS_VALUE(#global.br'
-    : '\n.cta {\n  color: $CMS_VALUE(#global.br';
+    ? '\n<text fill="$CMS_VALUE(CMS_GLOBAL.br'
+    : '\n.cta {\n  color: $CMS_VALUE(CMS_GLOBAL.br';
 }

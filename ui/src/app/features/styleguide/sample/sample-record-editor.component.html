@@ -1,4 +1,44 @@
 @let record = current();
+@if (missing(); as reason) {
+  <div class="record__head">
+    <sf-page-header [title]="'styleguide.sample.record.page' | transloco" />
+  </div>
+  <div class="record__state">
+    @switch (reason) {
+      @case ('notfound') {
+        <sf-empty-state
+          icon="search_off"
+          [level]="2"
+          [title]="'styleguide.sample.record.notFound.title' | transloco"
+          [description]="'styleguide.sample.record.notFound.description' | transloco"
+          [primaryLabel]="'styleguide.sample.record.notFound.action' | transloco"
+          (primary)="leave()"
+        />
+      }
+      @case ('revision') {
+        <sf-empty-state
+          icon="history"
+          [level]="2"
+          [title]="'styleguide.sample.record.noRevision.title' | transloco"
+          [description]="'styleguide.sample.record.noRevision.description' | transloco"
+          [primaryLabel]="'styleguide.sample.record.noRevision.action' | transloco"
+          (primary)="leave()"
+        />
+      }
+      @default {
+        <sf-empty-state
+          icon="error"
+          [level]="2"
+          [title]="'styleguide.sample.record.loadError.title' | transloco"
+          [description]="'styleguide.sample.record.loadError.description' | transloco"
+          [primaryLabel]="'styleguide.sample.record.loadError.retry' | transloco"
+          primaryIcon="refresh"
+          (primary)="leave()"
+        />
+      }
+    }
+  </div>
+} @else {
 <div class="record__head">
   <sf-page-header [title]="name()" [secondaryActions]="moreActions()" (secondaryAction)="secondary($event)">
     <sf-sample-breadcrumb
@@ -21,7 +61,22 @@
     }
     <ng-container sfPageHeaderActions>
       <sf-save-status class="record__save" [state]="saving() ? 'saving' : 'saved'" />
-      <sf-button variant="ghost" icon="history" [label]="'styleguide.sample.editor.history' | transloco" (click)="state.history.set('record')" />
+      @if (deleted()) {
+        <sf-button icon="restore_from_trash" (click)="restore()">{{ 'styleguide.sample.record.restore' | transloco }}</sf-button>
+      }
+      <sf-button
+        variant="secondary"
+        icon="fact_check"
+        [aria-expanded]="panelTab() === 'issues'"
+        [tooltip]="'styleguide.sample.record.checksTooltip' | transloco"
+        (click)="openPanel('issues')"
+      >
+        {{ 'styleguide.sample.record.checks' | transloco }}
+        @if (checkCount() > 0) {
+          <sf-badge [tone]="checkErrors() > 0 ? 'danger' : 'warning'" [label]="'' + checkCount()" />
+        }
+      </sf-button>
+      <sf-button variant="ghost" icon="history" [label]="'styleguide.sample.editor.history' | transloco" (click)="state.closeDrawers(); state.history.set('record')" />
       <sf-button icon="publish" (click)="release()">{{ 'styleguide.sample.editor.release' | transloco }}</sf-button>
     </ng-container>
   </sf-page-header>
@@ -46,6 +101,12 @@
 
 <div class="record__body">
   <div class="record__form">
+    @if (deleted()) {
+      <sf-banner tone="warning" [title]="'styleguide.sample.record.deletedBanner.title' | transloco">
+        {{ 'styleguide.sample.record.deletedBanner.text' | transloco }}
+      </sf-banner>
+    }
+    <div class="record__fields" [class.is-locked]="deleted()" [attr.inert]="deleted() ? '' : null">
     <sf-section [heading]="'styleguide.sample.record.fields' | transloco">
       <div class="record__grid">
         @for (f of plainFields(); track f.field.id) {
@@ -65,6 +126,12 @@
               }
               @case ('number') {
                 <sf-number-input [min]="0" [value]="number(f.value)" (valueChange)="setValue(f.field.id, $event)" />
+              }
+              @case ('boolean') {
+                <sf-select [options]="booleanOptions()" [value]="text(f.value) || null" (valueChange)="setValue(f.field.id, $event)" />
+              }
+              @case ('date') {
+                <sf-date-input [value]="text(f.value) || null" (valueChange)="setValue(f.field.id, $event)" />
               }
               @case ('money') {
                 <sf-number-input unit="€" [min]="0" [step]="0.1" [value]="number(f.value)" (valueChange)="setValue(f.field.id, $event)" />
@@ -104,5 +171,14 @@
         />
       }
     }
+    </div>
   </div>
 </div>
+
+<sf-sample-content-panel
+  [title]="'styleguide.sample.contentPanel.recordTitle' | transloco"
+  [issues]="issues()"
+  [usages]="usages()"
+  [(tab)]="panelTab"
+/>
+}

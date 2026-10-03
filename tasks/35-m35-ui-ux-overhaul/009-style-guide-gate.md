@@ -461,6 +461,179 @@ Source tab of text media (decisions 102–106, **signed off 2026-10-03**; added 
     (decision 82/19: `sf-uid-rename`, links to the item break, Undo toast); it changes the UID on its own, apart from the name's Apply. Folders get the
     same dialog (*Rename…* in the tree's menu, *Rename folder…* in the page header's ⋮); F2 in the tree remains the in-place name edit as signed off.
 
+## Review round 10 (2026-10-03): content — the New record set dialog (**awaiting sign-off**)
+
+Added to the sample for M35.20 (`/styleguide/sample?area=content&view=contentfolder`; `&newset=1` opens the dialog on arrival; it also opens from the
+folder header's *New record set*, the tree's *New* menu and a folder's context menu). **Not signed off yet** — the app keeps its current
+`sf-create-asset-dialog` (the first dataset preselected) until the user approves; M35.20 builds the new dialog only after sign-off.
+
+108. **New record set dialog:** a modal `sf-dialog` (md) with **Name** and **Dataset**. **No dataset is preselected**: the select shows the
+    placeholder *Choose a dataset*. **Create** is disabled until a name *and* a dataset are given and, being disabled, says why in its tooltip
+    (*Choose a dataset first.* / *Enter a name first.*). A missing name is called out ("A name is required.") only once the field was touched.
+    Enter creates; Escape, × and Cancel close without a result. The UID is not asked for (the server derives it from the name).
+109. **The dataset is permanent, and the dialog says so:** the hint under the select reads "Every record in the set has this dataset’s fields.
+    The dataset can’t be changed after the set is created." (replaces the app's hint, which only appeared beside an already chosen dataset).
+110. **Where it opens from:** the folder view's header *New record set*, the tree's *New* menu entry and — new — a **folder's context menu** entry
+    *New record set*. The tree's own inline create row now makes **folders only** (a set needs a dataset, so it is no inline item); in the
+    sample the entry still only announces what would happen (nothing is saved).
+
+## Review round 11 (2026-10-03): content — what the real M35.20 screens do beyond the signed-off sample (**awaiting sign-off**)
+
+Added to the sample for M35.20 (`/styleguide/sample?area=content&…`). **Not signed off yet** — M35.20 built these in the app while the sample lacked them (a slip
+against the sample-first rule); the sample now shows exactly what the app does, so the user can review it. Where a decision here is changed or refused, the app screen
+changes to match. Nothing in this round is saved: dialogs and menus announce what they would do, records move and delete in memory with Undo.
+
+Review links (all combine with `dev=0`, which hides developer mode):
+
+| Param | What it shows |
+|---|---|
+| `view=contentfolder` | the folder table with its new *Status* column; `&dialog=rename` / `move` / `bulkmove` opens that dialog (on the open folder; `bulkmove`: its first two entries) |
+| `view=recordset&show=all` | the record table on *All records*, the records the filter leaves out dimmed and marked |
+| `view=recordset&filter=extras` | the *Roastery tours* set: a date and a Yes/No condition, two sort keys, a limit (add `&show=all` to see *Spring cupping* marked as left out) |
+| `view=recordset&filter=custom` | a set that stores `roast == 'dark' \|\| stock > 50`, which the builder cannot show |
+| `view=recordset&dialog=rename` / `move` / `bulkmove` | the Rename dialog, the folder Move dialog, the records Move dialog (with the two preselected records; with `filter=extras` the "nowhere to move" state) |
+| `view=recordset&panel=usedby` | the record set's *Used by* drawer |
+| `view=record&panel=checks` / `panel=usedby` | the record editor's *Checks and usage* drawer on either tab |
+| `view=record&state=deleted` / `notfound` / `revision` / `error` | the deleted-record banner with *Restore*; *Record not found*; *Not there yet* (no such revision); *Could not load the record* |
+
+Sample data added for this round: the *Events* dataset gets a **Date** and a **Sold out** (Yes/No) field (new field types *Date* and *Yes/No*), and the *Roastery tours* set
+a fourth tour (*Spring cupping*, in the past, sold out) and a stored filter that uses them.
+
+111. **Folder table: Status column.** After *Records*: a chip per language (`DE`, `EN`) with the release state in its tooltip — *Released* when everything inside is,
+    *Draft* when nothing is, otherwise *Changed*. A folder combines the records of every set inside it. (The sample's table had Name, Dataset, Records, Modified.)
+112. **Record set: Shown by the filter / All records.** A two-segment control in the table's toolbar (*Records shown*). The default, **Shown by the filter**, lists
+    the records the set's *saved* filter selects, in its order. **All records** lists every record; the ones the filter leaves out are dimmed and carry a crossed-eye
+    icon, with the tooltip and screen-reader text "Not shown on the site: the filter leaves this record out." (`?show=all` in the app.)
+113. **Filter panel extras.** (a) **Skip first** and **Show at most** number fields (empty = none); the one-line summary adds "· skipping the first 2 · at most 10"; when they
+    cut the list the count reads "3 of 4 records · the set shows 2". (b) **Several sort keys:** "Sort by … / then by …" rows, each with a field (a field another key uses
+    is taken), an ascending/descending toggle and *Move up*, *Move down* and *Remove* buttons; *Add sort key*; without a key the default order (by name) is said.
+    The summary reads "sorted by date, then price (descending)". (c) **Typed value controls:** a **date picker** for a date field (operators *is*, *is not*, *is after*,
+    *is before*) and a **Yes/No select** for a yes/no field (operator *is* only).
+114. **A stored expression the builder cannot show** (`||`, groups, functions, an unknown field): the builder steps aside. The panel says "This filter is an expression
+    the builder can't show, so it stays as it is. Clear it to build a filter here.", quotes the expression (in developer mode the *Expression* field shows it, otherwise
+    it is printed in the panel), the summary quotes it in monospace, and **Clear filter** returns to the builder with no conditions (an unsaved change). Sort keys,
+    offset and limit stay editable.
+115. **Edits are a draft: Save filter / Revert.** The panel's edits show an **Unsaved** chip beside the summary; the count follows the draft at once, the table follows
+    only the *saved* filter. **Save filter** keeps the draft, **Revert** returns to the saved one (both disabled without a change).
+116. **Use as set filter** in the table toolbar (after the mode control). Developer mode adds the table's own **Expression filter** (a field with *Apply* and *Clear*;
+    an expression the sample cannot read is marked invalid). The button is disabled until the table has an expression or a header sort; it then copies the expression
+    (as builder rows, or as a stored expression when it has `||`) and the header sort (as sort keys) into the draft filter, opens the panel and leaves it **Unsaved**.
+117. **Record set ⋮ menu:** *History*, *Used by* (a drawer), *Rename…*, *Move…*, then *Delete…* (the sample's *Duplicate* is gone — the app has none). *Used by* lists
+    the pages, templates and records that read the set (type badge, name, path), or says "Not used yet". *History* opens the history drawer (fake data); *Delete…* is
+    still only announced.
+118. **Rename dialog** for a record set or folder (also *Rename…* of a folder's ⋮ menu): a **Name** field with **Save** (disabled until changed; a blank name is refused)
+    and, in developer mode only, a **UID** section with its own **Change UID** (decision 107; an Undo toast follows). F2 in the tree stays the in-place name edit.
+119. **Move dialog for a set or folder** (the ⋮ menus' *Move…*, the table's bulk *Move*, the tree's *Move to…*): the folders as a tree, the top level ("Content") first;
+    where the item is now is marked "Current location" and a moved folder with what lies inside it "Inside what you are moving" — neither can be chosen. **Move** is
+    disabled until a target is chosen, saying why. Afterwards "Moved … (prototype — nothing was moved)." with an Undo.
+120. **Bulk Move of records** (the record table's selection bar, and the record editor's *Move…*): a dialog "Move 2 records to…" with a list of the **other record sets of
+    the same dataset** (a record cannot leave its dataset; each entry says which folder it is in). With none: "There is no other record set of this dataset to move to."
+    **Move** stays disabled until one is chosen. The records move in memory ("Moved 2 records to Espresso blends.") and **Undo** moves them back.
+121. **Folder ⋮ menu:** *Rename*, *Move…*, *Delete…* — **no *Used by*** (folders have none, so the sample's entry is dropped) and **no menu at all at the top level** of the store.
+122. **Tree menu:** the one menu also has **Cut**, **Paste** and **Move to…** (the folder Move dialog; a drag only announces the move with an Undo). A record set's menu adds
+    **New record**, **History** and **Used by** (before *Add to favorites*); a folder's keeps *New record set*.
+123. **Record editor ⋮ menu:** *Save now*, *Move…*, *Copy link* ("Link copied."), *Used by…*, then *Delete…* (the sample's *Duplicate* is gone). *Delete…* says when pages or
+    templates use the record: "It is used by 2 pages or templates. Delete it anyway? …".
+124. **Checks and Used by drawer.** A **Checks** button with a count badge (red when any is an error, otherwise yellow) sits before *History* in the header. It opens the
+    right-hand drawer "Checks and usage" with two tabs: **Checks** (errors, warnings and notes with the field they are about, most severe first, an error outlined; empty
+    state "No problems found") and **Used by** (badge, name, path; empty state "Not used yet"). *Used by…* in the menu opens the second tab. The drawer is non-modal; the
+    record's versions stay in *History*. In the sample the findings come from the dataset's rules (a product needs a price, "Only 2 bags left" below 5), so editing the
+    price or stock changes the count.
+125. **Deleted record.** A banner "This record is deleted — Restore it to edit it again." over the form, a primary **Restore** button in the header (toast "Record restored"),
+    the form shown dimmed and not editable, and *Save now*, *Move…* and *Delete…* disabled in the menu.
+126. **States without a record**, each a centred empty state under a plain "Record" header with one way out: **Record not found** ("It may have been deleted, or the link is
+    wrong." — *Back to content*), **Not there yet** (no such revision — "This record did not exist at that revision." — *Back to now*) and **Could not load the record**
+    ("Try again in a moment." — *Try again*).
+127. **Not in this round (left as the app has them, unchanged in the sample):** the loading skeleton, time travel on the set and record, the deleted *record set* state, the
+    record set's *Delete…* confirmation, release dialogs, and the filter's server-side validation messages (in the app every edit is checked by the server and its errors are
+    listed under the panel; the sample has no server).
+
+## Review round 12 (2026-10-03): pages and media — what M35.18 and M35.19 built beyond the signed-off sample (**awaiting sign-off**)
+
+Added to the sample so the user can rule on what the apps do that rounds 8 and 9 did not show (`/styleguide/sample`). **Not signed off yet.** Nothing in the apps changes
+for this round; items 111–122 and 128–133 are new in the sample, 123–127 and 134–135 are differences where the app is *not* like the sample and the user decides which one wins. Decisions are
+numbered after the highest one at the time of writing (110); renumber if another round landed meanwhile.
+
+Review links (all combine with the usual `view`, `dev`, `theme`, `density`; they are read once and not written back):
+
+| Param | What it shows |
+|---|---|
+| `view=folder&fstate=loading` / `error` / `empty` | the folder table: skeleton / error with Retry (Retry returns to normal) / empty folder with its hint |
+| `view=folder&access=archived`, `view=editor&access=archived`, `view=editor&travel=88` | read-only: archived project (no time-travel banner) or a past revision |
+| `view=folder&pdialog=move` / `view=folder&pdialog=folder-move` | the Move dialog for the two selected pages / for the News folder (also from the bulk bar, the folder ⋮ and the tree's *Move to…*) |
+| `view=editor&pdialog=delete` | the page delete dialog (the page is online, so it offers the redirect) |
+| `view=editor&conflict=fields` / `conflict=whole` | the revision conflict drawer with a choice per field / with only the two whole-page answers |
+| `view=editor&issues=1` plus `istatus=checking` / `unavailable` / `published` | the Issues drawer's status line: being checked / unavailable with *Check again* / the preview-shows-published note |
+| `view=folder&psettings=folder` | Folder settings with its new *Addresses* section |
+| `empty=1&etemplates=1` (add `dev=0`) | the empty project when page templates exist: *Create a page* for everyone |
+| `area=media&dialog=rename-folder` (and `dialog=rename`) | the Rename dialog of a folder (of a file), with the UID section in developer mode |
+| `area=media&asset=a-hero-texture&mtab=usedby` (add `&urls=error`) | the Used by tab with its URLs panel / with the registry unavailable |
+| `area=media&asset=a-hero-texture&dialog=delete`, `area=media&selected=2&dialog=move` | the delete confirmation naming where the file is used / the Move dialog offering the top level for files |
+
+Pages — new in the sample:
+
+128. **Folder table states:** a skeleton while the folder loads; an error line ("The contents of this folder could not be loaded.") with **Retry**; an empty folder says
+    "This folder is empty" and adds a hint ("Create a page or a folder here, or move items in from another folder.").
+129. **Read-only (archived project, past revision):** *New page*, *New folder* and *Release folder…* are disabled, the table offers no bulk actions, the folder's *Rename*,
+    *Move…* and *Delete…* and the tree's *New* menu and edit actions are disabled; in the editor the header says "Revision 88 — read-only" or "Archived project — read-only"
+    **instead of** the save status, the ⋮ entries that change something are disabled, and the Page / Folder settings drawer says so and blocks the rename.
+130. **The root folder's ⋮ menu** has only *Folder settings…* and *Copy link* (the signed-off sample also offered Rename, Move and Delete there; the root has none of them).
+131. **Move dialog for pages and folders** (replaces the placeholder target of decision 89): one dialog for the table's bulk *Move…*, a folder's *Move…* in its ⋮ menu and
+    *Move to…* in the tree's menu — "Move N items to…", the page folders as a tree with the first node *Pages* (the project root), a folder being moved and what lies inside
+    it showing "Inside the folder being moved" and not choosable, **Move here** disabled until a target is chosen (and saying why), then a toast with **Undo**. (Unlike the
+    media dialog it does not mark the current folder.)
+132. **The tree's own menu and drag:** *Cut*, *Copy*, *Paste* (Ctrl+X / C / V), *Move to…*, drag to move and copy — all with a toast and Undo — plus *New page here* on a folder
+    and *Duplicate* on a page (next to *Add to favorites*); a Favorites branch has none of them.
+133. **Bulk actions, as built:** *Duplicate* copies the selected **pages** only — a mixed selection says "N copies created; folders are not duplicated.", folders alone are refused
+    ("Folders cannot be duplicated — select pages."); *Release…* on a selection with nothing waiting says "Nothing here is waiting to be released." (otherwise the shared release
+    dialog); *Delete* on folders says they go "with everything inside them".
+134. **Delete page dialog** (the app's is still the old plain dialog with English text): "Delete “name”?"; for a page that is **online** it says the page stays online until the
+    deletion is released and offers **Redirect the old address to another page** (a page picker; *Delete* waits for the target and says why); an Undo toast follows.
+135. **Revision conflict drawer** (the app's is still the old plain look): a drawer "This page changed" that says who saved a newer revision, when, and which revision yours was;
+    per field both changed it shows *Yours* and *Current* side by side with **Keep mine / Take theirs**, plus **Keep all mine**, **Take all theirs** and **Apply changes**
+    (disabled until every field has a choice, and saying so); when the server named no fields only **Keep mine** / **Take theirs** and the list of changed fields.
+136. **Editor header extras:** next to the star, in the editing language when it has untranslated fields: "English: 2 of 6 fields not translated" (never for the default language).
+137. **Issues drawer status:** under the title a status line — "Checked at 12:04", "Checking…", or "Checks unavailable — the draft could not be checked right now. Editing is not
+    affected." with **Check again** (no list while it is unavailable); a note when the preview shows the published page and the checks cover the draft; and, under the list, "Not fully
+    checked on a draft, a build checks them: SF-CHK-0301, SF-CHK-0302."
+138. **Folder settings: Addresses.** A section listing the folder's URLs per area, channel and language (build and preview), with **Override** and **Set URL** in developer mode only.
+139. **Empty project with page templates:** the empty state says a page needs a template and offers **Create a page** (primary, everyone) beside *Create a folder*; without templates
+    it stays as signed off (round 8, decision 87).
+
+Pages — the app differs from the sample; the user rules (nothing changed in the sample):
+
+140. **Start page:** the app has **no start-page mark, picker or field** (the pages folders have none in the backend). The sample still shows the *Start page* badge in the table and the
+    *Start page* section in Folder settings. Keep it as the target (needs backend work) or take it out of the sample?
+141. **Folder rows and folder navigation:** the app shows folders with the template column "Folder" and **no modified / by** ("—"), and Folder settings has **no navigation settings**;
+    the sample shows both. Same question: target or drop.
+142. **Entries the app does not have:** the page ⋮ has no *Move…* and no F2 on the page; the page header has no *History* button (the top bar's History is the way); the folder ⋮ has no
+    favorite entry (the ☆ in the table row does it). The sample has all three. Keep or drop?
+143. **Section palette tiles:** the app has no template description, maximum or thumbnail data in its API — a tile shows the template's **UID** as its second line, never "Maximum of N
+    reached", and the categories are the template folders (shown only when there are more than two). The sample shows description, maximum and thumbnail slot. Keep as the target or drop?
+144. **Duplicate and delete of folders:** the table's *Duplicate* skips folders (item 133); the tree's *Duplicate* exists for pages only. The user may want folder duplication later — a
+    note, no sample change.
+
+Media — new in the sample:
+
+145. **Rename dialog with the UID (decision 107, now shown) and for folders:** in developer mode a *UID* section under the name — the UID with **Change UID…**, a warning that links written
+    with it break, **Change UID** applying **on its own** (not with *Apply*) with an Undo toast. Folders get the same dialog (*Folder name*, required, free among the sibling folders, no
+    extension rule), from *Rename…* in the tree's menu and *Rename folder…* in the page header's ⋮ (which no longer shows F2); F2 in the tree stays the in-place edit.
+146. **Copyright:** the Details tab keeps a **Copyright** field under the caption (the app has it; the signed-off sample had none).
+147. **Move dialog offers the top level for files** too (files can live at the library root), not only for folders.
+148. **Delete names the usages:** deleting a file that is used lists where (page or record, and field) in the confirmation, besides "N places will break".
+149. **Completion names in the project's real syntax**, replacing the wording of decision 102: global values `CMS_GLOBAL.brand.roastColor` (not `#global.…`), media `media:hero_texture`,
+    pages by UID `page:shop` (not `page:/shop`). `#global.…` still matches. The unfinished example of `complete=1` is `$CMS_VALUE(CMS_GLOBAL.br`.
+150. **Used by: URLs.** Under the usages, the file's registered URLs (build and preview) with **Override** / **Set URL** in developer mode only; when the registry cannot be read a quiet note
+    "The URLs of this item are not available yet." with **Retry** (no error toast).
+
+Media — the app differs from the sample; the user rules (nothing changed in the sample):
+
+151. **Less data than the sample shows:** the Variants tab has name, width and format only (no height or size); *uploaded by / when* come from the history; Processing's "last attempt" is
+    the answer of the switch while open, else a check of the saved text; the PDF preview is an icon with the name; list rows cannot be dragged (cards can); alt text is **not required**
+    to save; the menu shows `Del` for Delete. Keep the sample as the target or bring it down to the app?
+152. **Tab bar of a text file:** at the drawer's default width (420 px below 1280, else 520) Processing, Rendered and Used by fall into "More". A wider default or another tab order for text
+    media — a design question.
+
 ## Notes / hazards
 
 - Sign-off: **signed off by the user on 2026-10-01** — gallery https://claude.ai/artifact/33yY26sd6H17UTP9sPPJid

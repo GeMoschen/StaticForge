@@ -6,11 +6,11 @@
     (navigate)="state.navigate($event)"
   />
   <ng-container sfPageHeaderActions>
-    <sf-button variant="secondary" icon="create_new_folder" (click)="newItem('folder')">{{
+    <sf-button variant="secondary" icon="create_new_folder" [disabled]="review.readOnly()" (click)="newItem('folder')">{{
       'styleguide.sample.folder.newFolder' | transloco
     }}</sf-button>
-    <sf-button variant="secondary" icon="publish" (click)="releaseFolder()">{{ 'styleguide.sample.folder.release' | transloco }}</sf-button>
-    <sf-button icon="add" (click)="newItem('page')">{{ 'styleguide.sample.folder.newPage' | transloco }}</sf-button>
+    <sf-button variant="secondary" icon="publish" [disabled]="review.readOnly()" (click)="releaseFolder()">{{ 'styleguide.sample.folder.release' | transloco }}</sf-button>
+    <sf-button icon="add" [disabled]="review.readOnly()" (click)="newItem('page')">{{ 'styleguide.sample.folder.newPage' | transloco }}</sf-button>
   </ng-container>
 </sf-page-header>
 
@@ -25,8 +25,12 @@
   [label]="'styleguide.sample.folder.table' | transloco: { name: title() }"
   [searchPlaceholder]="'styleguide.sample.folder.search' | transloco"
   [bulkActions]="bulkActions()"
+  [loading]="loading()"
+  [error]="failed() ? ('styleguide.sample.folder.loadFailed' | transloco) : null"
   [emptyTitle]="'styleguide.sample.folder.empty' | transloco"
+  [emptyDescription]="'styleguide.sample.folder.emptyHint' | transloco"
   (rowOpen)="open($event)"
+  (retry)="review.folder.set('normal')"
 >
   <ng-template sfDataTableCell="name" [sfDataTableCellRows]="rows()" let-row>
     <span class="cell-name">

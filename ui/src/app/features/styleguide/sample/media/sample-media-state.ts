@@ -15,6 +15,7 @@ import {
   MEDIA_FILES,
   SampleFocal,
   SampleMediaFile,
+  SampleMediaFolder,
   SampleMediaTypeFilter,
   SampleSourceBanner,
   UPLOADED_FILE,
@@ -25,6 +26,7 @@ import {
   matchesType,
   mediaFile,
   mediaFolder,
+  mediaFolderChildren,
   mediaFolderDescendants,
   mediaFolderParent,
   mediaFolderPath,
@@ -63,8 +65,8 @@ export type SampleMediaReview = 'live' | 'loading' | 'error' | 'empty';
 export const MEDIA_REVIEW_STATES: readonly SampleMediaReview[] = ['live', 'loading', 'error', 'empty'];
 
 /** Dialogs a link can open (`dialog`): rename and move a file, move the open folder, a delete of the selection. */
-export type SampleMediaDialog = 'rename' | 'move' | 'folder-move' | 'delete';
-export const MEDIA_DIALOGS: readonly SampleMediaDialog[] = ['rename', 'move', 'folder-move', 'delete'];
+export type SampleMediaDialog = 'rename' | 'rename-folder' | 'move' | 'folder-move' | 'delete';
+export const MEDIA_DIALOGS: readonly SampleMediaDialog[] = ['rename', 'rename-folder', 'move', 'folder-move', 'delete'];
 
 /** Why an upload was refused (decision 98): not an accepted type, over the limit, the name is taken, the connection dropped. */
 export type SampleUploadError = 'type' | 'size' | 'duplicate' | 'network';
@@ -102,6 +104,8 @@ export const UPLOAD_SEEDS: readonly SampleUploadSeed[] = ['1', 'errors'];
 export interface SampleMediaDetails {
   readonly alt: string;
   readonly caption: string;
+  /** The rights line under the caption (gate round 12: the app keeps it as a field; the signed-off sample had none). */
+  readonly copyright: string;
   readonly focal: SampleFocal | null;
 }
 
@@ -192,6 +196,8 @@ export class SampleMediaState {
   readonly sourceBanner = signal<SampleSourceBanner | null>(null);
   /** The language the Source tab shows for a text file with one file per language (decision 105). */
   readonly textLang = signal<SampleLang>('de');
+  /** The URL registry of the Used by tab could not be read (`urls=error`): a quiet note with Retry instead of an error toast. */
+  readonly urlsFailed = signal(false);
   /** "Replace" was chosen in the drawer's ⋮ menu: the Details tab brings its Replace field into view. */
   readonly replaceRequest = signal(false);
   /** Per-file switches the user flipped: "Different file per language", "Process CMS syntax". */
@@ -248,6 +254,7 @@ export class SampleMediaState {
     return {
       alt: edits.alt ?? file.alt,
       caption: edits.caption ?? file.caption,
+      copyright: edits.copyright ?? file.copyright ?? '',
       focal: edits.focal ?? file.focal,
     };
   });
@@ -257,7 +264,7 @@ export class SampleMediaState {
     if (!file || !now) {
       return false;
     }
-    return now.alt !== file.alt || now.caption !== file.caption || now.focal?.x !== file.focal?.x || now.focal?.y !== file.focal?.y;
+    return now.alt !== file.alt || now.caption !== file.caption || now.copyright !== (file.copyright ?? '') || now.focal?.x !== file.focal?.x || now.focal?.y !== file.focal?.y;
   });
   /** Source texts saved in the sample, by file and language (the file keeps one text only, the default language's). */
   private readonly savedSources = signal<ReadonlyMap<string, string>>(new Map());
@@ -513,7 +520,8 @@ export class SampleMediaState {
       tone: 'danger',
       // 25 or more files: the word "delete" must be typed (decision 99).
       typeToConfirm: typeToConfirmFor(count),
-      details: count > 1 ? files.map((f) => f.name) : undefined,
+      // One used file: the confirmation names where it is used (the drawer reads the usages afresh); several: the files.
+      details: count > 1 ? files.map((f) => f.name) : used > 0 ? files[0].usages.map((u) => `${u.title} · ${u.field}`) : undefined,
     });
     if (!confirmed) {
       return false;
@@ -613,7 +621,7 @@ export class SampleMediaState {
     const taken = this.files()
       .filter((f) => f.folderId === file.folderId && f.id !== file.id)
       .map((f) => f.name.toLowerCase());
-    const data: SampleRenameDialogData = { name: file.name, folder: mediaFolder(file.folderId)?.name ?? '', taken };
+    const data: SampleRenameDialogData = { name: file.name, folder: mediaFolder(file.folderId)?.name ?? '', taken, uid: file.uid };
     const name = await this.dialogs.open<string, SampleRenameDialogData>(SampleMediaRenameDialogComponent, data, { injector: this.injector })
       .result;
     if (!name || name === file.name) {
@@ -627,6 +635,28 @@ export class SampleMediaState {
     });
   }
 
+  /**
+   * The Rename dialog of a folder (tree menu *Rename…*, page header *Rename folder…*): the name is required and free among the
+   * sibling folders; in developer mode the UID can be changed there too. The sample's folder tree keeps its names: the
+   * rename is announced and offers Undo.
+   */
+  async renameFolder(folder: SampleMediaFolder | null = this.folder()): Promise<void> {
+    if (!folder) {
+      return;
+    }
+    const taken = mediaFolderChildren(mediaFolderParent(folder.id))
+      .filter((f) => f.id !== folder.id)
+      .map((f) => f.name.toLowerCase());
+    const data: SampleRenameDialogData = { kind: 'folder', name: folder.name, folder: '', taken, uid: folder.uid };
+    const name = await this.dialogs.open<string, SampleRenameDialogData>(SampleMediaRenameDialogComponent, data, { injector: this.injector })
+      .result;
+    if (name && name !== folder.name) {
+      this.toasts.undo(this.t('rename.folderDone', { from: folder.name, to: name }), () =>
+        this.toasts.show(this.t('rename.undone', { name: folder.name }), 'info'),
+      );
+    }
+  }
+
   /** The Move dialog with a folder tree (the current folder is disabled), then {@link applyMove}. */
   async moveFiles(files: readonly SampleMediaFile[]): Promise<void> {
     if (files.length === 0) {
@@ -636,11 +666,15 @@ export class SampleMediaState {
       title: this.t('move.title', { count: files.length, name: files[0].name }),
       current: files[0].folderId,
       blocked: [],
-      root: false,
+      // Files can live at the library root, so the top level is offered for files too.
+      root: true,
     };
     const target = await this.dialogs.open<string, SampleMoveDialogData>(SampleMediaMoveDialogComponent, data, { injector: this.injector })
       .result;
-    if (target) {
+    if (target === MEDIA_ROOT) {
+      // The sample has no files at the top level: the move is announced and can be undone, the files stay where they are.
+      this.toasts.undo(this.t('move.rootDone', { count: files.length, name: files[0].name }), () => this.toasts.show(this.t('move.undone'), 'info'));
+    } else if (target) {
       this.applyMove(
         files.map((f) => f.id),
         target,
@@ -696,6 +730,8 @@ export class SampleMediaState {
     const targets = this.selectedFiles().length > 0 ? this.selectedFiles() : fallback ? [fallback] : [];
     if (kind === 'folder-move') {
       void this.moveFolder();
+    } else if (kind === 'rename-folder') {
+      void this.renameFolder();
     } else if (kind === 'rename' && targets[0]) {
       void this.renameFile(targets[0]);
     } else if (kind === 'move') {
