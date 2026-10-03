@@ -1,6 +1,6 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { Injectable, Injector, OnDestroy, computed, inject, signal } from '@angular/core';
-import type { components } from '../../../core/api/generated/schema.d.ts';
+import { firstValueFrom } from 'rxjs';
 import { problemOf } from '../../../core/api/problem.util';
 import { diagnosticsOf } from '../text-media.util';
 import {
@@ -13,7 +13,6 @@ import { ConfirmService } from '../../../shared/components/dialog/confirm.servic
 import { MediaDrawerStore, type MediaView } from './media-drawer.store';
 import { MediaDrawerTextStore } from './media-drawer-text.store';
 
-type MediaLocaleFileView = components['schemas']['MediaLocaleFileView'];
 
 /** Replacing the file and the files per language of localized media (M27.6.4). */
 @Injectable()
@@ -28,16 +27,10 @@ export class MediaDrawerFilesStore implements OnDestroy {
   /** Un-localizing would discard these files (`409 SF-MEDIA-0505`): asked before resending with `confirmDiscard`. */
   readonly discardPrompt = signal<DiscardedFile[] | null>(null);
   readonly discardPromptText = computed(() => discardedFilesText(this.discardPrompt() ?? []));
-  /** The per-language files as `GET /media/{uuid}` resolves them, for a drawer opened from a list row (no `localeFiles`). */
-  private readonly fetchedFiles = signal<Record<string, MediaLocaleFileView> | null>(null);
-  private fetchedFilesKey: string | null = null;
+  /** The languages of localized media with the file each renders (`MediaView.localeFiles`, read with the file). */
   readonly fileRows = computed<LocaleFileRow[]>(() =>
     this.core.localized() && this.core.showLocalization()
-      ? localeFileRows(
-          this.core.media()?.localeFiles ?? this.fetchedFiles(),
-          this.core.locales.locales(),
-          this.core.locales.defaultLocale(),
-        )
+      ? localeFileRows(this.core.media()?.localeFiles, this.core.locales.locales(), this.core.locales.defaultLocale())
       : [],
   );
   /** The language whose file is being uploaded or removed. */
@@ -56,104 +49,72 @@ export class MediaDrawerFilesStore implements OnDestroy {
 
   // ── Replace ─────────────────────────────────────────────────────────────
 
-  onReplaceFile(event: Event): void {
-    const input = event.target as HTMLInputElement;
-    const file = input.files?.[0];
+  /** Swaps the file (the Details tab's Replace). Unsaved source edits are asked about first: they belong to the old file. */
+  async replaceFile(file: File): Promise<void> {
     const uuid = this.core.media()?.uuid;
-    if (!file || !uuid || this.core.readOnly() || !this.text.confirmDiscard()) {
-      input.value = '';
+    if (!uuid || this.core.readOnly() || this.replacing()) {
+      return;
+    }
+    if (this.text.dirty() && !(await this.text.confirmLeave())) {
       return;
     }
     this.replacing.set(true);
-    this.core.api.replaceMedia(this.core.projectKey(), uuid, file).subscribe({
-      next: (response) => {
-        const updated = response.media!;
-        this.core.revision.set(updated.revision ?? null);
-        this.text.resetText();
-        this.core.processDiagnostics.set(response.warnings ?? []);
-        this.core.toasts.show(
-          response.processCmsCleared
-            ? 'Media replaced — CMS processing was switched off because the new file is not text'
-            : 'Media replaced',
-          response.processCmsCleared ? 'warning' : 'success',
-        );
-        this.replacing.set(false);
-        this.core.emitUpdated(updated);
-        if (!updated.textEditable) {
-          this.core.tab.set('details');
-        }
-        input.value = '';
-      },
-      error: (err: unknown) => {
-        this.core.processDiagnostics.set(diagnosticsOf(err));
-        this.replacing.set(false);
-        input.value = '';
-      },
-    });
+    try {
+      const response = await firstValueFrom(this.core.api.replaceMedia(this.core.projectKey(), uuid, file));
+      this.text.resetText();
+      this.core.processDiagnostics.set(response.warnings ?? []);
+      this.core.toasts.show(
+        this.core.t(response.processCmsCleared ? 'details.replacedCleared' : 'details.replaced', { name: file.name }),
+        response.processCmsCleared ? 'warning' : 'success',
+      );
+      this.core.applyUpdated(response.media!);
+    } catch (err) {
+      this.core.processDiagnostics.set(diagnosticsOf(err));
+    } finally {
+      this.replacing.set(false);
+    }
   }
 
   // ── Different file per language ─────────────────────────────────────────
 
   /** "Different file per language": on is immediate; off asks first when other languages have their own file. */
-  onLocalizedToggle(event: Event): void {
-    const checkbox = event.target as HTMLInputElement;
-    const wanted = checkbox.checked;
-    checkbox.checked = this.core.localized();
+  async setLocalized(wanted: boolean): Promise<void> {
     if (this.core.readOnly() || this.togglingLocalized()) {
       return;
     }
-    this.sendLocalized(wanted, false);
+    await this.sendLocalized(wanted, false);
   }
 
-  confirmUnlocalize(): void {
-    this.sendLocalized(false, true);
+  async confirmUnlocalize(): Promise<void> {
+    await this.sendLocalized(false, true);
   }
 
   cancelUnlocalize(): void {
     this.discardPrompt.set(null);
   }
 
-  private sendLocalized(localized: boolean, confirmDiscard: boolean): void {
+  private async sendLocalized(localized: boolean, confirmDiscard: boolean): Promise<void> {
     const uuid = this.core.media()?.uuid;
     if (!uuid) {
       return;
     }
     this.togglingLocalized.set(true);
-    this.core.api
-      .setMediaLocalized(this.core.projectKey(), uuid, localized, confirmDiscard, this.core.revision() ?? undefined)
-      .subscribe({
-        next: (updated) => {
-          this.togglingLocalized.set(false);
-          this.discardPrompt.set(null);
-          this.core.applyUpdated(updated);
-          this.core.toasts.show(
-            localized ? 'Each language can now have its own file' : 'One file for every language again',
-            'success',
-          );
-        },
-        error: (err: unknown) => {
-          this.togglingLocalized.set(false);
-          const body = (err instanceof HttpErrorResponse ? err.error : null) as
-            | { code?: string; files?: DiscardedFile[] }
-            | null;
-          if (err instanceof HttpErrorResponse && err.status === 409 && body?.code === 'SF-MEDIA-0505') {
-            this.discardPrompt.set(body.files ?? []);
-          } else {
-            this.core.toasts.show(
-              problemOf(err, 'Could not change the file setting — try again in a moment.').detail,
-              'error',
-            );
-          }
-        },
-      });
-  }
-
-  onLocaleFileInput(locale: string, event: Event): void {
-    const input = event.target as HTMLInputElement;
-    const file = input.files?.[0];
-    input.value = '';
-    if (file) {
-      this.uploadLocaleFile(locale, file);
+    try {
+      const updated = await firstValueFrom(
+        this.core.api.setMediaLocalized(this.core.projectKey(), uuid, localized, confirmDiscard, this.core.revision() ?? undefined),
+      );
+      this.discardPrompt.set(null);
+      this.core.applyUpdated(updated);
+      this.core.toasts.show(this.core.t(localized ? 'languages.nowLocalized' : 'languages.nowShared'), 'success');
+    } catch (err) {
+      const body = (err instanceof HttpErrorResponse ? err.error : null) as { code?: string; files?: DiscardedFile[] } | null;
+      if (err instanceof HttpErrorResponse && err.status === 409 && body?.code === 'SF-MEDIA-0505') {
+        this.discardPrompt.set(body.files ?? []);
+      } else {
+        this.core.toasts.show(problemOf(err, this.core.t('languages.failed')).detail, 'error');
+      }
+    } finally {
+      this.togglingLocalized.set(false);
     }
   }
 
@@ -179,29 +140,30 @@ export class MediaDrawerFilesStore implements OnDestroy {
     this.dragLocale.set(null);
     const file = event.dataTransfer?.files?.[0];
     if (file) {
-      this.uploadLocaleFile(locale, file);
+      void this.uploadLocaleFile(locale, file);
     }
   }
 
-  uploadLocaleFile(locale: string, file: File): void {
+  async uploadLocaleFile(locale: string, file: File): Promise<void> {
     const uuid = this.core.media()?.uuid;
-    if (!uuid || this.core.readOnly() || this.busyLocale() || !this.text.confirmDiscard()) {
+    if (!uuid || this.core.readOnly() || this.busyLocale()) {
+      return;
+    }
+    if (this.text.dirty() && !(await this.text.confirmLeave())) {
       return;
     }
     this.busyLocale.set(locale);
-    this.core.api.putMediaLocaleFile(this.core.projectKey(), uuid, locale, file).subscribe({
-      next: (response) => {
-        this.busyLocale.set(null);
-        this.text.resetText();
-        this.core.processDiagnostics.set(response.warnings ?? []);
-        this.core.toasts.show(`File for ${locale.toUpperCase()} saved`, 'success');
-        this.core.applyUpdated(response.media!);
-      },
-      error: (err: unknown) => {
-        this.busyLocale.set(null);
-        this.core.processDiagnostics.set(diagnosticsOf(err));
-      },
-    });
+    try {
+      const response = await firstValueFrom(this.core.api.putMediaLocaleFile(this.core.projectKey(), uuid, locale, file));
+      this.text.resetText();
+      this.core.processDiagnostics.set(response.warnings ?? []);
+      this.core.toasts.show(this.core.t('languages.saved', { language: locale.toUpperCase() }), 'success');
+      this.core.applyUpdated(response.media!);
+    } catch (err) {
+      this.core.processDiagnostics.set(diagnosticsOf(err));
+    } finally {
+      this.busyLocale.set(null);
+    }
   }
 
   async removeLocaleFile(row: LocaleFileRow): Promise<void> {
@@ -211,9 +173,9 @@ export class MediaDrawerFilesStore implements OnDestroy {
     }
     // Not undoable here: no endpoint puts a removed language file back (the earlier revision stays in History).
     const confirmed = await this.confirms.confirm({
-      title: `Remove the ${row.label} file?`,
-      message: `${row.label} then uses the file it falls back to. The earlier version stays in the file's history.`,
-      confirmLabel: 'Remove file',
+      title: this.core.t('languages.removeTitle', { language: row.label }),
+      message: this.core.t('languages.removeMessage', { language: row.label }),
+      confirmLabel: this.core.t('languages.removeConfirm'),
       tone: 'danger',
       injector: this.injector,
     });
@@ -225,7 +187,7 @@ export class MediaDrawerFilesStore implements OnDestroy {
       next: (updated: MediaView) => {
         this.busyLocale.set(null);
         this.text.resetText();
-        this.core.toasts.show(`File for ${row.locale.toUpperCase()} removed`, 'success');
+        this.core.toasts.show(this.core.t('languages.removed', { language: row.locale.toUpperCase() }), 'success');
         this.core.applyUpdated(updated);
       },
       error: () => this.busyLocale.set(null),
@@ -233,29 +195,6 @@ export class MediaDrawerFilesStore implements OnDestroy {
   }
 
   // ── Loading ─────────────────────────────────────────────────────────────
-
-  /** A drawer opened from a list row has no `localeFiles`: the server resolves them, once per version. */
-  loadLocaleFiles(projectKey: string, media: MediaView, viewed: number | null): void {
-    const uuid = media?.uuid;
-    if (!uuid || !media.localized || media.localeFiles || !this.core.showLocalization()) {
-      this.fetchedFilesKey = null;
-      this.fetchedFiles.set(null);
-      return;
-    }
-    const key = `${uuid}|${media.revision ?? ''}|${viewed ?? ''}|${this.core.locales.locales().length}`;
-    if (key === this.fetchedFilesKey) {
-      return;
-    }
-    this.fetchedFilesKey = key;
-    this.core.api.mediaDetail(projectKey, uuid, viewed).subscribe({
-      next: (detail) => {
-        if (this.fetchedFilesKey === key) {
-          this.fetchedFiles.set(detail.localeFiles ?? null);
-        }
-      },
-      error: () => this.fetchedFiles.set(null),
-    });
-  }
 
   /** Thumbnails of the languages that have their own image file, re-fetched only when that file changes. */
   loadLocaleThumbs(projectKey: string, uuid: string, rows: LocaleFileRow[]): void {

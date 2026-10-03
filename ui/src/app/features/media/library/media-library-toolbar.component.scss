@@ -1,27 +1,22 @@
-@use '../../../design/forms';
-
 :host {
-  display: contents;
+  display: block;
+  flex: none;
 }
 
-.toolbar {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--sf-2);
-  align-items: center;
-}
-
-.toolbar .search {
-  @include forms.sf-form-control;
-  flex: 1 1 16rem;
+.toolbar__search {
+  flex: 0 1 16rem;
   min-width: 10rem;
 }
 
-.toolbar select {
-  @include forms.sf-form-control;
-  width: auto;
+.toolbar__type {
+  flex: 0 0 9.5rem;
 }
 
 .toolbar__spacer {
-  flex: 1;
+  flex: 1 1 auto;
+}
+
+.toolbar__readonly {
+  color: var(--sf-text-muted);
+  font-size: var(--sf-fs-13);
 }

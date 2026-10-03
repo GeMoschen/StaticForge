@@ -1,0 +1,184 @@
+<div class="preview" [class.preview--checker]="checker()" [class.preview--icon]="kind() === 'icon'">
+  @switch (kind()) {
+    @case ('image') {
+      @if (preview.previewUrl()) {
+        @if (hasFocal()) {
+          <div
+            class="frame frame--focal"
+            role="group"
+            tabindex="0"
+            [style.width]="frameWidth()"
+            [style.aspect-ratio]="frameAspect()"
+            [attr.aria-label]="'media.drawer.details.focalLabel' | transloco: { x: draft().focal!.x, y: draft().focal!.y }"
+            aria-describedby="media-drawer-focal-hint"
+            (click)="onPreviewClick($event)"
+            (keydown)="onPreviewKeydown($event)"
+          >
+            <img class="frame__img" [src]="preview.previewUrl()" [alt]="draft().alt" />
+            <span class="focal" aria-hidden="true" [style.left.%]="draft().focal!.x" [style.top.%]="draft().focal!.y"></span>
+          </div>
+        } @else {
+          <div class="frame" [class.frame--fill]="!frameWidth()" [style.width]="frameWidth()" [style.aspect-ratio]="frameAspect()">
+            <img class="frame__img frame__img--contain" [src]="preview.previewUrl()" [alt]="draft().alt" />
+          </div>
+        }
+      } @else {
+        <sf-skeleton class="preview__skeleton" [lines]="6" />
+      }
+    }
+    @case ('text') {
+      @if (textTooLarge()) {
+        <div class="icon-card">
+          <sf-icon class="icon-card__icon" [name]="icon()" />
+          <span class="icon-card__name">{{ media().fileName }}</span>
+          <span class="icon-card__note">{{ 'media.drawer.details.textTooLarge' | transloco }}</span>
+        </div>
+      } @else if (text.savedText() !== null) {
+        <sf-code-editor
+          class="code"
+          language="octl"
+          [format]="highlight().format"
+          [svg]="highlight().svg"
+          [value]="text.savedText() ?? ''"
+          [readOnly]="true"
+          [label]="'media.drawer.details.textPreview' | transloco: { name: media().fileName }"
+        />
+      } @else {
+        <sf-skeleton class="preview__skeleton" [lines]="6" />
+      }
+    }
+    @default {
+      <div class="icon-card">
+        <sf-icon class="icon-card__icon" [name]="icon()" />
+        <span class="icon-card__name">{{ media().fileName }}</span>
+        <span class="icon-card__note">{{ 'media.drawer.details.noPreview' | transloco }}</span>
+      </div>
+    }
+  }
+</div>
+
+@if (hasFocal()) {
+  <p class="focal-hint" id="media-drawer-focal-hint">
+    {{ 'media.drawer.details.focalHint' | transloco }}
+    <span class="focal-hint__value" aria-live="polite">{{
+      'media.drawer.details.focalValue' | transloco: { x: draft().focal!.x, y: draft().focal!.y }
+    }}</span>
+  </p>
+  @if (devMode()) {
+    <div class="focal-numbers">
+      <sf-field [label]="'media.drawer.details.focalX' | transloco">
+        <sf-number-input
+          [value]="draft().focal!.x"
+          [min]="0"
+          [max]="100"
+          [step]="1"
+          unit="%"
+          [readonly]="!editable()"
+          (valueChange)="setFocalX($event)"
+        />
+      </sf-field>
+      <sf-field [label]="'media.drawer.details.focalY' | transloco">
+        <sf-number-input
+          [value]="draft().focal!.y"
+          [min]="0"
+          [max]="100"
+          [step]="1"
+          unit="%"
+          [readonly]="!editable()"
+          (valueChange)="setFocalY($event)"
+        />
+      </sf-field>
+    </div>
+  }
+} @else if (isImage()) {
+  <p class="focal-hint">{{ 'media.drawer.details.noFocal' | transloco }}</p>
+}
+
+<div class="fields">
+  @if (hasAlt()) {
+    <sf-field
+      [label]="'media.drawer.details.alt' | transloco"
+      [hint]="(locale() ? 'media.drawer.details.altHintLocale' : 'media.drawer.details.altHint') | transloco: { language: (locale() ?? '').toUpperCase() }"
+    >
+      <sf-input [value]="draft().alt" [readonly]="!editable()" (valueChange)="metadata.edit({ alt: $event })" />
+    </sf-field>
+  }
+  @if (hasCaption()) {
+    <sf-field
+      [label]="'media.drawer.details.caption' | transloco"
+      [hint]="locale() ? ('media.drawer.details.captionHintLocale' | transloco: { language: locale()!.toUpperCase() }) : ''"
+      optional
+    >
+      <sf-textarea [rows]="2" [value]="draft().caption" [readonly]="!editable()" (valueChange)="metadata.edit({ caption: $event })" />
+    </sf-field>
+  }
+  <sf-field [label]="'media.drawer.details.copyright' | transloco" optional>
+    <sf-input [value]="draft().copyright" [readonly]="!editable()" (valueChange)="metadata.edit({ copyright: $event })" />
+  </sf-field>
+</div>
+
+<h3 class="subhead">{{ 'media.drawer.details.info' | transloco }}</h3>
+<dl class="info">
+  <div class="info__row">
+    <dt>{{ 'media.drawer.details.type' | transloco }}</dt>
+    <dd>{{ kindLabel() }}</dd>
+  </div>
+  @if (media().image?.width && media().image?.height) {
+    <div class="info__row">
+      <dt>{{ 'media.drawer.details.dimensions' | transloco }}</dt>
+      <dd class="num">{{ 'media.drawer.details.pixels' | transloco: { width: media().image?.width, height: media().image?.height } }}</dd>
+    </div>
+  }
+  <div class="info__row">
+    <dt>{{ 'media.drawer.details.size' | transloco }}</dt>
+    <dd class="num">{{ media().sizeBytes ?? 0 | sfFileSize }}</dd>
+  </div>
+  @if (versions.uploaded(); as uploaded) {
+    <div class="info__row">
+      <dt>{{ 'media.drawer.details.uploaded' | transloco }}</dt>
+      <dd>
+        @if (uploaded.changedByName) {
+          {{ uploaded.changedByName }} ·
+        }
+        <sf-relative-time [value]="uploaded.changedAt" />
+      </dd>
+    </div>
+  }
+  @if (versions.modified(); as modified) {
+    <div class="info__row">
+      <dt>{{ 'media.drawer.details.modified' | transloco }}</dt>
+      <dd><sf-relative-time [value]="modified.changedAt" /></dd>
+    </div>
+  }
+  @if (devMode()) {
+    <div class="info__row">
+      <dt>{{ 'media.drawer.details.uid' | transloco }}</dt>
+      <dd><sf-copyable [value]="media().uid ?? ''" [label]="'media.drawer.details.copyUid' | transloco" /></dd>
+    </div>
+    <div class="info__row">
+      <dt>{{ 'media.drawer.details.path' | transloco }}</dt>
+      <dd><sf-copyable [value]="path()" [label]="'media.drawer.details.copyPath' | transloco" /></dd>
+    </div>
+    <div class="info__row">
+      <dt>{{ 'media.drawer.details.mediaType' | transloco }}</dt>
+      <dd><sf-copyable [value]="media().mimeType ?? ''" [label]="'media.drawer.details.copyMediaType' | transloco" /></dd>
+    </div>
+    @if (media().blobSha256) {
+      <div class="info__row">
+        <dt>{{ 'media.drawer.details.hash' | transloco }}</dt>
+        <dd><sf-copyable [value]="media().blobSha256 ?? ''" [label]="'media.drawer.details.copyHash' | transloco" /></dd>
+      </div>
+      <div class="info__row">
+        <dt>{{ 'media.drawer.details.storagePath' | transloco }}</dt>
+        <dd><sf-copyable [value]="storagePath()" [label]="'media.drawer.details.copyStoragePath' | transloco" /></dd>
+      </div>
+    }
+  }
+</dl>
+
+<sf-field class="replace" [label]="'media.drawer.details.replace' | transloco" [hint]="'media.drawer.details.replaceHint' | transloco">
+  <sf-file-drop [accept]="accept()" [disabled]="!editable() || files.replacing()" (valueChange)="onReplace($event)" />
+</sf-field>
+@if (files.replacing()) {
+  <p class="focal-hint" aria-live="polite">{{ 'media.drawer.details.replacing' | transloco }}</p>
+}

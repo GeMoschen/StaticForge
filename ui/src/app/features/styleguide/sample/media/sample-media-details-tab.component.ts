@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, ElementRef, computed, effect, inject, untracked } from '@angular/core';
 import { TranslocoPipe } from '@jsverse/transloco';
+import { SfCodeEditorComponent } from '../../../../shared/code-editor/code-editor.component';
 import { SfCopyableComponent } from '../../../../shared/components/display/sf-copyable.component';
 import { SfRelativeTimeComponent } from '../../../../shared/components/display/sf-relative-time.component';
 import { SfFileDropComponent } from '../../../../shared/components/forms/sf-file-drop.component';
@@ -8,7 +9,7 @@ import { SfNumberInputComponent } from '../../../../shared/components/forms/sf-n
 import { SfTextareaComponent } from '../../../../shared/components/forms/sf-textarea.component';
 import { SfFieldComponent } from '../../../../shared/components/sf-field.component';
 import { SfFileSizePipe } from '../../../../shared/pipes/sf-file-size.pipe';
-import { SampleFocal, SampleMediaFile, mediaFolderPath } from './sample-media-data';
+import { SampleFocal, SampleMediaFile, mediaFolderPath, mediaHashOf, mediaTypeOf, storagePathOf } from './sample-media-data';
 import { SampleMediaState } from './sample-media-state';
 
 /** The preview's largest height, rem (a portrait picture gets narrower). */
@@ -23,12 +24,14 @@ function clamp(value: number): number {
  * The Details tab (decision 21): a large preview — the picture fitted, a checkerboard behind transparent files, the
  * first page of a PDF, the text of a CSS file — with the focal point of an image set by clicking the preview (a
  * crosshair; arrow keys move it while the preview has focus, Shift for 10 %); alt text and caption; the file's facts;
- * a styled Replace; and in developer mode the focal point as numbers and the UID. Edits are kept by the drawer's Save.
+ * a styled Replace; and in developer mode the focal point as numbers, the UID, the hash, the media type and the storage
+ * path. Only photos have a focal point; every other file says so under its preview. Edits are kept by the drawer's Save.
  */
 @Component({
   selector: 'sf-sample-media-details-tab',
   standalone: true,
   imports: [
+    SfCodeEditorComponent,
     SfCopyableComponent,
     SfFieldComponent,
     SfFileDropComponent,
@@ -51,10 +54,13 @@ export class SampleMediaDetailsTabComponent {
   protected readonly file = computed(() => this.state.asset()!);
   protected readonly details = computed(() => this.state.details()!);
   protected readonly focal = computed(() => this.details().focal);
-  protected readonly hasFocal = computed(() => this.file().kind === 'image' && this.focal() !== null);
+  /** Only photos get a focal point: PNG and SVG pictures, PDFs and text files are used as they are (decision 101). */
+  protected readonly hasFocal = computed(() => this.file().format === 'JPG' && this.focal() !== null);
   protected readonly hasAlt = computed(() => this.file().kind === 'image' || this.file().format === 'SVG');
   protected readonly hasCaption = computed(() => this.file().format !== 'CSS');
   protected readonly checker = computed(() => this.file().format === 'SVG' || this.file().format === 'PNG');
+  /** The text preview is highlighted like the Source tab: OCTL instructions plus the file's own format. */
+  protected readonly highlight = computed(() => this.state.highlightOf(this.file()));
   protected readonly accept = computed(() => ACCEPT[this.file().format] ?? null);
 
   /** The preview frame keeps the picture's aspect, within the preview's height. */
@@ -71,6 +77,10 @@ export class SampleMediaDetailsTabComponent {
     const folders = mediaFolderPath(this.file().folderId).map((f) => f.uid);
     return `/media/${[...folders, this.file().name].join('/')}`;
   });
+
+  protected readonly hash = computed(() => mediaHashOf(this.file()));
+  protected readonly mediaType = computed(() => mediaTypeOf(this.file()));
+  protected readonly storagePath = computed(() => storagePathOf(this.file()));
 
   protected readonly focalLabel = computed(() => {
     const focal = this.focal();

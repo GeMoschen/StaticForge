@@ -16,12 +16,16 @@
         [attr.aria-selected]="state.isSelected(file.id)"
         [attr.aria-label]="cardLabel(file)"
         [attr.data-file]="file.id"
+        draggable="true"
         (focus)="onFocus(file)"
         (click)="onClick(file, $event)"
+        (contextmenu)="onContextMenu($event, file)"
+        (dragstart)="onDragStart($event, file)"
+        (dragend)="onDragEnd()"
       >
         <div class="card__thumb" [class.card__thumb--checker]="file.format === 'SVG' || file.format === 'PNG'" [class.card__thumb--page]="file.kind === 'pdf'">
           @if (file.art) {
-            <img class="card__img" [class.card__img--contain]="file.kind !== 'image' || file.format === 'PNG'" [src]="file.art" alt="" loading="lazy" />
+            <img class="card__img" [class.card__img--contain]="file.kind !== 'image' || file.format === 'PNG'" [src]="file.art" alt="" loading="lazy" draggable="false" />
           } @else {
             <pre class="card__code" aria-hidden="true">{{ snippet(file) }}</pre>
           }
@@ -33,6 +37,9 @@
           [aria-label]="'styleguide.sample.media.grid.select' | transloco: { name: file.name }"
           (valueChange)="onCheck(file)"
         />
+        <span class="card__more" (click)="$event.stopPropagation()">
+          <sf-menu size="sm" [items]="menuItems(file)" [label]="'styleguide.sample.media.menu.label' | transloco: { name: file.name }" />
+        </span>
         @if (file.status !== 'released') {
           <sf-status
             class="card__status"

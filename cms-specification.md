@@ -2283,7 +2283,7 @@ The enabled rules that need the whole build are not run and are listed in `skipp
 |---|---|---|---|
 | `GET` | `/projects` | authenticated | Only projects the user is a member of, archived ones left out; every project for instance admins |
 | `POST` | `/projects` | INSTANCE_ADMIN | Creates revision 1 |
-| `GET` | `/projects/{key}` | VIEWER | With `publishPolicy {editor}` and `permissions` — the caller's effective publish permissions (M28) |
+| `GET` | `/projects/{key}` | VIEWER | With `publishPolicy {editor}` and `permissions` — the caller's effective publish permissions (M28) — and `effectiveAllowedMimeTypes` / `mediaMaxUploadBytes`, the upload rules the media library checks files against (M35.19) |
 | `PUT` | `/projects/{key}` | PROJECT_ADMIN | |
 | `PUT` | `/projects/{key}/code-highlighting` | PROJECT_ADMIN | Body `{extensions: {ext: format}, mimeTypes: {mime: format}}` replaces the code highlighting overrides (M33 follow-up, §24.5) → the project detail (`codeHighlighting`); `400 SF-API-0400` with `errors` (malformed extension or MIME type, unknown format); an identical body records nothing, otherwise one `UPDATE` revision (`PROJECT`, field `codeHighlighting`) |
 | `POST` | `/projects/{key}/archive` | INSTANCE_ADMIN | Read-only and hidden from members (§8.1); `204` |
@@ -2373,6 +2373,7 @@ Guard rails on disable, delete and system role: `409 SF-DOM-0131` (last active i
 | `GET` | `/projects/{p}/media` | `?mimeType=image/*`, `?folder=`, `?q=` |
 | `POST` | `/projects/{p}/media` | multipart upload |
 | `POST` | `/projects/{p}/media/bulk` | multi-file |
+| `POST` | `/projects/{p}/media/download` | `{uuids, name}` → one ZIP of the files (VIEWER; ≤ 500 files, ≤ 100 MB; M35.19) |
 | `PUT` | `/projects/{p}/media/{uuid}` | metadata (alt, caption, focal point) |
 | `POST` | `/projects/{p}/media/{uuid}/replace` | new binary, same asset identity |
 | `GET` | `/projects/{p}/media/{uuid}` | one media view with `localeFiles` (M27); `?revision=` for time travel |

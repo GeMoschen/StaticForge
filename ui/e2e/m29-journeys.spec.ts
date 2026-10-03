@@ -227,7 +227,7 @@ async function signIn(page: Page, username: string, password: string): Promise<v
   page.on('dialog', (dialog) => void dialog.accept());
   await page.goto('/login');
   await page.getByLabel('Username').fill(username);
-  await page.getByLabel('Password').fill(password);
+  await page.getByLabel('Password', { exact: true }).fill(password);
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page).toHaveURL(/\/$/, { timeout: 15_000 });
 }
@@ -408,20 +408,22 @@ test.describe('M29 housekeeping journey', () => {
     ]);
     await expect(library.getByText(`first-${RUN}.png`).first()).toBeVisible({ timeout: 20_000 });
     await expect(library.getByText(`second-${RUN}.png`).first()).toBeVisible({ timeout: 20_000 });
-    const mediaCard = (name: string) => library.locator('.grid').getByRole('button', { name: new RegExp(`^${name.replace('.', '\\.')} `) });
+    const mediaCard = (name: string) => library.getByRole('gridcell', { name: new RegExp(`^${name.replace('.', '\\.')}, `) });
 
     await mediaCard(`first-${RUN}.png`).click();
-    const drawer = page.locator('sf-media-detail-drawer');
-    await drawer.getByLabel('Replace file').setInputFiles({ name: `first-${RUN}-v2.png`, mimeType: 'image/png', buffer: REPLACEMENT_PNG });
-    await expect(page.locator('sf-toast-host .toast--success', { hasText: 'Media replaced' })).toBeVisible();
-    await drawer.getByRole('button', { name: 'Close' }).first().click();
+    // The detail is an sf-drawer in <body>; Replace is its styled file drop on the Details tab.
+    const drawer = page.locator('body > sf-drawer');
+    await drawer.locator('sf-file-drop input[type="file"]').setInputFiles({ name: `first-${RUN}-v2.png`, mimeType: 'image/png', buffer: REPLACEMENT_PNG });
+    await expect(page.locator('sf-toast-host .toast--success', { hasText: 'Replaced the file with' })).toBeVisible();
+    await drawer.getByRole('button', { name: 'Close' }).click();
     await expect(drawer).toHaveCount(0);
 
     await mediaCard(`second-${RUN}.png`).click();
-    await drawer.getByRole('button', { name: 'Delete', exact: true }).click();
-    const deleteDialog = page.getByRole('dialog', { name: 'Delete media' });
+    await drawer.getByRole('button', { name: 'File actions' }).click();
+    await page.getByRole('menuitem', { name: /^Delete/ }).click();
+    const deleteDialog = page.getByRole('dialog', { name: /^Delete/ });
     await deleteDialog.getByRole('button', { name: 'Delete', exact: true }).click();
-    await expect(page.locator('sf-toast-host .toast--success', { hasText: 'Media deleted' })).toBeVisible();
+    await expect(page.locator('sf-toast-host .toast--success', { hasText: 'Deleted' })).toBeVisible();
     await expect(mediaCard(`second-${RUN}.png`)).toHaveCount(0);
     await snap(page, '02-media');
 

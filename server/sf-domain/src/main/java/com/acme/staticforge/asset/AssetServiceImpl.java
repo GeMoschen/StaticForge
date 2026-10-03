@@ -534,6 +534,25 @@ public class AssetServiceImpl implements AssetService {
 
     @Override
     @Transactional(readOnly = true)
+    public Map<UUID, Integer> usageCounts(long projectId, java.util.Collection<UUID> uuids) {
+        if (uuids.isEmpty()) {
+            return Map.of();
+        }
+        Map<Long, UUID> byId = new java.util.HashMap<>();
+        assetRepository.findByProjectIdAndUuidIn(projectId, uuids).forEach(asset -> byId.put(asset.getId(), asset.getUuid()));
+        Map<UUID, Integer> counts = new java.util.LinkedHashMap<>();
+        byId.values().forEach(uuid -> counts.put(uuid, 0));
+        for (Object[] row : assetReferenceRepository.countIncomingOpen(byId.keySet())) {
+            UUID uuid = byId.get((Long) row[0]);
+            if (uuid != null) {
+                counts.put(uuid, Math.toIntExact((Long) row[1]));
+            }
+        }
+        return counts;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public List<UsageView> usagesAt(long projectId, UUID uuid, long revision) {
         Asset asset = require(projectId, uuid);
         return toUsages(asset, assetReferenceRepository.findIncomingValidAt(asset.getId(), revision));

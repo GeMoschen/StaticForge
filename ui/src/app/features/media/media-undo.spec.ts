@@ -8,6 +8,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiClient } from '../../core/api/api.client';
 import type { components } from '../../core/api/generated/schema.d.ts';
 import { ProjectContextStore } from '../../core/project/project-context.store';
+import { ProjectPermissionsStore } from '../../core/project/project-permissions.store';
 import { ToastService } from '../../core/ui/toast.service';
 import { ConfirmService } from '../../shared/components/dialog/confirm.service';
 import { MediaDrawerStore } from './drawer/media-drawer.store';
@@ -15,6 +16,7 @@ import { MediaDrawerUsagesStore } from './drawer/media-drawer-usages.store';
 import { MediaFolderActions } from './library/media-folder-actions';
 import { MediaItemActions } from './library/media-item-actions';
 import { MediaLibraryStore } from './library/media-library.store';
+import { MediaMover } from './library/media-mover';
 
 type FolderView = components['schemas']['FolderView'];
 type MediaView = components['schemas']['MediaView'];
@@ -59,6 +61,7 @@ describe('media undo', () => {
     api = {
       deleteAsset: vi.fn().mockReturnValue(of(undefined)),
       restoreAsset: vi.fn().mockReturnValue(of({})),
+      assetUsages: vi.fn().mockReturnValue(of([])),
       renameAsset: vi.fn().mockReturnValue(of({ revision: 8 })),
       moveAsset: vi.fn().mockReturnValue(of({})),
       deleteFolder: vi.fn().mockReturnValue(of(undefined)),
@@ -71,12 +74,14 @@ describe('media undo', () => {
         provideHttpClient(),
         provideRouter([]),
         MediaLibraryStore,
+        MediaMover,
         MediaItemActions,
         MediaFolderActions,
         MediaDrawerStore,
         MediaDrawerUsagesStore,
         { provide: ApiClient, useValue: api },
         { provide: ConfirmService, useValue: confirms },
+        { provide: ProjectPermissionsStore, useValue: { canEditContent: signal(true) } },
       ],
     });
     TestBed.inject(ProjectContextStore).mediaFolderTree.set(TREE);
@@ -161,7 +166,7 @@ describe('media undo', () => {
       await TestBed.inject(MediaItemActions).deleteSelection();
 
       expect(toasts.toasts().some((t) => t.kind === 'error')).toBe(true);
-      expect(lastToast().message).toBe('Deleted 1 file.');
+      expect(lastToast().message).toBe('Deleted “logo.png”.');
       lastToast().action!.run();
       await vi.waitFor(() => expect(api['restoreAsset']).toHaveBeenCalledTimes(1));
       expect(api['restoreAsset']).toHaveBeenCalledWith('proj', 'm2', { fromRevision: 4 });
@@ -205,7 +210,7 @@ describe('media undo', () => {
     it('a file dropped on a folder moves back to the folder it came from', async () => {
       library.allMedia.set([summary('m1', '/media_root/archive/')]);
 
-      TestBed.inject(MediaFolderActions).moveItemTo({ source: 'm1', target: 'press-uuid' });
+      await TestBed.inject(MediaMover).moveTo(['m1'], 'press-uuid', 'file');
 
       expect(api['moveAsset']).toHaveBeenCalledWith('proj', 'm1', { folderUuid: 'press-uuid' });
       expect(lastToast().message).toBe('Moved “m1” to Press.');
@@ -218,16 +223,16 @@ describe('media undo', () => {
     it('a file that came from the root moves back to the root (no folder)', async () => {
       library.allMedia.set([summary('m1', '/media_root/')]);
 
-      TestBed.inject(MediaFolderActions).moveItemTo({ source: 'm1', target: 'press-uuid' });
+      await TestBed.inject(MediaMover).moveTo(['m1'], 'press-uuid', 'file');
       lastToast().action!.run();
 
       await vi.waitFor(() => expect(api['moveAsset']).toHaveBeenLastCalledWith('proj', 'm1', {}));
     });
 
     it('a folder moves back into its old parent', async () => {
-      TestBed.inject(MediaFolderActions).moveItemTo({ source: 'kits-uuid', target: 'archive-uuid' });
+      await TestBed.inject(MediaMover).moveTo(['kits-uuid'], 'archive-uuid', 'folder');
 
-      expect(lastToast().message).toBe('Moved “Kits” to Archive.');
+      expect(lastToast().message).toBe('Moved the folder “Kits” into Archive.');
       lastToast().action!.run();
       await vi.waitFor(() =>
         expect(api['moveAsset']).toHaveBeenLastCalledWith('proj', 'kits-uuid', { folderUuid: 'press-uuid' }),
@@ -236,7 +241,7 @@ describe('media undo', () => {
 
     it('shows the error toast when moving back fails', async () => {
       library.allMedia.set([summary('m1', '/media_root/archive/')]);
-      TestBed.inject(MediaFolderActions).moveItemTo({ source: 'm1', target: 'press-uuid' });
+      await TestBed.inject(MediaMover).moveTo(['m1'], 'press-uuid', 'file');
       api['moveAsset'].mockReturnValue(throwError(() => new Error('409')));
 
       lastToast().action!.run();
@@ -288,7 +293,7 @@ describe('media undo', () => {
     it('is no longer irreversible, and Undo restores the revision the drawer showed', async () => {
       const core = TestBed.inject(MediaDrawerStore);
       const deleted = vi.fn();
-      core.connect({ projectKey: signal('proj'), media: signal(photo), updated: vi.fn(), deleted });
+      core.connect({ projectKey: signal('proj'), media: signal(photo), tab: signal(null), tabChange: vi.fn(), updated: vi.fn(), deleted });
       const usages = TestBed.inject(MediaDrawerUsagesStore);
 
       await usages.confirmDelete();

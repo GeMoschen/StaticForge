@@ -1,7 +1,8 @@
-import { HttpClient, HttpErrorResponse } from '@angular/common/http';
+import { HttpClient, HttpContext, HttpErrorResponse } from '@angular/common/http';
 import { inject, Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
 import type { components } from '../../core/api/generated/schema.d.ts';
+import { SKIP_ERROR_TOAST } from '../../core/api/error.interceptor';
 
 type S = components['schemas'];
 
@@ -65,8 +66,10 @@ export class UrlRegistryService {
 
   /** The URLs of one asset, and for a pages folder the index page it links instead (M32.7). */
   forAsset(projectKey: string, uuid: string): Observable<UrlRegistryAssetView> {
+    // The panel shows its own quiet note when this fails (a project without output): no global error toast.
     return this.http.get<UrlRegistryAssetView>(`${BASE}/projects/${projectKey}/url-registry/assets/${uuid}`, {
       withCredentials: true,
+      context: new HttpContext().set(SKIP_ERROR_TOAST, true),
     });
   }
 

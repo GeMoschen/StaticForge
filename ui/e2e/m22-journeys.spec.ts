@@ -128,9 +128,9 @@ class Api {
 
 async function login(page: Page): Promise<void> {
   await page.goto('/login');
-  await page.locator('sf-login input[formControlName="username"]').fill(USER);
-  await page.locator('sf-login input[formControlName="password"]').fill(PASSWORD);
-  await page.locator('sf-login button[type="submit"]').click();
+  await page.getByLabel('Username').fill(USER);
+  await page.getByLabel('Password', { exact: true }).fill(PASSWORD);
+  await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page).toHaveURL(/\/$/, { timeout: 15_000 });
 }
 
@@ -202,7 +202,7 @@ test('journey: why is this rebuilding?', async ({ page }) => {
     await screen.getByRole('button', { name: 'New generation', exact: true }).click();
     const dialog = page.getByRole('dialog', { name: 'New generation' });
     await dialog.locator('input[type="radio"][value="INCREMENTAL"]').check();
-    await dialog.locator('select.select').selectOption({ label: 'Site' });
+    await dialog.getByLabel('Target').selectOption({ label: 'Site' });
     await dialog.locator('input[type="radio"][value="INCREMENTAL"]').focus();
     await page.keyboard.press('Alt+p');
     const preview = dialog.locator('.preview__result');
@@ -266,9 +266,11 @@ test('journey: why is this rebuilding?', async ({ page }) => {
       }
     });
     await navigate(page, `/p/${api.projectKey}/media`);
-    await page.locator('sf-media-library .cell__body', { hasText: 'hero.txt' }).click();
-    const drawer = page.locator('sf-media-detail-drawer');
-    await expect(drawer.locator('.drawer__title')).toContainText('hero.txt');
+    await page.locator('sf-media-library .card', { hasText: 'hero.txt' }).click();
+    // The detail is an sf-drawer in <body>; the Impact panel sits on its "Used by" tab.
+    const drawer = page.locator('body > sf-drawer');
+    await expect(drawer.getByRole('heading', { level: 2, name: 'hero.txt' })).toBeVisible();
+    await drawer.getByRole('tab', { name: /^Used by/ }).click();
     const impactToggle = drawer.getByRole('button', { name: /Impact/ });
     await expect(impactToggle).toHaveAttribute('aria-expanded', 'false');
     await page.waitForTimeout(500);
@@ -281,7 +283,7 @@ test('journey: why is this rebuilding?', async ({ page }) => {
       'references media',
     );
     await snap(page, 'j6-media-impact');
-    await drawer.getByRole('button', { name: 'Close' }).first().click().catch(() => undefined);
+    await drawer.getByRole('button', { name: 'Close' }).click();
 
     // The template editor and the page editor carry the same panel.
     await navigate(page, `/p/${api.projectKey}/templates`);

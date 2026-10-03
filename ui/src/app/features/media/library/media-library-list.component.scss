@@ -1,0 +1,61 @@
+:host {
+  display: block;
+  min-height: 0;
+}
+
+.list {
+  height: 100%;
+  padding-bottom: var(--sf-space-4);
+}
+
+.list-thumb {
+  display: inline-flex;
+  inline-size: var(--sf-space-10);
+  block-size: var(--sf-space-8);
+  overflow: hidden;
+  border-radius: var(--sf-radius-sm);
+  vertical-align: middle;
+}
+
+.list-name {
+  display: flex;
+  align-items: center;
+  gap: var(--sf-space-2);
+  min-width: 0;
+}
+
+.list-name__text {
+  overflow: hidden;
+  color: var(--sf-text);
+  font-weight: var(--sf-weight-medium);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+// The star shows on the name cell's hover and focus, and stays, in the warning colour, while the file is a favorite (M35.15).
+.list-fav {
+  margin-inline-start: auto;
+  opacity: 0;
+  color: var(--sf-text-muted);
+  // The row's own hover and selection tints are close to the ghost button's hover: tint with the text colour instead,
+  // which stands out from them in both themes.
+  --sf-hover: color-mix(in srgb, var(--sf-text) 16%, transparent);
+
+  &:has(.is-on) {
+    opacity: 1;
+  }
+}
+
+.list-name:hover .list-fav,
+.list-name:focus-within .list-fav,
+.list-fav:focus-within {
+  opacity: 1;
+}
+
+.list-num {
+  font-variant-numeric: tabular-nums;
+}
+
+.list-muted {
+  color: var(--sf-text-subtle);
+}

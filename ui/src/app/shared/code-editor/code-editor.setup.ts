@@ -23,6 +23,7 @@ import {
   keymap,
   lineNumbers,
   placeholder as placeholderExtension,
+  tooltips,
 } from '@codemirror/view';
 import { Highlighter, tags } from '@lezer/highlight';
 import type { CodeFormat } from './code-format';
@@ -113,6 +114,8 @@ const theme = EditorView.theme({
     maxHeight: 'var(--sf-code-max-height, 36rem)',
     // A host that wants a fixed height (the template editors side by side) sets it; otherwise the editor grows with its text.
     height: 'var(--sf-code-height, auto)',
+    // In a flex column (the fill editor) the editor takes the free height, whatever its text needs.
+    flex: 'var(--sf-code-flex, 0 1 auto)',
   },
   '&.cm-focused': { outline: '2px solid var(--sf-focus-ring)', outlineOffset: '-1px' },
   '.cm-content': { caretColor: 'var(--sf-code-fg)', fontFamily: 'var(--sf-font-mono)' },
@@ -140,6 +143,18 @@ const theme = EditorView.theme({
   },
   '.cm-panels': { backgroundColor: 'var(--sf-surface-sunken)', color: 'var(--sf-text)' },
   '.cm-matchingBracket': { backgroundColor: 'color-mix(in srgb, var(--sf-success) 25%, transparent)' },
+});
+
+/**
+ * Inside an IDE-style panel (`sf-code-panel`) the hover tooltips and the completion list stay within the editor: they
+ * flip above the line rather than cover the panel's problems list and status line below it. Elsewhere they may use the
+ * whole window, as before.
+ */
+const panelTooltips = tooltips({
+  tooltipSpace: (view) =>
+    view.dom.closest('sf-code-panel')
+      ? view.dom.getBoundingClientRect()
+      : { top: 0, left: 0, bottom: innerHeight, right: innerWidth },
 });
 
 /** Creates an editor in `parent`; the controller is how the component drives it. */
@@ -275,6 +290,7 @@ function baseExtensions(config: CodeEditorConfig): Extension {
     config.language === 'octl' ? octlHighlighters : syntaxHighlighting(highlightStyle),
     theme,
     EditorView.lineWrapping,
+    panelTooltips,
     keymap.of([
       ...closeBracketsKeymap,
       ...defaultKeymap,

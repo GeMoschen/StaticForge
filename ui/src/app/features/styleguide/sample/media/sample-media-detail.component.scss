@@ -201,7 +201,7 @@
 
 // ── Rendered / Source: the code panel fills the tab ──────────────────────────
 .code {
-  display: block;
+  // The panel is a flex column itself (:host); a display here would stop the editor from taking the free height.
   flex: 1 1 auto;
   min-height: 24rem;
 }
@@ -240,9 +240,7 @@
   gap: var(--sf-space-2);
 }
 
-.footer__note {
+// The save status stays at the start (a polite live region; decision 97).
+.footer__status {
   margin-inline-end: auto;
-  color: var(--sf-text-muted);
-  font-size: var(--sf-fs-12);
-  line-height: var(--sf-lh-12);
 }

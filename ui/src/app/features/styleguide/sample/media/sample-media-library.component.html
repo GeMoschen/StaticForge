@@ -7,7 +7,7 @@
 >
   <sf-page-header
     class="library__header"
-    [title]="state.folderName()"
+    [title]="title()"
     [subtitle]="subtitle()"
     [secondaryActions]="folderActions()"
     (secondaryAction)="folderAction($event)"
@@ -20,121 +20,169 @@
     />
   </sf-page-header>
 
-  <sf-toolbar class="library__toolbar" [label]="'styleguide.sample.media.toolbar.label' | transloco">
-    <sf-search-input
-      class="library__search"
-      [value]="state.search()"
-      [placeholder]="'styleguide.sample.media.toolbar.search' | transloco"
-      [aria-label]="'styleguide.sample.media.toolbar.search' | transloco"
-      (valueChange)="state.search.set($event)"
+  @if (state.review() === 'empty') {
+    <sf-empty-state
+      class="library__body"
+      icon="photo_library"
+      [title]="'styleguide.sample.media.empty.libraryTitle' | transloco"
+      [description]="'styleguide.sample.media.empty.libraryHint' | transloco"
+      [primaryLabel]="'styleguide.sample.media.toolbar.upload' | transloco"
+      primaryIcon="upload"
+      [secondaryLabel]="'styleguide.sample.media.folders.new' | transloco"
+      (primary)="chooseFiles()"
+      (secondary)="newFolder()"
     />
-    <sf-select
-      class="library__type"
-      [options]="typeOptions()"
-      [value]="state.typeFilter()"
-      [aria-label]="'styleguide.sample.media.toolbar.type' | transloco"
-      (valueChange)="state.typeFilter.set($event ?? 'all')"
-    />
-    <sf-menu
-      variant="secondary"
-      align="start"
-      [text]="sortText()"
-      [label]="'styleguide.sample.media.toolbar.sort' | transloco"
-      [items]="sortItems()"
-    />
-    <span class="library__spacer"></span>
-    <sf-segmented
-      size="sm"
-      [options]="viewOptions()"
-      [value]="state.view()"
-      [aria-label]="'styleguide.sample.media.toolbar.view' | transloco"
-      (valueChange)="state.view.set($event ?? 'grid')"
-    />
-    <sf-button icon="upload" (click)="chooseFiles()">{{ 'styleguide.sample.media.toolbar.upload' | transloco }}</sf-button>
-  </sf-toolbar>
-  <input #picker class="library__picker" type="file" multiple hidden (change)="onPicked(picker)" />
-
-  @if (state.view() === 'grid') {
-    @if (state.selectedFiles().length > 0) {
-      <div class="bulk" role="group" [attr.aria-label]="'shared.dataTable.bulkActions' | transloco">
-        <span class="bulk__count">{{ 'shared.dataTable.selected' | transloco: { count: state.selectedFiles().length } }}</span>
-        <span class="bulk__actions">
-          <sf-button size="sm" variant="secondary" icon="drive_file_move" (click)="state.notice()">{{
-            'styleguide.sample.media.bulk.move' | transloco
-          }}</sf-button>
-          <sf-button size="sm" variant="secondary" icon="download" (click)="state.download(state.selectedFiles())">{{
-            'styleguide.sample.media.bulk.download' | transloco
-          }}</sf-button>
-          <sf-button size="sm" variant="danger" icon="delete" (click)="delete(state.selectedFiles())">{{
-            'styleguide.sample.media.bulk.delete' | transloco
-          }}</sf-button>
-        </span>
-        <sf-button size="sm" variant="ghost" (click)="clearSelection()">{{ 'shared.dataTable.clearSelection' | transloco }}</sf-button>
-      </div>
-    }
-
-    @if (state.visible().length > 0) {
-      <sf-sample-media-grid class="library__body" />
-    } @else {
-      <sf-empty-state
-        class="library__body"
-        icon="photo_library"
-        [title]="(state.folderCount() > 0 ? 'styleguide.sample.media.empty.noMatch' : 'styleguide.sample.media.empty.title') | transloco"
-        [description]="'styleguide.sample.media.empty.description' | transloco: { folder: state.folderName() }"
-        [primaryLabel]="'styleguide.sample.media.toolbar.upload' | transloco"
-        primaryIcon="upload"
-        (primary)="chooseFiles()"
-      />
-    }
   } @else {
-    <sf-data-table
-      class="library__body library__table"
-      selectable
-      [columns]="columns()"
-      [rows]="state.visible()"
-      [rowKey]="rowKey"
-      [rowLabel]="rowLabel"
-      [label]="'styleguide.sample.media.list.label' | transloco: { folder: state.folderName() }"
-      [bulkActions]="bulkActions()"
-      [emptyTitle]="'styleguide.sample.media.empty.title' | transloco"
-      (selectionChange)="onTableSelection($event)"
-      (rowOpen)="state.openAsset($event.id)"
-    >
-      <ng-template sfDataTableCell="thumb" [sfDataTableCellRows]="state.visible()" let-row>
-        <span class="list-thumb" [class.list-thumb--checker]="row.format === 'SVG' || row.format === 'PNG'">
-          @if (row.art) {
-            <img class="list-thumb__img" [src]="row.art" alt="" />
+    <sf-toolbar class="library__toolbar" [label]="'styleguide.sample.media.toolbar.label' | transloco">
+      <sf-search-input
+        class="library__search"
+        [value]="state.search()"
+        [placeholder]="'styleguide.sample.media.toolbar.search' | transloco"
+        [aria-label]="'styleguide.sample.media.toolbar.search' | transloco"
+        (valueChange)="state.search.set($event)"
+      />
+      <sf-select
+        class="library__type"
+        [options]="typeOptions()"
+        [value]="state.typeFilter()"
+        [aria-label]="'styleguide.sample.media.toolbar.type' | transloco"
+        (valueChange)="state.typeFilter.set($event ?? 'all')"
+      />
+      <sf-menu
+        variant="secondary"
+        align="start"
+        [text]="sortText()"
+        [label]="'styleguide.sample.media.toolbar.sort' | transloco"
+        [items]="sortItems()"
+      />
+      <span class="library__spacer"></span>
+      <sf-segmented
+        size="sm"
+        [options]="viewOptions()"
+        [value]="state.view()"
+        [aria-label]="'styleguide.sample.media.toolbar.view' | transloco"
+        (valueChange)="state.view.set($event ?? 'grid')"
+      />
+      <sf-button icon="upload" (click)="chooseFiles()">{{ 'styleguide.sample.media.toolbar.upload' | transloco }}</sf-button>
+    </sf-toolbar>
+
+    @if (state.view() === 'grid') {
+      @if (state.selectedFiles().length > 0) {
+        <div class="bulk" role="group" [attr.aria-label]="'shared.dataTable.bulkActions' | transloco">
+          <span class="bulk__count">{{ 'shared.dataTable.selected' | transloco: { count: state.selectedFiles().length } }}</span>
+          <span class="bulk__actions">
+            <sf-button size="sm" variant="secondary" icon="drive_file_move" (click)="state.moveFiles(state.selectedFiles())">{{
+              'styleguide.sample.media.bulk.move' | transloco
+            }}</sf-button>
+            <sf-button size="sm" variant="secondary" icon="download" (click)="state.download(state.selectedFiles())">{{
+              'styleguide.sample.media.bulk.download' | transloco
+            }}</sf-button>
+            <sf-button size="sm" variant="danger" icon="delete" (click)="delete(state.selectedFiles())">{{
+              'styleguide.sample.media.bulk.delete' | transloco
+            }}</sf-button>
+          </span>
+          <sf-button size="sm" variant="ghost" (click)="clearSelection()">{{ 'shared.dataTable.clearSelection' | transloco }}</sf-button>
+        </div>
+      }
+
+      @if (state.review() === 'loading') {
+        <div class="library__body skeleton" role="status" aria-busy="true">
+          <span class="sf-sr-only">{{ 'styleguide.sample.media.library.loading' | transloco: { folder: state.folderName() } }}</span>
+          <div class="skeleton__grid" aria-hidden="true">
+            @for (card of skeletonCards; track card) {
+              <div class="skeleton__card">
+                <div class="skeleton__thumb"></div>
+                <sf-skeleton class="skeleton__text" shape="text" [lines]="2" />
+              </div>
+            }
+          </div>
+        </div>
+      } @else if (state.review() === 'error') {
+        <div class="library__body">
+          <sf-banner tone="danger" live="assertive">
+            {{ error() }}
+            <sf-button sfBannerActions variant="secondary" size="sm" icon="refresh" (click)="state.review.set('live')">{{
+              'styleguide.sample.media.library.retry' | transloco
+            }}</sf-button>
+          </sf-banner>
+        </div>
+      } @else if (state.visible().length > 0) {
+        <sf-sample-media-grid class="library__body" />
+      } @else {
+        <sf-empty-state
+          class="library__body"
+          icon="photo_library"
+          [title]="(state.folderCount() > 0 ? 'styleguide.sample.media.empty.noMatch' : 'styleguide.sample.media.empty.title') | transloco"
+          [description]="'styleguide.sample.media.empty.description' | transloco: { folder: state.folderName() }"
+          [primaryLabel]="'styleguide.sample.media.toolbar.upload' | transloco"
+          primaryIcon="upload"
+          (primary)="chooseFiles()"
+        />
+      }
+    } @else {
+      <sf-data-table
+        class="library__body library__table"
+        selectable
+        [columns]="columns()"
+        [rows]="state.visible()"
+        [rowKey]="rowKey"
+        [rowLabel]="rowLabel"
+        [label]="'styleguide.sample.media.list.label' | transloco: { folder: state.folderName() }"
+        [bulkActions]="bulkActions()"
+        [loading]="state.review() === 'loading'"
+        [error]="error()"
+        [emptyTitle]="'styleguide.sample.media.empty.title' | transloco"
+        (selectionChange)="onTableSelection($event)"
+        (rowOpen)="state.requestOpenAsset($event.id)"
+        (retry)="state.review.set('live')"
+        (contextmenu)="onTableContextMenu($event)"
+        (keydown)="onTableKeydown($event)"
+      >
+        <ng-template sfDataTableCell="thumb" [sfDataTableCellRows]="state.visible()" let-row>
+          <span class="list-thumb" [class.list-thumb--checker]="row.format === 'SVG' || row.format === 'PNG'">
+            @if (row.art) {
+              <img class="list-thumb__img" [src]="row.art" alt="" />
+            } @else {
+              <sf-icon class="list-thumb__icon" [name]="typeIcons[row.kind]" />
+            }
+          </span>
+        </ng-template>
+        <ng-template sfDataTableCell="name" [sfDataTableCellRows]="state.visible()" let-row>
+          <span class="list-name" [attr.data-file]="row.id">
+            <span class="list-name__text">{{ row.name }}</span>
+            @if (row.status !== 'released') {
+              <sf-status size="sm" iconOnly [tone]="tones[row.status]" [icon]="icons[row.status]" [label]="sample.statusLabel(row.status)" />
+            }
+          </span>
+        </ng-template>
+        <ng-template sfDataTableCell="dimensions" [sfDataTableCellRows]="state.visible()" let-row>
+          @if (row.width && row.height) {
+            <span class="list-num">{{ row.width }} × {{ row.height }}</span>
           } @else {
-            <sf-icon class="list-thumb__icon" [name]="typeIcons[row.kind]" />
+            <span class="list-muted">—</span>
           }
-        </span>
-      </ng-template>
-      <ng-template sfDataTableCell="name" [sfDataTableCellRows]="state.visible()" let-row>
-        <span class="list-name">
-          <span class="list-name__text">{{ row.name }}</span>
-          @if (row.status !== 'released') {
-            <sf-status size="sm" iconOnly [tone]="tones[row.status]" [icon]="icons[row.status]" [label]="sample.statusLabel(row.status)" />
-          }
-        </span>
-      </ng-template>
-      <ng-template sfDataTableCell="dimensions" [sfDataTableCellRows]="state.visible()" let-row>
-        @if (row.width && row.height) {
-          <span class="list-num">{{ row.width }} × {{ row.height }}</span>
-        } @else {
-          <span class="list-muted">—</span>
-        }
-      </ng-template>
-      <ng-template sfDataTableCell="size" [sfDataTableCellRows]="state.visible()" let-row>
-        <span class="list-num">{{ row.sizeBytes | sfFileSize }}</span>
-      </ng-template>
-      <ng-template sfDataTableCell="modified" [sfDataTableCellRows]="state.visible()" let-row>
-        <sf-relative-time [value]="minutesAgo(row.modifiedMinutes)" />
-      </ng-template>
-      <ng-template sfDataTableCell="usages" [sfDataTableCellRows]="state.visible()" let-row>
-        <span class="list-num">{{ row.usages.length }}</span>
-      </ng-template>
-    </sf-data-table>
+        </ng-template>
+        <ng-template sfDataTableCell="size" [sfDataTableCellRows]="state.visible()" let-row>
+          <span class="list-num">{{ row.sizeBytes | sfFileSize }}</span>
+        </ng-template>
+        <ng-template sfDataTableCell="modified" [sfDataTableCellRows]="state.visible()" let-row>
+          <sf-relative-time [value]="minutesAgo(row.modifiedMinutes)" />
+        </ng-template>
+        <ng-template sfDataTableCell="usages" [sfDataTableCellRows]="state.visible()" let-row>
+          <span class="list-num">{{ row.usages.length }}</span>
+        </ng-template>
+        <ng-template sfDataTableCell="actions" [sfDataTableCellRows]="state.visible()" let-row>
+          <sf-menu
+            size="sm"
+            [label]="'styleguide.sample.media.menu.label' | transloco: { name: row.name }"
+            [items]="menuItems(row)"
+          />
+        </ng-template>
+      </sf-data-table>
+    }
   }
+
+  <input #picker class="library__picker" type="file" multiple hidden (change)="onPicked(picker)" />
 
   @if (dragging()) {
     <div class="drop" aria-hidden="true">

@@ -1,23 +1,42 @@
-<section class="rendered" aria-label="Rendered output">
-  <div class="rendered__toolbar">
-    <span class="muted">The saved file rendered as preview serves it, with media links as preview URLs.</span>
-    <sf-button variant="ghost" [disabled]="text.renderedLoading()" (click)="text.loadRendered()">Refresh</sf-button>
-  </div>
-  @if (text.renderedLoading()) {
-    <span class="muted">Rendering…</span>
-  } @else if (text.renderedDiagnostics().length > 0) {
-    <div class="diagnostics" aria-live="polite">
-      @for (diag of text.renderedDiagnostics(); track $index) {
-        <div class="diagnostic diagnostic--error">
-          <span class="diagnostic__code">{{ diag.code }}</span>
-          @if (positionLabel(diag); as position) {
-            <span class="diagnostic__position">{{ position }}</span>
+<p class="intro">{{ 'media.drawer.rendered.intro' | transloco }}</p>
+@if (text.renderedLoading()) {
+  <sf-skeleton [lines]="8" />
+} @else if (text.renderedDiagnostics().length > 0) {
+  <sf-banner tone="danger" [title]="'media.drawer.rendered.failed' | transloco">
+    <ul class="diags">
+      @for (d of text.renderedDiagnostics(); track $index) {
+        <li>
+          <code>{{ d.code }}</code>
+          @if (positionLabel(d); as position) {
+            <span>{{ position }}</span>
           }
-          <span>{{ diag.message }}</span>
-        </div>
+          {{ d.message }}
+        </li>
       }
-    </div>
-  } @else if (text.renderedText() !== null) {
-    <pre class="rendered__output">{{ text.renderedText() }}</pre>
-  }
-</section>
+    </ul>
+    <span sfBannerActions class="actions">
+      <sf-button variant="secondary" size="sm" (click)="text.loadRendered()">{{ 'media.drawer.rendered.refresh' | transloco }}</sf-button>
+    </span>
+  </sf-banner>
+} @else if (text.renderedText() !== null) {
+  <sf-code-panel
+    class="code"
+    [fileName]="core.media().fileName ?? ''"
+    [languageLabel]="languageLabel()"
+    [value]="text.renderedText() ?? ''"
+    language="octl"
+    [format]="highlight().format"
+    [svg]="highlight().svg"
+    [readOnly]="true"
+    [label]="'media.drawer.rendered.label' | transloco: { name: core.media().fileName }"
+  >
+    <sf-button
+      sfCodePanelTools
+      variant="ghost"
+      size="sm"
+      icon="refresh"
+      [label]="'media.drawer.rendered.refresh' | transloco"
+      (click)="text.loadRendered()"
+    />
+  </sf-code-panel>
+}

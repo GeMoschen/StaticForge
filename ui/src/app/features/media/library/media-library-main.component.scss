@@ -1,0 +1,120 @@
+:host {
+  display: block;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+}
+
+// Header, toolbar and bulk bar stay; the grid or list below scrolls. The drop zone and the upload panel sit on top.
+.library {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sf-space-3);
+  height: 100%;
+  min-height: 0;
+  padding: var(--sf-space-4) var(--sf-space-6) 0;
+}
+
+.library__body {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+// The Favorites list brings its own padding; inside the library's it would be doubled and its title would not line up with a folder's.
+sf-favorites-view.library__body {
+  padding: 0;
+}
+
+// ── Bulk bar (grid; the list has the table's own) ────────────────────────────
+.bulk {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sf-gap);
+  padding: var(--sf-space-1) var(--sf-pad-panel);
+  border: 1px solid var(--sf-border);
+  border-radius: var(--sf-radius-md);
+  background: var(--sf-accent-subtle);
+  color: var(--sf-text);
+  font-size: var(--sf-fs-13);
+}
+
+.bulk__count {
+  font-weight: var(--sf-weight-semibold);
+}
+
+.bulk__actions {
+  display: flex;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  gap: var(--sf-space-2);
+}
+
+// ── Loading: cards in the grid's own shape, so nothing jumps when the files arrive ───────────────────────────
+.skeleton {
+  overflow: hidden;
+}
+
+.skeleton__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(10.5rem, 1fr));
+  gap: var(--sf-space-4);
+}
+
+.skeleton__card {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--sf-border);
+  border-radius: var(--sf-radius-md);
+  background: var(--sf-surface);
+}
+
+.skeleton__thumb {
+  aspect-ratio: 4 / 3;
+  background: var(--sf-surface-sunken);
+}
+
+.skeleton__text {
+  padding: var(--sf-space-2) var(--sf-space-3);
+}
+
+// ── Drop zone over the whole library ─────────────────────────────────────────
+.drop {
+  position: absolute;
+  inset: var(--sf-space-2);
+  z-index: var(--sf-z-sticky);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px dashed var(--sf-accent);
+  border-radius: var(--sf-radius-lg);
+  background: color-mix(in srgb, var(--sf-accent-subtle) 88%, transparent);
+  pointer-events: none;
+}
+
+.drop__inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sf-space-2);
+  padding: var(--sf-space-6) var(--sf-space-8);
+  border-radius: var(--sf-radius-lg);
+  background: var(--sf-surface-raised);
+  box-shadow: var(--sf-elevation-2);
+}
+
+.drop__icon {
+  color: var(--sf-accent);
+  font-size: var(--sf-fs-30);
+}
+
+.drop__text {
+  color: var(--sf-text);
+  font-size: var(--sf-fs-16);
+  line-height: var(--sf-lh-16);
+  font-weight: var(--sf-weight-semibold);
+}

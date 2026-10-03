@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
 import { TranslocoPipe } from '@jsverse/transloco';
 import { ToastService } from '../../../../core/ui/toast.service';
-import { CodeFormat } from '../../../../shared/code-editor/code-format';
+import { CODE_FORMAT_LABELS } from '../../../../shared/code-editor/code-format';
 import { SfCodePanelComponent } from '../../../../shared/code-editor/sf-code-panel.component';
 import { ConfirmService } from '../../../../shared/components/dialog/confirm.service';
 import { SfDrawerComponent, SfDrawerFooterDirective } from '../../../../shared/components/dialog/sf-drawer.component';
@@ -9,6 +9,7 @@ import { SfAvatarComponent } from '../../../../shared/components/display/sf-avat
 import { SfBadgeComponent } from '../../../../shared/components/display/sf-badge.component';
 import { SfRelativeTimeComponent } from '../../../../shared/components/display/sf-relative-time.component';
 import { SfStatusComponent } from '../../../../shared/components/display/sf-status.component';
+import { SfSaveStatusComponent } from '../../../../shared/components/layout/sf-save-status.component';
 import { SfSwitchComponent } from '../../../../shared/components/forms/sf-switch.component';
 import { SfMenuComponent, SfMenuItem } from '../../../../shared/components/menu/sf-menu.component';
 import { SfButtonComponent } from '../../../../shared/components/sf-button.component';
@@ -20,13 +21,13 @@ import { LANGUAGE_NAMES, SAMPLE_LANGS, SampleLang } from '../sample-data';
 import { STATUS_ICONS, STATUS_TONES } from '../sample-state';
 import {
   CSS_DIAGNOSTICS,
-  SVG_DIAGNOSTICS,
   SampleMediaFile,
   SampleMediaVersion,
   renderedSource,
   variantsOf,
 } from './sample-media-data';
 import { SampleMediaDetailsTabComponent } from './sample-media-details-tab.component';
+import { SampleMediaSourceComponent } from './sample-media-source.component';
 import { SampleMediaState, SampleMediaTab } from './sample-media-state';
 
 /** One row of the Languages tab. */
@@ -41,21 +42,21 @@ interface LanguageRow {
 }
 
 const DEFAULT_LANG: SampleLang = 'de';
-const CODE_FORMATS: Readonly<Record<string, CodeFormat>> = { CSS: 'CSS', SVG: 'XML' };
-/** The code panel's language names (technical names, not translated). */
-const LANGUAGE_LABELS: Readonly<Record<string, string>> = { CSS: 'CSS', SVG: 'SVG · XML' };
 
 /**
  * The media detail (decisions 20, 21): a non-modal, resizable `sf-drawer` over the library's right side. The header
- * names the file and holds its status, previous/next and a ⋮ menu (Replace, Download, Copy link, Delete); ←/→ while
- * focus is in the header step through the library, Escape closes. Below, `sf-tabs` with every tab that applies to
- * the file: Details, Variants (images), Languages, Processing / Rendered / Source (text media), Used by, Versions.
+ * names the file and holds its status, previous/next and a ⋮ menu (Replace, Rename, Move, Download, Copy link, Delete);
+ * ←/→ while focus is in the header step through the library, F2 renames, Escape closes. Below, `sf-tabs` with every tab
+ * that applies to the file: Details, Variants (images), Languages, Processing / Rendered / Source (text media), Used by,
+ * Versions. The footer carries the save status and Save (decision 97); stepping, closing or switching folder with
+ * unsaved edits asks first (the shared leave dialog).
  */
 @Component({
   selector: 'sf-sample-media-detail',
   standalone: true,
   imports: [
     SampleMediaDetailsTabComponent,
+    SampleMediaSourceComponent,
     SfAvatarComponent,
     SfBadgeComponent,
     SfButtonComponent,
@@ -67,6 +68,7 @@ const LANGUAGE_LABELS: Readonly<Record<string, string>> = { CSS: 'CSS', SVG: 'SV
     SfIconComponent,
     SfMenuComponent,
     SfRelativeTimeComponent,
+    SfSaveStatusComponent,
     SfStatusComponent,
     SfSwitchComponent,
     SfTabsComponent,
@@ -115,8 +117,10 @@ export class SampleMediaDetailComponent {
 
   protected readonly fileActions = computed<SfMenuItem[]>(() => [
     { id: 'replace', label: this.state.t('detail.replace'), icon: 'swap_horiz', action: () => this.replace() },
+    { id: 'rename', label: this.state.t('detail.rename'), icon: 'edit', shortcut: 'F2', action: () => void this.state.renameFile(this.file()) },
+    { id: 'move', label: this.state.t('detail.move'), icon: 'drive_file_move', action: () => void this.state.moveFiles([this.file()]) },
     { id: 'download', label: this.state.t('detail.download'), icon: 'download', action: () => this.state.download([this.file()]) },
-    { id: 'copyLink', label: this.state.t('detail.copyLink'), icon: 'link', action: () => this.copyLink() },
+    { id: 'copyLink', label: this.state.t('detail.copyLink'), icon: 'link', action: () => this.state.copyLink(this.file()) },
     {
       id: 'delete',
       label: this.state.t('detail.delete'),
@@ -147,14 +151,16 @@ export class SampleMediaDetailComponent {
     });
   });
 
-  protected readonly diagnostics = computed(() => (this.file().format === 'CSS' ? CSS_DIAGNOSTICS : SVG_DIAGNOSTICS));
   /** The last processing attempt's findings: only when the file is processed. */
   protected readonly processDiagnostics = computed(() => (this.state.assetProcessed() && this.file().format === 'CSS' ? CSS_DIAGNOSTICS : []));
-  protected readonly codeFormat = computed<CodeFormat>(() => CODE_FORMATS[this.file().format] ?? 'PLAIN');
-  protected readonly languageLabel = computed(() => LANGUAGE_LABELS[this.file().format] ?? this.file().format);
+  /** How the file is highlighted: the project's override for its type, else detected (the Source tab's menu sets it). */
+  protected readonly highlight = computed(() => this.state.highlightOf(this.file()));
+  /** The code panel's language names (technical names, not translated). */
+  protected readonly languageLabel = computed(() => {
+    const { format, svg } = this.highlight();
+    return svg ? 'SVG · XML' : CODE_FORMAT_LABELS[format];
+  });
   protected readonly rendered = computed(() => renderedSource(this.file()));
-  protected readonly source = computed(() => this.state.sourceDraft() ?? this.file().source ?? '');
-  protected readonly dirty = computed(() => this.state.detailsDirty() || this.state.sourceDirty());
 
   protected selectTab(id: string): void {
     this.state.tab.set(id as SampleMediaTab);
@@ -164,30 +170,28 @@ export class SampleMediaDetailComponent {
     return this.now - minutes * 60_000;
   }
 
-  /** ←/→ while focus is in the drawer's header step to the previous/next file. */
+  /** ←/→ while focus is in the drawer's header step to the previous/next file; F2 renames (outside text fields). */
   protected onKeydown(event: KeyboardEvent): void {
+    const target = event.target as HTMLElement | null;
+    if (event.key === 'F2' && !event.altKey && !event.ctrlKey && !event.metaKey && !target?.closest('input, textarea, [contenteditable="true"], .cm-editor')) {
+      event.preventDefault();
+      void this.state.renameFile(this.file());
+      return;
+    }
     if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') {
       return;
     }
-    const target = event.target as HTMLElement | null;
     if (!target?.closest('.sf-drawer__header') || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) {
       return;
     }
     event.preventDefault();
-    this.state.step(event.key === 'ArrowLeft' ? -1 : 1);
+    void this.state.requestStep(event.key === 'ArrowLeft' ? -1 : 1);
   }
 
   protected save(): void {
-    if (!this.dirty()) {
-      return;
+    if (this.state.dirty()) {
+      this.state.save();
     }
-    this.state.save();
-    this.toasts.show(this.state.t('detail.saved', { name: this.file().name }), 'success');
-  }
-
-  protected revert(): void {
-    this.state.edits.set({});
-    this.state.sourceDraft.set(null);
   }
 
   protected async restore(version: SampleMediaVersion): Promise<void> {
@@ -213,12 +217,6 @@ export class SampleMediaDetailComponent {
   private replace(): void {
     this.state.tab.set('details');
     this.state.replaceRequest.set(true);
-  }
-
-  private copyLink(): void {
-    const url = `https://lumen-coffee.example/media/${this.file().name}`;
-    void navigator.clipboard?.writeText(url).catch(() => undefined);
-    this.toasts.show(this.state.t('detail.linkCopied'), 'success');
   }
 
   protected isCurrent(file: SampleMediaFile, version: SampleMediaVersion): boolean {

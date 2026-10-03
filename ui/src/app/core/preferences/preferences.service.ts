@@ -9,10 +9,12 @@ import {
 } from './preferences-migration';
 import {
   DEFAULT_DENSITY,
+  DEFAULT_MEDIA_VIEW,
   DEFAULT_PREVIEW_VIEW,
   DEFAULT_THEME,
   DensityPreference,
   FavoriteEntry,
+  MediaViewPreference,
   MergePatch,
   PREFERENCES_SCHEMA_VERSION,
   PreferencesDocument,
@@ -90,6 +92,7 @@ export class PreferencesService {
   readonly railCollapsed = computed(() => this.document().railCollapsed ?? false);
   readonly paneSizes = computed<Record<string, number>>(() => this.document().paneSizes ?? {});
   readonly previewView = computed<PreviewViewPreference>(() => this.document().previewView ?? DEFAULT_PREVIEW_VIEW);
+  readonly mediaView = computed<MediaViewPreference>(() => this.document().mediaView ?? DEFAULT_MEDIA_VIEW);
   readonly issueScopes = computed<string[]>(() => this.document().issueScopes ?? []);
   readonly favoriteProjects = computed<string[]>(() => this.document().favoriteProjects ?? []);
   readonly recentProjects = computed<string[]>(() => this.document().recentProjects ?? []);
@@ -119,6 +122,9 @@ export class PreferencesService {
   }
   setPreviewView(value: PreviewViewPreference): void {
     this.set(['previewView'], value);
+  }
+  setMediaView(value: MediaViewPreference): void {
+    this.set(['mediaView'], value);
   }
   setIssueScopes(value: string[]): void {
     this.set(['issueScopes'], value);

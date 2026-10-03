@@ -1,20 +1,43 @@
-<section class="section">
-  <h3 class="section__title">Referenced by</h3>
-  @if (store.usagesLoading()) {
-    <span class="muted">Loading…</span>
-  } @else if (store.usages().length === 0) {
-    <span class="muted">Not referenced by any asset.</span>
-  } @else {
-    <ul class="usages">
-      @for (usage of store.usages(); track usage.fromUuid) {
-        <li>
-          <code>{{ usage.fromUid }}</code>
-          <span>{{ usage.fromType }}</span>
-          @if (usage.sourcePath) {
-            <span class="muted">{{ usage.sourcePath }}</span>
-          }
-        </li>
-      }
-    </ul>
-  }
-</section>
+@if (store.usagesLoading() && store.usages().length === 0) {
+  <sf-skeleton shape="row" [rows]="3" />
+} @else if (store.usagesFailed()) {
+  <p class="note">{{ 'media.drawer.usedBy.failed' | transloco }}</p>
+  <div>
+    <sf-button variant="secondary" size="sm" (click)="store.loadUsages(true)">{{ 'media.drawer.usedBy.retry' | transloco }}</sf-button>
+  </div>
+} @else if (rows().length > 0) {
+  <h3 class="subhead">{{ 'media.drawer.usedBy.count' | transloco: { count: rows().length } }}</h3>
+  <ul class="list">
+    @for (row of rows(); track $index) {
+      <li class="usage">
+        <sf-icon class="usage__icon" [name]="row.icon" />
+        <span class="row__text">
+          <a class="usage__link" [routerLink]="row.commands" [queryParams]="row.queryParams">{{ row.usage.fromUid }}</a>
+          <span class="row__meta">
+            {{ row.kind }}
+            @if (row.usage.sourcePath) {
+              ·
+              @if (devMode()) {
+                <code class="mono">{{ row.usage.sourcePath }}</code>
+              } @else {
+                {{ row.usage.sourcePath }}
+              }
+            }
+          </span>
+        </span>
+      </li>
+    }
+  </ul>
+} @else {
+  <sf-empty-state
+    icon="link_off"
+    [level]="3"
+    [title]="'media.drawer.usedBy.none' | transloco"
+    [description]="'media.drawer.usedBy.noneHint' | transloco"
+  />
+}
+
+@if (core.media().uuid; as uuid) {
+  <sf-asset-impact [projectKey]="core.projectKey()" [assetUuid]="uuid" [refreshKey]="core.media().revision" />
+  <sf-asset-urls [projectKey]="core.projectKey()" [assetUuid]="uuid" [refreshKey]="core.media().revision" />
+}

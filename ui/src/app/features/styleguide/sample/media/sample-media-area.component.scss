@@ -16,3 +16,20 @@
   height: 100%;
   min-width: 0;
 }
+
+// The tree's filter, under the "Folders" head.
+.pane__filter {
+  flex: none;
+  padding: var(--sf-space-2) var(--sf-space-2) var(--sf-space-1);
+}
+
+.pane__empty {
+  flex: none;
+}
+
+// A folder row while library files are dragged over it (the tree's own rows, so the rule reaches into it).
+.pane ::ng-deep .is-media-drop {
+  background: var(--sf-accent-subtle);
+  outline: 2px solid var(--sf-accent);
+  outline-offset: calc(-1 * var(--sf-space-0));
+}

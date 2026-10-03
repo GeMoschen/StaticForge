@@ -224,9 +224,9 @@ function checkLinks(dir: string, indexFileName: string): { checked: number; brok
 
 async function login(page: Page): Promise<void> {
   await page.goto('/login');
-  await page.locator('sf-login input[formControlName="username"]').fill(USER);
-  await page.locator('sf-login input[formControlName="password"]').fill(PASSWORD);
-  await page.locator('sf-login button[type="submit"]').click();
+  await page.getByLabel('Username').fill(USER);
+  await page.getByLabel('Password', { exact: true }).fill(PASSWORD);
+  await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page).toHaveURL(/\/$/, { timeout: 15_000 });
 }
 
@@ -318,25 +318,29 @@ test('journey 2: media usages appear on save and the delete guard lifts once the
     await login(page);
     await navigate(page, `/p/${api.projectKey}/media`);
     await expect(page.locator('sf-media-library')).toBeVisible();
-    await page.locator('sf-media-library .cell__body').filter({ hasText: 'logo' }).click();
-    const drawer = page.locator('sf-media-detail-drawer');
-    await expect(drawer.locator('.usages')).toContainText(hero.uid);
-    await expect(drawer.locator('.usages')).toContainText('PAGE');
+    await page.locator('sf-media-library .card').filter({ hasText: 'logo' }).click();
+    // The detail is an sf-drawer in <body>; the usages are on its "Used by" tab.
+    const drawer = page.getByRole('dialog', { name: /logo/ });
+    await drawer.getByRole('tab', { name: /^Used by/ }).click();
+    await expect(drawer.locator('.usage')).toContainText(hero.uid);
+    await expect(drawer.locator('.usage')).toContainText('Page');
     await snap(page, 'j2-usages-without-generation');
     await drawer.getByRole('button', { name: 'Close' }).click();
 
     // Remove the reference from the page; the drawer now shows no usages and deletes without force.
     await api.patchContent(hero.uuid, { hero: null });
-    await page.locator('sf-media-library .cell__body').filter({ hasText: 'logo' }).click();
-    await expect(drawer.getByText('Not referenced by any asset.')).toBeVisible();
+    await page.locator('sf-media-library .card').filter({ hasText: 'logo' }).click();
+    await drawer.getByRole('tab', { name: /^Used by/ }).click();
+    await expect(drawer.getByText('Not used anywhere')).toBeVisible();
     await snap(page, 'j2-no-usages-after-removal');
     const deleteRequest = page.waitForRequest((r) => r.method() === 'DELETE' && r.url().includes(`/assets/${media.uuid}`));
     const deleteResponse = page.waitForResponse((r) => r.request().method() === 'DELETE' && r.url().includes(`/assets/${media.uuid}`));
-    await drawer.getByRole('button', { name: 'Delete' }).click();
-    await page.locator('.dlg').getByRole('button', { name: 'Delete' }).click();
+    await drawer.getByRole('button', { name: 'File actions' }).click();
+    await page.getByRole('menuitem', { name: /^Delete/ }).click();
+    await page.getByRole('dialog', { name: /^Delete/ }).getByRole('button', { name: 'Delete', exact: true }).click();
     expect((await deleteRequest).url()).not.toContain('force=true');
     expect((await deleteResponse).status()).toBeLessThan(300);
-    await expect(page.locator('sf-media-library .cell__body').filter({ hasText: 'logo' })).toHaveCount(0);
+    await expect(page.locator('sf-media-library .card').filter({ hasText: 'logo' })).toHaveCount(0);
     expect((await api.get('/media')).content ?? []).toHaveLength(0);
   } finally {
     await api.dispose();

@@ -64,6 +64,26 @@ describe('OCTL completion', () => {
     );
     expect(complete('<p>$CMS_VALUE(title)$ text |', octlCompletion, ['title'])).toBeNull();
   });
+
+  it('matches a reference with a path (`#global.brand.accent`, `media:logo`, `page:/shop`) as one name', () => {
+    const names = ['#global.brand.accent', 'media:logo', 'page:/shop'];
+    for (const source of ['color: $CMS_VALUE(#global.br|', 'href: $CMS_REF(page:/sh|', 'src: $CMS_REF(media:lo|']) {
+      const pos = source.indexOf('|');
+      const state = EditorState.create({ doc: source.replace('|', '') });
+      const result = octlCompletion(() => names)(new CompletionContext(state, pos, true)) as CompletionResult;
+      // The completion replaces the whole reference typed so far, not only the word after its last dot or slash.
+      expect(result.from).toBe(source.indexOf(source.includes('#') ? '#' : source.includes('page') ? 'page:' : 'media:'));
+      expect(result.options.map((o) => o.label)).toEqual(expect.arrayContaining(names));
+    }
+  });
+
+  it('matches a global value written as CMS_GLOBAL.<set>.<path> as one name', () => {
+    const source = 'color: $CMS_VALUE(CMS_GLOBAL.brand.ro';
+    const state = EditorState.create({ doc: source });
+    const result = octlCompletion(() => ['CMS_GLOBAL.brand.roastColor'])(new CompletionContext(state, source.length, true)) as CompletionResult;
+    expect(result.from).toBe(source.indexOf('CMS_GLOBAL'));
+    expect(result.options.map((o) => o.label)).toContain('CMS_GLOBAL.brand.roastColor');
+  });
 });
 
 describe('where completion', () => {

@@ -1,4 +1,4 @@
-import { Component, inject } from '@angular/core';
+import { ApplicationRef, Component, inject } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/angular';
 import { describe, expect, it, vi } from 'vitest';
@@ -159,5 +159,23 @@ describe('SfContextMenuComponent', () => {
     const menu = await findMenu();
 
     expect(menu.style.top).toBe('234px');
+  });
+
+  it('replaces an open menu by the next one without a DOM error (a second right click while the first menu is open)', async () => {
+    const { node } = await setup();
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    fireEvent.contextMenu(node, { clientX: 120, clientY: 80 });
+    await findMenu();
+    // The page closes the open menu on pointerdown and the next contextmenu opens a new one in the same tick.
+    // Plain dispatch: no change detection between the two events, as in the browser.
+    node.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+    node.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 300, clientY: 120 }));
+    TestBed.inject(ApplicationRef).tick();
+
+    await waitFor(() => expect(screen.getAllByRole('menu', { name: 'Actions' })).toHaveLength(1));
+    await waitFor(() => expect(screen.getByRole('menu', { name: 'Actions' }).style.left).toBe('300px'));
+    expect(errors).not.toHaveBeenCalled();
+    errors.mockRestore();
   });
 });

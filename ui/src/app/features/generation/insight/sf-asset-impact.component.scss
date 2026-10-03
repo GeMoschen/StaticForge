@@ -1,0 +1,37 @@
+.impact {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sf-2);
+  min-width: 0;
+}
+.impact__heading {
+  margin: 0;
+  font-size: var(--sf-text-sm);
+}
+.impact__toggle {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--sf-1);
+  border: none;
+  background: transparent;
+  padding: 0;
+  color: var(--sf-ink);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.impact__asof {
+  font-weight: 400;
+  color: var(--sf-slate);
+  font-size: var(--sf-text-xs);
+}
+.impact__headline {
+  margin: 0;
+  font-size: var(--sf-text-sm);
+}
+.impact__edges {
+  margin: 0;
+  padding-left: var(--sf-4);
+  font-size: var(--sf-text-xs);
+  color: var(--sf-slate);
+}

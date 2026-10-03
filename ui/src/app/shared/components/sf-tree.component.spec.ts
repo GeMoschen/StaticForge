@@ -59,6 +59,7 @@ async function setup(options: SetupOptions = {}) {
     move: vi.fn(),
     moveTo: vi.fn(),
     reorder: vi.fn(),
+    foreignDrop: vi.fn(),
   };
   const result = await render(SfTreeComponent, {
     inputs: {
@@ -403,6 +404,76 @@ describe('SfTreeComponent', () => {
       expect(fireEvent.dragOver(item('alpha'), { dataTransfer: transfer })).toBe(true); // itself
       fireEvent.drop(item('Gamma'), { dataTransfer: transfer });
       expect(move).not.toHaveBeenCalled();
+    });
+
+    describe('a drag from outside the tree', () => {
+      const foreign = (types = ['application/x-test']) => ({ ...dataTransfer(), types });
+      const accept = (event: DragEvent, target: SfTreeNode | null) =>
+        event.dataTransfer?.types.includes('application/x-test') === true && target?.id !== 'beta';
+
+      it('is ignored unless the host accepts foreign drags', async () => {
+        const { foreignDrop } = await setup();
+        const transfer = foreign();
+
+        expect(fireEvent.dragOver(item('alpha'), { dataTransfer: transfer })).toBe(true);
+        fireEvent.drop(item('alpha'), { dataTransfer: transfer });
+
+        expect(item('alpha').closest('.sf-tree__row')).not.toHaveClass('is-drop-target');
+        expect(foreignDrop).not.toHaveBeenCalled();
+      });
+
+      it('highlights a droppable node it accepts and reports the drop with its target', async () => {
+        const { foreignDrop } = await setup({ inputs: { acceptForeignDrag: accept } });
+        const transfer = foreign();
+
+        expect(fireEvent.dragOver(item('alpha'), { dataTransfer: transfer })).toBe(false); // allowed
+        expect(transfer.dropEffect).toBe('move');
+        expect(item('alpha').closest('.sf-tree__row')).toHaveClass('is-drop-target');
+        expect(document.querySelector('[aria-live]')).toHaveTextContent('Move into alpha');
+
+        fireEvent.drop(item('alpha'), { dataTransfer: transfer });
+        expect(foreignDrop).toHaveBeenCalledWith(expect.objectContaining({ target: expect.objectContaining({ id: 'alpha' }) }));
+        expect(item('alpha').closest('.sf-tree__row')).not.toHaveClass('is-drop-target');
+      });
+
+      it('refuses what the host rejects, a drag of another kind and leaves', async () => {
+        const { foreignDrop } = await setup({ inputs: { acceptForeignDrag: accept } });
+
+        const transfer = foreign();
+        expect(fireEvent.dragOver(item('Beta'), { dataTransfer: transfer })).toBe(true); // the host says no
+        expect(transfer.dropEffect).toBe('none');
+        expect(item('Beta').closest('.sf-tree__row')).toHaveClass('is-drop-invalid');
+        fireEvent.drop(item('Beta'), { dataTransfer: transfer });
+
+        const other = foreign(['text/plain']);
+        expect(fireEvent.dragOver(item('alpha'), { dataTransfer: other })).toBe(true);
+        fireEvent.drop(item('alpha'), { dataTransfer: other });
+
+        expect(fireEvent.dragOver(item('Gamma'), { dataTransfer: transfer })).toBe(true); // a leaf is no folder
+        fireEvent.drop(item('Gamma'), { dataTransfer: transfer });
+
+        expect(foreignDrop).not.toHaveBeenCalled();
+      });
+
+      it('refuses the root level unless the tree is rootDroppable', async () => {
+        const { foreignDrop } = await setup({ inputs: { acceptForeignDrag: accept } });
+        const tree = screen.getByRole('tree');
+
+        expect(fireEvent.dragOver(tree, { dataTransfer: foreign() })).toBe(true);
+        fireEvent.drop(tree, { dataTransfer: foreign() });
+
+        expect(foreignDrop).not.toHaveBeenCalled();
+      });
+
+      it('drops on the root level when the tree is rootDroppable', async () => {
+        const { foreignDrop } = await setup({ inputs: { acceptForeignDrag: accept, rootDroppable: true } });
+        const tree = screen.getByRole('tree');
+
+        expect(fireEvent.dragOver(tree, { dataTransfer: foreign() })).toBe(false);
+        fireEvent.drop(tree, { dataTransfer: foreign() });
+
+        expect(foreignDrop).toHaveBeenCalledWith(expect.objectContaining({ target: null }));
+      });
     });
 
     it('is not draggable without the move action', async () => {

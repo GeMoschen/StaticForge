@@ -108,6 +108,12 @@ public interface AssetService {
     /** Current inbound {@link AssetReference}s (open edges), resolved to the referring asset's identity. */
     List<UsageView> usages(long projectId, UUID uuid);
 
+    /**
+     * How many current inbound {@link AssetReference}s each asset has (the length of {@link #usages}), in one query, for
+     * listings. Every asked-for asset of the project is in the map (0 when nothing references it).
+     */
+    java.util.Map<UUID, Integer> usageCounts(long projectId, java.util.Collection<UUID> uuids);
+
     /** Inbound {@link AssetReference}s valid at {@code revision} (time travel), resolved like {@link #usages}. */
     List<UsageView> usagesAt(long projectId, UUID uuid, long revision);
 

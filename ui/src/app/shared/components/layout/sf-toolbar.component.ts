@@ -1,4 +1,4 @@
-import { AfterViewInit, ChangeDetectionStrategy, Component, ElementRef, OnDestroy, inject, input } from '@angular/core';
+import { AfterViewInit, ChangeDetectionStrategy, Component, ElementRef, OnDestroy, booleanAttribute, inject, input } from '@angular/core';
 
 export type SfToolbarOrientation = 'horizontal' | 'vertical';
 
@@ -28,6 +28,10 @@ const NON_TEXT_INPUTS = new Set(['button', 'submit', 'reset', 'checkbox', 'radio
  * `Home`/`End` go to the first/last. Natively disabled items are skipped; `aria-disabled` ones stay reachable (their
  * tooltip can say why). Text inputs, selects, textareas and editable content keep their own arrow keys. Items inside an
  * open menu are not toolbar items. The items are re-scanned whenever the content changes.
+ *
+ * `roving="false"` is for a bar that starts with (or holds) a text field, such as a library's search and filters: the
+ * field keeps the arrow keys, so a roving bar could never be left toward its other controls. Every control then stays in
+ * the tab order and the bar is a plain `role=group`.
  */
 @Component({
   selector: 'sf-toolbar',
@@ -37,9 +41,9 @@ const NON_TEXT_INPUTS = new Set(['button', 'submit', 'reset', 'checkbox', 'radio
   styleUrl: './sf-toolbar.component.scss',
   host: {
     class: 'sf-toolbar',
-    role: 'toolbar',
+    '[attr.role]': 'roving() ? "toolbar" : "group"',
     '[attr.aria-label]': 'label()',
-    '[attr.aria-orientation]': 'orientation()',
+    '[attr.aria-orientation]': 'roving() ? orientation() : null',
     '[class.sf-toolbar--vertical]': 'orientation() === "vertical"',
     '(keydown)': 'onKeydown($event)',
     '(focusin)': 'onFocusin($event)',
@@ -49,6 +53,8 @@ export class SfToolbarComponent implements AfterViewInit, OnDestroy {
   /** The toolbar's accessible name. */
   readonly label = input.required<string>();
   readonly orientation = input<SfToolbarOrientation>('horizontal');
+  /** One tab stop and arrow-key movement (default); `false`: every control is a tab stop and the bar is a group. */
+  readonly roving = input(true, { transform: booleanAttribute });
 
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef).nativeElement;
   /** The item that holds the tab stop. */
@@ -74,6 +80,9 @@ export class SfToolbarComponent implements AfterViewInit, OnDestroy {
   }
 
   protected onFocusin(event: FocusEvent): void {
+    if (!this.roving()) {
+      return;
+    }
     const item = this.itemOf(event.target);
     if (item) {
       this.active = item;
@@ -82,7 +91,7 @@ export class SfToolbarComponent implements AfterViewInit, OnDestroy {
   }
 
   protected onKeydown(event: KeyboardEvent): void {
-    if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey || ownsArrowKeys(event.target)) {
+    if (!this.roving() || event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey || ownsArrowKeys(event.target)) {
       return;
     }
     const items = this.items();
@@ -133,6 +142,9 @@ export class SfToolbarComponent implements AfterViewInit, OnDestroy {
 
   /** One tab stop: `tabindex=0` on the active item (or the first one), `-1` on the others. Writes only changes. */
   private syncTabStops(): void {
+    if (!this.roving()) {
+      return;
+    }
     const items = this.items();
     if (!this.active || !items.includes(this.active)) {
       this.active = items[0] ?? null;

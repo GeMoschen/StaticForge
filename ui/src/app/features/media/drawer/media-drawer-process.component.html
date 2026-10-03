@@ -1,33 +1,34 @@
-<section class="process" aria-label="CMS processing">
-  <label class="switch">
-    <input
-      type="checkbox"
-      role="switch"
-      [checked]="core.processCms()"
-      [disabled]="core.readOnly() || text.togglingProcess()"
-      (change)="text.onProcessToggle($event)"
-    />
-    <span>Process CMS syntax</span>
-  </label>
-  <p class="hint">
-    When on, <code>$CMS_…$</code> instructions in this file are rendered when the site is generated
-    and in preview, and <code>$$</code> is output as a single <code>$</code>.
-  </p>
-  @if (core.processDiagnostics().length > 0) {
-    <div class="diagnostics" aria-live="polite">
-      @for (diag of core.processDiagnostics(); track $index) {
-        <div
-          class="diagnostic"
-          [class.diagnostic--error]="diag.severity === 'ERROR'"
-          [class.diagnostic--warning]="diag.severity !== 'ERROR'"
-        >
-          <span class="diagnostic__code">{{ diag.code }}</span>
-          @if (positionLabel(diag); as position) {
-            <span class="diagnostic__position">{{ position }}</span>
-          }
-          <span>{{ diag.message }}</span>
-        </div>
-      }
-    </div>
-  }
-</section>
+<sf-switch
+  [value]="core.processCms()"
+  [disabled]="core.readOnly() || text.togglingProcess()"
+  (valueChange)="onSwitch($event)"
+  >{{ 'media.drawer.processing.switch' | transloco }}</sf-switch
+>
+<p class="intro">{{ 'media.drawer.processing.intro' | transloco }}</p>
+
+<h3 class="subhead">{{ 'media.drawer.processing.lastAttempt' | transloco }}</h3>
+@if (!core.processCms() && findings().length === 0) {
+  <p class="note">{{ 'media.drawer.processing.off' | transloco }}</p>
+} @else if (text.checking() && findings().length === 0) {
+  <p class="note" aria-live="polite">{{ 'media.drawer.processing.checking' | transloco }}</p>
+} @else if (findings().length === 0) {
+  <p class="note" aria-live="polite">{{ 'media.drawer.processing.clean' | transloco }}</p>
+} @else {
+  <p class="note">{{ 'media.drawer.processing.summary' | transloco: { count: findings().length } }}</p>
+  <ul class="diags" aria-live="polite">
+    @for (d of findings(); track $index) {
+      <li class="diag" [class.diag--error]="d.severity === 'ERROR'">
+        <sf-status
+          size="sm"
+          [tone]="d.severity === 'ERROR' ? 'danger' : 'warning'"
+          [label]="(d.severity === 'ERROR' ? 'media.drawer.processing.error' : 'media.drawer.processing.warning') | transloco"
+        />
+        <code class="diag__code">{{ d.code }}</code>
+        @if (positionLabel(d); as position) {
+          <span class="diag__pos">{{ 'media.drawer.processing.position' | transloco: { line: d.line, column: d.column ?? 1 } }}</span>
+        }
+        <span class="diag__message">{{ d.message }}</span>
+      </li>
+    }
+  </ul>
+}

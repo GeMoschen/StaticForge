@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, computed, inject, input, signal } from '@angular/core';
+import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
 import { Observable, map, tap } from 'rxjs';
 import { TimeTravelStore } from '../../revisions/time-travel.store';
 import { GenerationService } from '../generation.service';
@@ -20,13 +21,13 @@ import { SfPlanEntriesTableComponent } from './sf-plan-entries-table.component';
   selector: 'sf-asset-impact',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [SfPlanEntriesTableComponent],
+  imports: [SfPlanEntriesTableComponent, TranslocoPipe],
   template: `
     <section class="impact" [attr.aria-labelledby]="headingId">
       <h3 class="impact__heading" [id]="headingId">
         <button type="button" class="impact__toggle" [attr.aria-expanded]="open()" (click)="toggle()">
           <span aria-hidden="true">{{ open() ? '▾' : '▸' }}</span>
-          {{ heading() }}
+          {{ heading() ?? ('shared.assetImpact.heading' | transloco) }}
           <span class="impact__asof">{{ asOf() }}</span>
         </button>
       </h3>
@@ -46,63 +47,24 @@ import { SfPlanEntriesTableComponent } from './sf-plan-entries-table.component';
           [projectKey]="projectKey()"
           [impact]="true"
           [reloadKey]="refreshKey()"
-          emptyText="Nothing would rebuild."
+          [emptyText]="'shared.assetImpact.empty' | transloco"
         />
       }
     </section>
   `,
-  styles: [
-    `
-      .impact {
-        display: flex;
-        flex-direction: column;
-        gap: var(--sf-2);
-        min-width: 0;
-      }
-      .impact__heading {
-        margin: 0;
-        font-size: var(--sf-text-sm);
-      }
-      .impact__toggle {
-        display: inline-flex;
-        align-items: baseline;
-        gap: var(--sf-1);
-        border: none;
-        background: transparent;
-        padding: 0;
-        color: var(--sf-ink);
-        font: inherit;
-        font-weight: 600;
-        cursor: pointer;
-      }
-      .impact__asof {
-        font-weight: 400;
-        color: var(--sf-slate);
-        font-size: var(--sf-text-xs);
-      }
-      .impact__headline {
-        margin: 0;
-        font-size: var(--sf-text-sm);
-      }
-      .impact__edges {
-        margin: 0;
-        padding-left: var(--sf-4);
-        font-size: var(--sf-text-xs);
-        color: var(--sf-slate);
-      }
-    `,
-  ],
+  styleUrl: './sf-asset-impact.component.scss',
 })
 export class SfAssetImpactComponent {
   readonly projectKey = input.required<string>();
   readonly assetUuid = input.required<string>();
   /** Changing it reloads the impact (pass the asset's revision after a save). */
   readonly refreshKey = input<unknown>(null);
-  /** The panel's heading; "Impact" unless the host words it for its audience (the page editor: "Pages affected by this change"). */
-  readonly heading = input('Impact');
+  /** The panel's heading; the default ("Impact") unless the host words it for its audience (the page editor: "Pages affected by this change"). */
+  readonly heading = input<string | null>(null);
 
   private readonly api = inject(GenerationService);
   private readonly timeTravel = inject(TimeTravelStore);
+  private readonly transloco = inject(TranslocoService);
   private static nextId = 0;
 
   protected readonly headingId = `sf-asset-impact-${SfAssetImpactComponent.nextId++}`;
@@ -112,7 +74,7 @@ export class SfAssetImpactComponent {
   protected readonly edges = computed(() => firstEdgeRows(this.impact()?.byFirstEdge, 'the asset itself'));
   protected readonly asOf = computed(() => {
     const revision = this.timeTravel.activeRevision();
-    return revision === null ? 'as of now' : `reflects the current state, not revision ${revision}`;
+    return this.transloco.translate(revision === null ? 'shared.assetImpact.asOfNow' : 'shared.assetImpact.notRevision', { revision });
   });
 
   /** One stable loader: the table reloads when the asset or the refresh key changes, not on every check. */

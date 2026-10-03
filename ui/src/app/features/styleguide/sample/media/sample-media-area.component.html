@@ -6,19 +6,59 @@
   [max]="400"
   [label]="'styleguide.sample.media.folders.resize' | transloco"
 >
-  <section sfSplitterStart class="pane" aria-labelledby="sample-media-folders-title">
+  <section
+    #pane
+    sfSplitterStart
+    class="pane"
+    aria-labelledby="sample-media-folders-title"
+    (dragover)="onTreeDragOver($event)"
+    (dragleave)="onTreeDragLeave($event, pane)"
+    (drop)="onTreeDrop($event)"
+  >
     <div class="pane__head">
       <span class="pane__title" id="sample-media-folders-title">{{ 'styleguide.sample.media.folders.title' | transloco }}</span>
       <sf-button variant="secondary" size="sm" icon="create_new_folder" (click)="newFolder()">{{
         'styleguide.sample.media.folders.new' | transloco
       }}</sf-button>
     </div>
+    @if (state.review() !== 'empty') {
+      <div class="pane__filter">
+        <sf-search-input
+          [value]="state.treeFilter()"
+          [placeholder]="'styleguide.sample.media.folders.filter' | transloco"
+          [aria-label]="'styleguide.sample.media.folders.filterLabel' | transloco"
+          (valueChange)="state.treeFilter.set($event)"
+        />
+      </div>
+    }
+    @if (state.review() === 'empty') {
+      <sf-empty-state
+        class="pane__empty"
+        icon="create_new_folder"
+        [level]="3"
+        [title]="'styleguide.sample.media.folders.emptyTitle' | transloco"
+        [description]="'styleguide.sample.media.folders.emptyHint' | transloco"
+        [primaryLabel]="'styleguide.sample.media.folders.new' | transloco"
+        primaryIcon="create_new_folder"
+        (primary)="newFolder()"
+      />
+    } @else if (noMatch()) {
+      <sf-empty-state
+        class="pane__empty"
+        icon="search_off"
+        [level]="3"
+        [title]="'styleguide.sample.media.folders.noMatch' | transloco: { query: state.treeFilter().trim() }"
+        [secondaryLabel]="'styleguide.sample.media.folders.clearFilter' | transloco"
+        (secondary)="clearTreeFilter()"
+      />
+    }
     <sf-tree
       class="pane__tree"
       [label]="'styleguide.sample.media.folders.title' | transloco"
       [loadChildren]="loader()"
       [selection]="treeSelection()"
       [multiselect]="false"
+      [filterable]="false"
       [actions]="treeActions"
       [createKinds]="createKinds"
       [expandActions]="false"

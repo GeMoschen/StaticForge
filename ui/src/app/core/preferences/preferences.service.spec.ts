@@ -65,6 +65,7 @@ describe('PreferencesService', () => {
     expect(prefs.recentProjects()).toEqual([]);
     expect(prefs.railCollapsed()).toBe(false);
     expect(prefs.previewView()).toBe('draft');
+    expect(prefs.mediaView()).toBe('grid');
     expect(prefs.issueScopes()).toEqual([]);
     expect(prefs.recents('acme')).toEqual([]);
     expect(prefs.editingLocale('acme')).toBeNull();
@@ -129,6 +130,17 @@ describe('PreferencesService', () => {
     expect(prefs.editingLocale('acme')).toBeNull();
     vi.advanceTimersByTime(500);
     expect(http.expectOne(URL).request.body).toEqual({ projects: { acme: { editingLocale: null } } });
+  });
+
+  it('stores the media view as a typed instance-wide key', () => {
+    const { prefs, http } = setup();
+    expect(prefs.mediaView()).toBe('grid');
+
+    prefs.setMediaView('list');
+
+    expect(prefs.mediaView()).toBe('list');
+    vi.advanceTimersByTime(500);
+    expect(http.expectOne(URL).request.body).toEqual({ mediaView: 'list' });
   });
 
   it('stores a table column layout: order and hidden replace, widths merge per column', () => {

@@ -49,7 +49,7 @@ export type { CodeFormat } from './code-format';
     :host { display: block; }
     :host(.sf-code-editor-host--fill) { display: flex; flex-direction: column; min-height: 0; }
     .sf-code-editor--compact { --sf-code-min-height: 0; --sf-code-max-height: 8rem; }
-    .sf-code-editor--fill { flex: 1 1 auto; min-height: 0; --sf-code-height: 100%; --sf-code-max-height: none; }
+    .sf-code-editor--fill { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; --sf-code-height: auto; --sf-code-flex: 1 1 auto; --sf-code-max-height: none; }
   `,
 })
 export class SfCodeEditorComponent implements AfterViewInit {

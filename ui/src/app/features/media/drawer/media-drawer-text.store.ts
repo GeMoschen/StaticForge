@@ -1,5 +1,8 @@
 import { HttpErrorResponse } from '@angular/common/http';
-import { Injectable, OnDestroy, computed, inject, signal } from '@angular/core';
+import { Injectable, Injector, OnDestroy, computed, inject, signal } from '@angular/core';
+import { firstValueFrom } from 'rxjs';
+import type { SaveResult } from '../../../shared/components/dialog/unsaved-changes.service';
+import { UnsavedChangesService } from '../../../shared/components/dialog/unsaved-changes.service';
 import { TimeTravelStore } from '../../revisions/time-travel.store';
 import type { ConflictInfo } from '../../pages/types';
 import {
@@ -11,25 +14,34 @@ import {
   lineEndingOf,
   withLineEnding,
 } from '../text-media.util';
-import { type Diagnostic, MediaDrawerStore, type MediaDrawerTab } from './media-drawer.store';
+import { type Diagnostic, MediaDrawerStore } from './media-drawer.store';
 
-/** Source and Rendered tabs of text media (M18.4.1), the "Process CMS syntax" switch and live validation. */
+/**
+ * Text media (M18.4.1): the Source tab's text with live validation and its save (with the conflict flow), the Rendered
+ * tab's output, the "Process CMS syntax" switch and the findings of the Processing tab. `savedText` is also what the
+ * Details tab previews for a text file.
+ */
 @Injectable()
 export class MediaDrawerTextStore implements OnDestroy {
   private readonly core = inject(MediaDrawerStore);
   private readonly timeTravel = inject(TimeTravelStore);
+  private readonly unsaved = inject(UnsavedChangesService);
+  private readonly injector = inject(Injector);
 
   readonly togglingProcess = signal(false);
 
-  /** The file content as last loaded or saved; `null` until the Source tab loads it. */
+  /** The file content as last loaded or saved; `null` until it was read. */
   readonly savedText = signal<string | null>(null);
   /** The editor content, with the file's own line endings. */
   readonly sourceText = signal('');
   /** What the editor is (re)initialized with — only on load, never while typing (keeps the caret). */
   readonly editorSeed = signal('');
+  /** Counts the times the editor has to be created anew with the saved text (Revert): the seed alone may not change. */
+  readonly editorEpoch = signal(0);
   readonly lineEnding = signal<LineEnding>('LF');
   readonly sourceUtf8 = signal(true);
   readonly sourceLoading = signal(false);
+  readonly sourceFailed = signal(false);
   readonly sourceSaving = signal(false);
   readonly sourceDiagnostics = signal<Diagnostic[]>([]);
   readonly conflict = signal<ConflictInfo | null>(null);
@@ -37,6 +49,10 @@ export class MediaDrawerTextStore implements OnDestroy {
   readonly renderedText = signal<string | null>(null);
   readonly renderedLoading = signal(false);
   readonly renderedDiagnostics = signal<Diagnostic[]>([]);
+
+  /** The findings of checking the saved text now (Processing tab); `null` before the check ran. */
+  readonly checkedDiagnostics = signal<Diagnostic[] | null>(null);
+  readonly checking = signal(false);
 
   /** The language the Source tab edits for localized text media; `null` follows the editing language. */
   private readonly textLocaleChoice = signal<string | null>(null);
@@ -55,36 +71,26 @@ export class MediaDrawerTextStore implements OnDestroy {
 
   private validateTimer: ReturnType<typeof setTimeout> | null = null;
   private validateSequence = 0;
+  private checkSequence = 0;
 
   ngOnDestroy(): void {
     this.clearValidateTimer();
   }
 
-  /**
-   * `true` when there are no unsaved source edits, or the user agrees to drop them. The library calls
-   * this before switching the drawer to another file.
-   */
-  confirmDiscard(): boolean {
-    if (!this.dirty()) {
-      return true;
-    }
-    const media = this.core.media();
-    const name = media?.displayName ?? media?.uid ?? 'this file';
-    return window.confirm(`Discard your unsaved changes to "${name}"?`);
-  }
-
-  // ── Tabs ────────────────────────────────────────────────────────────────
-
-  openTab(tab: MediaDrawerTab): void {
-    this.core.tab.set(tab);
-    if (tab === 'source' && this.savedText() !== null) {
-      // The editor is recreated with the tab: seed it with the edits, not the loaded text.
-      this.editorSeed.set(this.sourceText());
-    } else if (tab === 'source' && !this.tooLarge()) {
-      this.loadSource();
-    } else if (tab === 'rendered') {
-      this.loadRendered();
-    }
+  /** Another file, a new file or another revision: forget everything read. */
+  resetText(): void {
+    this.clearValidateTimer();
+    this.validateSequence++;
+    this.checkSequence++;
+    this.savedText.set(null);
+    this.sourceText.set('');
+    this.editorSeed.set('');
+    this.sourceDiagnostics.set([]);
+    this.sourceFailed.set(false);
+    this.renderedText.set(null);
+    this.renderedDiagnostics.set([]);
+    this.checkedDiagnostics.set(null);
+    this.conflict.set(null);
   }
 
   /** Another file: forget the language picked for the Source tab. */
@@ -92,52 +98,63 @@ export class MediaDrawerTextStore implements OnDestroy {
     this.textLocaleChoice.set(null);
   }
 
-  resetText(): void {
+  /** Drops the unsaved source edits (Revert, Discard in the leave dialog). */
+  revert(): void {
+    const saved = this.savedText();
+    if (saved === null) {
+      return;
+    }
     this.clearValidateTimer();
-    this.validateSequence++;
-    this.savedText.set(null);
-    this.sourceText.set('');
-    this.editorSeed.set('');
-    this.sourceDiagnostics.set([]);
-    this.renderedText.set(null);
-    this.renderedDiagnostics.set([]);
+    this.sourceText.set(saved);
+    this.editorSeed.set(saved);
+    this.editorEpoch.update((epoch) => epoch + 1);
     this.conflict.set(null);
+    this.scheduleValidate(0);
   }
 
   // ── Process toggle ──────────────────────────────────────────────────────
 
-  onProcessToggle(event: Event): void {
-    const checkbox = event.target as HTMLInputElement;
+  /** Switches CMS processing on or off. The answer's warnings (or the 422's diagnostics) are the last attempt's findings. */
+  async setProcess(wanted: boolean): Promise<void> {
     const uuid = this.core.media()?.uuid;
-    const wanted = checkbox.checked;
-    if (!uuid || this.core.readOnly()) {
-      checkbox.checked = this.core.processCms();
+    if (!uuid || this.core.readOnly() || this.togglingProcess()) {
       return;
     }
     this.togglingProcess.set(true);
-    this.core.api
-      .setMediaProcessCms(this.core.projectKey(), uuid, wanted, this.core.revision() ?? undefined)
-      .subscribe({
-        next: (response) => {
-          const updated = response.media!;
-          this.core.revision.set(updated.revision ?? null);
-          this.core.processCms.set(updated.processCms ?? false);
-          this.core.processDiagnostics.set(response.warnings ?? []);
-          this.togglingProcess.set(false);
-          this.core.toasts.show(wanted ? 'CMS processing switched on' : 'CMS processing switched off', 'success');
-          this.core.emitUpdated(updated);
-          this.renderedText.set(null);
-          this.scheduleValidate(0);
-        },
-        error: (err: unknown) => {
-          this.core.processDiagnostics.set(diagnosticsOf(err));
-          this.togglingProcess.set(false);
-          checkbox.checked = this.core.processCms();
-        },
-      });
+    try {
+      const response = await firstValueFrom(
+        this.core.api.setMediaProcessCms(this.core.projectKey(), uuid, wanted, this.core.revision() ?? undefined),
+      );
+      const updated = response.media!;
+      this.core.processDiagnostics.set(response.warnings ?? []);
+      this.checkedDiagnostics.set(null);
+      this.core.toasts.show(this.core.t(wanted ? 'processing.switchedOn' : 'processing.switchedOff'), 'success');
+      this.core.applyUpdated(updated);
+      this.renderedText.set(null);
+      this.scheduleValidate(0);
+    } catch (err) {
+      this.core.processDiagnostics.set(diagnosticsOf(err));
+    } finally {
+      this.togglingProcess.set(false);
+    }
   }
 
   // ── Source ──────────────────────────────────────────────────────────────
+
+  /**
+   * Reads the saved text unless it is known, and puts what the editor holds (unsaved edits included) in front of the
+   * editor that is about to be created.
+   */
+  ensureLoaded(): void {
+    if (!this.core.textEditable() || this.tooLarge()) {
+      return;
+    }
+    if (this.savedText() !== null) {
+      this.editorSeed.set(this.sourceText());
+    } else if (!this.sourceLoading()) {
+      this.loadSource();
+    }
+  }
 
   loadSource(): void {
     const uuid = this.core.media()?.uuid;
@@ -145,6 +162,7 @@ export class MediaDrawerTextStore implements OnDestroy {
       return;
     }
     this.sourceLoading.set(true);
+    this.sourceFailed.set(false);
     this.core.api
       .mediaText(this.core.projectKey(), uuid, this.timeTravel.activeRevision(), this.textLocale())
       .subscribe({
@@ -159,7 +177,10 @@ export class MediaDrawerTextStore implements OnDestroy {
           this.sourceLoading.set(false);
           this.scheduleValidate(0);
         },
-        error: () => this.sourceLoading.set(false),
+        error: () => {
+          this.sourceLoading.set(false);
+          this.sourceFailed.set(true);
+        },
       });
   }
 
@@ -169,51 +190,75 @@ export class MediaDrawerTextStore implements OnDestroy {
     this.scheduleValidate(VALIDATE_DEBOUNCE_MS);
   }
 
-  /** The Source tab of localized text media edits one language's file. */
-  onTextLocaleChange(event: Event): void {
-    const select = event.target as HTMLSelectElement;
-    if (!this.confirmDiscard()) {
-      select.value = this.textLocale() ?? '';
+  /** The Source tab of localized text media edits one language's file; unsaved edits are asked about first. */
+  async pickTextLocale(locale: string | null): Promise<void> {
+    if (locale === this.textLocale()) {
       return;
     }
-    this.textLocaleChoice.set(select.value || null);
+    if (this.dirty() && !(await this.confirmLeave())) {
+      return;
+    }
+    this.textLocaleChoice.set(locale);
     this.resetText();
     this.loadSource();
   }
 
-  saveSource(): void {
+  /** The leave dialog for unsaved source edits (Save / Discard / Cancel); `true` when the person may go on. */
+  confirmLeave(): Promise<boolean> {
+    const media = this.core.media();
+    return this.unsaved.confirmLeave({
+      name: media?.displayName ?? media?.uid ?? '',
+      save: () => this.saveSource(),
+      discard: () => this.revert(),
+      injector: this.injector,
+    });
+  }
+
+  async saveSource(): Promise<SaveResult> {
     const uuid = this.core.media()?.uuid;
-    if (!uuid || !this.canSaveSource()) {
-      return;
+    if (!uuid) {
+      return { ok: false, message: '' };
+    }
+    if (this.core.readOnly()) {
+      return { ok: false, message: this.core.readOnlyLabel() };
+    }
+    if (this.sourceHasErrors()) {
+      return { ok: false, message: this.core.t('source.fixErrors') };
+    }
+    if (!this.canSaveSource()) {
+      return { ok: true };
     }
     const text = this.sourceText();
     this.sourceSaving.set(true);
-    this.core.api
-      .saveMediaText(this.core.projectKey(), uuid, text, this.core.revision() ?? undefined, this.textLocale())
-      .subscribe({
-        next: (response) => {
-          const updated = response.media!;
-          const changed = updated.revision !== this.core.revision();
-          this.core.revision.set(updated.revision ?? null);
-          this.savedText.set(text);
-          this.sourceDiagnostics.set(response.warnings ?? []);
-          this.renderedText.set(null);
-          this.sourceSaving.set(false);
-          this.core.toasts.show(changed ? `Saved as revision ${updated.revision}` : 'No changes to save', 'success');
-          this.core.emitUpdated(updated);
-        },
-        error: (err: unknown) => {
-          this.sourceSaving.set(false);
-          if (err instanceof HttpErrorResponse && err.status === 409) {
-            this.conflict.set(this.conflictOf(err));
-            return;
-          }
-          const diagnostics = diagnosticsOf(err);
-          if (diagnostics.length > 0) {
-            this.sourceDiagnostics.set(diagnostics);
-          }
-        },
-      });
+    try {
+      const response = await firstValueFrom(
+        this.core.api.saveMediaText(this.core.projectKey(), uuid, text, this.core.revision() ?? undefined, this.textLocale()),
+      );
+      const updated = response.media!;
+      const changed = updated.revision !== this.core.revision();
+      this.savedText.set(text);
+      this.sourceDiagnostics.set(response.warnings ?? []);
+      this.renderedText.set(null);
+      this.checkedDiagnostics.set(null);
+      this.core.toasts.show(
+        changed ? this.core.t('source.savedRevision', { revision: updated.revision }) : this.core.t('source.nothingChanged'),
+        'success',
+      );
+      this.core.applyUpdated(updated);
+      return { ok: true };
+    } catch (err) {
+      if (err instanceof HttpErrorResponse && err.status === 409) {
+        this.conflict.set(this.conflictOf(err));
+        return { ok: false, message: this.core.t('source.conflict') };
+      }
+      const diagnostics = diagnosticsOf(err);
+      if (diagnostics.length > 0) {
+        this.sourceDiagnostics.set(diagnostics);
+      }
+      return { ok: false, message: this.core.t('source.notSaved') };
+    } finally {
+      this.sourceSaving.set(false);
+    }
   }
 
   private conflictOf(err: HttpErrorResponse): ConflictInfo {
@@ -235,7 +280,7 @@ export class MediaDrawerTextStore implements OnDestroy {
     }
     this.conflict.set(null);
     this.core.revision.set(conflict.currentRevision);
-    this.saveSource();
+    void this.saveSource();
   }
 
   /** Conflict: drop the editor content and load the newer revision. */
@@ -248,6 +293,7 @@ export class MediaDrawerTextStore implements OnDestroy {
     this.core.revision.set(conflict.currentRevision);
     this.resetText();
     this.loadSource();
+    this.core.loadDetail();
   }
 
   // ── Rendered ────────────────────────────────────────────────────────────
@@ -273,6 +319,52 @@ export class MediaDrawerTextStore implements OnDestroy {
   }
 
   // ── Validation ──────────────────────────────────────────────────────────
+
+  /**
+   * The Processing tab's findings: the saved text checked now (`POST text/validate`), as the backend keeps no record of
+   * the last attempt. Needs the saved text, which is read first.
+   */
+  checkProcessing(): void {
+    const uuid = this.core.media()?.uuid;
+    if (!uuid || !this.core.processCms() || this.core.readOnly()) {
+      return;
+    }
+    const sequence = ++this.checkSequence;
+    const validate = (text: string) => {
+      this.checking.set(true);
+      this.core.api.validateMediaText(this.core.projectKey(), uuid, text).subscribe({
+        next: (res) => {
+          if (sequence === this.checkSequence) {
+            this.checkedDiagnostics.set(res.diagnostics ?? []);
+            this.checking.set(false);
+          }
+        },
+        error: () => {
+          if (sequence === this.checkSequence) {
+            this.checking.set(false);
+          }
+        },
+      });
+    };
+    const saved = this.savedText();
+    if (saved !== null) {
+      validate(saved);
+      return;
+    }
+    this.checking.set(true);
+    this.core.api.mediaText(this.core.projectKey(), uuid, this.timeTravel.activeRevision(), this.textLocale()).subscribe({
+      next: (view) => {
+        if (sequence === this.checkSequence) {
+          validate(view.text ?? '');
+        }
+      },
+      error: () => {
+        if (sequence === this.checkSequence) {
+          this.checking.set(false);
+        }
+      },
+    });
+  }
 
   /** Live validation of the editor content while processing is on; stale answers are dropped. */
   private scheduleValidate(delayMs: number): void {

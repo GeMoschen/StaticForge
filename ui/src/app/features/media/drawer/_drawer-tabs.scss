@@ -1,0 +1,85 @@
+// Rules several tabs of the media detail drawer share. Component styles are encapsulated, so each tab includes the ones
+// it uses.
+
+@mixin stack {
+  :host {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sf-space-3);
+  }
+}
+
+@mixin text {
+  .intro,
+  .note {
+    margin: 0;
+    color: var(--sf-text-muted);
+    font-size: var(--sf-fs-13);
+    line-height: var(--sf-lh-13);
+  }
+
+  .subhead {
+    margin: var(--sf-space-2) 0 0;
+    color: var(--sf-text);
+    font-size: var(--sf-fs-13);
+    line-height: var(--sf-lh-13);
+    font-weight: var(--sf-weight-semibold);
+  }
+
+  .mono {
+    font-family: var(--sf-font-mono);
+    font-size: var(--sf-fs-12);
+  }
+
+  .actions {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: var(--sf-space-2);
+  }
+}
+
+// A plain list of rows with a rule between them (languages, used by, versions).
+@mixin rows($row) {
+  .list {
+    display: flex;
+    flex-direction: column;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  #{$row} {
+    display: flex;
+    align-items: center;
+    gap: var(--sf-space-3);
+    padding: var(--sf-space-2) 0;
+    border-bottom: 1px solid var(--sf-border);
+  }
+
+  .row__text {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    gap: var(--sf-space-1);
+    min-width: 0;
+  }
+
+  .row__title {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--sf-space-2);
+    color: var(--sf-text);
+    font-size: var(--sf-fs-13);
+    line-height: var(--sf-lh-13);
+    font-weight: var(--sf-weight-medium);
+  }
+
+  .row__meta {
+    overflow: hidden;
+    color: var(--sf-text-muted);
+    font-size: var(--sf-fs-12);
+    line-height: var(--sf-lh-12);
+    text-overflow: ellipsis;
+  }
+}

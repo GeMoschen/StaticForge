@@ -56,6 +56,8 @@ async function setup(options: Options = {}) {
           favorites: () => [],
           favoriteProjects: () => ['lumen'],
           recentProjects: () => [],
+          setRecents: vi.fn(),
+          setFavorites: vi.fn(),
         },
       },
       { provide: EditingLocaleStore, useValue: { locale: signal<string | null>(null) } },

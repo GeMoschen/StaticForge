@@ -1,0 +1,20 @@
+<sf-dialog size="md" [title]="data.title">
+  <p class="move__lead">{{ t('move.lead') }}</p>
+  <div class="move__tree">
+    <sf-tree
+      [label]="t('move.tree')"
+      [loadChildren]="loader()"
+      [selection]="selection()"
+      [multiselect]="false"
+      [filterable]="false"
+      [expandActions]="false"
+      (open)="onOpen($event)"
+    />
+  </div>
+  <ng-container sfDialogFooter>
+    <sf-button variant="ghost" (click)="cancel()">{{ t('move.cancel') }}</sf-button>
+    <sf-button [disabled]="selected() === null" [disabledReason]="selected() === null ? t('move.chooseFirst') : null" (click)="choose()">{{
+      t('move.confirm')
+    }}</sf-button>
+  </ng-container>
+</sf-dialog>

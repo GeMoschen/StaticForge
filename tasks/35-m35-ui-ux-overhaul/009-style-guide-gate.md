@@ -370,6 +370,97 @@ Added to the sample for M35.18 (`/styleguide/sample?area=pages&…`: `view=edito
 88. **Incomplete-page preview:** an explanatory state instead of a blank frame — what is missing and a *Go to <field>* button.
 89. **Bulk move and duplicate** in the folder table show toasts with Undo (move target is a placeholder until a move picker exists).
 
+## Review round 9 (2026-10-03): media — states, file actions, uploads, guards, text-media source (signed off 2026-10-03)
+
+Added to the sample for M35.19 (`/styleguide/sample?area=media&…`). **Signed off by the user on 2026-10-03** (decisions 90–106) — M35.19 builds the app from it. Favorites in media are not part of this round (they follow the Pages design, decisions 57–58).
+
+Review links (all combine with `media=grid|list`, `folder=<id>`, `asset=<id>`, `mtab=…`; `dev=0` hides developer mode):
+
+| Param | What it shows |
+|---|---|
+| `tfilter=<text>` | the folder tree's filter; `tfilter=zzz` is the no-match state with *Clear filter* |
+| `state=loading` / `state=error` / `state=empty` | skeleton (grid, list, tree) / error banner with Retry (Retry returns to normal) / library with no folders and no files |
+| `q=<text>`, `type=images\|documents\|text`, `sort=name\|date\|size\|type` + `-asc\|-desc` | search, type filter and sort in the URL (`sort=size-desc`); defaults are left out |
+| `dialog=rename` / `move` / `folder-move` / `delete` | opens that dialog on the open file, the selection or the first file (`asset=a-latte-rosetta&dialog=rename`) |
+| `menu=<fileId>` | opens that file's menu (`menu=a-latte-rosetta`); right click, Shift+F10 and the ⋮ button work by hand |
+| `asset=a-yirgacheffe-beans&dirty=1` | the drawer with unsaved edits: step ←/→, click another folder or close it to get the leave dialog |
+| `upload=1` / `upload=errors` | the panel mid-upload / every kind of refusal and a finished picture asking for alt text |
+| `folder=m-archive&selected=30` (add `&dialog=delete`) | 30 files selected in the new *Archive* folder (32 generated photos): the typed delete confirmation; `selected=24` confirms plainly |
+| `asset=a-hero-texture` (PNG), `a-yirgacheffe-beans` (JPG) | the focal point rule; developer mode adds hash, media type and storage path |
+| `asset=a-brand-css&mtab=source` (CSS), `asset=a-logo&mtab=source` (SVG) | the Source tab of a text file (decisions 102–106) |
+| … `&complete=1` | the text ends with an unfinished `$CMS_VALUE(#global.br`: click into the editor, Ctrl+End, **Ctrl+Space** to see the project names (102) |
+| … `&highlight=auto\|css\|javascript\|json\|xml\|markdown\|plain` | the project's override of the open file's type, as if picked from the *Highlighted as* menu (104) |
+| … `&banner=large\|utf8\|eol` | too large to edit (editor replaced by the banner) / not valid UTF-8 (text with �) / mixed line endings (105) |
+| … `&lang=de\|en` | the file has one file per language: the Source tab shows the Language select on that language (105) |
+| `?` sheet | on the media area it lists the media shortcuts |
+
+90. **Folder tree filter:** a filter field under the *Folders* head filters the folders client-side — a folder stays when its name matches or a folder
+    below it does, and the folders on the way open. No match: "No folder matches “x”" with *Clear filter*. URL `tfilter`. (The shared `sf-tree`
+    filter is switched off here; the app either reuses it and adds a *Clear filter* action to its no-results state, or builds this field.)
+91. **Review states** (`state`): a skeleton for the grid (cards of the grid's own shape), the list (`sf-data-table` loading) and the tree; an error
+    banner with **Retry** above an empty grid / the table's banner / the tree's "Couldn’t load this tree" with Retry — any Retry returns the whole area
+    to normal. **Empty library** (no folders, no files): title "Your media library is empty", explains what to do, **Upload** + **New folder**; the
+    tree says "No folders yet" with **New folder**; the toolbar is hidden. The existing empty folder and no-match states stay.
+92. **Per-file actions:** one menu — *Open, Rename…, Move…, Download, Copy link, Delete…* (danger, after a separator; shortcuts shown) — on a grid
+    card (right click, **Shift+F10** / menu key, and a **⋮ button** that shows on hover and focus and is not a tab stop while hidden), on a list row
+    (right click, Shift+F10, a **⋮ column**) and in the drawer's ⋮ menu (which adds *Rename…* and *Move…* to Replace, Download, Copy link, Delete…).
+    On a file that is part of a multi-file selection the menu acts on the selection (*Move N files…, Download N files as ZIP, Delete N files…*).
+    **F2** renames and **Delete** deletes (the selection when the file is in it). The status icon of a card moves to the end of the meta line.
+93. **Rename dialog:** one name field, checked as you type — required, no `/ \ : * ? " < > |`, at most 100 characters, the **extension stays**, the name is
+    not taken in the folder; *Apply* is disabled until the name is valid and changed; Enter applies. An Undo toast follows.
+94. **Move dialog** (one for bulk Move, a file's *Move…*, the page header's *Move folder…*): a folder tree to pick from; the current folder is shown
+    with "Current folder" and cannot be chosen; for a folder, itself and what lies inside it ("Inside the folder being moved") are blocked and the
+    top level is offered; *Move* is disabled until a target is chosen. **Dragging cards onto a tree folder** moves them (the row highlights; the
+    folder they are in refuses). Every move shows a toast with **Undo** (a group undoes together); moving the open file closes the drawer.
+    **Folder create and rename stay inline in the tree** (as the tree already does; the page header's *Rename folder* starts the inline edit),
+    no dialog. In the sample a folder move is announced and undoable but the sample's folder tree does not change.
+95. **Download:** one file downloads as itself; several files as **one ZIP named after the folder** (`products.zip`). The sample shows it as a toast
+    (read out by screen readers) that says nothing is downloaded.
+96. **URL state for the library:** `q`, `type`, `sort` (`<field>-<asc|desc>`) join `media`, `folder`, `asset`, `mtab` and `selected`; defaults are
+    omitted; back/forward and deep links restore them. The tree filter is `tfilter`.
+97. **Unsaved changes in the drawer:** the footer shows `sf-save-status` (*Saved 12:04* / *Unsaved changes*) with *Revert* and *Save* (decision 47);
+    stepping to another file (←/→ or the buttons), clicking another file, switching folder (the drawer then closes), closing the drawer and leaving the
+    area through the rail all raise the shared leave dialog (decision 48: **Discard / Cancel / Save**). A clean drawer never asks.
+98. **Uploads panel:** the header names the target ("Uploads to Products"; "to N folders" when mixed). A refused file says why and offers what fits:
+    *type not accepted* (list of types) → Remove; *too large* ("24.6 MB is over the limit of 10 MB per file") → Remove; *name already exists in
+    <folder>* → **Replace** (links and usages stay) / **Keep both** (`name-2.jpg`) / Remove; *connection lost* → **Retry** / Remove. Retry exists
+    only for a lost connection. A finished picture asks for **alt text inline** (field + *Save*, then "Alt text saved") and has an *Open details* icon.
+    Chosen and dropped files are checked for real (type, 10 MB, name).
+99. **Large delete:** a selection of **25 or more** files needs the word *delete* typed (decision 50); fewer confirm plainly. Both offer Undo.
+100. **Keyboard:** the `?` sheet lists, for the media area — grid: arrows, Home, End, Space, Ctrl+A, Enter, F2, Shift+F10, Delete; drawer: ←/→ (focus in
+    its header), Esc; focal point: arrows (1 %), Shift+arrows (10 %); tree: expand, collapse, F2.
+101. **Focal point is for photos (JPG) only** — PNG and SVG pictures, PDFs and text files get none; the Details tab says so (a note under the
+    preview, and in the photo's hint/description). In developer mode the Details tab additionally lists **media type, hash (SHA-256) and storage
+    path** (copyable) next to the UID and path.
+
+Source tab of text media (decisions 102–106, **signed off 2026-10-03**; added 2026-10-03 to bring the sample level with the app's
+`MediaDrawerSource` and then past it — the app's Source tab has none of the *new* items 102, 103 and 104):
+
+102. **Completion of project names in the Source tab** (CSS and SVG): inside an instruction (`$CMS_VALUE(`, `$CMS_REF(`) **Ctrl+Space** offers the
+    project's **global values** (`#global.brand.roastColor`, `#global.brand.accentColor`, …), **media UIDs** (`media:hero_texture`) and **page paths**
+    (`page:/shop`) besides the OCTL words. A reference is matched as a whole, so `#global.br` completes to `#global.brand.roastColor` (a small fix in the
+    shared OCTL completion; before, only the last word of a dotted or slashed name matched). The app passes the names from the project's globals, the media
+    library and the page tree (`sf-code-editor [names]`; `sf-code-panel` gains the same input). A hint line under the panel says so. The sample offers
+    `brand.accentColor` and not `brand.accent`, which the Processing tab's warning says does not exist.
+103. **SVG-aware completion:** an SVG file's Source (and Rendered) passes `svg`, so inside the text `<` completes SVG elements and attributes; SVG and CSS
+    highlight in both tabs and in the Details preview of a text file (CSS as CSS, SVG as XML). The Details tab of an SVG keeps showing the picture.
+104. **Highlight override:** the Source panel header carries a **Highlighted as <format>** button (the panel's new `sfCodePanelTools` slot) opening a
+    menu *Auto · CSS · JavaScript · JSON · XML · Markdown · Plain text* under the heading **“Project setting for .css files”**; Auto says what it detects.
+    Choosing re-highlights Source, Rendered and the Details preview at once and announces that every file of that type in the project is now highlighted
+    that way. In the app it writes the project's `codeHighlighting` override by extension (the MIME-type override stays settings-only). Open: whether
+    editing project settings from the drawer needs the settings permission (the menu is disabled with a reason without it).
+105. **Source banners and language:** *too large to edit here* (the editor is replaced by the banner with **Download** and **Replace file**), *not valid
+    UTF-8* (unreadable characters shown as �, saving stores UTF-8), *mixes line endings* (saving stores LF) — wording as the app's; and, for a text
+    file with one file per language, a **Language** select above the panel that switches the file being edited (unsaved edits raise the leave dialog).
+106. **Popups stay over the editor:** inside `sf-code-panel` the hover tooltip and the completion list are confined to the editor (they flip above the line
+    near its bottom) instead of covering the Problems list and the status line below it (CodeMirror `tooltipSpace`, set in the shared setup). Editors outside
+    a panel keep the whole window. Not done on purpose: highlighted text snippets on grid cards — they are a static `<pre>` and a highlighted one needs the
+    editor's lazily loaded grammars; the card keeps the plain snippet.
+107. **Rename dialog carries the UID in developer mode, files and folders; F2 in the tree stays inline** (user request 2026-10-03, after the sign-off of
+    this round; not in the sample). The Rename dialog (decision 93) gets a *UID* section in developer mode with the same control as the page settings
+    (decision 82/19: `sf-uid-rename`, links to the item break, Undo toast); it changes the UID on its own, apart from the name's Apply. Folders get the
+    same dialog (*Rename…* in the tree's menu, *Rename folder…* in the page header's ⋮); F2 in the tree remains the in-place name edit as signed off.
+
 ## Notes / hazards
 
 - Sign-off: **signed off by the user on 2026-10-01** — gallery https://claude.ai/artifact/33yY26sd6H17UTP9sPPJid

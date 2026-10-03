@@ -64,11 +64,27 @@
   line-height: var(--sf-lh-12);
 }
 
+.sf-code-panel__tools {
+  display: flex;
+  align-items: center;
+  gap: var(--sf-space-1);
+  margin-inline-start: auto;
+
+  &:empty {
+    display: none;
+  }
+}
+
 .sf-code-panel__actions {
   display: flex;
   align-items: center;
   gap: var(--sf-space-1);
   margin-inline-start: auto;
+}
+
+// With tools in the header the actions follow them instead of pushing to the end themselves.
+.sf-code-panel__tools:not(:empty) + .sf-code-panel__actions {
+  margin-inline-start: 0;
 }
 
 .sf-code-panel__editor {

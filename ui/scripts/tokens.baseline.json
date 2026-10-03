@@ -43,30 +43,6 @@
     "colors": 2,
     "zIndex": 0
   },
-  "src/app/features/media/drawer/_drawer-parts.scss": {
-    "colors": 2,
-    "zIndex": 0
-  },
-  "src/app/features/media/library/media-library-grid.component.scss": {
-    "colors": 0,
-    "zIndex": 1
-  },
-  "src/app/features/media/media-detail-drawer.component.scss": {
-    "colors": 2,
-    "zIndex": 3
-  },
-  "src/app/features/media/media-folder-detail.component.scss": {
-    "colors": 2,
-    "zIndex": 2
-  },
-  "src/app/features/media/media-folder-node.component.scss": {
-    "colors": 1,
-    "zIndex": 0
-  },
-  "src/app/features/media/media-library.component.scss": {
-    "colors": 2,
-    "zIndex": 1
-  },
   "src/app/features/navigation/nav-reference-detail.component.scss": {
     "colors": 1,
     "zIndex": 0

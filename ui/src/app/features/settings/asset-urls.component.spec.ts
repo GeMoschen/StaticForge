@@ -1,6 +1,6 @@
 import { signal } from '@angular/core';
 import { render, screen, waitFor, fireEvent } from '@testing-library/angular';
-import { of } from 'rxjs';
+import { of, throwError } from 'rxjs';
 import { describe, expect, it, vi } from 'vitest';
 import { ProjectPermissionsStore } from '../../core/project/project-permissions.store';
 import { ChannelsService } from '../channels/channels.service';
@@ -31,9 +31,9 @@ function permissions(developer: boolean, admin: boolean) {
   return { canEditTemplates: signal(developer), canAdminProject: signal(admin) };
 }
 
-async function setup(view: UrlRegistryAssetView, developer = true, admin = true) {
+async function setup(view: UrlRegistryAssetView, developer = true, admin = true, forAsset = vi.fn().mockReturnValue(of(view))) {
   const api = {
-    forAsset: vi.fn().mockReturnValue(of(view)),
+    forAsset,
     override: vi.fn().mockReturnValue(of({ ...row, url: 'company/about.html', overridden: true })),
     assign: vi.fn().mockReturnValue(of(row)),
     reset: vi.fn().mockReturnValue(of(undefined)),
@@ -100,5 +100,21 @@ describe('SfAssetUrlsComponent', () => {
     expect(screen.queryByText('Override')).toBeNull();
     expect(screen.queryByText('Reset')).toBeNull();
     expect(screen.queryByText('Set URL')).toBeNull();
+  });
+
+  it('says quietly that the URLs are not available (a project without output) and reads again on Retry', async () => {
+    const view: UrlRegistryAssetView = { uuid: 'media-1', targetType: 'MEDIA', indexPages: [], entries: [row] };
+    const forAsset = vi.fn().mockReturnValueOnce(throwError(() => new Error('500'))).mockReturnValue(of(view));
+    await setup(view, true, true, forAsset);
+
+    const note = await screen.findByRole('status');
+    expect(note).toHaveTextContent('The URLs of this file are not available yet.');
+    expect(screen.queryByRole('alert')).toBeNull();
+
+    screen.getByRole('button', { name: 'Retry' }).click();
+
+    await waitFor(() => expect(screen.getByText('about.html')).toBeTruthy());
+    expect(screen.queryByRole('status')).toBeNull();
+    expect(forAsset).toHaveBeenCalledTimes(2);
   });
 });

@@ -1,69 +1,30 @@
+<sf-splitter
+  class="media"
+  collapsible
+  paneId="media-tree"
+  [defaultSize]="treeWidth"
+  [min]="200"
+  [max]="440"
+  [label]="'media.folders.resize' | transloco"
+>
+  <sf-media-library-tree sfSplitterStart class="media__pane" />
+  <sf-media-library-main sfSplitterEnd class="media__pane media__library" />
+</sf-splitter>
+
 @if (library.selectedMedia(); as media) {
   <sf-media-detail-drawer
-    #detailDrawer
     [projectKey]="projectKey()"
     [media]="media"
+    [tab]="library.tabParam()"
+    [position]="library.detailPosition()"
+    [folderPath]="library.assetFolderPath()"
+    [mediaUids]="library.mediaUids()"
     (closed)="library.closeDetail()"
     (updated)="library.onUpdated($event)"
     (deleted)="library.onDeleted($event)"
     (discarded)="library.onDiscarded($event)"
+    (tabChange)="library.setDetailTab($event)"
+    (step)="library.stepAsset($event)"
+    (fileAction)="onFileAction($event, media)"
   />
 }
-
-@if (itemActions.renamingItem(); as ri) {
-  <sf-rename-asset-dialog
-    [open]="true"
-    [projectKey]="projectKey()"
-    [uuid]="ri.uuid ?? ''"
-    [uid]="ri.uid ?? ''"
-    [displayName]="ri.displayName ?? ri.uid ?? ''"
-    [submittingName]="itemActions.renamingItemName()"
-    (renameDisplayName)="itemActions.submitRenameItemDisplayName($event)"
-    (uidChanged)="library.reloadMedia()"
-    (closed)="itemActions.closeRenameItem()"
-  />
-}
-
-@if (folders.renamingFolder(); as rf) {
-  <sf-media-folder-detail
-    [projectKey]="projectKey()"
-    [folder]="rf"
-    [mediaCount]="folders.renamingFolderMediaCount()"
-    [folderCount]="rf.children?.length ?? 0"
-    (close)="folders.closeFolderDetail()"
-    (renamed)="folders.onFolderDetailChanged()"
-    (deleted)="folders.onFolderDetailChanged()"
-  />
-}
-
-<div
-  class="library"
-  sfDropTarget
-  (dragenter)="uploads.onDragEnter($event)"
-  (dragleave)="uploads.onDragLeave()"
-  (drop)="uploads.onDrop($event)"
->
-  <h1 class="sf-sr-only">Media</h1>
-
-  <sf-media-library-sidebar />
-
-  <div class="library__main">
-    <sf-media-library-toolbar />
-    <sf-media-library-grid />
-    <sf-media-library-uploads />
-  </div>
-</div>
-
-@if (uploads.dragActive()) {
-  <div class="drop-overlay">Drop files to upload</div>
-}
-
-<sf-create-asset-dialog
-  kind="FOLDER"
-  scope="MEDIA"
-  [open]="folders.newFolderOpen()"
-  [submitting]="folders.creatingFolder()"
-  [projectKey]="projectKey()"
-  (create)="folders.submitNewFolder($event)"
-  (closed)="folders.closeNewFolder()"
-/>

@@ -506,6 +506,12 @@ public class MediaServiceImpl implements MediaService {
 
     @Override
     @Transactional(readOnly = true)
+    public java.util.Map<UUID, Integer> usageCounts(long projectId, java.util.Collection<UUID> uuids) {
+        return assetService.usageCounts(projectId, uuids);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public Page<AssetVersionView> list(long projectId, String mimeType, String folder, boolean recursive, String q, Pageable pageable) {
         return mediaVersionRepository
                 .searchMedia(projectId, mimePattern(mimeType), trimToNull(q), folderPattern(folder, recursive), pageable)

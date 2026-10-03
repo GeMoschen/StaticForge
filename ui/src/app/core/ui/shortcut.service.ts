@@ -6,7 +6,17 @@ import { KeyStep, isModifierKey, matchesStep, normalizeKeys, parseKeys } from '.
 export type ShortcutScope = 'global' | 'screen' | 'component';
 
 /** The sheet's groups (`frame.shortcuts.groups.<group>`). */
-export type ShortcutGroup = 'screen' | 'general' | 'goTo' | 'publishing' | 'editing' | 'lists' | 'tree';
+export type ShortcutGroup =
+  | 'screen'
+  | 'general'
+  | 'goTo'
+  | 'publishing'
+  | 'editing'
+  | 'lists'
+  | 'tree'
+  | 'mediaGrid'
+  | 'mediaDrawer'
+  | 'mediaFocal';
 
 /** How a command shows in the palette's *Actions* group. */
 export interface ShortcutPalette {

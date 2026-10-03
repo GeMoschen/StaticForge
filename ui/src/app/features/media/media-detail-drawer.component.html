@@ -1,128 +1,134 @@
-<div class="scrim" (click)="closeDrawer()"></div>
-
-<aside
-  class="drawer"
-  [class.drawer--wide]="store.tab() !== 'details'"
-  role="dialog"
-  aria-modal="true"
-  aria-labelledby="media-drawer-title"
+<sf-drawer
+  [title]="title()"
+  [width]="layout.width()"
+  [minWidth]="360"
+  (widthChange)="layout.width.set($event)"
+  (closed)="closed.emit()"
+  (keydown)="onKeydown($event)"
 >
-  <header class="drawer__header">
-    <h2 id="media-drawer-title" class="drawer__title">
-      {{ media().displayName ?? media().uid ?? 'Media' }}
-      @if (store.processCms()) {
-        <span class="cms-badge" title="CMS syntax is processed when the site is generated">CMS</span>
-      }
-    </h2>
-    <sf-asset-favorite type="MEDIA" [uuid]="media().uuid" [name]="media().displayName ?? media().uid" />
-    <sf-button variant="ghost" (click)="closeDrawer()">Close</sf-button>
-  </header>
-
-  <sf-release-bar
-    [projectKey]="projectKey()"
-    [assetUuid]="media().uuid"
-    [refreshKey]="store.revision()"
-    (changed)="onReleaseChanged($event)"
-  />
-
-  @if (store.textEditable()) {
-    <div class="tabs" role="tablist">
-      <button
-        type="button"
-        role="tab"
-        [attr.aria-selected]="store.tab() === 'details'"
-        [class.tab--active]="store.tab() === 'details'"
-        (click)="text.openTab('details')"
-      >
-        Details
-      </button>
-      <button
-        type="button"
-        role="tab"
-        [attr.aria-selected]="store.tab() === 'source'"
-        [class.tab--active]="store.tab() === 'source'"
-        (click)="text.openTab('source')"
-      >
-        Source
-        @if (text.dirty()) {
-          <span class="tab__dirty" aria-label="unsaved changes">•</span>
-        }
-      </button>
-      @if (store.processCms()) {
-        <button
-          type="button"
-          role="tab"
-          [attr.aria-selected]="store.tab() === 'rendered'"
-          [class.tab--active]="store.tab() === 'rendered'"
-          (click)="text.openTab('rendered')"
-        >
-          Rendered
-        </button>
-      }
-    </div>
-  }
-
-  <div class="drawer__body">
-    @if (readOnly()) {
-      <div class="banner banner--warning">
-        {{ readOnlyLabel() }}
-      </div>
-    }
-
-    @if (store.textEditable()) {
-      <sf-media-drawer-process />
-    }
-
-    @switch (store.tab()) {
-      @case ('source') {
-        <sf-media-drawer-source />
-      }
-      @case ('rendered') {
-        <sf-media-drawer-rendered />
-      }
-      @default {
-        <sf-media-drawer-preview />
-
-        @if (store.showLocalization()) {
-          <sf-media-drawer-localization />
-        }
-
-        @if (usages.usages().length > 0) {
-          <div class="banner banner--warning">
-            This file is referenced by {{ usages.usages().length }} asset(s). Deleting it will
-            break those references.
-          </div>
-        }
-
-        <sf-media-drawer-metadata />
-
-        <sf-media-drawer-variants />
-
-        <sf-media-drawer-usages />
-
-        @if (media().uuid; as mediaUuid) {
-          <section class="section">
-            <sf-asset-impact [projectKey]="projectKey()" [assetUuid]="mediaUuid" [refreshKey]="media().revision" />
-          </section>
-          <section class="section">
-            <sf-asset-urls [projectKey]="projectKey()" [assetUuid]="mediaUuid" [refreshKey]="media().revision" />
-          </section>
-        }
-      }
-    }
+  <div sfDrawerActions class="head">
+    <sf-asset-favorite type="MEDIA" [uuid]="media().uuid" [name]="title()" />
+    <sf-button
+      variant="ghost"
+      size="sm"
+      icon="chevron_left"
+      [label]="'media.drawer.header.previous' | transloco"
+      aria-keyshortcuts="ArrowLeft"
+      [disabled]="singleFile()"
+      (click)="step.emit(-1)"
+    />
+    <sf-button
+      variant="ghost"
+      size="sm"
+      icon="chevron_right"
+      [label]="'media.drawer.header.next' | transloco"
+      aria-keyshortcuts="ArrowRight"
+      [disabled]="singleFile()"
+      (click)="step.emit(1)"
+    />
+    <sf-menu size="sm" [items]="fileActions()" [label]="'media.drawer.header.more' | transloco" />
   </div>
 
-  <footer class="drawer__footer">
-    <sf-field label="Replace file">
-      <input type="file" [disabled]="readOnly()" (change)="onReplaceFile($event)" />
-    </sf-field>
-    <div class="drawer__footer-actions">
-      <sf-button variant="danger" [disabled]="usages.deleting() || usages.usagesLoading() || readOnly()" (click)="confirmDelete()">
-        Delete
-      </sf-button>
+  <div class="detail">
+    @if (readOnly()) {
+      <sf-banner tone="warning">{{ store.readOnlyLabel() }}</sf-banner>
+    }
+
+    <p class="detail__meta">
+      <span>{{ meta() }}</span>
+      @if (!singleFile()) {
+        <span class="detail__position">{{
+          'media.drawer.header.position' | transloco: { index: position().index + 1, count: position().count }
+        }}</span>
+      }
+    </p>
+
+    <sf-release-bar
+      [projectKey]="projectKey()"
+      [assetUuid]="media().uuid"
+      [refreshKey]="store.revision()"
+      (changed)="onReleaseChanged($event)"
+    />
+
+    <sf-tabs
+      class="detail__tabs"
+      [tabs]="tabs()"
+      [selected]="store.tab()"
+      [idPrefix]="tabsId"
+      [label]="'media.drawer.header.tabs' | transloco"
+      (selectTab)="selectTab($event)"
+    />
+
+    <div
+      class="detail__panel"
+      role="tabpanel"
+      [class.detail__panel--code]="store.tab() === 'rendered' || store.tab() === 'source'"
+      [id]="tabsId + '-panel-' + store.tab()"
+      [attr.aria-labelledby]="tabsId + '-tab-' + store.tab()"
+    >
+      @if (store.loadFailed() && !store.ready()) {
+        <sf-banner tone="danger" live="polite">
+          {{ 'media.drawer.header.loadFailed' | transloco }}
+          <span sfBannerActions>
+            <sf-button variant="secondary" size="sm" (click)="store.loadDetail()">{{ 'media.drawer.header.retry' | transloco }}</sf-button>
+          </span>
+        </sf-banner>
+      } @else if (!store.ready()) {
+        <sf-skeleton shape="form" [rows]="4" />
+      } @else {
+        @switch (store.tab()) {
+          @case ('details') {
+            <sf-media-drawer-details [folderPath]="folderPath()" [(replaceRequest)]="replaceRequested" />
+          }
+          @case ('variants') {
+            <sf-media-drawer-variants />
+          }
+          @case ('languages') {
+            <sf-media-drawer-localization />
+          }
+          @case ('processing') {
+            <sf-media-drawer-process />
+          }
+          @case ('rendered') {
+            <sf-media-drawer-rendered />
+          }
+          @case ('source') {
+            <sf-media-drawer-source (replaceRequested)="requestReplace()" />
+          }
+          @case ('usedby') {
+            <sf-media-drawer-usages />
+          }
+          @case ('versions') {
+            <sf-media-drawer-versions />
+          }
+        }
+      }
     </div>
-  </footer>
-</aside>
+  </div>
+
+  @if (store.tab() === 'details' || store.tab() === 'source') {
+    <div sfDrawerFooter class="footer">
+      <sf-save-status
+        class="footer__status"
+        [state]="saveState()"
+        [savedAt]="lastSaved()"
+        [errorCount]="0"
+      />
+      @if (dirty()) {
+        <sf-button variant="ghost" [disabled]="metadata.saving() || text.sourceSaving()" (click)="revert()">{{
+          'media.drawer.footer.revert' | transloco
+        }}</sf-button>
+      }
+      <sf-button
+        [disabled]="saveBlockedReason() !== null || metadata.saving() || text.sourceSaving()"
+        [loading]="metadata.saving() || text.sourceSaving()"
+        [disabledReason]="saveBlockedReason()"
+        (click)="saveClicked()"
+        >{{ 'media.drawer.footer.save' | transloco }}</sf-button
+      >
+    </div>
+  }
+</sf-drawer>
 
 @if (text.conflict(); as c) {
   <div class="conflict-overlay">
@@ -134,4 +140,3 @@
     />
   </div>
 }
-

@@ -1,0 +1,51 @@
+:host {
+  display: block;
+  height: 100%;
+  min-height: 0;
+}
+
+.pane {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  background: var(--sf-surface);
+}
+
+.pane__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sf-space-2);
+  padding: var(--sf-space-2) var(--sf-space-2) var(--sf-space-2) var(--sf-space-3);
+  border-bottom: 1px solid var(--sf-border);
+}
+
+.pane__title {
+  color: var(--sf-text);
+  font-size: var(--sf-fs-14);
+  line-height: var(--sf-lh-14);
+  font-weight: var(--sf-weight-semibold);
+}
+
+// The folder filter, under the "Folders" head.
+.pane__filter {
+  flex: none;
+  padding: var(--sf-space-2) var(--sf-space-2) var(--sf-space-1);
+}
+
+.pane__empty,
+.pane__state,
+.pane__skeleton {
+  flex: none;
+}
+
+.pane__state,
+.pane__skeleton {
+  padding: var(--sf-space-2);
+}
+
+.pane__tree {
+  flex: 1 1 auto;
+  min-height: 0;
+}

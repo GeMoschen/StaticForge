@@ -37,6 +37,7 @@ import { ContentComponent } from './features/content/content.component';
 import { RecordEditorComponent } from './features/content/record-editor.component';
 import { RecordSetViewComponent } from './features/content/record-set-view.component';
 import { MediaLibraryComponent } from './features/media/media-library.component';
+import { mediaLeaveGuard } from './features/media/media-leave.guard';
 import { TemplatesComponent } from './features/templates/templates.component';
 import { SearchPageComponent } from './features/search/search-page.component';
 import { ChangesComponent } from './features/changes/changes.component';
@@ -138,6 +139,9 @@ export const routes: Routes = [
           {
             path: 'media',
             title: routeTitle('frame.section.media'),
+            // The detail drawer's unsaved edits: another file, closing it or leaving the library asks first (M35.19).
+            canDeactivate: [mediaLeaveGuard],
+            runGuardsAndResolvers: 'always',
             component: MediaLibraryComponent,
           },
           {

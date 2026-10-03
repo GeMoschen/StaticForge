@@ -29,11 +29,22 @@
           </div>
         }
       } @else {
-        <pre class="code" [attr.aria-label]="'styleguide.sample.media.details.textPreview' | transloco: { name: file().name }">{{ file().source }}</pre>
+        <sf-code-editor
+          class="code"
+          language="octl"
+          [format]="highlight().format"
+          [svg]="highlight().svg"
+          [value]="file().source ?? ''"
+          [readOnly]="true"
+          [label]="'styleguide.sample.media.details.textPreview' | transloco: { name: file().name }"
+        />
       }
     }
   }
 </div>
+@if (!hasFocal()) {
+  <p class="focal-hint">{{ 'styleguide.sample.media.details.noFocal' | transloco }}</p>
+}
 @if (hasFocal()) {
   <p class="focal-hint" id="sample-media-focal-hint">
     {{ 'styleguide.sample.media.details.focalHint' | transloco }}
@@ -101,6 +112,18 @@
     <div class="info__row">
       <dt>{{ 'styleguide.sample.media.details.path' | transloco }}</dt>
       <dd><sf-copyable [value]="path()" [label]="'styleguide.sample.media.details.copyPath' | transloco" /></dd>
+    </div>
+    <div class="info__row">
+      <dt>{{ 'styleguide.sample.media.details.mediaType' | transloco }}</dt>
+      <dd><sf-copyable [value]="mediaType()" [label]="'styleguide.sample.media.details.copyMediaType' | transloco" /></dd>
+    </div>
+    <div class="info__row">
+      <dt>{{ 'styleguide.sample.media.details.hash' | transloco }}</dt>
+      <dd><sf-copyable [value]="hash()" [label]="'styleguide.sample.media.details.copyHash' | transloco" /></dd>
+    </div>
+    <div class="info__row">
+      <dt>{{ 'styleguide.sample.media.details.storagePath' | transloco }}</dt>
+      <dd><sf-copyable [value]="storagePath()" [label]="'styleguide.sample.media.details.copyStoragePath' | transloco" /></dd>
     </div>
   }
 </dl>

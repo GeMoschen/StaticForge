@@ -69,6 +69,36 @@
   gap: var(--sf-space-2);
 }
 
+// ── Loading: cards in the grid's own shape, so nothing jumps when the files arrive ───────────────────────────
+.skeleton {
+  overflow: hidden;
+}
+
+.skeleton__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(10.5rem, 1fr));
+  gap: var(--sf-space-4);
+}
+
+.skeleton__card {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--sf-border);
+  border-radius: var(--sf-radius-md);
+  background: var(--sf-surface);
+}
+
+.skeleton__thumb {
+  aspect-ratio: 4 / 3;
+  background: var(--sf-surface-sunken);
+}
+
+.skeleton__text {
+  padding: var(--sf-space-2) var(--sf-space-3);
+}
+
 // ── List cells ───────────────────────────────────────────────────────────────
 .list-thumb {
   display: inline-flex;

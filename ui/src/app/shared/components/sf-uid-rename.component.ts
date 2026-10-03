@@ -43,6 +43,12 @@ export class SfUidRenameComponent {
    */
   readonly undoable = input(false);
 
+  /**
+   * Called with the old UID when Undo changed it back, also after this component is gone (a dialog that closed) — when
+   * `uidChanged` can no longer be emitted. A caller that keeps showing the UID elsewhere refreshes from here.
+   */
+  readonly onUndone = input<((uid: string) => void) | null>(null);
+
   readonly uidChanged = output<string>();
 
   private readonly api = inject(ApiClient);
@@ -125,7 +131,12 @@ export class SfUidRenameComponent {
             this.undo.offer(this.transloco.translate('shared.uidRename.changedFrom', { old: oldUid, new: newUid }), () =>
               this.api.changeUid(key, uuid, { uid: oldUid }).pipe(
                 // The component may be gone by then (its dialog closed): an emit on a destroyed output throws.
-                tap(() => !this.destroyed && this.uidChanged.emit(oldUid)),
+                tap(() => {
+                  this.onUndone()?.(oldUid);
+                  if (!this.destroyed) {
+                    this.uidChanged.emit(oldUid);
+                  }
+                }),
               ),
             );
           } else {

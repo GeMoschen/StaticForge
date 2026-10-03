@@ -112,6 +112,7 @@ function folder(id: string, name: string, children?: readonly SampleMediaFolder[
 }
 
 export const MEDIA_FOLDERS: readonly SampleMediaFolder[] = [
+  folder('m-archive', 'Archive'),
   folder('m-brand', 'Brand'),
   folder('m-downloads', 'Downloads'),
   folder('m-products', 'Products', [folder('m-origins', 'Single origins')]),
@@ -119,7 +120,7 @@ export const MEDIA_FOLDERS: readonly SampleMediaFolder[] = [
   folder('m-team', 'Team'),
 ];
 
-function allFolders(list: readonly SampleMediaFolder[] = MEDIA_FOLDERS): SampleMediaFolder[] {
+export function allFolders(list: readonly SampleMediaFolder[] = MEDIA_FOLDERS): SampleMediaFolder[] {
   return list.flatMap((f) => [f, ...allFolders(f.children ?? [])]);
 }
 
@@ -129,6 +130,34 @@ export function mediaFolder(id: string | null): SampleMediaFolder | null {
 
 export function mediaFolderChildren(id: string | null): readonly SampleMediaFolder[] {
   return id === null ? MEDIA_FOLDERS : (mediaFolder(id)?.children ?? []);
+}
+
+/** Whether a folder's name contains `query` (lower case), or any folder below it does: the tree filter keeps it. */
+export function mediaFolderMatches(folder: SampleMediaFolder, query: string): boolean {
+  return !query || folder.name.toLowerCase().includes(query) || (folder.children ?? []).some((c) => mediaFolderMatches(c, query));
+}
+
+/** The ids of every folder below `id`. */
+export function mediaFolderDescendants(id: string): string[] {
+  const below = (list: readonly SampleMediaFolder[]): string[] => list.flatMap((f) => [f.id, ...below(f.children ?? [])]);
+  return below(mediaFolder(id)?.children ?? []);
+}
+
+/** The folder that holds `id` (`null` = a top-level folder). */
+export function mediaFolderParent(id: string): string | null {
+  const find = (list: readonly SampleMediaFolder[], parent: string | null): string | null | undefined => {
+    for (const f of list) {
+      if (f.id === id) {
+        return parent;
+      }
+      const found = find(f.children ?? [], f.id);
+      if (found !== undefined) {
+        return found;
+      }
+    }
+    return undefined;
+  };
+  return find(MEDIA_FOLDERS, null) ?? null;
 }
 
 /** The folders from the top down to `id`. */
@@ -289,6 +318,29 @@ export const SVG_DIAGNOSTICS: readonly CodeDiagnostic[] = [
     column: 1,
   },
 ];
+
+/** How many photos the Archive folder holds: enough to try the typed confirmation of a large delete (25 or more). */
+export const ARCHIVE_FILE_COUNT = 32;
+
+/** The Archive folder's generated photos (`archive-photo-01.jpg` …): a long list for selection and large deletes. */
+function archiveFiles(): SampleMediaFile[] {
+  const roasts = ['light', 'medium', 'dark'] as const;
+  return Array.from({ length: ARCHIVE_FILE_COUNT }, (_, i) => {
+    const n = String(i + 1).padStart(2, '0');
+    return photo({
+      id: `a-archive-${n}`,
+      name: `archive-photo-${n}.jpg`,
+      folderId: 'm-archive',
+      art: beans('landscape', i + 1, roasts[i % roasts.length]),
+      size: LANDSCAPE,
+      sizeBytes: (640 + i * 17) * KB,
+      focal: { x: 50, y: 50 },
+      alt: `Archive photo ${n}`,
+      by: anna,
+      minutes: (30 + i) * DAY,
+    });
+  });
+}
 
 export const MEDIA_FILES: readonly SampleMediaFile[] = [
   // Products
@@ -630,6 +682,7 @@ export const MEDIA_FILES: readonly SampleMediaFile[] = [
     usages: [{ id: 'u-wholesale', title: 'Wholesale', kind: 'page', path: '/wholesale', field: 'Downloads' }],
     versions: versions(284 * KB, sofia, 22 * DAY),
   },
+  ...archiveFiles(),
 ];
 
 /** The served output of the brand CSS (decision 21, Rendered). */
@@ -684,5 +737,108 @@ export function variantsOf(file: SampleMediaFile): SampleMediaVariant[] {
 /** The folder the library opens on. */
 export const DEFAULT_MEDIA_FOLDER = 'm-products';
 
+// ── Uploads (decision 98): what the library accepts ──────────────────────────
+
+/** The largest file the upload accepts. */
+export const UPLOAD_MAX_BYTES = 10 * MB;
+/** The file types the upload accepts, by extension. */
+export const UPLOAD_EXTENSIONS: readonly string[] = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'pdf', 'css'];
+
+/** The extension of a file name, lower case, without the dot ('' when there is none). */
+export function fileExtension(name: string): string {
+  const dot = name.lastIndexOf('.');
+  return dot < 0 ? '' : name.slice(dot + 1).toLowerCase();
+}
+
+/** `name.jpg` → `name-2.jpg` (the next free "Keep both" name among `taken`). */
+export function copyName(name: string, taken: ReadonlySet<string>): string {
+  const dot = name.lastIndexOf('.');
+  const base = dot < 0 ? name : name.slice(0, dot);
+  const ext = dot < 0 ? '' : name.slice(dot);
+  for (let n = 2; ; n++) {
+    const candidate = `${base}-${n}${ext}`;
+    if (!taken.has(candidate.toLowerCase())) {
+      return candidate;
+    }
+  }
+}
+
+// ── Developer-mode facts of a file (decision 101) ─────────────────────────────
+
+const MEDIA_TYPES: Readonly<Record<SampleMediaFormat, string>> = {
+  JPG: 'image/jpeg',
+  PNG: 'image/png',
+  SVG: 'image/svg+xml',
+  CSS: 'text/css',
+  PDF: 'application/pdf',
+};
+
+/** The media type of a file ("image/jpeg"). */
+export function mediaTypeOf(file: SampleMediaFile): string {
+  return MEDIA_TYPES[file.format];
+}
+
+/** A stable, made-up SHA-256 of the file (64 hex digits) — the sample has no real bytes. */
+export function mediaHashOf(file: SampleMediaFile): string {
+  let hash = 0x811c9dc5;
+  let out = '';
+  for (let block = 0; out.length < 64; block++) {
+    for (const char of `${file.id}:${file.sizeBytes}:${block}`) {
+      hash = Math.imul(hash ^ char.charCodeAt(0), 0x01000193) >>> 0;
+    }
+    out += hash.toString(16).padStart(8, '0');
+  }
+  return out;
+}
+
+/** Where the blob lives in the store: content addressed, two levels of fan-out. */
+export function storagePathOf(file: SampleMediaFile): string {
+  const hash = mediaHashOf(file);
+  return `blobs/${hash.slice(0, 2)}/${hash.slice(2, 4)}/${hash}`;
+}
+
 /** The file a finished upload of the `upload=1` state points at ("Add alt text"). */
 export const UPLOADED_FILE = 'a-cold-brew';
+
+// ── Source tab (decisions 102–106): completion names, damaged text, the highlight choices ──
+
+/** Global values the Source tab completes (`#global.brand.accentColor`); `brand.accent` is not one, as the Processing tab warns. */
+const GLOBAL_VALUES: readonly string[] = ['brand.name', 'brand.tagline', 'brand.roastColor', 'brand.creamColor', 'brand.accentColor', 'shop.currency'];
+/** Pages the Source tab completes besides the ones that use a file. */
+const PAGE_PATHS: readonly string[] = ['/', '/shop', '/about', '/wholesale', '/news/spring-harvest'];
+
+/**
+ * The project names the Source tab's completion offers inside an instruction (Ctrl+Space): global values, the media
+ * UIDs of the library (`media:hero_texture`, not the generated Archive photos) and page paths (`page:/shop`).
+ */
+export function completionNames(files: readonly SampleMediaFile[] = MEDIA_FILES): string[] {
+  const media = files.filter((f) => f.folderId !== 'm-archive').map((f) => `media:${f.uid}`);
+  const pages = new Set([...PAGE_PATHS, ...files.flatMap((f) => f.usages.filter((u) => u.kind === 'page').map((u) => u.path))]);
+  return [...GLOBAL_VALUES.map((g) => `#global.${g}`), ...media, ...[...pages].map((p) => `page:${p}`)];
+}
+
+/** What the Source tab warns about (`banner=`): the file is too large to edit, is not valid UTF-8 or mixes line endings. */
+export type SampleSourceBanner = 'large' | 'utf8' | 'eol';
+export const SOURCE_BANNERS: readonly SampleSourceBanner[] = ['large', 'utf8', 'eol'];
+
+/** A file that is not valid UTF-8, as the editor shows it: unreadable characters become U+FFFD (a comment line makes sure there is one). */
+export function withUnreadableCharacters(source: string, extension: string): string {
+  const replaced = source.replace(/—/g, '�');
+  if (replaced !== source) {
+    return replaced;
+  }
+  return extension === 'svg' ? `<!-- Caf� M�nchen -->\n${source}` : `/* Caf� M�nchen */\n${source}`;
+}
+
+/** The other language's file of a text medium that has one file per language: the default language's text, marked. */
+export function languageVariant(source: string, language: string, extension: string): string {
+  const mark = `Language: ${language}`;
+  return extension === 'svg' ? `<!-- ${mark} -->\n${source}` : `/* ${mark} */\n${source}`;
+}
+
+/** The text of the unfinished instruction `complete=1` leaves at the end of the file, to try the completion on. */
+export function completionStub(extension: string): string {
+  return extension === 'svg'
+    ? '\n<text fill="$CMS_VALUE(#global.br'
+    : '\n.cta {\n  color: $CMS_VALUE(#global.br';
+}

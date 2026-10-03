@@ -6,6 +6,8 @@
 export type ThemePreference = 'light' | 'dark' | 'system';
 export type DensityPreference = 'compact' | 'comfortable';
 export type PreviewViewPreference = 'draft' | 'published';
+/** How the media library lists a folder's files. */
+export type MediaViewPreference = 'grid' | 'list';
 
 /** One entry of a project's "recently opened" list. */
 export interface RecentEntry {
@@ -61,6 +63,8 @@ export interface PreferencesDocument {
   /** Pane sizes (px or ratio, as the pane defines) by pane id. */
   paneSizes?: Record<string, number>;
   previewView?: PreviewViewPreference;
+  /** The media library's view of a folder (instance-wide); the library's `?media=` parameter overrides it. */
+  mediaView?: MediaViewPreference;
   issueScopes?: string[];
   /** Column layouts by table id (instance-wide: a table looks the same in every project). */
   tableColumns?: Record<string, TableColumnsPreference>;
@@ -70,6 +74,7 @@ export interface PreferencesDocument {
 export const DEFAULT_THEME: ThemePreference = 'system';
 export const DEFAULT_DENSITY: DensityPreference = 'compact';
 export const DEFAULT_PREVIEW_VIEW: PreviewViewPreference = 'draft';
+export const DEFAULT_MEDIA_VIEW: MediaViewPreference = 'grid';
 export const RECENTS_CAP = 20;
 export const RECENT_PROJECTS_CAP = 5;
 export const PREFERENCES_SCHEMA_VERSION = 1;

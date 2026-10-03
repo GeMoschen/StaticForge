@@ -119,6 +119,9 @@ public interface MediaService {
     /** {@code recursive} controls whether {@code folder} matches that folder's own contents only, or also its descendants. */
     Page<AssetVersionView> list(long projectId, String mimeType, String folder, boolean recursive, String q, Pageable pageable);
 
+    /** How many places reference each of the given media (the listing's "used by" count), in one query. */
+    java.util.Map<UUID, Integer> usageCounts(long projectId, java.util.Collection<UUID> uuids);
+
     /** The bytes of a media asset (or a named variant), or throws when the blob is absent. */
     MediaBinary binary(long projectId, UUID uuid, String variantName);
 

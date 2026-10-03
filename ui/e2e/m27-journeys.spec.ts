@@ -207,7 +207,7 @@ async function signIn(page: Page, username: string, password: string): Promise<v
   page.on('dialog', (dialog) => void dialog.accept());
   await page.goto('/login');
   await page.getByLabel('Username').fill(username);
-  await page.getByLabel('Password').fill(password);
+  await page.getByLabel('Password', { exact: true }).fill(password);
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page).toHaveURL(/\/$/, { timeout: 15_000 });
 }
@@ -468,9 +468,12 @@ test.describe('M27 release and scheduling journey', () => {
     // ── 5. Localized media: an EN file, released for EN, is written under en/; DE keeps the DE file ──
     await rail(page, 'Media');
     await page.locator('sf-media-library').getByText('hero.png').first().click();
-    const drawer = page.locator('sf-media-detail-drawer');
-    await drawer.getByText('Different file per language').click();
-    await drawer.locator('[data-locale="en"] input[type="file"]').setInputFiles({
+    const drawer = page.locator('body > sf-drawer');
+    await drawer.getByRole('tab', { name: 'Languages' }).click();
+    await drawer.getByRole('switch', { name: 'Different file per language' }).click();
+    const chooser = page.waitForEvent('filechooser');
+    await drawer.getByRole('button', { name: 'Upload a file for English' }).click();
+    await (await chooser).setFiles({
       name: 'hero-en.png',
       mimeType: 'image/png',
       buffer: EN_PNG,

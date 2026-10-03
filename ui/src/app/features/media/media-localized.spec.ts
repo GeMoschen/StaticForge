@@ -1,18 +1,17 @@
 import '@angular/compiler';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
-import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/angular';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { components } from '../../core/api/generated/schema.d.ts';
 import { LocalesStore } from '../../core/project/locales.store';
+import { answerReads, flushPending } from './drawer/media-drawer.testing';
 import { MediaDetailDrawerComponent } from './media-detail-drawer.component';
 import { localeFileRows } from './media-locale-files.util';
-import { MediaItemActions } from './library/media-item-actions';
-import { MediaNavNodeComponent } from './media-nav-node.component';
 
 type MediaView = components['schemas']['MediaView'];
-type MediaSummaryView = components['schemas']['MediaSummaryView'];
 
 /** `ProjectLocalesView` as `GET /projects/{key}/locales` answers it. */
 const LOCALES = {
@@ -56,119 +55,130 @@ const LOCALIZED: MediaView = {
 };
 
 describe('localized media drawer (M27.6.4)', () => {
-  let fixture: ComponentFixture<MediaDetailDrawerComponent>;
-  let httpMock: HttpTestingController;
+  let http: HttpTestingController;
+  let settle: () => Promise<void>;
 
-  function drain(): void {
-    for (const req of httpMock.match((r) => r.method === 'GET')) {
-      req.flush(req.request.responseType === 'blob' ? new Blob() : req.request.url.includes('/usages') ? [] : {});
-    }
-  }
-
-  function el(): HTMLElement {
-    return fixture.nativeElement as HTMLElement;
-  }
-
-  beforeEach(() => {
-    TestBed.configureTestingModule({
-      imports: [MediaDetailDrawerComponent],
+  beforeEach(async () => {
+    const result = await render(MediaDetailDrawerComponent, {
+      componentInputs: { projectKey: 'proj1', media: LOCALIZED, tab: 'languages' },
       providers: [provideHttpClient(), provideHttpClientTesting(), provideRouter([])],
+      configureTestBed: (bed) => bed.inject(LocalesStore).set('proj1', LOCALES),
     });
-    httpMock = TestBed.inject(HttpTestingController);
-    TestBed.inject(LocalesStore).set('proj1', LOCALES);
-    fixture = TestBed.createComponent(MediaDetailDrawerComponent);
-    fixture.componentRef.setInput('projectKey', 'proj1');
-    fixture.componentRef.setInput('media', LOCALIZED);
-    fixture.detectChanges();
-    fixture.detectChanges();
-    drain();
-    fixture.detectChanges();
+    http = TestBed.inject(HttpTestingController);
+    settle = async () => {
+      for (let round = 0; round < 4; round++) {
+        result.fixture.detectChanges();
+        answerReads(http, { detail: LOCALIZED });
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      }
+      result.fixture.detectChanges();
+    };
+    await settle();
   });
 
   afterEach(() => {
-    drain();
-    httpMock.verify();
+    flushPending(http);
   });
 
-  it('turning it off with other language files lists them and resends with confirmDiscard', () => {
-    const toggle = el().querySelector<HTMLInputElement>('.localization input[role="switch"]')!;
-    expect(toggle.checked).toBe(true);
+  const toggle = () => screen.getByRole('switch', { name: 'Different file per language' });
+  const rows = () => Array.from(document.querySelectorAll<HTMLElement>('.lang'));
 
-    toggle.checked = false;
-    toggle.dispatchEvent(new Event('change'));
-    const first = httpMock.expectOne((r) => r.method === 'PUT' && r.url.endsWith('/media/media-1/localized'));
+  it('turning it off with other language files lists them and resends with confirmDiscard', async () => {
+    expect(toggle()).toBeChecked();
+
+    fireEvent.click(toggle());
+    const first = http.expectOne((r) => r.method === 'PUT' && r.url.endsWith('/media/media-1/localized'));
     expect(first.request.body).toEqual({ localized: false, confirmDiscard: false });
     expect(first.request.headers.get('If-Match')).toBe('"rev-3"');
     first.flush(
       {
         status: 409,
         code: 'SF-MEDIA-0505',
-        detail: 'Un-localizing keeps only the default language\'s file; the other language files would be discarded.',
+        detail: 'Un-localizing keeps only the default language file; the other language files would be discarded.',
         files: [{ locale: 'de', fileName: 'hero-de.png', sizeBytes: 1258291 }],
       },
       { status: 409, statusText: 'Conflict' },
     );
-    fixture.detectChanges();
 
-    const prompt = el().querySelector('.discard-prompt');
-    expect(prompt?.textContent).toContain('These files will be discarded: DE hero-de.png (1.2 MB)');
+    expect(await screen.findByText(/These files will be discarded: DE hero-de\.png \(1\.2 MB\)/)).toBeInTheDocument();
+    await waitFor(() => expect(toggle()).toBeChecked());
 
-    const confirm = Array.from(prompt!.querySelectorAll('button')).find((b) => b.textContent?.includes('Discard files'))!;
-    confirm.click();
-    const second = httpMock.expectOne((r) => r.method === 'PUT' && r.url.endsWith('/media/media-1/localized'));
+    fireEvent.click(screen.getByRole('button', { name: 'Discard files' }));
+    const second = await waitFor(() => http.expectOne((r) => r.method === 'PUT' && r.url.endsWith('/media/media-1/localized')));
     expect(second.request.body).toEqual({ localized: false, confirmDiscard: true });
     second.flush({ ...LOCALIZED, revision: 4, localized: false, localeFiles: undefined });
-    fixture.detectChanges();
-    expect(el().querySelector('.discard-prompt')).toBeNull();
+    await settle();
+
+    await waitFor(() => expect(screen.queryByText(/These files will be discarded/)).not.toBeInTheDocument());
+    expect(toggle()).not.toBeChecked();
+  });
+
+  it('keeps the files when the discard question is declined', async () => {
+    fireEvent.click(toggle());
+    http
+      .expectOne((r) => r.method === 'PUT')
+      .flush({ code: 'SF-MEDIA-0505', files: [{ locale: 'de', fileName: 'hero-de.png', sizeBytes: 10 }] }, { status: 409, statusText: 'Conflict' });
+    await screen.findByText(/These files will be discarded/);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Keep the files' }));
+
+    await waitFor(() => expect(screen.queryByText(/These files will be discarded/)).not.toBeInTheDocument());
+    expect(toggle()).toBeChecked();
+    http.expectNone((r) => r.method === 'PUT');
   });
 
   it('labels own and fallback rows: the default file has no Remove, a fallback row offers Upload', () => {
-    const rows = Array.from(el().querySelectorAll<HTMLElement>('.locale-file'));
-    expect(rows.map((row) => row.dataset['locale'])).toEqual(['en', 'de', 'fr']);
+    expect(rows().map((row) => row.dataset['locale'])).toEqual(['en', 'de', 'fr']);
 
-    const [en, de, fr] = rows;
+    const [en, de, fr] = rows();
     expect(en.textContent).toContain('hero.png');
-    expect(en.textContent).toContain('Replace');
-    expect(en.textContent).not.toContain('Remove');
+    expect(en.textContent).toContain('Default');
+    expect(within(en).getByRole('button', { name: 'Replace the English (EN) file' })).toBeInTheDocument();
+    expect(within(en).queryByRole('button', { name: /^Remove/ })).not.toBeInTheDocument();
 
     expect(de.textContent).toContain('hero-de.png');
-    expect(de.textContent).toContain('Remove');
+    expect(within(de).getByRole('button', { name: 'Remove the German (DE) file' })).toBeInTheDocument();
 
-    expect(fr.textContent).toContain("Uses German's file");
-    expect(fr.textContent).toContain('Upload');
-    expect(fr.textContent).not.toContain('Remove');
+    expect(fr.textContent).toContain('Uses the German file');
+    expect(within(fr).getByRole('button', { name: 'Upload a file for French (FR)' })).toBeInTheDocument();
+    expect(within(fr).queryByRole('button', { name: /^Remove/ })).not.toBeInTheDocument();
   });
 
-  it('uploads a file dropped on a language row for that language', () => {
-    const fr = el().querySelector<HTMLElement>('.locale-file[data-locale="fr"]')!;
+  it('uploads a file dropped on a language row for that language', async () => {
+    const fr = rows()[2];
     const file = new File(['x'], 'hero-fr.png', { type: 'image/png' });
     const drop = new Event('drop', { bubbles: true, cancelable: true }) as unknown as DragEvent;
     Object.defineProperty(drop, 'dataTransfer', { value: { files: [file], types: ['Files'] } });
     fr.dispatchEvent(drop);
 
-    const req = httpMock.expectOne((r) => r.method === 'POST' && r.url.endsWith('/media/media-1/files/fr'));
+    const req = await waitFor(() => http.expectOne((r) => r.method === 'POST' && r.url.endsWith('/media/media-1/files/fr')));
     expect((req.request.body as FormData).get('file')).toBe(file);
     req.flush({ media: { ...LOCALIZED, revision: 4 }, warnings: [] });
+  });
+
+  it('removes a language file after asking', async () => {
+    fireEvent.click(within(rows()[1]).getByRole('button', { name: 'Remove the German (DE) file' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Remove file' }));
+
+    const req = await waitFor(() => http.expectOne((r) => r.method === 'DELETE' && r.url.endsWith('/media/media-1/files/de')));
+    req.flush({ ...LOCALIZED, revision: 4 });
   });
 });
 
 describe('localized media without project languages', () => {
-  it('hides the switch and the Files section', () => {
-    TestBed.configureTestingModule({
-      imports: [MediaDetailDrawerComponent],
+  it('says the project has no languages and offers no switch that works', async () => {
+    const media = { ...LOCALIZED, localized: false, localeFiles: undefined };
+    await render(MediaDetailDrawerComponent, {
+      componentInputs: { projectKey: 'proj1', media, tab: 'languages' },
       providers: [provideHttpClient(), provideHttpClientTesting(), provideRouter([])],
     });
-    const httpMock = TestBed.inject(HttpTestingController);
-    const fixture = TestBed.createComponent(MediaDetailDrawerComponent);
-    fixture.componentRef.setInput('projectKey', 'proj1');
-    fixture.componentRef.setInput('media', { ...LOCALIZED, localized: false, localeFiles: undefined });
-    fixture.detectChanges();
-    const root = fixture.nativeElement as HTMLElement;
-    expect(root.querySelector('.localization')).toBeNull();
-    expect(root.querySelector('.locale-file')).toBeNull();
-    for (const req of httpMock.match(() => true)) {
-      req.flush(req.request.responseType === 'blob' ? new Blob() : {});
-    }
+    const http = TestBed.inject(HttpTestingController);
+    answerReads(http, { detail: media });
+
+    expect(await screen.findByRole('switch', { name: 'Different file per language' })).toBeDisabled();
+    expect(screen.getByText(/This project has no languages/)).toBeInTheDocument();
+    expect(document.querySelector('.lang')).toBeNull();
+    flushPending(http);
   });
 });
 
@@ -177,37 +187,5 @@ describe('media locale files util', () => {
     const rows = localeFileRows(LOCALIZED.localeFiles, LOCALES.locales, 'en');
     expect(rows[2]).toMatchObject({ locale: 'fr', own: false, fallbackText: "Uses German's file", isDefault: false });
     expect(rows[0].isDefault).toBe(true);
-  });
-});
-
-describe('media tree leaf release badge', () => {
-  function render(summary: MediaSummaryView): HTMLElement {
-    TestBed.configureTestingModule({
-      imports: [MediaNavNodeComponent],
-      providers: [provideHttpClient(), provideHttpClientTesting(), provideRouter([]), { provide: MediaItemActions, useValue: {} }],
-    });
-    const fixture = TestBed.createComponent(MediaNavNodeComponent);
-    fixture.componentRef.setInput('projectKey', 'proj1');
-    fixture.componentRef.setInput('summary', summary);
-    fixture.detectChanges();
-    return fixture.nativeElement as HTMLElement;
-  }
-
-  it('shows the status of a changed item, with its text for screen readers', () => {
-    const root = render({ uuid: 'm1', uid: 'logo', displayName: 'Logo', mimeType: 'image/png', release: { '': { status: 'CHANGED', releasedRevision: 4 } } });
-    expect(root.querySelector('sf-release-badge [role="img"]')?.getAttribute('aria-label')).toBe('Status: Changed');
-  });
-
-  it('shows a published item and the localized marker', () => {
-    const root = render({
-      uuid: 'm2',
-      uid: 'hero',
-      displayName: 'Hero',
-      mimeType: 'image/png',
-      localized: true,
-      release: { '': { status: 'PUBLISHED', releasedRevision: 2 } },
-    });
-    expect(root.querySelector('sf-release-badge [role="img"]')?.getAttribute('aria-label')).toBe('Status: Published');
-    expect(root.querySelector('.media-nav__localized')).not.toBeNull();
   });
 });

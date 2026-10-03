@@ -106,7 +106,10 @@ every screen. Screen migration starts only after the style guide (M35.9) is sign
 - [x] M35.18 pages
   - Design signed off 2026-10-02 (gate round 8, decisions 82–89). Review: see `35-m35-ui-ux-overhaul/018-pages.md`
     (292 test files / 2,700 tests, build + lint green, checked in headless Chrome). Open: start-page field (backend), e2e journeys m21/m27/m28.
-- [ ] M35.19 media
+- [x] M35.19 media
+  - Design signed off 2026-10-03 (gate round 9, decisions 90-106). Review: see `35-m35-ui-ux-overhaul/019-media.md`
+    (314 test files / 3,161 tests, build + lint + backend media tests green, 169 states checked in headless Chrome). Open: journeys m16/m18/m22/m27/m29 need the
+    release flow and the new pages tree/account menu (M35.31), text-media tabs sit in "More" at the default drawer width.
 - [ ] M35.20 content: record sets and records
 - [ ] M35.21 templates IDE
 - [ ] M35.22 navigation and globals

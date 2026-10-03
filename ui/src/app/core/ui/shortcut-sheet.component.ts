@@ -14,7 +14,18 @@ interface SheetSection {
   readonly items: readonly { readonly id: string; readonly label: string; readonly keys: string }[];
 }
 
-const GROUP_ORDER: readonly ShortcutGroup[] = ['screen', 'editing', 'lists', 'tree', 'general', 'goTo', 'publishing'];
+const GROUP_ORDER: readonly ShortcutGroup[] = [
+  'screen',
+  'mediaGrid',
+  'mediaDrawer',
+  'mediaFocal',
+  'editing',
+  'lists',
+  'tree',
+  'general',
+  'goTo',
+  'publishing',
+];
 
 /** The keys as plain words for searching: `Mod+K` → `ctrl k`, `ArrowUp` → `up`. */
 function spoken(keys: string): string {

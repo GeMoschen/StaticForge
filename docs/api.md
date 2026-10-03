@@ -49,7 +49,7 @@ integer or is greater than the current version (`1`): `422 SF-DOM-0134`.
 |---|---|---|
 | `GET` | `/projects` | authenticated (member projects only; archived projects only for INSTANCE_ADMIN) |
 | `POST` | `/projects` | INSTANCE_ADMIN |
-| `GET`/`PUT` | `/projects/{key}` | VIEWER / PROJECT_ADMIN — the detail carries `publishPolicy` and the caller's `permissions` (M28, §3.3) |
+| `GET`/`PUT` | `/projects/{key}` | VIEWER / PROJECT_ADMIN — the detail carries `publishPolicy` and the caller's `permissions` (M28, §3.3), and `effectiveAllowedMimeTypes` (the project's own upload allow-list, else the instance default `sf.media.allowed-mime`) with `mediaMaxUploadBytes` (`sf.media.max-upload-size`, default 100 MB) so the media library can check files before it sends them (M35.19) |
 | `POST` | `/projects/{key}/archive` | INSTANCE_ADMIN — read-only (`409 SF-DOM-0141` on every write) and `404` for members until unarchived |
 | `POST` | `/projects/{key}/unarchive` | INSTANCE_ADMIN |
 | `GET` | `/projects/{key}/members` | VIEWER — `email` only for PROJECT_ADMIN and instance admins, `status` per member |
@@ -491,8 +491,9 @@ Records are added with `POST /datasets/{uuid}/records` and `recordSetUuid` (§6.
 
 | Method | Path |
 |---|---|
-| `GET`/`POST` | `/projects/{projectKey}/media` |
+| `GET`/`POST` | `/projects/{projectKey}/media` — a list row (`MediaSummaryView`) carries `width`/`height` (pictures only), `changedAt` (when the current version was written) and `usageCount` (places that reference the file, one grouped query per page) (M35.19) |
 | `POST` | `/projects/{projectKey}/media/bulk` |
+| `POST` | `/projects/{projectKey}/media/download` — `{uuids, name}` → one ZIP (VIEWER; ≤ 500 files and 100 MB; entries named as the library shows them, `-2` before the extension on a clash) (M35.19) |
 | `PUT` | `/projects/{projectKey}/media/{uuid}` (`?locale=`) |
 | `POST` | `/projects/{projectKey}/media/{uuid}/replace` |
 | `GET` | `/projects/{projectKey}/media/{uuid}` (`?revision=`) — one media view with `localeFiles` (M27) |

@@ -62,6 +62,10 @@ export class SfCodePanelComponent {
   readonly label = input.required<string>();
   /** For `octl`: the host format of the text between the instructions. */
   readonly format = input<CodeFormat>('PLAIN');
+  /** For `octl` with format `XML`: an SVG file, so completion offers SVG elements and attributes. */
+  readonly svg = input(false);
+  /** Names completion offers besides the language's own words (global values, media UIDs, page paths). */
+  readonly names = input<readonly string[]>([]);
   readonly diagnostics = input<readonly CodeDiagnostic[]>([]);
   readonly readOnly = input(false);
   /** Offers a Format button (when the language has a formatter). */

@@ -1,16 +1,110 @@
 @if (store.uploads().length > 0) {
-  <div class="uploads">
-    @for (upload of store.uploads(); track upload.id) {
-      <div class="upload">
-        <span>{{ upload.fileName }}</span>
-        @if (upload.status === 'uploading') {
-          <span>Uploading…</span>
-        } @else if (upload.status === 'done') {
-          <span>Done</span>
-        } @else {
-          <span class="upload__err">{{ upload.message ?? 'Failed' }}</span>
-        }
-      </div>
-    }
-  </div>
+  <section class="uploads" aria-labelledby="media-uploads-title">
+    <header class="uploads__head">
+      <h2 class="uploads__title" id="media-uploads-title">{{ title() }}</h2>
+      <span class="uploads__summary" role="status" aria-live="polite">{{ summary() }}</span>
+      <sf-button
+        variant="ghost"
+        size="sm"
+        [icon]="collapsed() ? 'expand_less' : 'expand_more'"
+        [label]="(collapsed() ? 'media.uploads.expand' : 'media.uploads.collapse') | transloco"
+        [aria-expanded]="!collapsed()"
+        aria-controls="media-uploads-list"
+        (click)="collapsed.set(!collapsed())"
+      />
+      @if (store.running() === 0) {
+        <sf-button variant="ghost" size="sm" icon="close" [label]="'media.uploads.close' | transloco" (click)="store.clear()" />
+      }
+    </header>
+
+    <ul class="uploads__list" id="media-uploads-list" [hidden]="collapsed()">
+      @for (upload of store.uploads(); track upload.id) {
+        <li class="upload" [class.upload--error]="upload.state === 'error'" [class.upload--done]="upload.state === 'done'">
+          <sf-icon class="upload__icon" [name]="iconOf(upload)" />
+          <div class="upload__main">
+            <div class="upload__line">
+              <span class="upload__name" [title]="upload.name">{{ upload.name }}</span>
+              <span class="upload__size">{{ upload.sizeBytes | sfFileSize }}</span>
+            </div>
+            @switch (upload.state) {
+              @case ('queued') {
+                <span class="upload__status">{{ 'media.uploads.waiting' | transloco }}</span>
+              }
+              @case ('uploading') {
+                <div
+                  class="upload__bar"
+                  role="progressbar"
+                  aria-valuemin="0"
+                  aria-valuemax="100"
+                  [attr.aria-valuenow]="upload.progress"
+                  [attr.aria-label]="'media.uploads.progress' | transloco: { name: upload.name }"
+                >
+                  <span class="upload__fill" [style.inline-size.%]="upload.progress"></span>
+                </div>
+                <span class="upload__status">{{ 'media.uploads.percent' | transloco: { value: upload.progress } }}</span>
+              }
+              @case ('done') {
+                <span class="upload__status">{{ doneText(upload) }}</span>
+                @if (store.asksForAlt(upload)) {
+                  <form class="upload__alt" (submit)="$event.preventDefault(); saveAlt(upload)">
+                    <sf-input
+                      class="upload__alt-input"
+                      autocomplete="off"
+                      [value]="altOf(upload)"
+                      [placeholder]="'media.uploads.altPlaceholder' | transloco"
+                      [aria-label]="'media.uploads.altLabel' | transloco: { name: upload.name }"
+                      (valueChange)="setAlt(upload, $event)"
+                    />
+                    <sf-button variant="secondary" size="sm" [disabled]="altOf(upload).trim() === '' || !!upload.altSaving" (click)="saveAlt(upload)">{{
+                      'media.uploads.altSave' | transloco
+                    }}</sf-button>
+                  </form>
+                }
+              }
+              @default {
+                <span class="upload__status upload__status--error">{{ errorText(upload) }}</span>
+                @if (upload.error === 'network' || upload.error === 'duplicate') {
+                  <span class="upload__buttons">
+                    @if (upload.error === 'network') {
+                      <sf-button variant="secondary" size="sm" icon="refresh" (click)="store.retry(upload.id)">{{ 'media.uploads.retry' | transloco }}</sf-button>
+                    } @else {
+                      @if (upload.existingUuid) {
+                        <sf-button variant="secondary" size="sm" icon="swap_horiz" (click)="store.resolveDuplicate(upload.id, 'replaced')">{{
+                          'media.uploads.replace' | transloco
+                        }}</sf-button>
+                      }
+                      <sf-button variant="secondary" size="sm" icon="content_copy" (click)="store.resolveDuplicate(upload.id, 'copy')">{{
+                        'media.uploads.keepBoth' | transloco
+                      }}</sf-button>
+                    }
+                  </span>
+                }
+              }
+            }
+          </div>
+          <div class="upload__actions">
+            @switch (upload.state) {
+              @case ('done') {
+                @if (upload.media?.uuid) {
+                  <sf-button
+                    variant="ghost"
+                    size="sm"
+                    icon="open_in_new"
+                    [label]="'media.uploads.details' | transloco: { name: upload.name }"
+                    (click)="openDetails(upload)"
+                  />
+                }
+              }
+              @case ('error') {
+                <sf-button variant="ghost" size="sm" icon="close" [label]="'media.uploads.remove' | transloco: { name: upload.name }" (click)="store.cancel(upload.id)" />
+              }
+              @default {
+                <sf-button variant="ghost" size="sm" icon="close" [label]="'media.uploads.cancel' | transloco: { name: upload.name }" (click)="store.cancel(upload.id)" />
+              }
+            }
+          </div>
+        </li>
+      }
+    </ul>
+  </section>
 }

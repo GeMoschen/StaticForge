@@ -1,11 +1,16 @@
 @for (entry of open(); track entry.state) {
-  <sf-menu-panel
-    [items]="entry.state.items"
-    [label]="'shared.menu.contextLabel' | transloco"
-    [anchor]="entry.anchor"
-    [anchorOptions]="entry.options"
-    initialFocus="first"
-    (activated)="onActivated($event)"
-    (closeRequest)="onCloseRequest($event)"
-  />
+  <!-- The panel moves itself into <body>. A view whose first node was the relocated panel could not be the reference of
+       the next view's insert (a menu opened while another is open: "The child can not be found in the parent"), so
+       each panel sits in a slot that stays here; the panel removes itself from <body> when it is destroyed. -->
+  <span class="sf-context-menu__slot" hidden>
+    <sf-menu-panel
+      [items]="entry.state.items"
+      [label]="'shared.menu.contextLabel' | transloco"
+      [anchor]="entry.anchor"
+      [anchorOptions]="entry.options"
+      initialFocus="first"
+      (activated)="onActivated($event)"
+      (closeRequest)="onCloseRequest($event)"
+    />
+  </span>
 }

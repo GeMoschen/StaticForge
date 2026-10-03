@@ -12,7 +12,9 @@ import { SfStatusComponent } from '../../../../shared/components/display/sf-stat
 import { SfSearchInputComponent } from '../../../../shared/components/forms/sf-search-input.component';
 import { SfSegmentedComponent, SfSegmentedOption } from '../../../../shared/components/forms/sf-segmented.component';
 import { SfSelectComponent, SfSelectOption } from '../../../../shared/components/forms/sf-select.component';
+import { SfBannerComponent } from '../../../../shared/components/layout/sf-banner.component';
 import { SfPageHeaderComponent } from '../../../../shared/components/layout/sf-page-header.component';
+import { SfSkeletonComponent } from '../../../../shared/components/layout/sf-skeleton.component';
 import { SfToolbarComponent } from '../../../../shared/components/layout/sf-toolbar.component';
 import { SfMenuComponent, SfMenuItem } from '../../../../shared/components/menu/sf-menu.component';
 import { SfButtonComponent } from '../../../../shared/components/sf-button.component';
@@ -40,6 +42,7 @@ const TYPE_ICONS: Readonly<Record<SampleMediaFile['kind'], string>> = { image: '
     SampleBreadcrumbComponent,
     SampleMediaGridComponent,
     SampleMediaUploadsComponent,
+    SfBannerComponent,
     SfButtonComponent,
     SfDataTableCellDirective,
     SfDataTableComponent,
@@ -52,6 +55,7 @@ const TYPE_ICONS: Readonly<Record<SampleMediaFile['kind'], string>> = { image: '
     SfSearchInputComponent,
     SfSegmentedComponent,
     SfSelectComponent,
+    SfSkeletonComponent,
     SfStatusComponent,
     SfToolbarComponent,
     TranslocoPipe,
@@ -71,6 +75,10 @@ export class SampleMediaLibraryComponent {
   protected readonly typeIcons = TYPE_ICONS;
   protected readonly dragging = signal(false);
   private dragDepth = 0;
+  /** A Shift+F10 press opened the menu already; the `contextmenu` event some browsers add must not open it twice. */
+  private suppressContextMenu = false;
+  /** Placeholder cards of the loading grid. */
+  protected readonly skeletonCards = Array.from({ length: 8 }, (_, index) => index);
   private readonly now = Date.now();
 
   protected readonly rowKey = (file: SampleMediaFile) => file.id;
@@ -112,9 +120,14 @@ export class SampleMediaLibraryComponent {
     ];
   });
 
-  protected readonly subtitle = computed(() => this.state.t('library.count', { count: this.state.folderCount() }));
+  protected readonly title = computed(() => (this.state.review() === 'empty' ? this.state.t('library.title') : this.state.folderName()));
+  /** The count says nothing while the folder loads or fails to load. */
+  protected readonly subtitle = computed(() =>
+    this.state.review() === 'loading' || this.state.review() === 'error' ? '' : this.state.t('library.count', { count: this.state.folderCount() }),
+  );
+  protected readonly error = computed(() => (this.state.review() === 'error' ? this.state.t('library.error', { folder: this.state.folderName() }) : null));
 
-  protected readonly folderActions = computed<SfMenuItem[]>(() => [
+  protected readonly folderActions = computed<SfMenuItem[]>(() => this.state.review() === 'empty' ? [] : [
     { id: 'rename', label: this.state.t('library.rename'), icon: 'edit', shortcut: 'F2' },
     { id: 'move', label: this.state.t('library.move'), icon: 'drive_file_move' },
     { id: 'delete', label: this.state.t('library.delete'), icon: 'delete', danger: true, separatorBefore: true },
@@ -137,11 +150,12 @@ export class SampleMediaLibraryComponent {
       { id: 'size', header: header('size'), value: (f) => f.sizeBytes, sortable: true, align: 'end', width: 100 },
       { id: 'modified', header: header('modified'), value: (f) => f.modifiedMinutes, sortable: true, width: 140 },
       { id: 'usages', header: header('usages'), value: (f) => f.usages.length, sortable: true, align: 'end', width: 90 },
+      { id: 'actions', header: header('actions'), searchable: false, hideable: false, width: 64 },
     ];
   });
 
   protected readonly bulkActions = computed<SfDataTableBulkAction<SampleMediaFile>[]>(() => [
-    { id: 'move', label: this.state.t('bulk.move'), icon: 'drive_file_move', action: () => this.state.notice() },
+    { id: 'move', label: this.state.t('bulk.move'), icon: 'drive_file_move', action: (s) => void this.state.moveFiles(s.rows) },
     { id: 'download', label: this.state.t('bulk.download'), icon: 'download', action: (s) => this.state.download(s.rows) },
     { id: 'delete', label: this.state.t('bulk.delete'), icon: 'delete', variant: 'danger', action: (s) => void this.delete(s.rows) },
   ]);
@@ -165,7 +179,64 @@ export class SampleMediaLibraryComponent {
   }
 
   protected folderAction(item: SfMenuItem): void {
-    this.state.notice(item.id === 'delete' ? 'media.library.deleteNotice' : 'prototypeNotice');
+    if (item.id === 'rename') {
+      this.state.folderRequest.set('rename');
+    } else if (item.id === 'move') {
+      void this.state.moveFolder();
+    } else {
+      this.state.notice('media.library.deleteNotice');
+    }
+  }
+
+  protected newFolder(): void {
+    this.state.folderRequest.set('create');
+  }
+
+  protected menuItems(file: SampleMediaFile): SfMenuItem[] {
+    return this.state.fileMenu(file);
+  }
+
+  // ── List rows: context menu and keys ───────────────────────────────────────
+
+  /** The file of the list row a DOM node is in (the name cell carries its id). */
+  private rowFile(node: EventTarget | null): { file: SampleMediaFile; row: HTMLElement } | null {
+    const row = node instanceof Element ? node.closest<HTMLElement>('tr.sf-data-table__row') : null;
+    const id = row?.querySelector('[data-file]')?.getAttribute('data-file');
+    const file = id ? this.state.files().find((f) => f.id === id) : undefined;
+    return row && file ? { file, row } : null;
+  }
+
+  protected onTableContextMenu(event: MouseEvent): void {
+    const hit = this.rowFile(event.target);
+    if (!hit) {
+      return;
+    }
+    if (this.suppressContextMenu) {
+      this.suppressContextMenu = false;
+      event.preventDefault();
+      return;
+    }
+    this.state.openFileMenu(event, hit.file);
+  }
+
+  /** Shift+F10 / the menu key open the row's menu, F2 renames, Delete deletes (the selection when the row is in it). */
+  protected onTableKeydown(event: KeyboardEvent): void {
+    const hit = event.target instanceof HTMLElement && event.target.matches('tr.sf-data-table__row') ? this.rowFile(event.target) : null;
+    if (!hit) {
+      return;
+    }
+    if ((event.key === 'F10' && event.shiftKey) || event.key === 'ContextMenu') {
+      event.preventDefault();
+      this.suppressContextMenu = true;
+      setTimeout(() => (this.suppressContextMenu = false));
+      this.state.openFileMenu(hit.row, hit.file);
+    } else if (event.key === 'F2' && !event.ctrlKey && !event.metaKey && !event.altKey) {
+      event.preventDefault();
+      void this.state.renameFile(hit.file);
+    } else if (event.key === 'Delete') {
+      event.preventDefault();
+      void this.delete(this.state.menuTargets(hit.file));
+    }
   }
 
   protected chooseFiles(): void {

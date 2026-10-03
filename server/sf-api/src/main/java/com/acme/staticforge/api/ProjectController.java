@@ -11,6 +11,7 @@ import com.acme.staticforge.api.dto.ProjectSummary;
 import com.acme.staticforge.api.dto.ProjectUpdateRequest;
 import com.acme.staticforge.api.dto.PublishPolicyView;
 import com.acme.staticforge.api.dto.SetMemberRoleRequest;
+import com.acme.staticforge.asset.media.MediaProperties;
 import com.acme.staticforge.common.ProblemFactory;
 import com.acme.staticforge.common.Problem;
 import com.acme.staticforge.common.SfException;
@@ -62,12 +63,15 @@ public class ProjectController {
     private final UserService userService;
     private final ProjectAuthorizationService projectAuth;
     private final SecuritySupport securitySupport;
+    private final MediaProperties mediaProperties;
 
     public ProjectController(
             ProjectService projectService,
             UserService userService,
             SecuritySupport securitySupport,
-            ProjectAuthorizationService projectAuth) {
+            ProjectAuthorizationService projectAuth,
+            MediaProperties mediaProperties) {
+        this.mediaProperties = mediaProperties;
         this.projectService = projectService;
         this.userService = userService;
         this.securitySupport = securitySupport;
@@ -298,7 +302,9 @@ public class ProjectController {
                         .toList()),
                 projectAuth.permissions(project.getKey()).stream().map(Enum::name).toList(),
                 project.getCompactedThrough(),
-                codeHighlightingView(CodeHighlighting.fromJson(project.getCodeHighlighting())));
+                codeHighlightingView(CodeHighlighting.fromJson(project.getCodeHighlighting())),
+                project.allowedMimeTypesList().isEmpty() ? mediaProperties.getAllowedMime() : project.allowedMimeTypesList(),
+                mediaProperties.getMaxUploadSize().toBytes());
     }
 
     private static CodeHighlightingView codeHighlightingView(CodeHighlighting highlighting) {

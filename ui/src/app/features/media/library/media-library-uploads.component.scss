@@ -1,20 +1,165 @@
+// Docked bottom right of the window, which is the library's bottom right corner: fixed, so that a narrow library (or an open
+// drawer that covers most of it) can't clip the panel. The component shifts it left of the open detail drawer (inline style
+// on the host) and keeps it inside the window.
 :host {
-  display: contents;
+  position: fixed;
+  inset-block-end: var(--sf-space-4);
+  inset-inline-end: var(--sf-space-4);
+  z-index: var(--sf-z-sticky);
+  display: block;
+  inline-size: 24rem;
+  max-inline-size: calc(100vw - var(--sf-space-8) - var(--uploads-offset, 0px));
 }
 
 .uploads {
   display: flex;
   flex-direction: column;
-  gap: var(--sf-1);
+  max-block-size: 28rem;
+  overflow: hidden;
+  border: 1px solid var(--sf-border);
+  border-radius: var(--sf-radius-lg);
+  background: var(--sf-surface-raised);
+  box-shadow: var(--sf-elevation-3);
+}
+
+.uploads__head {
+  display: flex;
+  align-items: center;
+  gap: var(--sf-space-2);
+  padding: var(--sf-space-2) var(--sf-space-2) var(--sf-space-2) var(--sf-space-4);
+  border-bottom: 1px solid var(--sf-border);
+}
+
+.uploads__title {
+  margin: 0;
+  color: var(--sf-text);
+  font-size: var(--sf-fs-14);
+  line-height: var(--sf-lh-14);
+  font-weight: var(--sf-weight-semibold);
+}
+
+.uploads__summary {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--sf-text-muted);
+  font-size: var(--sf-fs-12);
+  line-height: var(--sf-lh-12);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.uploads__list {
+  margin: 0;
+  padding: var(--sf-space-1) 0;
+  overflow: auto;
+  list-style: none;
 }
 
 .upload {
   display: flex;
-  gap: var(--sf-2);
-  font-size: var(--sf-text-sm);
-  color: var(--sf-slate);
+  align-items: flex-start;
+  gap: var(--sf-space-3);
+  padding: var(--sf-space-2) var(--sf-space-4);
+
+  & + & {
+    border-top: 1px solid var(--sf-border);
+  }
 }
 
-.upload__err {
-  color: var(--sf-rust);
+.upload__icon {
+  flex: none;
+  color: var(--sf-text-subtle);
+  font-size: var(--sf-fs-18);
+}
+
+.upload--done .upload__icon {
+  color: var(--sf-success);
+}
+
+.upload--error .upload__icon {
+  color: var(--sf-danger);
+}
+
+.upload__main {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: var(--sf-space-1);
+  min-width: 0;
+}
+
+.upload__line {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sf-space-2);
+}
+
+.upload__name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--sf-text);
+  font-size: var(--sf-fs-13);
+  line-height: var(--sf-lh-13);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.upload__size,
+.upload__status {
+  flex: none;
+  color: var(--sf-text-muted);
+  font-size: var(--sf-fs-12);
+  line-height: var(--sf-lh-12);
+  font-variant-numeric: tabular-nums;
+}
+
+.upload__status--error {
+  color: var(--sf-danger-text);
+  white-space: normal;
+}
+
+.upload__bar {
+  block-size: var(--sf-space-1);
+  overflow: hidden;
+  border-radius: var(--sf-radius-pill);
+  background: var(--sf-surface-sunken);
+}
+
+.upload__fill {
+  display: block;
+  block-size: 100%;
+  border-radius: inherit;
+  background: var(--sf-accent);
+  transition: inline-size var(--sf-duration-base) var(--sf-ease-standard);
+}
+
+.upload__actions {
+  flex: none;
+  align-self: flex-start;
+}
+
+// Text buttons (Retry; Replace, Keep both) and the alt text field sit under the message, using the row's width.
+.upload__buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sf-space-2);
+}
+
+.upload__alt {
+  display: flex;
+  align-items: center;
+  gap: var(--sf-space-2);
+}
+
+.upload__alt-input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .upload__fill {
+    transition: none;
+  }
 }

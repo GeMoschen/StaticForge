@@ -130,4 +130,21 @@ describe('SfToolbarComponent', () => {
     expect(save).toHaveAttribute('tabindex', '0');
     expect(screen.getByRole('button', { name: 'Redo' })).toHaveAttribute('tabindex', '-1');
   });
+
+  it('with roving="false" is a named group: every control keeps its place in the tab order and the arrows are left alone', async () => {
+    await render(
+      `<sf-toolbar label="Library tools" roving="false"><input aria-label="Search" /><sf-button>Sort</sf-button><sf-button>Upload</sf-button></sf-toolbar>`,
+      { imports: [SfToolbarComponent, SfButtonComponent] },
+    );
+    const group = screen.getByRole('group', { name: 'Library tools' });
+    const sort = screen.getByRole('button', { name: 'Sort' });
+    sort.focus();
+
+    fireEvent.keyDown(sort, { key: 'ArrowRight' });
+
+    expect(screen.queryByRole('toolbar')).toBeNull();
+    expect(group).not.toHaveAttribute('aria-orientation');
+    expect(group.querySelectorAll('[tabindex]')).toHaveLength(0);
+    expect(document.activeElement).toBe(sort);
+  });
 });

@@ -1,129 +1,58 @@
-@use 'drawer/drawer-parts';
-
-:host {
-  display: block;
-}
-
-.scrim {
-  position: fixed;
-  inset: 0;
-  z-index: 50;
-  background: rgba(0, 0, 0, 0.35);
-}
-
-.drawer {
-  position: fixed;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 51;
-  width: min(26rem, 90vw);
-  display: flex;
-  flex-direction: column;
-  background: var(--sf-surface);
-  border-left: 1px solid var(--sf-line);
-  box-shadow: -8px 0 24px rgba(0, 0, 0, 0.15);
-}
-
-.drawer--wide {
-  width: min(56rem, 95vw);
-}
-
-.drawer__header {
+.head {
   display: flex;
   align-items: center;
+  gap: var(--sf-space-1);
+}
+
+.detail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sf-space-3);
+  min-height: 100%;
+}
+
+.detail__meta {
+  display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
-  gap: var(--sf-2);
-  padding: var(--sf-3) var(--sf-4);
-  border-bottom: 1px solid var(--sf-line);
-}
-
-.drawer__title {
+  gap: var(--sf-space-2);
   margin: 0;
-  font-family: var(--sf-font-display);
-  font-size: var(--sf-text-lg);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  color: var(--sf-text-muted);
+  font-size: var(--sf-fs-12);
+  line-height: var(--sf-lh-12);
+  font-variant-numeric: tabular-nums;
 }
 
-.drawer__body {
-  flex: 1;
-  overflow: auto;
-  padding: var(--sf-4);
+.detail__panel {
   display: flex;
   flex-direction: column;
-  gap: var(--sf-4);
+  gap: var(--sf-space-3);
+  padding-top: var(--sf-space-1);
 }
 
-/* The body scrolls; its sections keep their height. A column flex item with `overflow: hidden` (the preview) would
-   otherwise shrink to a thin strip as soon as the sections below it outgrow the drawer. The parts of the drawer are
-   `display: contents` components, so they keep this for their own root elements. */
-.drawer__body > * {
-  flex-shrink: 0;
+// The code panels (Source, Rendered) take the height the tab leaves.
+.detail__panel--code {
+  flex: 1 1 auto;
 }
 
-@include drawer-parts.banner;
-@include drawer-parts.section;
-
-.drawer__footer {
-  padding: var(--sf-3) var(--sf-4);
-  border-top: 1px solid var(--sf-line);
+.footer {
   display: flex;
-  flex-direction: column;
-  gap: var(--sf-2);
-}
-
-.drawer__footer-actions {
-  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
   justify-content: flex-end;
-  gap: var(--sf-2);
+  gap: var(--sf-space-2);
 }
 
-.cms-badge {
-  display: inline-block;
-  margin-left: var(--sf-2);
-  padding: 0 var(--sf-1);
-  border: 1px solid var(--sf-signal);
-  border-radius: var(--sf-radius-sm);
-  color: var(--sf-signal);
-  font-family: var(--sf-font-mono, monospace);
-  font-size: var(--sf-text-xs);
-  vertical-align: middle;
+// The save status stays at the start (a polite live region; decision 97).
+.footer__status {
+  margin-inline-end: auto;
 }
 
-.tabs {
-  display: flex;
-  gap: var(--sf-1);
-  padding: 0 var(--sf-4);
-  border-bottom: 1px solid var(--sf-line);
-}
-
-.tabs button {
-  padding: var(--sf-2) var(--sf-3);
-  border: none;
-  border-bottom: 2px solid transparent;
-  background: transparent;
-  color: var(--sf-slate);
-  font-size: var(--sf-text-sm);
-  cursor: pointer;
-}
-
-.tabs .tab--active {
-  color: var(--sf-ink);
-  border-bottom-color: var(--sf-signal);
-}
-
-.tab__dirty {
-  margin-left: var(--sf-1);
-  color: var(--sf-signal);
-}
-
+// The conflict question sits over the drawer's right edge, below the top bar.
 .conflict-overlay {
   position: fixed;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 55;
+  inset-block: var(--sf-topbar-height, 0) 0;
+  inset-inline-end: 0;
+  z-index: var(--sf-z-modal);
   width: min(26rem, 90vw);
 }

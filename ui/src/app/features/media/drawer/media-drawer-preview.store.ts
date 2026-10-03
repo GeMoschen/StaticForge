@@ -3,7 +3,7 @@ import { ApiClient } from '../../../core/api/api.client';
 import { ToastService } from '../../../core/ui/toast.service';
 import { MediaDrawerStore } from './media-drawer.store';
 
-/** The preview binary and variant downloads. */
+/** The preview binary and the downloads of the file and its variants. */
 @Injectable()
 export class MediaDrawerPreviewStore implements OnDestroy {
   private readonly api = inject(ApiClient);
@@ -49,7 +49,7 @@ export class MediaDrawerPreviewStore implements OnDestroy {
         anchor.click();
         URL.revokeObjectURL(url);
       },
-      error: () => this.toasts.show('Could not download — try again in a moment.', 'error'),
+      error: () => this.toasts.show(this.core.t('details.downloadFailed'), 'error'),
     });
   }
 

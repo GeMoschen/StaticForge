@@ -18,6 +18,7 @@ const COMPONENT_LOCAL_KNOBS = new Set([
   '--sf-code-height',
   '--sf-code-min-height',
   '--sf-code-max-height',
+  '--sf-code-flex',
   '--sf-code-border',
   '--sf-code-radius',
   '--sf-cdl-min-height',

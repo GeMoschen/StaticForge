@@ -189,3 +189,17 @@
 - **Rule:** no `git stash`, `checkout --`, `reset` or `clean` unless the step is the point of the command and the tree
   state is known. Compare with the old code through `git show HEAD:path` or a worktree. Keep lint/build commands free of
   trailing "just in case" commands.
+
+## A roving toolbar with a text field in it is a keyboard trap (2026-10-03)
+- **Mistake (M35.19, found in the browser walkthrough, not by any spec):** the media toolbar used the design system's `sf-toolbar` (one tab stop, ←/→ between
+  items) with the search field as its first item. A text field keeps ←/→ for its caret, so from the search field Tab jumped over Type, Sort, Grid/List and
+  Upload straight to the first card: four controls could not be reached by keyboard. The unit specs only checked DOM order.
+- **Rule:** a bar that holds a text field or a select is a plain group with every control in the tab order (`sf-toolbar roving="false"`); roving tabindex is
+  for bars of buttons only. A keyboard walkthrough prints the real tab order (`document.activeElement` after each Tab) and checks every action is in it.
+
+## An element that moves itself into `<body>` must not be the first node of a repeated view (2026-10-03)
+- **Mistake (shared `sf-context-menu`, M35.7, surfaced in M35.19):** the panel relocates itself into `<body>` and was the root of an `@for` view. When a second
+  menu replaced the first in one change-detection pass, Angular inserted the new panel before the old one — a node that was no longer a child of the host —
+  and threw `insertBefore ... not a child`. jsdom showed it only when the two events were dispatched without a change-detection pass between them.
+- **Rule:** wrap such an element in a slot that stays where Angular put it (an `ng-container` does not help: its first node is its first child). Reproduce
+  with plain `dispatchEvent` calls, not `fireEvent`, which runs change detection after each event.

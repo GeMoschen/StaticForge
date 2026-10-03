@@ -1,7 +1,14 @@
-import { DestroyRef, Injectable, computed, inject, signal } from '@angular/core';
+import { DestroyRef, Injectable, Injector, computed, inject, signal } from '@angular/core';
 import { HashMap } from '@jsverse/transloco';
 import { ToastService } from '../../../../core/ui/toast.service';
+import { CodeFormat, ResolvedCodeFormat, extensionOf, resolveCodeFormat } from '../../../../shared/code-editor/code-format';
 import { ConfirmService } from '../../../../shared/components/dialog/confirm.service';
+import { typeToConfirmFor } from '../../../../shared/components/dialog/delete-confirm';
+import { DialogService } from '../../../../shared/components/dialog/dialog.service';
+import { UnsavedChangesService } from '../../../../shared/components/dialog/unsaved-changes.service';
+import { SfMenuItem } from '../../../../shared/components/menu/sf-menu-item';
+import { ContextMenuItem, ContextMenuService, ContextMenuTarget } from '../../../../shared/services/context-menu.service';
+import { LANGUAGE_NAMES, SampleLang } from '../sample-data';
 import { SampleState } from '../sample-state';
 import {
   DEFAULT_MEDIA_FOLDER,
@@ -9,12 +16,27 @@ import {
   SampleFocal,
   SampleMediaFile,
   SampleMediaTypeFilter,
+  SampleSourceBanner,
   UPLOADED_FILE,
+  UPLOAD_EXTENSIONS,
+  UPLOAD_MAX_BYTES,
+  copyName,
+  fileExtension,
   matchesType,
   mediaFile,
   mediaFolder,
+  mediaFolderDescendants,
+  mediaFolderParent,
   mediaFolderPath,
+  languageVariant,
+  mediaTypeOf,
+  withUnreadableCharacters,
 } from './sample-media-data';
+import { MEDIA_ROOT, SampleMediaMoveDialogComponent, SampleMoveDialogData } from './sample-media-move-dialog.component';
+import { SampleMediaRenameDialogComponent, SampleRenameDialogData } from './sample-media-rename-dialog.component';
+
+/** The default language of the sample project: its text media have their own file (the other language's is derived). */
+const DEFAULT_TEXT_LANG: SampleLang = 'de';
 
 export type SampleMediaView = 'grid' | 'list';
 export const MEDIA_VIEWS: readonly SampleMediaView[] = ['grid', 'list'];
@@ -36,6 +58,17 @@ export type SampleMediaSort = 'name' | 'date' | 'size' | 'type';
 export const MEDIA_SORTS: readonly SampleMediaSort[] = ['name', 'date', 'size', 'type'];
 export type SampleSortDirection = 'asc' | 'desc';
 
+/** The review states of the library and the folder tree (`state`): live data, the skeleton, the error with Retry, no files at all. */
+export type SampleMediaReview = 'live' | 'loading' | 'error' | 'empty';
+export const MEDIA_REVIEW_STATES: readonly SampleMediaReview[] = ['live', 'loading', 'error', 'empty'];
+
+/** Dialogs a link can open (`dialog`): rename and move a file, move the open folder, a delete of the selection. */
+export type SampleMediaDialog = 'rename' | 'move' | 'folder-move' | 'delete';
+export const MEDIA_DIALOGS: readonly SampleMediaDialog[] = ['rename', 'move', 'folder-move', 'delete'];
+
+/** Why an upload was refused (decision 98): not an accepted type, over the limit, the name is taken, the connection dropped. */
+export type SampleUploadError = 'type' | 'size' | 'duplicate' | 'network';
+
 export interface SampleUpload {
   readonly id: string;
   readonly name: string;
@@ -43,9 +76,27 @@ export interface SampleUpload {
   /** 0–100. */
   readonly progress: number;
   readonly state: 'uploading' | 'done' | 'error';
+  /** The folder the file goes to (named in the panel's header). */
+  readonly folderId: string;
   /** The library file a finished upload became ("Add alt text" opens it). */
   readonly fileId?: string;
+  readonly error?: SampleUploadError;
+  /** A refused duplicate: the library file that has the name. */
+  readonly existingId?: string;
+  /** How a duplicate went on (Replace / Keep both), shown once it is uploaded. */
+  readonly outcome?: 'replaced' | 'copy';
+  /** The alt text saved from the panel. */
+  readonly alt?: string;
 }
+
+/** Whether a file of this name can have alt text (pictures). */
+export function acceptsAlt(name: string): boolean {
+  return ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'].includes(fileExtension(name));
+}
+
+/** Review of a link: `upload=1` mid-upload, `upload=errors` every kind of refusal. */
+export type SampleUploadSeed = '1' | 'errors';
+export const UPLOAD_SEEDS: readonly SampleUploadSeed[] = ['1', 'errors'];
 
 /** The editable details of the open file (decision 21, Details). */
 export interface SampleMediaDetails {
@@ -102,7 +153,19 @@ export class SampleMediaState {
   readonly sample = inject(SampleState);
   private readonly confirms = inject(ConfirmService);
   private readonly toasts = inject(ToastService);
+  private readonly dialogs = inject(DialogService);
+  private readonly unsaved = inject(UnsavedChangesService);
+  private readonly contextMenu = inject(ContextMenuService);
+  private readonly injector = inject(Injector);
 
+  /** Live data, or one of the review states of the library and the tree (`state=loading|error|empty`). */
+  readonly review = signal<SampleMediaReview>('live');
+  /** The folder tree's filter (`tfilter`). */
+  readonly treeFilter = signal('');
+  /** The page header's folder menu asked for an inline rename / new folder in the tree; the area performs it. */
+  readonly folderRequest = signal<'rename' | 'create' | null>(null);
+  /** The files being dragged from the library toward a folder of the tree. */
+  readonly dragging = signal<readonly string[]>([]);
   readonly view = signal<SampleMediaView>('grid');
   readonly folderId = signal<string>(DEFAULT_MEDIA_FOLDER);
   readonly files = signal<readonly SampleMediaFile[]>(MEDIA_FILES);
@@ -120,11 +183,23 @@ export class SampleMediaState {
   /** Unsaved edits of the open file's details, and of a text file's source. */
   readonly edits = signal<Partial<SampleMediaDetails>>({});
   readonly sourceDraft = signal<string | null>(null);
+  /**
+   * The project's highlighting overrides (decision 104), by file extension: a text file type the project highlights
+   * as another format (`css` → JavaScript). Absent = Auto (detected from the media type and the extension).
+   */
+  readonly highlightOverrides = signal<Readonly<Record<string, CodeFormat>>>({});
+  /** What the Source tab warns about (`banner=`, decision 105); in the app it follows from the file. */
+  readonly sourceBanner = signal<SampleSourceBanner | null>(null);
+  /** The language the Source tab shows for a text file with one file per language (decision 105). */
+  readonly textLang = signal<SampleLang>('de');
   /** "Replace" was chosen in the drawer's ⋮ menu: the Details tab brings its Replace field into view. */
   readonly replaceRequest = signal(false);
   /** Per-file switches the user flipped: "Different file per language", "Process CMS syntax". */
   readonly localized = signal<ReadonlyMap<string, boolean>>(new Map());
   readonly processed = signal<ReadonlyMap<string, boolean>>(new Map());
+
+  /** When the details were last saved ("12:04"), for the save status. */
+  readonly savedAt = signal<string | null>(null);
 
   readonly uploads = signal<readonly SampleUpload[]>([]);
   readonly reducedMotion = typeof matchMedia === 'function' && matchMedia(REDUCED_MOTION).matches;
@@ -138,6 +213,9 @@ export class SampleMediaState {
 
   /** The open folder's files after search and type filter, sorted. */
   readonly visible = computed<readonly SampleMediaFile[]>(() => {
+    if (this.review() !== 'live') {
+      return [];
+    }
     const query = this.search().trim().toLowerCase();
     const type = this.typeFilter();
     const compare = compareBy(this.sort());
@@ -146,7 +224,7 @@ export class SampleMediaState {
       .filter((f) => f.folderId === this.folderId() && matchesType(f, type) && (!query || f.name.toLowerCase().includes(query)))
       .sort((a, b) => sign * compare(a, b));
   });
-  readonly folderCount = computed(() => this.files().filter((f) => f.folderId === this.folderId()).length);
+  readonly folderCount = computed(() => (this.review() === 'empty' ? 0 : this.files().filter((f) => f.folderId === this.folderId()).length));
   readonly selectedFiles = computed(() => this.visible().filter((f) => this.selection().includes(f.id)));
 
   readonly asset = computed(() => mediaFile(this.files(), this.assetId()));
@@ -181,10 +259,37 @@ export class SampleMediaState {
     }
     return now.alt !== file.alt || now.caption !== file.caption || now.focal?.x !== file.focal?.x || now.focal?.y !== file.focal?.y;
   });
+  /** Source texts saved in the sample, by file and language (the file keeps one text only, the default language's). */
+  private readonly savedSources = signal<ReadonlyMap<string, string>>(new Map());
+  /** The text the Source tab starts from: what was saved, else the file's text in the shown language, damaged when `banner=utf8`. */
+  readonly sourceBase = computed(() => {
+    const file = this.asset();
+    if (!file) {
+      return '';
+    }
+    const lang = this.sourceLang();
+    const saved = this.savedSources().get(`${file.id}:${lang}`);
+    if (saved !== undefined) {
+      return saved;
+    }
+    const extension = extensionOf(file.name) ?? '';
+    let text = file.source ?? '';
+    if (lang !== DEFAULT_TEXT_LANG) {
+      text = languageVariant(text, LANGUAGE_NAMES[lang], extension);
+    }
+    return this.sourceBanner() === 'utf8' ? withUnreadableCharacters(text, extension) : text;
+  });
+  /** The language of the Source tab's file: the chosen one when the file has one file per language, else the default. */
+  readonly sourceLang = computed<SampleLang>(() => {
+    const file = this.asset();
+    return file && this.isLocalized(file) ? this.textLang() : DEFAULT_TEXT_LANG;
+  });
   readonly sourceDirty = computed(() => {
     const draft = this.sourceDraft();
-    return draft !== null && draft !== this.asset()?.source;
+    return draft !== null && draft !== this.sourceBase();
   });
+  /** The open file has edits that are not saved (the drawer's save status, the leave guard). */
+  readonly dirty = computed(() => this.detailsDirty() || this.sourceDirty());
 
   /** The open file's place in the library (for ←/→). */
   readonly position = computed(() => {
@@ -194,7 +299,12 @@ export class SampleMediaState {
   });
 
   constructor() {
-    inject(DestroyRef).onDestroy(() => this.stopTimer());
+    // Leaving the area (the rail, the breadcrumb) with unsaved edits asks first (decision 97).
+    const unregister = this.sample.registerGuard(() => this.leave());
+    inject(DestroyRef).onDestroy(() => {
+      unregister();
+      this.stopTimer();
+    });
   }
 
   t(key: string, params?: HashMap): string {
@@ -203,6 +313,40 @@ export class SampleMediaState {
 
   notice(key = 'prototypeNotice', params?: HashMap): void {
     this.sample.notice(key, params);
+  }
+
+  /** How a text file is highlighted: the project's override for its extension, else detected (the code editor's own rule). */
+  highlightOf(file: SampleMediaFile): ResolvedCodeFormat {
+    return resolveCodeFormat({
+      extension: extensionOf(file.name),
+      mimeType: mediaTypeOf(file),
+      overrides: { extensions: this.highlightOverrides() },
+    });
+  }
+
+  /** Overrides the format of the file's type for the whole project (`null`: back to Auto). */
+  setHighlight(file: SampleMediaFile, format: CodeFormat | null): void {
+    const extension = extensionOf(file.name);
+    if (!extension) {
+      return;
+    }
+    this.highlightOverrides.update((map) => {
+      const next = { ...map };
+      if (format) {
+        next[extension] = format;
+      } else {
+        delete next[extension];
+      }
+      return next;
+    });
+  }
+
+  /** Switches the Source tab's language; unsaved source edits ask first (decision 97). */
+  async requestTextLang(lang: SampleLang): Promise<void> {
+    if (lang !== this.textLang() && (!this.sourceDirty() || (await this.leave()))) {
+      this.sourceDraft.set(null);
+      this.textLang.set(lang);
+    }
   }
 
   isLocalized(file: SampleMediaFile): boolean {
@@ -226,8 +370,51 @@ export class SampleMediaState {
   openFolder(id: string): void {
     if (id !== this.folderId()) {
       this.selection.set([]);
+      // A file of another folder can't be stepped to from here: the drawer closes with the folder.
+      this.openAsset(null);
     }
     this.folderId.set(id);
+  }
+
+  /** Whether the drawer may be left: nothing unsaved, or the person saved or discarded it (decision 97). */
+  async leave(): Promise<boolean> {
+    if (!this.dirty()) {
+      return true;
+    }
+    return this.unsaved.confirmLeave({
+      name: this.asset()?.name ?? '',
+      save: async () => {
+        this.save();
+        return { ok: true };
+      },
+      discard: () => this.discard(),
+      injector: this.injector,
+    });
+  }
+
+  /** {@link openFolder} after the leave guard. */
+  async requestOpenFolder(id: string): Promise<void> {
+    if (id !== this.folderId() && (await this.leave())) {
+      this.openFolder(id);
+    }
+  }
+
+  /** {@link openAsset} after the leave guard (another file, or closing with `null`). */
+  async requestOpenAsset(id: string | null, tab?: SampleMediaTab): Promise<void> {
+    if (id !== this.assetId() && !(await this.leave())) {
+      return;
+    }
+    this.openAsset(id, tab);
+  }
+
+  /** {@link step} after the leave guard. */
+  async requestStep(delta: -1 | 1): Promise<void> {
+    const list = this.visible();
+    const { index } = this.position();
+    if (list.length < 2 || index < 0) {
+      return;
+    }
+    await this.requestOpenAsset(list[(index + delta + list.length) % list.length].id);
   }
 
   /** Opens a file in the drawer (unsaved edits of the previous one are dropped: nothing is saved anyway). */
@@ -235,6 +422,7 @@ export class SampleMediaState {
     if (id !== this.assetId()) {
       this.edits.set({});
       this.sourceDraft.set(null);
+      this.textLang.set(DEFAULT_TEXT_LANG);
     }
     this.assetId.set(id);
     if (tab) {
@@ -279,6 +467,12 @@ export class SampleMediaState {
     this.edits.update((e) => ({ ...e, ...patch }));
   }
 
+  /** Gives the edits up. */
+  discard(): void {
+    this.edits.set({});
+    this.sourceDraft.set(null);
+  }
+
   /** Keeps the details and source edits in memory (the prototype's "save"). */
   save(): void {
     const id = this.assetId();
@@ -287,11 +481,21 @@ export class SampleMediaState {
     if (!id || !details) {
       return;
     }
+    const lang = this.sourceLang();
+    if (source !== null) {
+      this.savedSources.update((map) => new Map(map).set(`${id}:${lang}`, source));
+    }
     this.files.update((list) =>
-      list.map((f) => (f.id === id ? { ...f, ...details, ...(source !== null ? { source } : {}), status: 'changed' as const } : f)),
+      list.map((f) =>
+        f.id === id
+          ? { ...f, ...details, ...(source !== null && lang === DEFAULT_TEXT_LANG ? { source } : {}), status: 'changed' as const }
+          : f,
+      ),
     );
     this.edits.set({});
     this.sourceDraft.set(null);
+    this.savedAt.set(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+    this.toasts.show(this.t('detail.saved', { name: this.files().find((f) => f.id === id)?.name ?? '' }), 'success');
   }
 
   /** Delete with a danger confirm, then an Undo toast (decision 10). Resolves whether the files were removed. */
@@ -307,6 +511,8 @@ export class SampleMediaState {
       message: used > 0 ? this.t('delete.messageUsed', { count: used }) : this.t('delete.message'),
       confirmLabel: this.t('delete.confirm', { count }),
       tone: 'danger',
+      // 25 or more files: the word "delete" must be typed (decision 99).
+      typeToConfirm: typeToConfirmFor(count),
       details: count > 1 ? files.map((f) => f.name) : undefined,
     });
     if (!confirmed) {
@@ -320,8 +526,183 @@ export class SampleMediaState {
     return true;
   }
 
+  /**
+   * One file downloads as itself, several as one ZIP named after the folder (decision 95). The sample only says so:
+   * a toast (which screen readers announce) — nothing is downloaded.
+   */
   download(files: readonly SampleMediaFile[]): void {
-    this.notice('media.downloadNotice', { count: files.length, name: files[0]?.name ?? '' });
+    if (files.length === 0) {
+      return;
+    }
+    if (files.length === 1) {
+      this.notice('media.download.single', { name: files[0].name });
+      return;
+    }
+    const slug = this.folderName()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '');
+    this.notice('media.download.zip', { count: files.length, zip: `${slug}.zip` });
+  }
+
+  copyLink(file: SampleMediaFile): void {
+    const url = `https://lumen-coffee.example/media/${file.name}`;
+    void navigator.clipboard?.writeText(url).catch(() => undefined);
+    this.toasts.show(this.t('detail.linkCopied'), 'success');
+  }
+
+  // ── Per-file actions (decision 92) ─────────────────────────────────────────
+
+  /** What a menu of `file` acts on: the whole selection when the file is part of a multi-file selection, else the file. */
+  menuTargets(file: SampleMediaFile): readonly SampleMediaFile[] {
+    const selected = this.selectedFiles();
+    return selected.length > 1 && selected.some((f) => f.id === file.id) ? selected : [file];
+  }
+
+  /**
+   * The entries of a file's menu (card, list row): Open, Rename…, Move…, Download, Copy link, Delete…; for a
+   * multi-file selection only the bulk actions (Move…, Download, Delete…) with the count.
+   */
+  fileMenu(file: SampleMediaFile): SfMenuItem[] {
+    const targets = this.menuTargets(file);
+    const count = targets.length;
+    if (count > 1) {
+      return [
+        { id: 'move', label: this.t('menu.moveMany', { count }), icon: 'drive_file_move', action: () => void this.moveFiles(targets) },
+        { id: 'download', label: this.t('menu.downloadMany', { count }), icon: 'download', action: () => this.download(targets) },
+        {
+          id: 'delete',
+          label: this.t('menu.deleteMany', { count }),
+          icon: 'delete',
+          danger: true,
+          separatorBefore: true,
+          shortcut: 'Delete',
+          action: () => void this.confirmDelete(targets),
+        },
+      ];
+    }
+    return [
+      { id: 'open', label: this.t('menu.open'), icon: 'open_in_new', shortcut: 'Enter', action: () => void this.requestOpenAsset(file.id) },
+      { id: 'rename', label: this.t('menu.rename'), icon: 'edit', shortcut: 'F2', action: () => void this.renameFile(file) },
+      { id: 'move', label: this.t('menu.move'), icon: 'drive_file_move', action: () => void this.moveFiles([file]) },
+      { id: 'download', label: this.t('menu.download'), icon: 'download', action: () => this.download([file]) },
+      { id: 'copyLink', label: this.t('menu.copyLink'), icon: 'link', action: () => this.copyLink(file) },
+      {
+        id: 'delete',
+        label: this.t('menu.delete'),
+        icon: 'delete',
+        danger: true,
+        separatorBefore: true,
+        shortcut: 'Delete',
+        action: () => void this.confirmDelete([file]),
+      },
+    ];
+  }
+
+  /** Opens the file's context menu: at the pointer for a right click, below the element for Shift+F10. */
+  openFileMenu(target: ContextMenuTarget, file: SampleMediaFile): void {
+    const items: ContextMenuItem[] = this.fileMenu(file).flatMap((item) => [
+      ...(item.separatorBefore ? [{ label: '', separator: true }] : []),
+      { label: item.label, icon: item.icon, danger: item.danger, shortcut: item.shortcut, action: item.action },
+    ]);
+    this.contextMenu.open(target, items);
+  }
+
+  /** The Rename dialog (name field, validation, Apply), then an Undo toast. */
+  async renameFile(file: SampleMediaFile): Promise<void> {
+    const taken = this.files()
+      .filter((f) => f.folderId === file.folderId && f.id !== file.id)
+      .map((f) => f.name.toLowerCase());
+    const data: SampleRenameDialogData = { name: file.name, folder: mediaFolder(file.folderId)?.name ?? '', taken };
+    const name = await this.dialogs.open<string, SampleRenameDialogData>(SampleMediaRenameDialogComponent, data, { injector: this.injector })
+      .result;
+    if (!name || name === file.name) {
+      return;
+    }
+    const previous = file.name;
+    this.files.update((list) => list.map((f) => (f.id === file.id ? { ...f, name } : f)));
+    this.toasts.undo(this.t('rename.done', { from: previous, to: name }), () => {
+      this.files.update((list) => list.map((f) => (f.id === file.id ? { ...f, name: previous } : f)));
+      this.toasts.show(this.t('rename.undone', { name: previous }), 'info');
+    });
+  }
+
+  /** The Move dialog with a folder tree (the current folder is disabled), then {@link applyMove}. */
+  async moveFiles(files: readonly SampleMediaFile[]): Promise<void> {
+    if (files.length === 0) {
+      return;
+    }
+    const data: SampleMoveDialogData = {
+      title: this.t('move.title', { count: files.length, name: files[0].name }),
+      current: files[0].folderId,
+      blocked: [],
+      root: false,
+    };
+    const target = await this.dialogs.open<string, SampleMoveDialogData>(SampleMediaMoveDialogComponent, data, { injector: this.injector })
+      .result;
+    if (target) {
+      this.applyMove(
+        files.map((f) => f.id),
+        target,
+      );
+    }
+  }
+
+  /** The Move dialog for the open folder (page header menu); the folder and what lies inside it can't be the target. */
+  async moveFolder(): Promise<void> {
+    const folder = this.folder();
+    if (!folder) {
+      return;
+    }
+    const data: SampleMoveDialogData = {
+      title: this.t('move.folderTitle', { name: folder.name }),
+      current: mediaFolderParent(folder.id) ?? MEDIA_ROOT,
+      blocked: [folder.id, ...mediaFolderDescendants(folder.id)],
+      root: true,
+    };
+    const target = await this.dialogs.open<string, SampleMoveDialogData>(SampleMediaMoveDialogComponent, data, { injector: this.injector })
+      .result;
+    if (!target) {
+      return;
+    }
+    const into = target === MEDIA_ROOT ? this.t('move.topLevel') : (mediaFolder(target)?.name ?? '');
+    // The sample's folder structure is fixed: the move is announced and can be undone, the tree stays as it is.
+    this.toasts.undo(this.t('move.folderDone', { name: folder.name, folder: into }), () => this.toasts.show(this.t('move.undone'), 'info'));
+  }
+
+  /** Moves files into a folder (a dialog, a bulk move or a drop on the tree) and offers Undo for the whole group. */
+  applyMove(ids: readonly string[], target: string): void {
+    const moving = this.files().filter((f) => ids.includes(f.id) && f.folderId !== target);
+    if (moving.length === 0) {
+      return;
+    }
+    const before = new Map(moving.map((f) => [f.id, f.folderId]));
+    this.files.update((list) => list.map((f) => (before.has(f.id) ? { ...f, folderId: target } : f)));
+    this.selection.update((s) => s.filter((id) => !before.has(id)));
+    const open = this.assetId();
+    if (open !== null && before.has(open) && this.folderId() !== target) {
+      this.openAsset(null);
+    }
+    const folder = mediaFolder(target)?.name ?? '';
+    this.toasts.undo(this.t('move.done', { count: moving.length, name: moving[0].name, folder }), () => {
+      this.files.update((list) => list.map((f) => (before.has(f.id) ? { ...f, folderId: before.get(f.id)! } : f)));
+      this.toasts.show(this.t('move.undone'), 'info');
+    });
+  }
+
+  /** The dialog a link names (`dialog=…`), on the open file, the selection or the first file of the folder. */
+  openDialog(kind: SampleMediaDialog): void {
+    const fallback = this.asset() ?? this.visible()[0];
+    const targets = this.selectedFiles().length > 0 ? this.selectedFiles() : fallback ? [fallback] : [];
+    if (kind === 'folder-move') {
+      void this.moveFolder();
+    } else if (kind === 'rename' && targets[0]) {
+      void this.renameFile(targets[0]);
+    } else if (kind === 'move') {
+      void this.moveFiles(targets);
+    } else if (kind === 'delete') {
+      void this.confirmDelete(targets);
+    }
   }
 
   /** Removes files; the returned function puts them back where they were. */
@@ -344,38 +725,116 @@ export class SampleMediaState {
 
   // ── Uploads (fake) ─────────────────────────────────────────────────────────
 
-  /** Starts fake uploads of chosen or dropped files into the open folder. */
+  /**
+   * Starts fake uploads of chosen or dropped files into the open folder. A file that is refused — not an accepted type,
+   * over the size limit, a name that is taken — shows up as a failed row with the reason (decision 98).
+   */
   upload(files: readonly { readonly name: string; readonly size: number }[]): void {
-    const rows = files.map<SampleUpload>((f) => ({ id: `up-${this.nextUpload++}`, name: f.name, sizeBytes: f.size, progress: 0, state: 'uploading' }));
+    const folderId = this.folderId();
+    const rows = files.map<SampleUpload>((f) => {
+      const base: SampleUpload = { id: `up-${this.nextUpload++}`, name: f.name, sizeBytes: f.size, progress: 0, state: 'uploading', folderId };
+      const refused = this.refusal(f.name, f.size, folderId);
+      return refused ? { ...base, state: 'error', ...refused } : base;
+    });
     this.uploads.update((list) => [...list, ...rows]);
     this.startTimer();
   }
 
-  /** The scripted `upload=1` state: two files mid-upload, one finished (needs alt text), one failed. */
-  seedUploads(): void {
+  /** Why a file can't go into a folder, if it can't. */
+  private refusal(name: string, size: number, folderId: string): { error: SampleUploadError; existingId?: string } | null {
+    if (!UPLOAD_EXTENSIONS.includes(fileExtension(name))) {
+      return { error: 'type' };
+    }
+    if (size > UPLOAD_MAX_BYTES) {
+      return { error: 'size' };
+    }
+    const existing = this.files().find((f) => f.folderId === folderId && f.name.toLowerCase() === name.toLowerCase());
+    return existing ? { error: 'duplicate', existingId: existing.id } : null;
+  }
+
+  /**
+   * The scripted `upload=` states. `1`: two files mid-upload, one finished (alt text to enter), one lost its
+   * connection. `errors`: every kind of refusal — type, size, duplicate, connection — and a finished picture.
+   */
+  seedUploads(kind: SampleUploadSeed = '1'): void {
     const mb = 1024 * 1024;
-    this.uploads.set([
-      { id: 'up-a', name: 'iced-latte-terrace.jpg', sizeBytes: 2.4 * mb, progress: 38, state: 'uploading' },
-      { id: 'up-b', name: 'iced-latte-close-up.jpg', sizeBytes: 1.8 * mb, progress: 71, state: 'uploading' },
-      { id: 'up-c', name: 'cold-brew-bottle.jpg', sizeBytes: 0.72 * mb, progress: 100, state: 'done', fileId: UPLOADED_FILE },
-      { id: 'up-d', name: 'menu-board-summer.jpg', sizeBytes: 3.1 * mb, progress: 54, state: 'error' },
-    ]);
+    const folderId = this.folderId();
+    const done: SampleUpload = { id: 'up-c', name: 'cold-brew-bottle.jpg', sizeBytes: 0.72 * mb, progress: 100, state: 'done', folderId, fileId: UPLOADED_FILE };
+    const lost: SampleUpload = { id: 'up-d', name: 'menu-board-summer.jpg', sizeBytes: 3.1 * mb, progress: 54, state: 'error', folderId, error: 'network' };
+    this.uploads.set(
+      kind === 'errors'
+        ? [
+            done,
+            lost,
+            { id: 'up-e', name: 'setup-wizard.exe', sizeBytes: 4.8 * mb, progress: 0, state: 'error', folderId, error: 'type' },
+            { id: 'up-f', name: 'harvest-panorama.jpg', sizeBytes: 24.6 * mb, progress: 0, state: 'error', folderId, error: 'size' },
+            { id: 'up-g', name: 'espresso-blend-bag.jpg', sizeBytes: 0.9 * mb, progress: 0, state: 'error', folderId, error: 'duplicate', existingId: 'a-espresso-bag' },
+          ]
+        : [
+            { id: 'up-a', name: 'iced-latte-terrace.jpg', sizeBytes: 2.4 * mb, progress: 38, state: 'uploading', folderId },
+            { id: 'up-b', name: 'iced-latte-close-up.jpg', sizeBytes: 1.8 * mb, progress: 71, state: 'uploading', folderId },
+            done,
+            lost,
+          ],
+    );
     this.startTimer();
   }
 
+  /** Cancels a running upload, or removes a finished or failed row from the panel. */
   cancelUpload(id: string): void {
     this.uploads.update((list) => list.filter((u) => u.id !== id));
   }
 
+  /** Retry: only for a lost connection (the other refusals would fail again). */
   retryUpload(id: string): void {
-    this.uploads.update((list) => list.map((u) => (u.id === id ? { ...u, state: 'uploading' as const, progress: 0 } : u)));
+    this.uploads.update((list) => list.map((u) => (u.id === id ? { ...u, state: 'uploading' as const, progress: 0, error: undefined } : u)));
     this.startTimer();
+  }
+
+  /** A duplicate: *Replace* uploads over the existing file (links and usages stay), *Keep both* under the next free name. */
+  resolveDuplicate(id: string, outcome: 'replaced' | 'copy'): void {
+    const taken = new Set(this.files().map((f) => f.name.toLowerCase()));
+    this.uploads.update((list) =>
+      list.map((u) =>
+        u.id === id
+          ? {
+              ...u,
+              name: outcome === 'copy' ? copyName(u.name, taken) : u.name,
+              state: 'uploading' as const,
+              progress: 0,
+              error: undefined,
+              existingId: undefined,
+              outcome,
+            }
+          : u,
+      ),
+    );
+    this.startTimer();
+  }
+
+  /** The alt text entered in the panel for a finished picture: saved on the library file, and the row says so. */
+  saveUploadAlt(id: string, alt: string): void {
+    const upload = this.uploads().find((u) => u.id === id);
+    if (!upload) {
+      return;
+    }
+    this.uploads.update((list) => list.map((u) => (u.id === id ? { ...u, alt } : u)));
+    if (upload.fileId) {
+      this.files.update((list) => list.map((f) => (f.id === upload.fileId ? { ...f, alt } : f)));
+    }
+    this.toasts.show(this.t('uploads.altSaved', { name: upload.name }), 'success');
   }
 
   /** Closes the panel: finished and failed rows go, running uploads would continue in the background. */
   clearUploads(): void {
     this.uploads.update((list) => list.filter((u) => u.state === 'uploading'));
   }
+
+  /** The folder name the upload panel's header names: the one folder the files go to, else how many. */
+  readonly uploadTarget = computed(() => {
+    const folders = [...new Set(this.uploads().map((u) => u.folderId))];
+    return folders.length === 1 ? { folder: mediaFolder(folders[0])?.name ?? '', count: 1 } : { folder: '', count: folders.length };
+  });
 
   private startTimer(): void {
     if (this.timer !== null || !this.uploads().some((u) => u.state === 'uploading')) {

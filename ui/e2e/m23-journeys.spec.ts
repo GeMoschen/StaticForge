@@ -121,9 +121,9 @@ class Api {
 
 async function login(page: Page): Promise<void> {
   await page.goto('/login');
-  await page.locator('sf-login input[formControlName="username"]').fill(USER);
-  await page.locator('sf-login input[formControlName="password"]').fill(PASSWORD);
-  await page.locator('sf-login button[type="submit"]').click();
+  await page.getByLabel('Username').fill(USER);
+  await page.getByLabel('Password', { exact: true }).fill(PASSWORD);
+  await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page).toHaveURL(/\/$/, { timeout: 15_000 });
 }
 
@@ -280,20 +280,19 @@ test('journey: media by alt text opens the drawer', async ({ page }) => {
     const { listbox } = await paletteSearch(page, term);
     const option = listbox.getByRole('option', { name: /gull\.txt/ });
     await expect(option).toBeVisible({ timeout: 10_000 });
-    await expect(page.getByRole('group', { name: /Media/ })).toContainText('gull.txt');
     await page.keyboard.press('Enter');
 
-    const drawer = page.locator('sf-media-detail-drawer');
-    await expect(drawer.locator('.drawer__title')).toContainText('gull.txt', { timeout: 15_000 });
-    // The deep link was consumed, so the same link works again later.
-    await expect(page).toHaveURL(new RegExp(`/p/${api.projectKey}/media$`));
+    const drawer = page.locator('body > sf-drawer');
+    await expect(drawer.getByRole('heading', { level: 2, name: 'gull.txt' })).toBeVisible({ timeout: 15_000 });
+    // The open file is part of the URL (?asset=), so the link can be shared and reloaded.
+    await expect(page).toHaveURL(new RegExp(`/p/${api.projectKey}/media\\?asset=${media.uuid}`));
     await snap(page, 'm1-media-drawer');
 
     // The deep link as a fresh in-app navigation.
     await navigate(page, `/p/${api.projectKey}/pages`);
     await expect(page.locator('sf-pages-list')).toBeVisible();
     await navigate(page, `/p/${api.projectKey}/media?asset=${media.uuid}`);
-    await expect(page.locator('sf-media-detail-drawer .drawer__title')).toContainText('gull.txt', { timeout: 15_000 });
+    await expect(page.locator('body > sf-drawer').getByRole('heading', { level: 2, name: 'gull.txt' })).toBeVisible({ timeout: 15_000 });
   } finally {
     await api.dispose();
   }

@@ -138,6 +138,9 @@ export function cdlCompletion(extraNames: () => readonly string[]): CompletionSo
   };
 }
 
+/** The start of a reference with a path: `#global.…`, `CMS_GLOBAL.…` or a reference prefix, then what was typed of the path. */
+const REFERENCE_START = /(?<![\w:])(?:#|CMS_GLOBAL\.|(?:page|media|record|global|nav|dataset|set):)[\w:#./-]*/;
+
 /** OCTL completion; `names` are the template's editor names (or a record template's dataset fields). */
 export function octlCompletion(names: () => readonly string[]): CompletionSource {
   return (context: CompletionContext): CompletionResult | null => {
@@ -161,7 +164,10 @@ export function octlCompletion(names: () => readonly string[]): CompletionSource
     if (!inside) {
       return null;
     }
-    const word = context.matchBefore(/[\w:]*/);
+    // A reference (`#global.brand.accent`, `media:logo`, `page:/shop`) is one name though it holds `.` and `/`: the
+    // names a host passes are matched against the whole reference typed so far, not only its last word.
+    const reference = context.matchBefore(REFERENCE_START);
+    const word = reference ?? context.matchBefore(/[\w:]*/);
     return {
       from: word ? word.from : context.pos,
       options: [
@@ -170,7 +176,7 @@ export function octlCompletion(names: () => readonly string[]): CompletionSource
         ...options(OCTL_PREFIXES, 'namespace'),
         ...options(OCTL_WORDS, 'keyword', -1),
       ],
-      validFor: /^[\w:]*$/,
+      validFor: reference ? /^[\w:#./-]*$/ : /^[\w:]*$/,
     };
   };
 }

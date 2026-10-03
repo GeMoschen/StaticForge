@@ -17,5 +17,9 @@ export default defineConfig({
     include: ['src/**/*.spec.ts'],
     reporters: ['default'],
     css: false,
+    // Separate processes, not worker threads: with the threads this setup ran on, every spec file leaked its jsdom window
+    // into a long-lived worker (heap up to the 4 GB limit by the last third of ~310 files) and a full run ended with
+    // "Worker terminated due to reaching memory limit" (unhandled errors). A process per file stays below 1 GB.
+    pool: 'forks',
   },
 });

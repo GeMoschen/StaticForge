@@ -1,28 +1,78 @@
-import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
+import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
+import { SfSearchInputComponent } from '../../../shared/components/forms/sf-search-input.component';
+import { SfSegmentedComponent, type SfSegmentedOption } from '../../../shared/components/forms/sf-segmented.component';
+import { SfSelectComponent, type SfSelectOption } from '../../../shared/components/forms/sf-select.component';
+import { SfToolbarComponent } from '../../../shared/components/layout/sf-toolbar.component';
+import { SfMenuComponent, type SfMenuItem } from '../../../shared/components/menu/sf-menu.component';
 import { SfButtonComponent } from '../../../shared/components/sf-button.component';
-import { MediaItemActions } from './media-item-actions';
 import { MediaLibraryStore } from './media-library.store';
+import { MEDIA_SORTS, MEDIA_TYPE_FILTERS, type MediaTypeFilter, type MediaViewMode } from './media-library.util';
 import { MediaUploadStore } from './media-upload.store';
 
-/** Search, type filter, bulk delete and Upload above the grid. */
+/**
+ * Search, type filter, sort, grid/list and Upload above the files (decision 19). The search filters at once and reaches the
+ * URL after a pause; type, sort and view go to the URL (the view is also remembered in the user's preferences).
+ */
 @Component({
   selector: 'sf-media-library-toolbar',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [SfButtonComponent],
+  imports: [
+    SfButtonComponent,
+    SfMenuComponent,
+    SfSearchInputComponent,
+    SfSegmentedComponent,
+    SfSelectComponent,
+    SfToolbarComponent,
+    TranslocoPipe,
+  ],
   templateUrl: './media-library-toolbar.component.html',
   styleUrl: './media-library-toolbar.component.scss',
 })
 export class MediaLibraryToolbarComponent {
   protected readonly library = inject(MediaLibraryStore);
-  protected readonly items = inject(MediaItemActions);
   protected readonly uploads = inject(MediaUploadStore);
+  private readonly transloco = inject(TranslocoService);
 
-  protected onSearchInput(event: Event): void {
-    this.library.queueSearch((event.target as HTMLInputElement).value);
+  private t(key: string, params?: Record<string, unknown>): string {
+    return this.transloco.translate(`media.toolbar.${key}`, params);
   }
 
-  protected onMimeChange(event: Event): void {
-    this.library.setMimeFilter((event.target as HTMLSelectElement).value);
-  }
+  protected readonly typeOptions = computed<SfSelectOption<MediaTypeFilter>[]>(() =>
+    MEDIA_TYPE_FILTERS.map((value) => ({ value, label: this.t(`types.${value}`) })),
+  );
+
+  protected readonly viewOptions = computed<SfSegmentedOption<MediaViewMode>[]>(() => [
+    { value: 'grid', label: this.t('grid'), icon: 'grid_view', iconOnly: true },
+    { value: 'list', label: this.t('list'), icon: 'view_list', iconOnly: true },
+  ]);
+
+  /** "Sort: Name ↑" — the menu button's text (and name). */
+  protected readonly sortText = computed(() =>
+    this.t('sortButton', { field: this.t(`sortBy.${this.library.sort()}`), direction: this.library.direction() }),
+  );
+
+  protected readonly sortItems = computed<SfMenuItem[]>(() => {
+    const sort = this.library.sort();
+    const direction = this.library.direction();
+    const sortGroup = this.t('sortGroup');
+    const orderGroup = this.t('orderGroup');
+    return [
+      ...MEDIA_SORTS.map<SfMenuItem>((id) => ({
+        id,
+        label: this.t(`sortBy.${id}`),
+        icon: id === sort ? 'check' : undefined,
+        group: sortGroup,
+        action: () => this.library.setSort(id, direction),
+      })),
+      ...(['asc', 'desc'] as const).map<SfMenuItem>((id) => ({
+        id,
+        label: this.t(id === 'asc' ? 'ascending' : 'descending'),
+        icon: id === direction ? 'check' : undefined,
+        group: orderGroup,
+        action: () => this.library.setSort(sort, id),
+      })),
+    ];
+  });
 }

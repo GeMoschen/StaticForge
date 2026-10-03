@@ -283,6 +283,33 @@ export interface SheetGroup {
 
 const item = (id: string, keys: string): SheetItem => ({ id, keys });
 
+/** The media library's shortcuts (decision 100): the grid, a file's actions, the open drawer, the focal point, the folder tree. */
+const MEDIA_SHORTCUTS: readonly SheetGroup[] = [
+  {
+    id: 'mediaGrid',
+    items: [
+      item('gridMove', 'ArrowRight'),
+      item('gridFirst', 'Home'),
+      item('gridLast', 'End'),
+      item('rowSelect', 'Space'),
+      item('rowAll', 'Mod+A'),
+      item('gridOpen', 'Enter'),
+      item('fileRename', 'F2'),
+      item('fileMenu', 'Shift+F10'),
+      item('fileDelete', 'Delete'),
+    ],
+  },
+  {
+    id: 'mediaDrawer',
+    items: [item('drawerPrevious', 'ArrowLeft'), item('drawerNext', 'ArrowRight'), item('drawerClose', 'Escape')],
+  },
+  { id: 'mediaFocal', items: [item('focalMove', 'ArrowRight'), item('focalMoveBig', 'Shift+ArrowRight')] },
+  {
+    id: 'tree',
+    items: [item('treeExpand', 'ArrowRight'), item('treeCollapse', 'ArrowLeft'), item('treeRename', 'F2')],
+  },
+];
+
 /** The shortcuts of what is open (they come first and are labelled as such). */
 export function screenShortcuts(view: SampleView): SheetGroup[] {
   if (view === 'editor' || view === 'record' || view === 'template' || view === 'dataset') {
@@ -296,6 +323,9 @@ export function screenShortcuts(view: SampleView): SheetGroup[] {
         ],
       },
     ];
+  }
+  if (view === 'media') {
+    return [...MEDIA_SHORTCUTS];
   }
   const lists: SheetGroup = {
     id: 'lists',

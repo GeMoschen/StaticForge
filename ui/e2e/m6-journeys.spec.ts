@@ -29,34 +29,25 @@ async function login(page: Page): Promise<void> {
   await expect(page).toHaveURL(/\/$/, { timeout: 10_000 });
 }
 
-// Journey 5 — rename an asset UID, get warned about affected templates, then assert the
-// rename succeeded (the amber warning only renders when the response lists affected
-// templates, so it is asserted conditionally rather than treated as mandatory).
-test('journey 5: rename a media UID and surface affected-template warning', async ({ page }) => {
+// Journey 5 — rename a media file from the library (M35.19: the UID of a file is shown and copied in the
+// drawer, the name is changed with F2 / "Rename…" in a dialog that checks it as you type).
+test('journey 5: rename a media file; links keep pointing at it', async ({ page }) => {
   test.skip(!process.env['SF_RUN_E2E'], 'requires seeded demo backend (SF_RUN_E2E=1)');
   await login(page);
   await page.goto(`/p/${PROJECT_KEY}/media`);
   await expect(page.locator('sf-media-library')).toBeVisible();
 
-  // Open the first media asset's detail drawer.
-  await page.locator('sf-media-library .cell__body').first().click();
-  const drawer = page.locator('sf-media-detail-drawer');
-  await expect(drawer).toBeVisible();
-
-  // Use the UID-rename affordance inside the "Identity" section.
-  const rename = drawer.locator('sf-uid-rename');
-  await rename.getByRole('button', { name: 'Change UID' }).click();
-  await rename.locator('.uid-rename__input').fill('e2e_renamed_uid');
-  await rename.getByRole('button', { name: 'Save' }).click();
-
-  // After a successful save the edit form collapses (the row shows the new value again).
-  // The affected-templates warning is amber and only appears if the API reports any.
-  const warning = rename.locator('.uid-rename__warning');
-  if (await warning.isVisible().catch(() => false)) {
-    await expect(warning).toContainText(/still reference the old uid/i);
-  } else {
-    await expect(rename.locator('.uid-rename__value')).toBeVisible();
-  }
+  // The first file's card, then F2.
+  const first = page.locator('sf-media-library .card').first();
+  await first.focus();
+  await page.keyboard.press('F2');
+  const dialog = page.getByRole('dialog', { name: /^Rename/ });
+  await expect(dialog).toContainText('Links to this file keep working');
+  const name = dialog.getByRole('textbox', { name: 'File name' });
+  const extension = ((await name.inputValue()).match(/\.[^.]+$/) ?? [''])[0];
+  await name.fill(`e2e-renamed${extension}`);
+  await dialog.getByRole('button', { name: 'Apply' }).click();
+  await expect(page.locator('sf-media-library .card', { hasText: `e2e-renamed${extension}` })).toBeVisible();
 });
 
 // Journey 6 — two browser contexts edit the same page; the second save hits a 409 and
@@ -137,33 +128,29 @@ test('journey 7: time travel to a past revision and restore an asset', async ({ 
   }
 });
 
-// Journey 8 — deleting a media asset that is still referenced: the drawer advertises the
-// usages and the confirm dialog requires typing DELETE before it will proceed.
-test('journey 8: delete a referenced media asset requires typed confirmation', async ({ page }) => {
+// Journey 8 — deleting a media asset that is still referenced: the drawer's Used by tab lists the
+// usages and the confirmation names how many places the delete breaks (a plain confirm with Undo;
+// the typed word is only asked from 25 files on).
+test('journey 8: delete a referenced media asset says what breaks', async ({ page }) => {
   test.skip(!process.env['SF_RUN_E2E'], 'requires seeded demo backend (SF_RUN_E2E=1)');
   await login(page);
   await page.goto(`/p/${PROJECT_KEY}/media`);
   await expect(page.locator('sf-media-library')).toBeVisible();
 
-  // Open a media asset that is referenced elsewhere (the amber banner advertises it).
-  await page.locator('sf-media-library .cell__body').first().click();
-  const drawer = page.locator('sf-media-detail-drawer');
+  // Open a media asset that is referenced elsewhere.
+  await page.locator('sf-media-library .card').first().click();
+  const drawer = page.locator('body > sf-drawer');
   await expect(drawer).toBeVisible();
 
-  // "Referenced by" section renders its usage list.
-  await expect(drawer.getByText('Referenced by')).toBeVisible();
-  const usages = drawer.locator('.usages li');
-  await expect(usages.first()).toBeVisible();
+  // "Used by" lists the usages.
+  await drawer.getByRole('tab', { name: /^Used by/ }).click();
+  await expect(drawer.locator('.usage').first()).toBeVisible();
 
-  // Trigger delete → proportional confirmation dialog appears and blocks delete.
-  await drawer.locator('.drawer__footer').getByRole('button', { name: 'Delete' }).click();
-  const dlg = drawer.locator('.dlg');
-  await expect(dlg).toBeVisible();
-  await expect(dlg).toContainText(/referenced by \d+ asset/i);
-
-  const confirmDelete = dlg.getByRole('button', { name: 'Delete', exact: true });
-  await expect(confirmDelete).toBeDisabled();
-
-  await dlg.locator('input.dlg__input').fill('DELETE');
-  await expect(confirmDelete).toBeEnabled();
+  // Delete… from the drawer's ⋮ menu → the confirmation says what breaks.
+  await drawer.getByRole('button', { name: 'File actions' }).click();
+  await page.getByRole('menuitem', { name: /^Delete/ }).click();
+  const dlg = page.getByRole('dialog', { name: /^Delete/ });
+  await expect(dlg).toContainText(/is used in \d+ place/i);
+  await expect(dlg.getByRole('button', { name: 'Delete', exact: true })).toBeEnabled();
+  await dlg.getByRole('button', { name: 'Cancel' }).click();
 });

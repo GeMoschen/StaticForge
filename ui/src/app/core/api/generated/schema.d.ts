@@ -1092,6 +1092,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{projectKey}/media/download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["download"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{projectKey}/import": {
         parameters: {
             query?: never;
@@ -3045,6 +3061,10 @@ export interface components {
             /** Format: double */
             y?: number;
         };
+        MediaDownloadRequest: {
+            uuids?: string[];
+            name?: string;
+        };
         MediaMetadataRequest: {
             altText?: string;
             caption?: string;
@@ -3311,6 +3331,9 @@ export interface components {
             /** Format: int64 */
             compactedThrough?: number;
             codeHighlighting?: components["schemas"]["CodeHighlightingView"];
+            effectiveAllowedMimeTypes?: string[];
+            /** Format: int64 */
+            mediaMaxUploadBytes?: number;
         };
         SetMemberRoleRequest: {
             role: string;
@@ -4568,6 +4591,14 @@ export interface components {
             processCms?: boolean;
             textEditable?: boolean;
             localized?: boolean;
+            /** Format: int32 */
+            width?: number;
+            /** Format: int32 */
+            height?: number;
+            /** Format: date-time */
+            changedAt?: string;
+            /** Format: int32 */
+            usageCount?: number;
             release?: {
                 [key: string]: components["schemas"]["LocaleReleaseView"];
             };
@@ -7619,6 +7650,32 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["MediaBulkItemResult"][];
+                };
+            };
+        };
+    };
+    download: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MediaDownloadRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": string;
                 };
             };
         };

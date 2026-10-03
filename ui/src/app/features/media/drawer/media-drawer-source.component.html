@@ -1,81 +1,63 @@
-<section class="source" aria-label="Source">
-  @if (text.tooLarge()) {
-    <div class="banner banner--warning">
-      This file is too large to edit here. Download it, edit it locally and use Replace file.
-    </div>
-  } @else if (text.sourceLoading()) {
-    <span class="muted">Loading…</span>
-  } @else {
-    @if (!text.sourceUtf8()) {
-      <div class="banner banner--warning">
-        This file is not valid UTF-8. Unreadable characters are shown as �, and saving stores the
-        file as UTF-8.
-      </div>
-    }
-    @if (text.textLocale() !== null) {
-      <label class="text-locale">
-        <span>Language</span>
-        <select [value]="text.textLocale()" (change)="text.onTextLocaleChange($event)" aria-label="Language of the file">
-          @for (locale of core.locales.locales(); track locale.code) {
-            <option [value]="locale.code" [selected]="locale.code === text.textLocale()">
-              {{ locale.label ?? locale.code }} ({{ (locale.code ?? '').toUpperCase() }})
-            </option>
-          }
-        </select>
-      </label>
-    }
-    @if (text.lineEnding() === 'MIXED') {
-      <div class="banner banner--warning">
-        This file mixes line endings; saving stores LF line endings.
-      </div>
-    }
-    <sf-code-editor
-      #sourceEditor
-      class="source__editor"
-      language="octl"
-      label="File source"
+@if (banner() === 'large') {
+  <sf-banner tone="warning">
+    {{ 'media.drawer.source.large' | transloco }}
+    <span sfBannerActions class="actions">
+      <sf-button variant="secondary" size="sm" icon="download" (click)="download()">{{ 'media.drawer.source.download' | transloco }}</sf-button>
+      <sf-button variant="secondary" size="sm" icon="swap_horiz" (click)="replaceRequested.emit()">{{
+        'media.drawer.source.replace' | transloco
+      }}</sf-button>
+    </span>
+  </sf-banner>
+} @else if (text.sourceLoading() || (text.savedText() === null && !text.sourceFailed())) {
+  <sf-skeleton [lines]="10" />
+} @else if (text.sourceFailed()) {
+  <sf-banner tone="danger" live="polite">
+    {{ 'media.drawer.source.failed' | transloco }}
+    <span sfBannerActions class="actions">
+      <sf-button variant="secondary" size="sm" (click)="text.loadSource()">{{ 'media.drawer.source.retry' | transloco }}</sf-button>
+    </span>
+  </sf-banner>
+} @else {
+  @if (banner() === 'utf8') {
+    <sf-banner tone="warning">{{ 'media.drawer.source.utf8' | transloco }}</sf-banner>
+  }
+  @if (isLocalized()) {
+    <label class="language">
+      <span>{{ 'media.drawer.source.language' | transloco }}</span>
+      <sf-select
+        [options]="languageOptions()"
+        [value]="text.textLocale()"
+        [aria-label]="'media.drawer.source.languageLabel' | transloco"
+        (valueChange)="pickLanguage($event)"
+      />
+    </label>
+  }
+  @if (mixedEndings()) {
+    <sf-banner tone="warning">{{ 'media.drawer.source.eol' | transloco }}</sf-banner>
+  }
+  @for (epoch of [text.editorEpoch()]; track epoch) {
+    <sf-code-panel
+      class="code"
+      [fileName]="media().fileName ?? ''"
+      [languageLabel]="languageLabel()"
       [value]="text.editorSeed()"
+      language="octl"
+      [format]="highlight().format"
+      [svg]="highlight().svg"
+      [names]="names()"
       [readOnly]="core.readOnly()"
       [diagnostics]="text.sourceDiagnostics()"
-      [indentWithTabs]="true"
-      [format]="sourceFormat().format"
-      [svg]="sourceFormat().svg"
+      [label]="'media.drawer.source.label' | transloco: { name: media().fileName }"
       (valueChange)="text.onSourceInput($event)"
-    />
-
-    @if (text.sourceDiagnostics().length > 0) {
-      <div class="diagnostics" aria-live="polite">
-        @for (diag of text.sourceDiagnostics(); track $index) {
-          <button
-            type="button"
-            class="diagnostic diagnostic--button"
-            [class.diagnostic--error]="diag.severity === 'ERROR'"
-            [class.diagnostic--warning]="diag.severity !== 'ERROR'"
-            (click)="goToDiagnostic(diag)"
-          >
-            <span class="diagnostic__code">{{ diag.code }}</span>
-            @if (positionLabel(diag); as position) {
-              <span class="diagnostic__position">{{ position }}</span>
-            }
-            <span>{{ diag.message }}</span>
-          </button>
-        }
-      </div>
-    }
-
-    <div class="source__actions">
-      <sf-button variant="primary" [disabled]="!text.canSaveSource()" (click)="text.saveSource()">
-        {{ text.sourceSaving() ? 'Saving…' : 'Save' }}
-      </sf-button>
-      <span class="muted">
-        @if (text.sourceHasErrors()) {
-          Fix the errors to save.
-        } @else if (text.dirty()) {
-          Unsaved changes — saving creates a revision.
-        } @else {
-          Every save creates a revision.
-        }
-      </span>
-    </div>
+    >
+      <sf-menu
+        sfCodePanelTools
+        size="sm"
+        [items]="highlightItems()"
+        [text]="'media.drawer.source.highlight.chip' | transloco: { format: languageLabel() }"
+        [label]="'media.drawer.source.highlight.menu' | transloco"
+      />
+    </sf-code-panel>
   }
-</section>
+  <p class="hint">{{ 'media.drawer.source.completeHint' | transloco }}</p>
+}

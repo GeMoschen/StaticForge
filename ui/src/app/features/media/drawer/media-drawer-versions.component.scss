@@ -1,0 +1,5 @@
+@use 'drawer-tabs';
+
+@include drawer-tabs.stack;
+@include drawer-tabs.text;
+@include drawer-tabs.rows('.version');

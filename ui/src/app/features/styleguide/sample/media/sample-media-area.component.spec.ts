@@ -85,12 +85,15 @@ describe('SampleMediaAreaComponent', () => {
     it('shows the upload panel mid-upload, with a finished and a failed file', async () => {
       await setup({ upload: '1' });
 
-      const panel = screen.getByRole('region', { name: 'Uploads' });
+      // The header names the folder the files go to.
+      const panel = screen.getByRole('region', { name: 'Uploads to Products' });
       expect(within(panel).getAllByRole('progressbar').length).toBe(2);
       expect(within(panel).getByRole('button', { name: 'Retry' })).toBeInTheDocument();
       expect(within(panel).getByRole('button', { name: 'Cancel the upload of iced-latte-terrace.jpg' })).toBeInTheDocument();
 
-      fireEvent.click(within(panel).getByRole('button', { name: 'Add alt text' }));
+      // A finished picture asks for its alt text in the panel; its details open from the row.
+      expect(within(panel).getByRole('textbox', { name: 'Alt text for cold-brew-bottle.jpg' })).toHaveValue('');
+      fireEvent.click(within(panel).getByRole('button', { name: 'Open the details of cold-brew-bottle.jpg' }));
       const detail = await drawer('cold-brew-bottle.jpg');
       expect(within(detail).getByRole('textbox', { name: /Alt text/ })).toHaveValue('');
     });

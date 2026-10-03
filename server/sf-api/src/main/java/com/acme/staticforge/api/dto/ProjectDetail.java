@@ -10,6 +10,8 @@ import java.util.List;
  * role (epic decision 12). {@code compactedThrough} is the newest revision revision compaction has processed (M29.4.3);
  * {@code null} when the project was never compacted — reads at later revisions are never compacted.
  * {@code codeHighlighting} are the project's code highlighting overrides (M33 follow-up), empty maps when none.
+ * {@code effectiveAllowedMimeTypes} is the allow-list uploads are checked against (the project's own, else the instance's
+ * default) and {@code mediaMaxUploadBytes} the instance's size cap per file (M35.19: the library checks files before sending).
  */
 public record ProjectDetail(
         String key,
@@ -22,4 +24,6 @@ public record ProjectDetail(
         PublishPolicyView publishPolicy,
         List<String> permissions,
         Long compactedThrough,
-        CodeHighlightingView codeHighlighting) {}
+        CodeHighlightingView codeHighlighting,
+        List<String> effectiveAllowedMimeTypes,
+        Long mediaMaxUploadBytes) {}

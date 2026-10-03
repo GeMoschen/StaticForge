@@ -585,6 +585,38 @@
       "info": "Information",
       "warning": "Warning",
       "error": "Error"
+    },
+    "assetUrls": {
+      "title": "URLs",
+      "unavailable": "The URLs of this file are not available yet.",
+      "indexPage": "Uses the URL of its index page",
+      "none": "This asset has no URL of its own.",
+      "noneYet": "No URL yet — the next build or preview assigns one.",
+      "areaBuild": "Build",
+      "areaPreview": "Preview",
+      "url": "URL",
+      "newUrl": "New URL",
+      "placeholder": "e.g. company/about.html",
+      "manual": "manual",
+      "override": "Override",
+      "reset": "Reset",
+      "setUrl": "Set URL",
+      "resetAll": "Reset all URLs",
+      "area": "Area",
+      "channel": "Channel",
+      "language": "Language",
+      "notLocalized": "Not localized",
+      "saved": "URL saved — the next build moves the output there",
+      "wasReset": "URL reset — the next build or preview assigns the computed one",
+      "resetFailed": "Could not reset the URL — try again in a moment.",
+      "allWereReset": "URLs reset — the next build or preview assigns the computed ones",
+      "resetAllFailed": "Could not reset the URLs — try again in a moment."
+    },
+    "assetImpact": {
+      "heading": "Impact",
+      "asOfNow": "as of now",
+      "notRevision": "reflects the current state, not revision {revision}",
+      "empty": "Nothing would rebuild."
     }
   },
   "shell": {
@@ -788,7 +820,10 @@
         "tree": "Trees",
         "general": "Everywhere",
         "goTo": "Go to",
-        "publishing": "Publishing"
+        "publishing": "Publishing",
+        "mediaGrid": "Media files",
+        "mediaDrawer": "File details",
+        "mediaFocal": "Focal point"
       },
       "items": {
         "palette": "Search and commands",
@@ -846,7 +881,23 @@
         "richToolbar": "Focus the formatting toolbar",
         "richBold": "Bold",
         "richItalic": "Italic",
-        "richLink": "Insert link"
+        "richLink": "Insert link",
+        "gridMove": "Move between files (any arrow key)",
+        "gridFirst": "First file",
+        "gridLast": "Last file",
+        "gridSelect": "Select or deselect the file",
+        "gridAll": "Select all files",
+        "gridOpen": "Open the file",
+        "fileRename": "Rename the file",
+        "fileMenu": "Open the file’s menu",
+        "fileDelete": "Delete the file (or the selection)",
+        "drawerPrevious": "Previous file (focus in the drawer’s header)",
+        "drawerNext": "Next file (focus in the drawer’s header)",
+        "drawerClose": "Close the file details",
+        "focalMove": "Move the focal point by 1 % (focus on the picture; any arrow key)",
+        "focalMoveBig": "Move the focal point by 10 % (any arrow key)",
+        "mediaUpload": "Upload files",
+        "mediaFavorites": "Show the favorites"
       }
     },
     "sidenav": {
@@ -1341,11 +1392,16 @@
         "title": "Settings"
       },
       "media": {
-        "downloadNotice": "{count, plural, one {Downloading “{name}”} other {Downloading # files}} (prototype — nothing is downloaded).",
         "folders": {
           "title": "Folders",
           "resize": "Resize the folders pane",
-          "new": "New folder"
+          "new": "New folder",
+          "filter": "Filter folders…",
+          "filterLabel": "Filter the folders",
+          "emptyTitle": "No folders yet",
+          "emptyHint": "Create a folder, then upload files into it.",
+          "noMatch": "No folder matches “{query}”",
+          "clearFilter": "Clear filter"
         },
         "toolbar": {
           "label": "Library tools",
@@ -1379,7 +1435,11 @@
           "rename": "Rename folder",
           "move": "Move folder…",
           "delete": "Delete folder…",
-          "deleteNotice": "Deleting a folder is not part of the sample."
+          "deleteNotice": "Deleting a folder is not part of the sample.",
+          "title": "Media",
+          "loading": "Loading the files of {folder}…",
+          "error": "Couldn’t load the files of {folder}.",
+          "retry": "Retry"
         },
         "grid": {
           "label": "Files in {folder}",
@@ -1395,13 +1455,16 @@
             "dimensions": "Dimensions",
             "size": "Size",
             "modified": "Modified",
-            "usages": "Used by"
+            "usages": "Used by",
+            "actions": "Actions"
           }
         },
         "empty": {
           "title": "This folder is empty",
           "noMatch": "No files match the search or filter",
-          "description": "Drop files here or upload them to {folder}."
+          "description": "Drop files here or upload them to {folder}.",
+          "libraryTitle": "Your media library is empty",
+          "libraryHint": "Create a folder to organise your files, then upload pictures, documents and text files into it. You can also drop files anywhere in this area."
         },
         "bulk": {
           "move": "Move",
@@ -1418,7 +1481,6 @@
         },
         "drop": "Drop files to upload to {folder}",
         "uploads": {
-          "title": "Uploads",
           "running": "{count} of {total} uploading",
           "finished": "{failed, plural, =0 {All uploads finished} one {# upload failed} other {# uploads failed}}",
           "collapse": "Hide the upload list",
@@ -1426,11 +1488,25 @@
           "close": "Close uploads",
           "progress": "Uploading {name}",
           "percent": "{value} %",
-          "done": "Uploaded",
-          "error": "Interrupted — the connection was lost",
+          "done": "{outcome, select, replaced {Uploaded — replaced the existing file} copy {Uploaded as “{name}”} other {Uploaded}}{altSaved, select, true { · Alt text saved} other {}}",
           "cancel": "Cancel the upload of {name}",
-          "addAlt": "Add alt text",
-          "retry": "Retry"
+          "retry": "Retry",
+          "titleTo": "Uploads to {folder}",
+          "titleMany": "Uploads to {count} folders",
+          "errors": {
+            "type": "This file type isn’t accepted. Use images, PDF, CSS or SVG files.",
+            "size": "{size} is over the limit of {limit} per file.",
+            "duplicate": "A file with this name already exists in {folder}.",
+            "network": "Interrupted — the connection was lost."
+          },
+          "replace": "Replace",
+          "keepBoth": "Keep both",
+          "remove": "Remove {name} from the list",
+          "details": "Open the details of {name}",
+          "altLabel": "Alt text for {name}",
+          "altPlaceholder": "Describe the picture",
+          "altSave": "Save",
+          "altSaved": "Alt text of “{name}” saved"
         },
         "tabs": {
           "details": "Details",
@@ -1453,17 +1529,18 @@
           "copyLink": "Copy link",
           "delete": "Delete…",
           "linkCopied": "Link copied",
-          "unsaved": "Unsaved changes",
           "revert": "Revert",
           "save": "Save",
           "nothingToSave": "No changes to save",
-          "saved": "Saved “{name}” (prototype — kept until you leave the sample)."
+          "saved": "Saved “{name}” (prototype — kept until you leave the sample).",
+          "rename": "Rename…",
+          "move": "Move…"
         },
         "details": {
           "page": "Page 1 of {count}",
           "textPreview": "Text of {name}",
           "focalLabel": "Focal point at {x} % across and {y} % down",
-          "focalHint": "Click the picture to set the focal point, or use the arrow keys (Shift: bigger steps).",
+          "focalHint": "Click the picture to set the focal point, or use the arrow keys (Shift: bigger steps). Only photos have a focal point.",
           "focalValue": "Focal point {x} % × {y} %",
           "focalX": "Focal point X",
           "focalY": "Focal point Y",
@@ -1490,7 +1567,14 @@
             "SVG": "SVG image (text media)",
             "CSS": "CSS stylesheet (text media)",
             "PDF": "PDF document"
-          }
+          },
+          "noFocal": "Only photos have a focal point. PNG and SVG pictures, PDFs and text files are used as they are.",
+          "mediaType": "Media type",
+          "copyMediaType": "Copy media type",
+          "hash": "Hash (SHA-256)",
+          "copyHash": "Copy hash",
+          "storagePath": "Storage path",
+          "copyStoragePath": "Copy storage path"
         },
         "variants": {
           "intro": "Generated sizes and formats. Pages pick the best one for each screen.",
@@ -1532,7 +1616,23 @@
           "label": "Served output of {name}"
         },
         "source": {
-          "label": "Source of {name}"
+          "label": "Source of {name}",
+          "large": "This file is too large to edit here. Download it, edit it locally and use Replace file.",
+          "download": "Download",
+          "replace": "Replace file",
+          "utf8": "This file is not valid UTF-8. Unreadable characters are shown as �, and saving stores the file as UTF-8.",
+          "eol": "This file mixes line endings; saving stores LF line endings.",
+          "language": "Language",
+          "languageLabel": "Language of the file",
+          "completeHint": "Ctrl+Space inside an instruction completes global values, media (media:…) and pages (page:…).",
+          "highlight": {
+            "chip": "Highlighted as {format}",
+            "menu": "Highlight this file type as",
+            "group": "Project setting for {type} files",
+            "auto": "Auto",
+            "detected": "Detected: {format}",
+            "changed": "{type} files in this project are now highlighted as {format}. (Sample: nothing is saved.)"
+          }
         },
         "usedBy": {
           "count": "{count, plural, one {Used in # place} other {Used in # places}}",
@@ -1550,6 +1650,51 @@
           "restoreMessage": "“{name}” goes back to this version. The current one stays in the history.",
           "restoreConfirm": "Restore",
           "restored": "Restored version {version} (prototype — nothing was changed)."
+        },
+        "download": {
+          "single": "Downloading “{name}” (prototype — nothing is downloaded).",
+          "zip": "Downloading {count} files as {zip} — several files come as one ZIP named after the folder (prototype — nothing is downloaded)."
+        },
+        "menu": {
+          "label": "Actions for {name}",
+          "open": "Open",
+          "rename": "Rename…",
+          "move": "Move…",
+          "download": "Download",
+          "copyLink": "Copy link",
+          "delete": "Delete…",
+          "moveMany": "Move {count} files…",
+          "downloadMany": "Download {count} files as ZIP",
+          "deleteMany": "Delete {count} files…"
+        },
+        "rename": {
+          "title": "Rename “{name}”",
+          "label": "File name",
+          "hint": "Links to this file keep working: they point to the file, not to its name.",
+          "required": "Enter a file name.",
+          "characters": "A file name can’t contain / \\ : * ? \" < > |",
+          "tooLong": "Use at most {max} characters.",
+          "extension": "Keep the .{extension} extension: the file type stays the same.",
+          "taken": "A file named “{name}” already exists in {folder}.",
+          "cancel": "Cancel",
+          "apply": "Apply",
+          "done": "Renamed “{from}” to “{to}”",
+          "undone": "Rename undone."
+        },
+        "move": {
+          "title": "{count, plural, one {Move “{name}”} other {Move # files}}",
+          "folderTitle": "Move folder “{name}”",
+          "lead": "Choose the folder to move to.",
+          "tree": "Folders",
+          "current": "Current folder",
+          "blocked": "Inside the folder being moved",
+          "topLevel": "Top level",
+          "chooseFirst": "Choose a folder first",
+          "cancel": "Cancel",
+          "confirm": "Move",
+          "done": "{count, plural, one {Moved “{name}” to {folder}} other {Moved # files to {folder}}}",
+          "folderDone": "Moved the folder “{name}” into {folder} (prototype — the sample’s folder tree stays as it is).",
+          "undone": "Move undone."
         }
       },
       "title": "Sample screen",
@@ -2624,7 +2769,10 @@
             "tree": "Trees",
             "general": "Everywhere",
             "goTo": "Go to",
-            "publishing": "Publishing"
+            "publishing": "Publishing",
+            "mediaGrid": "Media files",
+            "mediaDrawer": "File details",
+            "mediaFocal": "Focal point"
           },
           "items": {
             "refreshPreview": "Refresh the preview",
@@ -2659,7 +2807,19 @@
             "goSchedules": "Go to Schedules",
             "goSettings": "Go to Settings",
             "release": "Release…",
-            "build": "Build now…"
+            "build": "Build now…",
+            "gridMove": "Move between files (any arrow key)",
+            "gridFirst": "First file",
+            "gridLast": "Last file",
+            "gridOpen": "Open the file",
+            "fileRename": "Rename the file",
+            "fileMenu": "Open the file’s menu",
+            "fileDelete": "Delete the file (or the selection)",
+            "drawerPrevious": "Previous file (focus in the drawer’s header)",
+            "drawerNext": "Next file (focus in the drawer’s header)",
+            "drawerClose": "Close the file details",
+            "focalMove": "Move the focal point by 1 % (focus on the picture; any arrow key)",
+            "focalMoveBig": "Move the focal point by 10 % (any arrow key)"
           }
         }
       },
@@ -5040,6 +5200,451 @@
         "tree": "Folders",
         "choose": "Move here",
         "blocked": "Can't move into itself"
+      }
+    }
+  },
+  "media": {
+    "folders": {
+      "title": "Folders",
+      "resize": "Resize the folders pane",
+      "new": "New folder",
+      "filter": "Filter folders…",
+      "filterLabel": "Filter the folders",
+      "emptyTitle": "No folders yet",
+      "emptyHint": "Create a folder, then upload files into it.",
+      "noMatch": "No folder matches “{query}”",
+      "clearFilter": "Clear filter",
+      "loadFailed": "Couldn’t load the folders",
+      "loading": "Loading the folders…",
+      "nameTaken": "A folder with this name already exists here.",
+      "created": "Folder “{name}” created.",
+      "createFailed": "Could not create the folder — a folder with that name may already exist here.",
+      "renamed": "Renamed “{from}” to “{to}”.",
+      "renamedOne": "Folder renamed",
+      "renameFailed": "Could not rename “{name}” — try again in a moment.",
+      "renameDialog": "Rename…",
+      "root": "All media",
+      "delete": {
+        "title": "Delete “{name}”?",
+        "contents": "This also deletes {contents} inside it.",
+        "and": "{first} and {second}",
+        "items": "{count, plural, one {# media item} other {# media items}}",
+        "subfolders": "{count, plural, one {# sub-folder} other {# sub-folders}}",
+        "confirm": "Delete",
+        "done": "Deleted “{name}”.",
+        "failed": "Could not delete the folder — try again in a moment.",
+        "online": "It stays online until you release the deletion."
+      },
+      "favorites": "Favorites"
+    },
+    "toolbar": {
+      "label": "Library tools",
+      "search": "Search this folder",
+      "type": "File type",
+      "types": {
+        "all": "All types",
+        "images": "Images",
+        "documents": "Documents",
+        "text": "Text"
+      },
+      "sort": "Sort files",
+      "sortButton": "Sort: {field} {direction, select, asc {↑} other {↓}}",
+      "sortGroup": "Sort by",
+      "orderGroup": "Order",
+      "sortBy": {
+        "name": "Name",
+        "date": "Date modified",
+        "size": "Size",
+        "type": "Type"
+      },
+      "ascending": "Ascending",
+      "descending": "Descending",
+      "view": "View",
+      "grid": "Grid",
+      "list": "List",
+      "upload": "Upload"
+    },
+    "library": {
+      "title": "All media",
+      "count": "{count, plural, =0 {No files} one {# file} other {# files}}",
+      "rename": "Rename folder…",
+      "renameInline": "Rename folder",
+      "move": "Move folder…",
+      "delete": "Delete folder…",
+      "loading": "Loading the files of {folder}…",
+      "error": "Couldn’t load the files of {folder}.",
+      "retry": "Retry",
+      "assetGone": "That file no longer exists.",
+      "folderGone": "That folder no longer exists.",
+      "loadingMore": "Loading more files…"
+    },
+    "grid": {
+      "label": "Files in {folder}",
+      "select": "Select {name}",
+      "meta": "{type} · {size}"
+    },
+    "list": {
+      "label": "Files in {folder}",
+      "columns": {
+        "thumb": "Preview",
+        "name": "Name",
+        "type": "Type",
+        "dimensions": "Dimensions",
+        "size": "Size",
+        "modified": "Modified",
+        "usages": "Used by",
+        "actions": "Actions"
+      }
+    },
+    "empty": {
+      "title": "This folder is empty",
+      "noMatch": "No files match the search or filter",
+      "noMatchHint": "Try another name or type, or clear the filters.",
+      "clearFilters": "Clear filters",
+      "description": "Drop files here or upload them to {folder}.",
+      "libraryTitle": "Your media library is empty",
+      "libraryHint": "Create a folder to organise your files, then upload pictures, documents and text files into it. You can also drop files anywhere in this area."
+    },
+    "bulk": {
+      "delete": "Delete",
+      "move": "Move",
+      "download": "Download"
+    },
+    "dropzone": {
+      "text": "Drop files to upload to {folder}"
+    },
+    "uploads": {
+      "running": "{count} of {total} uploading",
+      "finished": "{failed, plural, =0 {All uploads finished} one {# upload failed} other {# uploads failed}}",
+      "collapse": "Hide the upload list",
+      "expand": "Show the upload list",
+      "close": "Close uploads",
+      "titleTo": "Uploads to {folder}",
+      "titleMany": "Uploads to {count} folders",
+      "waiting": "Waiting…",
+      "progress": "Uploading {name}",
+      "percent": "{value} %",
+      "done": "{outcome, select, replaced {Uploaded — replaced the existing file} copy {Uploaded as “{name}”} other {Uploaded}}{altSaved, select, true { · Alt text saved} other {}}",
+      "cancel": "Cancel the upload of {name}",
+      "retry": "Retry",
+      "replace": "Replace",
+      "keepBoth": "Keep both",
+      "remove": "Remove {name} from the list",
+      "details": "Open the details of {name}",
+      "altLabel": "Alt text for {name}",
+      "altPlaceholder": "Describe the picture",
+      "altSave": "Save",
+      "altSaved": "Alt text of “{name}” saved",
+      "viewerOnly": "Viewers can’t upload files.",
+      "errors": {
+        "type": "This file type isn’t accepted here.",
+        "typeList": "This file type isn’t accepted. Allowed: {types}.",
+        "size": "{size} is over the limit of {limit} per file.",
+        "sizeUnknown": "This file is over the size limit per file.",
+        "duplicate": "A file with this name already exists in {folder}.",
+        "network": "Interrupted — the connection was lost.",
+        "server": "The server couldn’t store this file."
+      }
+    },
+    "menu": {
+      "label": "Actions for {name}",
+      "open": "Open",
+      "rename": "Rename…",
+      "move": "Move…",
+      "download": "Download",
+      "copyLink": "Copy link",
+      "delete": "Delete…",
+      "moveMany": "Move {count} files…",
+      "downloadMany": "Download {count} files as ZIP",
+      "deleteMany": "Delete {count} files…",
+      "linkCopied": "Link copied.",
+      "linkFailed": "Could not copy the link."
+    },
+    "rename": {
+      "title": "Rename “{name}”",
+      "label": "File name",
+      "hint": "Links to this file keep working: they point to the file, not to its name.",
+      "required": "Enter a file name.",
+      "characters": "A file name can’t contain / \\ : * ? \" < > |",
+      "tooLong": "Use at most {max} characters.",
+      "extension": "Keep the .{extension} extension: the file type stays the same.",
+      "taken": "A file named “{name}” already exists in {folder}.",
+      "cancel": "Cancel",
+      "apply": "Apply",
+      "done": "Renamed “{from}” to “{to}”.",
+      "failed": "Could not rename “{name}” — try again in a moment.",
+      "renamedOne": "File renamed.",
+      "uid": {
+        "heading": "UID",
+        "hint": "Changing the UID breaks links that were written with it (for example media:uid in a template). The UID changes on its own, not with Apply."
+      },
+      "folder": {
+        "label": "Folder name",
+        "hint": "Links to this folder keep working: they point to the folder, not to its name.",
+        "required": "Enter a folder name.",
+        "taken": "A folder with this name already exists here."
+      }
+    },
+    "move": {
+      "title": "{count, plural, one {Move “{name}”} other {Move # files}}",
+      "folderTitle": "{count, plural, one {Move folder “{name}”} other {Move # folders}}",
+      "lead": "Choose the folder to move to.",
+      "tree": "Folders",
+      "current": "Current folder",
+      "blocked": "Inside the folder being moved",
+      "topLevel": "All media",
+      "chooseFirst": "Choose a folder first",
+      "cancel": "Cancel",
+      "confirm": "Move",
+      "done": "{count, plural, one {Moved “{name}” to {folder}.} other {Moved # files to {folder}.}}",
+      "folderDone": "{count, plural, one {Moved the folder “{name}” into {folder}.} other {Moved # folders into {folder}.}}",
+      "failed": "Could not move {count} of {total} files — try again in a moment.",
+      "folderFailed": "Could not move the folder — that may create a cycle, or a folder with that name is already there.",
+      "failedOne": "Could not move “{name}” — try again in a moment."
+    },
+    "delete": {
+      "title": "{count, plural, one {Delete “{name}”?} other {Delete # files?}}",
+      "message": "Deleted files can be restored from the history.",
+      "messageUsed": "{count, plural, one {It is used in # place; that link will break.} other {They are used in # places; those links will break.}}",
+      "online": "Published files stay online until you release their deletion.",
+      "confirm": "{count, plural, one {Delete} other {Delete # files}}",
+      "done": "{count, plural, one {Deleted “{name}”.} other {Deleted # files.}}",
+      "failed": "Could not delete “{name}” — try again in a moment.",
+      "failedSome": "Could not delete {failed} of {total} files — try again in a moment.",
+      "onlineOne": "It stays online until you release the deletion."
+    },
+    "download": {
+      "failed": "Could not download “{name}” — try again in a moment.",
+      "zipFailed": "Could not download the files — try again in a moment.",
+      "tooLarge": "These files add up to too much for one download. Select fewer files.",
+      "zipName": "media"
+    },
+    "drawer": {
+      "header": {
+        "tabs": "File details",
+        "previous": "Previous file",
+        "next": "Next file",
+        "more": "File actions",
+        "position": "{index} of {count}",
+        "loadFailed": "Couldn’t load this file.",
+        "retry": "Retry"
+      },
+      "tabs": {
+        "details": "Details",
+        "variants": "Variants",
+        "languages": "Languages",
+        "processing": "Processing",
+        "rendered": "Rendered",
+        "source": "Source",
+        "usedby": "Used by",
+        "versions": "Versions"
+      },
+      "menu": {
+        "replace": "Replace…",
+        "rename": "Rename…",
+        "move": "Move…",
+        "download": "Download",
+        "copyLink": "Copy link",
+        "delete": "Delete…"
+      },
+      "footer": {
+        "revert": "Revert",
+        "save": "Save",
+        "nothingToSave": "No changes to save"
+      },
+      "errors": {
+        "saveDetails": "Couldn’t save the details."
+      },
+      "details": {
+        "textPreview": "Text of {name}",
+        "textTooLarge": "Too large to preview. Open the Source tab for the options.",
+        "noPreview": "No preview for this kind of file.",
+        "focalLabel": "Focal point at {x} % across and {y} % down",
+        "focalHint": "Click the picture to set the focal point, or use the arrow keys (Shift: bigger steps). Only photos have a focal point.",
+        "focalValue": "Focal point {x} % × {y} %",
+        "focalX": "Focal point X",
+        "focalY": "Focal point Y",
+        "noFocal": "Only photos have a focal point. PNG and SVG pictures, PDFs and text files are used as they are.",
+        "alt": "Alt text",
+        "altHint": "Describe the picture for people who can’t see it.",
+        "altHintLocale": "Describe the picture for people who can’t see it. Saved for {language}.",
+        "caption": "Caption",
+        "captionHintLocale": "Saved for {language}.",
+        "copyright": "Copyright",
+        "info": "File",
+        "type": "Type",
+        "dimensions": "Dimensions",
+        "pixels": "{width} × {height} px",
+        "size": "Size",
+        "uploaded": "Uploaded",
+        "modified": "Modified",
+        "uid": "UID",
+        "copyUid": "Copy UID",
+        "path": "Path",
+        "copyPath": "Copy path",
+        "mediaType": "Media type",
+        "copyMediaType": "Copy media type",
+        "hash": "Hash (SHA-256)",
+        "copyHash": "Copy hash",
+        "storagePath": "Storage path",
+        "copyStoragePath": "Copy storage path",
+        "replace": "Replace file",
+        "replaceHint": "The new file keeps this file’s links, alt text and usages.",
+        "replacing": "Replacing the file…",
+        "replaced": "Replaced the file with “{name}”.",
+        "replacedCleared": "Replaced the file with “{name}”. CMS processing was switched off because the new file is not text.",
+        "downloadFailed": "Couldn’t download — try again in a moment.",
+        "kinds": {
+          "JPG": "JPEG image",
+          "PNG": "PNG image",
+          "GIF": "GIF image",
+          "WEBP": "WebP image",
+          "AVIF": "AVIF image",
+          "SVG": "SVG image (text media)",
+          "CSS": "CSS stylesheet (text media)",
+          "JS": "JavaScript (text media)",
+          "JSON": "JSON (text media)",
+          "HTML": "HTML (text media)",
+          "XML": "XML (text media)",
+          "MD": "Markdown (text media)",
+          "TXT": "Plain text (text media)",
+          "PDF": "PDF document",
+          "ZIP": "ZIP archive"
+        }
+      },
+      "variants": {
+        "intro": "Generated sizes and formats. Pages pick the best one for each screen.",
+        "columns": {
+          "variant": "Variant",
+          "format": "Format",
+          "dimensions": "Dimensions",
+          "size": "Size",
+          "actions": "Actions"
+        },
+        "original": "Original",
+        "widthPx": "{width} px",
+        "none": "–",
+        "download": "Download {variant}"
+      },
+      "languages": {
+        "switch": "Different file per language",
+        "intro": "For pictures and documents that contain text: each language gets its own file, the others use the default language’s.",
+        "single": "One file for all languages.",
+        "noLanguages": "This project has no languages. Add them in the project settings to give a file one version per language.",
+        "default": "Default",
+        "fallback": "Uses the {language} file",
+        "noFile": "No file",
+        "replace": "Replace…",
+        "replaceLabel": "Replace the {language} file",
+        "upload": "Upload",
+        "uploadLabel": "Upload a file for {language}",
+        "remove": "Remove the {language} file",
+        "removeTitle": "Remove the {language} file?",
+        "removeMessage": "{language} then uses the file it falls back to. The earlier version stays in the file’s history.",
+        "removeConfirm": "Remove file",
+        "removed": "File for {language} removed.",
+        "saved": "File for {language} saved.",
+        "saving": "Saving…",
+        "dropHint": "Drop a file on a language to upload it for that language.",
+        "nowLocalized": "Each language can now have its own file.",
+        "nowShared": "One file for every language again.",
+        "failed": "Couldn’t change the file setting — try again in a moment.",
+        "discardTitle": "Discard the language files?",
+        "discardMessage": "Only the default language’s file is kept.",
+        "discardFiles": "These files will be discarded: {files}.",
+        "keepFiles": "Keep the files",
+        "discardConfirm": "Discard files"
+      },
+      "processing": {
+        "switch": "Process CMS syntax",
+        "intro": "When on, $CMS_…$ instructions in this file are rendered when the site is generated and in preview, and $$ is served as a single $.",
+        "lastAttempt": "Last attempt",
+        "off": "Not processed: the file is served as it is.",
+        "checking": "Checking the file…",
+        "clean": "No problems.",
+        "summary": "{count, plural, one {# finding} other {# findings}}",
+        "warning": "Warning",
+        "error": "Error",
+        "position": "Line {line}, column {column}",
+        "switchedOn": "CMS processing switched on.",
+        "switchedOff": "CMS processing switched off."
+      },
+      "rendered": {
+        "intro": "What the site and the preview serve for this file, after its CMS syntax was processed.",
+        "label": "Served output of {name}",
+        "refresh": "Refresh",
+        "failed": "The file can’t be rendered."
+      },
+      "source": {
+        "label": "Source of {name}",
+        "large": "This file is too large to edit here. Download it, edit it locally and use Replace file.",
+        "download": "Download",
+        "replace": "Replace file",
+        "failed": "Couldn’t load the text of this file.",
+        "retry": "Retry",
+        "utf8": "This file is not valid UTF-8. Unreadable characters are shown as �, and saving stores the file as UTF-8.",
+        "eol": "This file mixes line endings; saving stores LF line endings.",
+        "language": "Language",
+        "languageLabel": "Language of the file",
+        "completeHint": "Ctrl+Space inside an instruction completes global values (CMS_GLOBAL…), media (media:…) and pages (page:…).",
+        "fixErrors": "Fix the errors in the source to save.",
+        "conflict": "Someone else changed this file.",
+        "notSaved": "The source was not saved.",
+        "savedRevision": "Saved as revision {revision}.",
+        "nothingChanged": "No changes to save.",
+        "highlight": {
+          "chip": "Highlighted as {format}",
+          "menu": "Highlight this file type as",
+          "group": "Project setting for {type} files",
+          "auto": "Auto",
+          "detected": "Detected: {format}",
+          "changed": "{type} files in this project are now highlighted as {format}.",
+          "noRights": "Changing it is a project setting, for project admins.",
+          "noExtension": "This file has no extension, and the setting is by file type.",
+          "failed": "Couldn’t change the highlighting — try again in a moment."
+        }
+      },
+      "usedBy": {
+        "count": "{count, plural, one {Used in # place} other {Used in # places}}",
+        "none": "Not used anywhere",
+        "noneHint": "Pages and records that use this file are listed here.",
+        "failed": "Couldn’t load where this file is used.",
+        "retry": "Retry",
+        "types": {
+          "PAGE": "Page",
+          "RECORD": "Record",
+          "RECORD_SET": "Record set",
+          "PAGE_TEMPLATE": "Page template",
+          "SECTION_TEMPLATE": "Section template",
+          "DATASET": "Dataset",
+          "GLOBAL_SET": "Global set",
+          "PAGE_REFERENCE": "Navigation",
+          "MEDIA": "Media file"
+        }
+      },
+      "versions": {
+        "version": "Version {version}",
+        "current": "Current",
+        "deleted": "Deleted",
+        "restore": "Restore…",
+        "restoreTitle": "Restore version {version}?",
+        "restoreMessage": "“{name}” goes back to this version. The current one stays in the history.",
+        "restoreConfirm": "Restore",
+        "restored": "Restored version {version}.",
+        "failed": "Couldn’t restore that version — try again in a moment.",
+        "loadFailed": "Couldn’t load the history of this file.",
+        "retry": "Retry",
+        "saveFirst": "Save or revert your changes first."
+      },
+      "delete": {
+        "title": "Delete “{name}”?",
+        "used": "{count, plural, one {It is used in # place; that link will break.} other {It is used in # places; those links will break.}}",
+        "online": "It stays online until you release the deletion.",
+        "plain": "Deleted files can be restored from the history.",
+        "confirm": "Delete",
+        "undo": "Deleted “{name}”.",
+        "deleted": "File deleted.",
+        "failed": "Couldn’t delete the file — try again in a moment."
       }
     }
   }

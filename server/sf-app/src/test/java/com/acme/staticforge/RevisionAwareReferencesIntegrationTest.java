@@ -146,6 +146,32 @@ class RevisionAwareReferencesIntegrationTest {
                 .andExpect(jsonPath("$[0].sourcePath").value("content.hero"));
     }
 
+    @Test
+    void theMediaListCarriesTheUsageCountAndWhenTheFileChanged() throws Exception {
+        Fixture fx = newFixture();
+        ObjectNode picture = mapper.createObjectNode();
+        picture.putObject("image").put("width", 640).put("height", 480);
+        AssetVersionView media = create(fx, AssetType.MEDIA, "Hero", picture);
+        AssetVersionView unused = create(fx, AssetType.MEDIA, "Spare", mapper.createObjectNode());
+        AssetVersionView page = create(fx, AssetType.PAGE, "Home", pagePayload(template(fx, "Layout", "Hello").uuid()));
+        AssetVersionView linked = update(fx, page, withMedia(page, media.uuid()));
+        String list = "/api/v1/projects/" + fx.project().getKey() + "/media";
+
+        mvc.perform(get(list).header("Authorization", "Bearer " + fx.token()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[?(@.uuid == '" + media.uuid() + "')].usageCount").value(1))
+                .andExpect(jsonPath("$.content[?(@.uuid == '" + media.uuid() + "')].width").value(640))
+                .andExpect(jsonPath("$.content[?(@.uuid == '" + media.uuid() + "')].height").value(480))
+                .andExpect(jsonPath("$.content[?(@.uuid == '" + media.uuid() + "')].changedAt").isNotEmpty())
+                .andExpect(jsonPath("$.content[?(@.uuid == '" + unused.uuid() + "')].usageCount").value(0))
+                .andExpect(jsonPath("$.content[?(@.uuid == '" + unused.uuid() + "')].width")
+                        .value(org.hamcrest.Matchers.contains(org.hamcrest.Matchers.nullValue())));
+
+        update(fx, linked, pagePayload(UUID.fromString(linked.payload().path("templateRef").asText())));
+        mvc.perform(get(list).header("Authorization", "Bearer " + fx.token()))
+                .andExpect(jsonPath("$.content[?(@.uuid == '" + media.uuid() + "')].usageCount").value(0));
+    }
+
     /**
      * Incremental matrix. P1 = T2 + section S + media M; P2 = T1, which reads
      * {@code $CMS_VALUE(page:about.title)$}; P3 = T2 + an internal link to About; About = T2.

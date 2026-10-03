@@ -149,9 +149,9 @@ function builtFile(projectKey: string, targetId: number, runId: number, file: st
 
 async function login(page: Page): Promise<void> {
   await page.goto('/login');
-  await page.locator('sf-login input[formControlName="username"]').fill(USER);
-  await page.locator('sf-login input[formControlName="password"]').fill(PASSWORD);
-  await page.locator('sf-login button[type="submit"]').click();
+  await page.getByLabel('Username').fill(USER);
+  await page.getByLabel('Password', { exact: true }).fill(PASSWORD);
+  await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page).toHaveURL(/\/$/, { timeout: 15_000 });
 }
 
@@ -163,14 +163,48 @@ async function navigate(page: Page, url: string): Promise<void> {
   }, url);
 }
 
+/** The media detail: an sf-drawer in <body>, titled with the file name. */
 function drawer(page: Page) {
-  return page.locator('sf-media-detail-drawer');
+  return page.locator('body > sf-drawer');
+}
+
+/** The Source tab's editor (CodeMirror: a contenteditable, labelled "Source of <file>"). */
+function source(page: Page) {
+  return drawer(page).getByRole('textbox', { name: /^Source of / });
+}
+
+/** Replaces the whole text of a CodeMirror editor. */
+async function setSource(page: Page, text: string): Promise<void> {
+  await source(page).click();
+  await page.keyboard.press('Control+A');
+  await page.keyboard.insertText(text);
+}
+
+/** Time travel: the project history drawer's *View* on a revision (the banner then says which one is shown). */
+async function viewRevision(page: Page, revision: number): Promise<void> {
+  await page.getByRole('button', { name: 'Project history' }).click();
+  await page
+    .locator('li', { has: page.getByText(new RegExp(`^Revision ${revision}$`)) })
+    .getByRole('button', { name: 'View' })
+    .click();
+  await expect(page.getByText(`Viewing revision ${revision}`)).toBeVisible();
+}
+
+/** Opens a drawer tab; one that does not fit the drawer's width sits in the tab bar's "More" menu. */
+async function openTab(page: Page, name: RegExp | string): Promise<void> {
+  const tab = drawer(page).getByRole('tab', { name });
+  if ((await tab.count()) > 0) {
+    await tab.click();
+    return;
+  }
+  await drawer(page).getByRole('button', { name: 'More', exact: true }).click();
+  await page.getByRole('menuitem', { name }).click();
 }
 
 async function openMedia(page: Page, projectKey: string, name: string): Promise<void> {
   await navigate(page, `/p/${projectKey}/media`);
-  await page.locator('sf-media-library .cell__body', { hasText: name }).click();
-  await expect(drawer(page).locator('.drawer__title')).toContainText(name);
+  await page.locator('sf-media-library .card', { hasText: name }).click();
+  await expect(drawer(page).getByRole('heading', { level: 2, name })).toBeVisible();
 }
 
 async function snap(page: Page, name: string): Promise<void> {
@@ -198,42 +232,43 @@ test('journey 1: a stylesheet is processed, edited, previewed and generated', as
     // 2. Enable processing: no errors, the CMS badge appears.
     await login(page);
     await openMedia(page, api.projectKey, 'site.css');
+    await openTab(page, 'Processing');
     const toggle = drawer(page).getByRole('switch', { name: 'Process CMS syntax' });
     const enabled = page.waitForResponse((r) => r.request().method() === 'PUT' && r.url().endsWith('/process'));
-    await toggle.check();
+    await toggle.click();
     expect((await enabled).status()).toBe(200);
     await expect(toggle).toBeChecked();
-    await expect(drawer(page).locator('.drawer__title .cms-badge')).toBeVisible();
-    await expect(drawer(page).locator('.process .diagnostic--error')).toHaveCount(0);
+    // Processed text media gets a Rendered tab.
+    await expect(drawer(page).getByRole('tab', { name: 'Rendered' })).toBeVisible();
+    await expect(drawer(page).locator('.diag--error')).toHaveCount(0);
 
-    // 3. Source tab: live validation flags $CMS_BODY and blocks Save; the diagnostic moves the caret.
-    await drawer(page).getByRole('tab', { name: /Source/ }).click();
-    const editor = drawer(page).getByRole('textbox', { name: 'File source' });
-    await expect(editor).toHaveValue('h1 { color: $CMS_VALUE(global:site.brandColor)$; }\n');
-    await editor.fill('h1 { color: $CMS_VALUE(global:site.brandColor)$; }\n$CMS_BODY(x)$\n');
-    const error = drawer(page).locator('.source .diagnostic--error', { hasText: 'SF-TPL-0121' });
+    // 3. Source tab: live validation flags $CMS_BODY and blocks Save; the problem moves the caret.
+    await openTab(page, 'Source');
+    await expect(source(page)).toContainText('$CMS_VALUE(global:site.brandColor)$');
+    await setSource(page, 'h1 { color: $CMS_VALUE(global:site.brandColor)$; }\n$CMS_BODY(x)$\n');
+    const error = drawer(page).locator('.sf-code-panel__problem', { hasText: 'SF-TPL-0121' });
     await expect(error).toBeVisible({ timeout: 10_000 });
     await expect(drawer(page).getByRole('button', { name: 'Save' })).toBeDisabled();
     await error.click();
-    const caret = await editor.evaluate((el: HTMLTextAreaElement) => el.selectionStart);
-    expect(caret).toBe('h1 { color: $CMS_VALUE(global:site.brandColor)$; }\n'.length);
+    await expect(drawer(page).locator('.sf-code-panel__position')).toHaveText('Ln 2, Col 1');
     await snap(page, 'j1-live-error');
 
-    await editor.fill('h1 { color: $CMS_VALUE(global:site.brandColor)$; }\nbody { margin: 0; }\n');
-    await expect(drawer(page).locator('.source .diagnostic--error')).toHaveCount(0, { timeout: 10_000 });
+    await setSource(page, 'h1 { color: $CMS_VALUE(global:site.brandColor)$; }\nbody { margin: 0; }\n');
+    await expect(drawer(page).locator('.sf-code-panel__problem')).toHaveCount(0, { timeout: 10_000 });
     const saved = page.waitForResponse((r) => r.request().method() === 'PUT' && r.url().endsWith('/text'));
     await drawer(page).getByRole('button', { name: 'Save' }).click();
     const savedResponse = await saved;
     expect(savedResponse.status()).toBe(200);
     const savedRevision = (await savedResponse.json()).media.revision as number;
     expect((await api.revisions())[0].revisionId).toBe(savedRevision);
-    await expect(
-      page.locator('sf-revision-spine').getByRole('button', { name: new RegExp(`^Revision ${savedRevision} ·`) }),
-    ).toBeVisible({ timeout: 10_000 });
+    // The save is a revision of the project: the history drawer lists it (then it is closed again).
+    await page.getByRole('button', { name: 'Project history' }).click();
+    await expect(page.getByText(new RegExp(`^Revision ${savedRevision}$`))).toBeVisible({ timeout: 10_000 });
+    await page.getByRole('dialog', { name: /history/i }).getByRole('button', { name: 'Close' }).click();
 
     // 4. Rendered tab shows the substituted color.
-    await drawer(page).getByRole('tab', { name: 'Rendered' }).click();
-    await expect(drawer(page).locator('.rendered__output')).toContainText('h1 { color: #c00; }');
+    await openTab(page, 'Rendered');
+    await expect(drawer(page).getByRole('textbox', { name: /^Served output of / })).toContainText('h1 { color: #c00; }');
     await snap(page, 'j1-rendered');
     await drawer(page).getByRole('button', { name: 'Close' }).click();
 
@@ -274,30 +309,26 @@ test('journey 2: time travel shows the old source read-only; closing with unsave
 
     await login(page);
     await openMedia(page, api.projectKey, 'site.css');
-    await drawer(page).getByRole('tab', { name: /Source/ }).click();
-    const editor = drawer(page).getByRole('textbox', { name: 'File source' });
-    await expect(editor).toHaveValue('a { color: blue; }\n');
+    await openTab(page, 'Source');
+    await expect(source(page)).toContainText('a { color: blue; }');
 
-    // Unsaved edits: dismissing the confirm keeps the drawer open, accepting it closes the drawer.
-    await editor.fill('a { color: green; }\n');
-    page.once('dialog', (dialog) => dialog.dismiss());
+    // Unsaved edits: the leave dialog's Cancel keeps the drawer open, Discard closes it.
+    await setSource(page, 'a { color: green; }\n');
     await drawer(page).getByRole('button', { name: 'Close' }).click();
-    await expect(drawer(page).locator('aside.drawer')).toBeVisible();
-    page.once('dialog', (dialog) => dialog.accept());
+    await page.getByRole('dialog', { name: 'Unsaved changes' }).getByRole('button', { name: 'Cancel' }).click();
+    await expect(drawer(page)).toBeVisible();
     await drawer(page).getByRole('button', { name: 'Close' }).click();
+    await page.getByRole('dialog', { name: 'Unsaved changes' }).getByRole('button', { name: 'Discard' }).click();
     await expect(drawer(page)).toHaveCount(0);
 
     // Time travel to the revision before the edit.
-    await page
-      .locator('sf-revision-spine')
-      .getByRole('button', { name: new RegExp(`^Revision ${before} ·`) })
-      .click();
-    await expect(page.locator('.shell__timemachine')).toContainText(`Viewing revision ${before}`);
+    await viewRevision(page, before);
     await openMedia(page, api.projectKey, 'site.css');
+    await openTab(page, 'Processing');
     await expect(drawer(page).getByRole('switch', { name: 'Process CMS syntax' })).toBeDisabled();
-    await drawer(page).getByRole('tab', { name: /Source/ }).click();
-    await expect(editor).toHaveValue('a { color: red; }\n');
-    await expect(editor).not.toBeEditable();
+    await openTab(page, 'Source');
+    await expect(source(page)).toContainText('a { color: red; }');
+    await expect(source(page)).not.toBeEditable();
     await expect(drawer(page).getByRole('button', { name: 'Save' })).toBeDisabled();
     await snap(page, 'j2-time-travel');
   } finally {
@@ -320,12 +351,13 @@ test('journey 3: a robots.txt (detected as text/x-robots) can be processed and i
 
     await login(page);
     await openMedia(page, api.projectKey, 'robots.txt');
+    await openTab(page, 'Processing');
     const toggle = drawer(page).getByRole('switch', { name: 'Process CMS syntax' });
     await expect(toggle).toBeVisible();
     const enabled = page.waitForResponse((r) => r.request().method() === 'PUT' && r.url().endsWith('/process'));
-    await toggle.check();
+    await toggle.click();
     expect((await enabled).status()).toBe(200);
-    await expect(drawer(page).locator('.drawer__title .cms-badge')).toBeVisible();
+    await expect(drawer(page).getByRole('tab', { name: 'Rendered' })).toBeVisible();
     await snap(page, 'j3-robots-processed');
 
     const full = await api.generate('FULL', target.id);

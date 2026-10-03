@@ -1,124 +1,152 @@
 :host {
-  display: contents;
+  display: block;
+  overflow: auto;
+  padding-bottom: var(--sf-space-6);
+  // The row's padding keeps the focus ring and selection shadow from being clipped; the negative margin takes it back
+  // out so the cards line up with the header and toolbar.
+  margin-inline: calc(-1 * var(--sf-space-1));
 }
 
-.grid {
+.grid__row {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-  gap: var(--sf-3);
+  grid-template-columns: repeat(auto-fill, minmax(10.5rem, 1fr));
+  gap: var(--sf-space-4);
+  padding: var(--sf-space-1);
 }
 
-.cell {
+.grid__sentinel {
+  block-size: var(--sf-space-0);
+}
+
+.grid__more {
+  margin: var(--sf-space-2) var(--sf-space-1) 0;
+  color: var(--sf-text-muted);
+  font-size: var(--sf-fs-12);
+  line-height: var(--sf-lh-12);
+}
+
+// ── Card ─────────────────────────────────────────────────────────────────────
+.card {
   position: relative;
   display: flex;
   flex-direction: column;
-  border: 1px solid var(--sf-line);
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--sf-border);
   border-radius: var(--sf-radius-md);
   background: var(--sf-surface);
-  overflow: hidden;
+  cursor: pointer;
   transition:
-    border-color var(--sf-motion-fast) var(--sf-ease),
-    box-shadow var(--sf-motion-fast) var(--sf-ease);
+    border-color var(--sf-duration-fast) var(--sf-ease-standard),
+    box-shadow var(--sf-duration-fast) var(--sf-ease-standard);
+
+  &:hover {
+    border-color: var(--sf-border-strong);
+    box-shadow: var(--sf-elevation-1);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--sf-focus-ring);
+    outline-offset: 2px;
+  }
+
+  &.is-selected {
+    border-color: var(--sf-accent);
+    box-shadow: 0 0 0 1px var(--sf-accent);
+  }
+
+  &.is-open:not(.is-selected) {
+    border-color: var(--sf-accent);
+  }
 }
 
-.cell:hover {
-  border-color: color-mix(in srgb, var(--sf-signal) 50%, var(--sf-line));
-  box-shadow: var(--sf-shadow-1);
+.card__thumb {
+  aspect-ratio: 4 / 3;
+  overflow: hidden;
+  background: var(--sf-surface-sunken);
 }
 
-.cell--selected {
-  border-color: var(--sf-signal);
-  box-shadow: 0 0 0 1px var(--sf-signal);
-}
-
-.cell__check {
+// The checkbox shows on hover, on focus and when selected.
+.card__check {
   position: absolute;
-  top: var(--sf-1);
-  left: var(--sf-1);
-  z-index: 2;
+  inset-block-start: var(--sf-space-2);
+  inset-inline-start: var(--sf-space-2);
+  display: flex;
+  padding: var(--sf-space-1);
+  border-radius: var(--sf-radius-sm);
+  background: var(--sf-surface-raised);
+  box-shadow: var(--sf-elevation-1);
+  opacity: 0;
+  transition: opacity var(--sf-duration-fast) var(--sf-ease-standard);
 }
 
-.cell__body {
+.card:hover .card__check,
+.card:focus-within .card__check,
+.card.is-selected .card__check {
+  opacity: 1;
+}
+
+// The ⋮ button shows on hover and focus, and while its menu is open (focus is in the menu then); hidden, it is not a tab stop.
+.card__more {
+  position: absolute;
+  inset-block-start: var(--sf-space-2);
+  inset-inline-end: var(--sf-space-2);
+  display: flex;
+  border-radius: var(--sf-radius-sm);
+  background: var(--sf-surface-raised);
+  box-shadow: var(--sf-elevation-1);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity var(--sf-duration-fast) var(--sf-ease-standard);
+}
+
+.card:hover .card__more,
+.card:focus-within .card__more,
+.card__more:has([aria-expanded='true']) {
+  opacity: 1;
+  visibility: visible;
+}
+
+// The status icon sits at the end of the meta line (the top corners belong to the checkbox and the ⋮ button).
+.card__status {
+  position: absolute;
+  inset-block-end: var(--sf-space-2);
+  inset-inline-end: var(--sf-space-2);
+  padding: var(--sf-space-1);
+  border-radius: var(--sf-radius-pill);
+  background: var(--sf-surface-raised);
+  box-shadow: var(--sf-elevation-1);
+}
+
+.card__text {
   display: flex;
   flex-direction: column;
-  gap: var(--sf-1);
-  padding: var(--sf-2);
-  border: none;
-  background: transparent;
-  text-align: left;
-  cursor: pointer;
-  color: var(--sf-ink);
-}
-
-.cell__img {
-  width: 100%;
-  aspect-ratio: 4 / 3;
-  object-fit: cover;
-  background: var(--sf-line);
-  border-radius: var(--sf-radius-sm);
-}
-
-.cell__icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 100%;
-  aspect-ratio: 4 / 3;
-  background: var(--sf-line);
-  border-radius: var(--sf-radius-sm);
-  color: var(--sf-slate);
-  font-size: 2rem;
-}
-
-.cell--folder {
-  cursor: pointer;
-}
-
-.cell--folder .cell__body {
-  cursor: pointer;
-}
-
-.cell__icon--folder {
-  background: transparent;
-  color: var(--sf-amber);
-}
-
-.cell__name {
-  max-width: 100%;
+  gap: var(--sf-space-0);
   min-width: 0;
-  font-size: var(--sf-text-sm);
-  font-weight: 500;
+  padding: var(--sf-space-2) var(--sf-space-3);
+}
+
+// Long names truncate at the end only.
+.card__name {
   overflow: hidden;
+  color: var(--sf-text);
+  font-size: var(--sf-fs-13);
+  line-height: var(--sf-lh-13);
+  font-weight: var(--sf-weight-medium);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.cell__meta {
-  font-size: var(--sf-text-xs);
-  color: var(--sf-slate);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.card__meta {
+  color: var(--sf-text-muted);
+  font-size: var(--sf-fs-12);
+  line-height: var(--sf-lh-12);
 }
 
-.sentinel {
-  height: 1px;
-}
-
-.cell__badge {
-  margin-left: var(--sf-1);
-  padding: 0 var(--sf-1);
-  border: 1px solid var(--sf-signal);
-  border-radius: var(--sf-radius-sm);
-  color: var(--sf-signal);
-  font-family: var(--sf-font-mono, monospace);
-  font-size: var(--sf-text-xs);
-  font-weight: 400;
-}
-
-.cell__localized {
-  display: inline-flex;
-  vertical-align: middle;
-  margin-left: var(--sf-1);
-  color: var(--sf-slate);
+@media (prefers-reduced-motion: reduce) {
+  .card,
+  .card__check,
+  .card__more {
+    transition: none;
+  }
 }

@@ -1,0 +1,205 @@
+:host {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sf-space-4);
+}
+
+// ── Preview ──────────────────────────────────────────────────────────────────
+.preview {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 12rem;
+  padding: var(--sf-space-4);
+  border: 1px solid var(--sf-border);
+  border-radius: var(--sf-radius-md);
+  background: var(--sf-surface-sunken);
+}
+
+// Transparent files show a checkerboard behind them.
+.preview--checker {
+  background: repeating-conic-gradient(var(--sf-surface-muted) 0 25%, var(--sf-surface) 0 50%) 0 0 / var(--sf-space-4)
+    var(--sf-space-4);
+}
+
+.frame {
+  position: relative;
+  max-width: 100%;
+  overflow: hidden;
+  border-radius: var(--sf-radius-sm);
+}
+
+// A picture that does not say how big it is (an SVG without a size) is fitted into the preview's height instead of
+// collapsing to nothing.
+.frame--fill {
+  width: 100%;
+  height: 20rem;
+}
+
+.frame--focal {
+  cursor: crosshair;
+
+  &:focus-visible {
+    outline: 2px solid var(--sf-focus-ring);
+    outline-offset: 2px;
+  }
+}
+
+.frame__img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.frame__img--contain {
+  object-fit: contain;
+}
+
+// The focal point: a ring with a crosshair, centred on the point.
+.focal {
+  position: absolute;
+  width: var(--sf-space-8);
+  height: var(--sf-space-8);
+  border: 2px solid var(--sf-on-accent);
+  border-radius: 50%;
+  box-shadow:
+    0 0 0 2px var(--sf-accent),
+    var(--sf-elevation-2);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+
+  &::before,
+  &::after {
+    content: '';
+    position: absolute;
+    background: var(--sf-on-accent);
+  }
+
+  &::before {
+    inset-block: 0;
+    inset-inline-start: calc(50% - 1px);
+    width: 2px;
+  }
+
+  &::after {
+    inset-inline: 0;
+    inset-block-start: calc(50% - 1px);
+    height: 2px;
+  }
+}
+
+.preview__skeleton {
+  align-self: stretch;
+  width: 100%;
+}
+
+// A file without a picture (a PDF, a download, a text file too large to read here): its icon, name and a note.
+.preview--icon {
+  min-height: 10rem;
+}
+
+.icon-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sf-space-1);
+  max-width: 100%;
+  text-align: center;
+}
+
+.icon-card__icon {
+  color: var(--sf-text-subtle);
+  font-size: var(--sf-fs-30);
+}
+
+.icon-card__name {
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--sf-text);
+  font-size: var(--sf-fs-13);
+  line-height: var(--sf-lh-13);
+  font-weight: var(--sf-weight-medium);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.icon-card__note {
+  color: var(--sf-text-muted);
+  font-size: var(--sf-fs-12);
+  line-height: var(--sf-lh-12);
+}
+
+.code {
+  align-self: stretch;
+  width: 100%;
+  --sf-code-max-height: 20rem;
+}
+
+.focal-hint {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--sf-space-2);
+  margin: calc(-1 * var(--sf-space-2)) 0 0;
+  color: var(--sf-text-muted);
+  font-size: var(--sf-fs-12);
+  line-height: var(--sf-lh-12);
+}
+
+.focal-hint__value {
+  color: var(--sf-text);
+  font-variant-numeric: tabular-nums;
+}
+
+.focal-numbers {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--sf-space-3);
+}
+
+// ── Fields and facts ─────────────────────────────────────────────────────────
+.fields {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sf-space-3);
+}
+
+.subhead {
+  margin: var(--sf-space-2) 0 0;
+  color: var(--sf-text);
+  font-size: var(--sf-fs-13);
+  line-height: var(--sf-lh-13);
+  font-weight: var(--sf-weight-semibold);
+}
+
+.info {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  font-size: var(--sf-fs-13);
+  line-height: var(--sf-lh-13);
+}
+
+.info__row {
+  display: grid;
+  grid-template-columns: 8rem minmax(0, 1fr);
+  gap: var(--sf-space-3);
+  align-items: center;
+  padding: var(--sf-space-1) 0;
+  border-bottom: 1px solid var(--sf-border);
+
+  dt {
+    color: var(--sf-text-muted);
+  }
+
+  dd {
+    min-width: 0;
+    margin: 0;
+    color: var(--sf-text);
+  }
+}
+
+.num {
+  font-variant-numeric: tabular-nums;
+}

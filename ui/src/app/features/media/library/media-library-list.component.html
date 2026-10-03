@@ -1,0 +1,61 @@
+<sf-data-table
+  class="list"
+  selectable
+  tableId="media-list"
+  [columns]="columns()"
+  [rows]="library.visible()"
+  [rowKey]="rowKey"
+  [rowLabel]="rowLabel"
+  [currentKey]="library.assetUuid()"
+  [label]="'media.list.label' | transloco: { folder: folderName() }"
+  [bulkActions]="bulkActions()"
+  [loading]="loading()"
+  [emptyTitle]="'media.empty.title' | transloco"
+  (selectionChange)="library.setSelection($event.keys)"
+  (rowOpen)="library.openAsset($event.uuid ?? null)"
+  (contextmenu)="onContextMenu($event)"
+  (keydown)="onKeydown($event)"
+>
+  <ng-template sfDataTableCell="thumb" [sfDataTableCellRows]="library.visible()" let-row>
+    <span class="list-thumb"><sf-media-preview [item]="row" variant="row" /></span>
+  </ng-template>
+  <ng-template sfDataTableCell="name" [sfDataTableCellRows]="library.visible()" let-row>
+    <span class="list-name" [attr.data-file]="row.uuid">
+      <span class="list-name__text">{{ row.displayName }}</span>
+      @if (library.statusOf(row); as status) {
+        <sf-status size="sm" iconOnly [tone]="status.tone" [icon]="status.icon" [label]="status.label" />
+      }
+      <sf-asset-favorite
+        class="list-fav"
+        type="MEDIA"
+        [uuid]="row.uuid"
+        [name]="row.displayName"
+        [folderPath]="row.folderPath"
+        (click)="$event.stopPropagation()"
+      />
+    </span>
+  </ng-template>
+  <ng-template sfDataTableCell="dimensions" [sfDataTableCellRows]="library.visible()" let-row>
+    @if (row.width && row.height) {
+      <span class="list-num">{{ row.width }} × {{ row.height }}</span>
+    } @else {
+      <span class="list-muted">—</span>
+    }
+  </ng-template>
+  <ng-template sfDataTableCell="size" [sfDataTableCellRows]="library.visible()" let-row>
+    <span class="list-num">{{ row.sizeBytes | sfFileSize }}</span>
+  </ng-template>
+  <ng-template sfDataTableCell="modified" [sfDataTableCellRows]="library.visible()" let-row>
+    @if (row.changedAt) {
+      <sf-relative-time [value]="row.changedAt" />
+    } @else {
+      <span class="list-muted">—</span>
+    }
+  </ng-template>
+  <ng-template sfDataTableCell="usages" [sfDataTableCellRows]="library.visible()" let-row>
+    <span class="list-num">{{ row.usageCount ?? 0 }}</span>
+  </ng-template>
+  <ng-template sfDataTableCell="actions" [sfDataTableCellRows]="library.visible()" let-row>
+    <sf-menu size="sm" [items]="items.menuItems(row)" [label]="'media.menu.label' | transloco: { name: row.displayName }" />
+  </ng-template>
+</sf-data-table>

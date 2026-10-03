@@ -43,6 +43,10 @@ public interface AssetReferenceRepository extends JpaRepository<AssetReference, 
             """)
     List<AssetReference> findOutgoingValidAt(@Param("fromAssetId") Long fromAssetId, @Param("revision") long revision);
 
+    /** How many open (current) edges point at each of the given assets, as `[toAssetId, count]` rows (assets nothing points at have none). */
+    @Query("SELECT r.toAssetId, COUNT(r) FROM AssetReference r WHERE r.toAssetId IN :toAssetIds AND r.validToRevision IS NULL GROUP BY r.toAssetId")
+    List<Object[]> countIncomingOpen(@Param("toAssetIds") java.util.Collection<Long> toAssetIds);
+
     /** Incoming open (current-state) edges of an asset. */
     @Query("SELECT r FROM AssetReference r WHERE r.toAssetId = :toAssetId AND r.validToRevision IS NULL")
     List<AssetReference> findIncomingOpen(@Param("toAssetId") Long toAssetId);

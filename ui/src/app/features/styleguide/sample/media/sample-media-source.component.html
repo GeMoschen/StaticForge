@@ -1,0 +1,49 @@
+@if (state.sourceBanner() === 'large') {
+  <sf-banner tone="warning">
+    {{ 'styleguide.sample.media.source.large' | transloco }}
+    <span sfBannerActions class="actions">
+      <sf-button variant="secondary" size="sm" icon="download" (click)="download()">{{ 'styleguide.sample.media.source.download' | transloco }}</sf-button>
+      <sf-button variant="secondary" size="sm" icon="swap_horiz" (click)="replace()">{{ 'styleguide.sample.media.source.replace' | transloco }}</sf-button>
+    </span>
+  </sf-banner>
+} @else {
+  @if (state.sourceBanner() === 'utf8') {
+    <sf-banner tone="warning">{{ 'styleguide.sample.media.source.utf8' | transloco }}</sf-banner>
+  }
+  @if (isLocalized()) {
+    <label class="language">
+      <span>{{ 'styleguide.sample.media.source.language' | transloco }}</span>
+      <sf-select
+        [options]="languageOptions"
+        [value]="state.sourceLang()"
+        [aria-label]="'styleguide.sample.media.source.languageLabel' | transloco"
+        (valueChange)="pickLanguage($event)"
+      />
+    </label>
+  }
+  @if (state.sourceBanner() === 'eol') {
+    <sf-banner tone="warning">{{ 'styleguide.sample.media.source.eol' | transloco }}</sf-banner>
+  }
+  <sf-code-panel
+    class="code"
+    [fileName]="file().name"
+    [languageLabel]="languageLabel()"
+    [value]="source()"
+    language="octl"
+    [format]="highlight().format"
+    [svg]="highlight().svg"
+    [names]="names"
+    [diagnostics]="diagnostics()"
+    [label]="'styleguide.sample.media.source.label' | transloco: { name: file().name }"
+    (valueChange)="state.sourceDraft.set($event)"
+  >
+    <sf-menu
+      sfCodePanelTools
+      size="sm"
+      [items]="highlightItems()"
+      [text]="'styleguide.sample.media.source.highlight.chip' | transloco: { format: languageLabel() }"
+      [label]="'styleguide.sample.media.source.highlight.menu' | transloco"
+    />
+  </sf-code-panel>
+  <p class="hint">{{ 'styleguide.sample.media.source.completeHint' | transloco }}</p>
+}

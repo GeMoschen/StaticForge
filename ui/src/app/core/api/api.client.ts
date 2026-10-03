@@ -1,6 +1,6 @@
-import { HttpClient, HttpContext, HttpParams, HttpResponse } from '@angular/common/http';
+import { HttpClient, HttpContext, HttpEventType, HttpParams, HttpResponse } from '@angular/common/http';
 import { Injectable } from '@angular/core';
-import { Observable } from 'rxjs';
+import { Observable, filter, map } from 'rxjs';
 import { SKIP_ERROR_TOAST } from './error.interceptor';
 import type { components } from './generated/schema.d.ts';
 
@@ -23,6 +23,9 @@ export function revisionFromEtag(etag: string): number | null {
 }
 
 type QueryValue = string | number | boolean | undefined;
+
+/** A multipart upload under way: how much has been sent (`total` is `null` when the browser doesn't know), then the answer. */
+export type Transfer<T> = { kind: 'progress'; loaded: number; total: number | null } | { kind: 'done'; body: T };
 
 /** Which state a page preview renders (M27.2.3): the drafts (default) or what the next build publishes. */
 export type PreviewView = 'draft' | 'published';
@@ -711,9 +714,10 @@ export class ApiClient {
       size?: number;
     } = {},
   ): Observable<S['PageMediaSummaryView']> {
+    // The media library shows its own error state (with Retry), so a failed read raises no global toast.
     return this.http.get<S['PageMediaSummaryView']>(
       `${BASE}/projects/${projectKey}/media`,
-      { withCredentials: true, params: this.params(opts) },
+      { withCredentials: true, params: this.params(opts), context: new HttpContext().set(SKIP_ERROR_TOAST, true) },
     );
   }
 
@@ -729,6 +733,47 @@ export class ApiClient {
       formData,
       { withCredentials: true, params: this.params(opts) },
     );
+  }
+
+  /**
+   * {@link uploadMedia} that reports how much of the file has been sent (`progress`) before the created file arrives
+   * (`done`); unsubscribing aborts the request. A failed upload raises no global toast: the library's upload panel says
+   * why it failed.
+   */
+  uploadMediaWithProgress(
+    projectKey: string,
+    file: File,
+    opts: { folderUuid?: string; altText?: string; caption?: string } = {},
+  ): Observable<Transfer<S['MediaView']>> {
+    return this.transfer<S['MediaView']>(`${BASE}/projects/${projectKey}/media`, file, this.params(opts));
+  }
+
+  /** {@link replaceMedia} with progress, for the upload panel's *Replace* (see {@link uploadMediaWithProgress}). */
+  replaceMediaWithProgress(projectKey: string, uuid: string, file: File): Observable<Transfer<S['MediaSaveResponse']>> {
+    return this.transfer<S['MediaSaveResponse']>(`${BASE}/projects/${projectKey}/media/${uuid}/replace`, file);
+  }
+
+  private transfer<T>(url: string, file: File, params?: HttpParams): Observable<Transfer<T>> {
+    const formData = new FormData();
+    formData.append('file', file);
+    return this.http
+      .post<T>(url, formData, {
+        withCredentials: true,
+        params,
+        observe: 'events',
+        reportProgress: true,
+        context: new HttpContext().set(SKIP_ERROR_TOAST, true),
+      })
+      .pipe(
+        map((event): Transfer<T> | null =>
+          event.type === HttpEventType.UploadProgress
+            ? { kind: 'progress', loaded: event.loaded, total: event.total ?? null }
+            : event.type === HttpEventType.Response
+              ? { kind: 'done', body: event.body as T }
+              : null,
+        ),
+        filter((event): event is Transfer<T> => event !== null),
+      );
   }
 
   /**
@@ -900,6 +945,18 @@ export class ApiClient {
     });
   }
 
+  /**
+   * Several files as one ZIP (the library's multi-file Download): the entries are the files' own names, in the order
+   * given; `name` is the archive's name without `.zip`.
+   */
+  downloadMediaZip(projectKey: string, uuids: readonly string[], name: string): Observable<Blob> {
+    return this.http.post(
+      `${BASE}/projects/${projectKey}/media/download`,
+      { uuids: [...uuids], name } satisfies S['MediaDownloadRequest'],
+      { responseType: 'blob' },
+    );
+  }
+
   /** `locale` picks the file a language renders, for localized media (M27.3.1). */
   mediaThumbnailUrl(projectKey: string, uuid: string, locale?: string | null): string {
     const query = locale ? `?locale=${encodeURIComponent(locale)}` : '';
@@ -907,8 +964,10 @@ export class ApiClient {
   }
 
   mediaThumbnailBlob(projectKey: string, uuid: string, locale?: string | null): Observable<Blob> {
+    // A missing thumbnail shows the file's icon: a failed request raises no global toast.
     return this.http.get(this.mediaThumbnailUrl(projectKey, uuid, locale), {
       responseType: 'blob',
+      context: new HttpContext().set(SKIP_ERROR_TOAST, true),
     });
   }
 

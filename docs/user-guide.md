@@ -90,19 +90,54 @@ with a note.
 
 ### Media
 
-1. Open **Media**. Drop files anywhere to upload (or use the multi-file drop).
-2. Set alt text, caption, copyright, and focal point in the detail drawer.
-3. Reference media from a `media` or `link` editor using the picker.
-4. The drawer shows **usages** ("where is this used?") before you delete anything. Usages are current as soon as a page or template is saved; you don't need to run a generation. Once you remove the media from every page that used it (or delete those pages), it can be deleted without forcing.
+The library has the **folders** on the left (filter them with the field under *Folders*; **Favorites** is pinned on top
+while you have any) and the open folder's files on the right, as a **grid** of cards or as a **list** (the choice is
+remembered; *Grid* / *List* in the toolbar). The toolbar also searches the folder, narrows it to images, documents or
+text, and sorts by name, date modified, size or type. Search, type, sort, the open folder and the open file are part of
+the address, so a link to a file opens the library on it, and the browser's back button steps back through them.
+
+1. **Upload.** Choose **Upload**, or drop files anywhere on the library (or press `Ctrl+K` and choose *Upload files*).
+   Each file is checked before it is sent — type, size, a name that is already in the folder — and the upload list at the
+   bottom right shows one row per file with a progress bar, **Cancel**, and a reason when a file is refused. A name that
+   already exists offers **Replace** (links and usages stay) or **Keep both** (`name-2.jpg`); a lost connection offers
+   **Retry**. A finished picture asks for **alt text** right in the list.
+2. **Open a file** (click a card or press `Enter`): the detail drawer opens on the right, below the top bar. It shows the
+   file name, its release status, and the tabs that apply to the file: **Details**, **Variants** (generated sizes of
+   pictures), **Languages**, **Processing**, **Rendered** and **Source** (text files), **Used by** and **Versions**.
+   `←` / `→` in the drawer's header step to the previous and next file; the open tab stays. Drag the drawer's edge to resize it.
+3. **Details** has the preview, alt text, caption and copyright (per language in a project with languages), the file's
+   facts (type, size, dimensions, uploaded and modified, who and when) and **Replace file**. Only photos (JPEG) get a
+   **focal point**: click the picture, or use the arrow keys (`Shift` for 10 % steps). **Save** in the footer is
+   enabled only while something changed; **Revert** takes the edits back. Stepping to another file, closing the drawer
+   or leaving the screen with unsaved edits asks first (Discard, Cancel or Save). In developer mode the Details also show the
+   UID, path, media type, SHA-256 hash and storage path, each with a copy button.
+4. **Rename** (`F2`), **Move…**, **Download**, **Copy link**, **Add to favorites** and **Delete…** are in one menu: the ⋮ on a card, on a
+   list row and in the drawer, and the context menu (right click, `Shift+F10`). With several files selected the menu acts on
+   all of them (*Move 3 files…*, *Download 3 files as ZIP*, *Delete 3 files…*). Renaming keeps links working: they point to the file,
+   not to its name; the extension stays. Moving is also done by dragging cards onto a folder in the tree. Every rename,
+   move and delete offers **Undo** in the toast.
+5. **Select** files with the checkbox on a card (or `Space`, `Ctrl+A`); the bar above the files then offers **Move**, **Download**
+   (one ZIP named after the folder) and **Delete**. Deleting **25 or more** files asks you to type the word *delete*.
+6. **Folders** are renamed in the tree (`F2` or the page header's ⋮), moved (drag, or *Move…*), created (*New folder*) and
+   deleted with a confirmation and Undo.
+7. Reference media from a `media` or `link` editor using the picker.
+8. **Used by** lists where the file is used (each a link) **before** you delete anything; the delete confirmation names how
+   many places will break. Usages are current as soon as a page or template is saved; you don't need to run a generation. Below the list
+   the **Impact** panel and the file's **URLs** (see below) are shown. Once you remove the media from every page that used it (or delete
+   those pages), it can be deleted without forcing.
+9. **Versions** lists the file's earlier versions (who, when) with **Restore**.
+
+A project's administrators can restrict which file types may be uploaded; the library tells you when a file is refused and why.
+Viewers see the library, can download and copy links, but cannot upload, rename, move or delete; the same goes for a past revision during time travel.
 
 #### A different file per language (M27)
 
-In a project with languages, the media drawer offers **Different file per language** — for a banner with text in it,
+In a project with languages, the media drawer's **Languages** tab offers **Different file per language** — for a banner with text in it,
 a German and an English PDF, a screenshot of a localized interface.
 
 - Switch it on: the current file becomes the default language's file, and every other language uses it until it
   gets its own.
-- The **Files** section lists every language: its own file (thumbnail, name, size, **Replace**, **Remove**) or
+- The list on the **Languages** tab shows every language: its own file (thumbnail, name, size, **Replace**, **Remove**) or
   "Uses Deutsch's file" with **Upload**. You can also drop a file onto a language's row. The default language's
   file can be replaced, not removed — every language without its own file falls back to it.
 - The library's thumbnails show the file of the language you are editing; a small marker shows which media is
@@ -117,24 +152,27 @@ Pickers in page and link editors still pick the media, not one of its files: eve
 
 #### Stylesheets, scripts and other text files
 
-Text files (CSS, JavaScript, JSON, SVG, XML, plain text, web manifests) get two more tabs in the
-media drawer, next to **Details**:
+Text files (CSS, JavaScript, JSON, SVG, XML, plain text, web manifests) get more tabs in the
+media drawer, next to **Details**: **Processing**, **Rendered** and **Source**.
 
-- **Source** shows the file's content. Edit it and choose **Save**: every save is a revision, with
+- **Source** shows the file's content in the code panel (line numbers, highlighting, find, a problems list and a status line).
+  Edit it and choose **Save**: every save is a revision, with
   history, diff and restore like any other change, so you don't need to download and re-upload the
   file. Tab inserts a tab, and the file keeps its line endings. Very large files (over 1 MB) open
   read-only; use **Replace file** for those. If someone else saved the file since you opened it, you
   choose between keeping your version and taking theirs. Closing the drawer or opening another file
-  with unsaved changes asks first.
-- **Process CMS syntax** (a switch at the top) lets a developer use template instructions in the
+  with unsaved changes asks first. Inside an instruction (`$CMS_VALUE(`, `$CMS_REF(`) `Ctrl+Space` completes the project's global
+  values (`CMS_GLOBAL.<set>.<path>`), media (`media:<uid>`) and pages (`page:<uid>`). A file that is not valid UTF-8 or mixes
+  line endings says so; saving stores UTF-8 with LF. The **Highlighted as** menu in the panel header changes how files of that
+  type are highlighted in the whole project (a project setting, for project admins).
+- **Process CMS syntax** (a switch on the **Processing** tab) lets a developer use template instructions in the
   file, for example the brand color from Globals in a stylesheet. When it's on:
   - errors are listed as you type (click one to jump to it) and **Save** stays disabled until
     they're fixed;
   - switching it on lists every place where the file's content will change, for example each `$$`,
     which is published as a single `$`;
   - the **Rendered** tab shows what the file turns into with the current values;
-  - page previews and generated sites use the rendered file; a **CMS** badge marks the file in the
-    library.
+  - page previews and generated sites use the rendered file.
 
   Leave it off for files that should be published exactly as uploaded, such as third-party scripts.
   Replacing a processed file with a file that isn't text switches processing off, and the drawer
@@ -467,7 +505,7 @@ An incremental run renders only what changed and publishes the complete site: th
 
 - **Before a run.** In the generation dialog press **Preview plan** (`Alt+P`). It shows how many files would rebuild, how many assets changed (expand the list), the counts by reason and the largest groups ("412 via section_template:teaser"), and the revision the preview was computed at. The table lists every file with its reason; open a reason to read its chain from the page to the change, e.g. `page:about — places section` → `section_template:teaser`, with a link to the revision the change was made in ("+ 2 other changes" when several changes reach the same page). Tick **Validate templates** to also compile what the plan needs. If incremental can't be used — no previous complete build for this target, the build is gone, channel output settings changed — a warning says so: the run will be a full build. Changing the mode, target or channels marks the preview out of date; starting still works, and if content was saved after the preview you get a notice.
 - **After a run.** In the run history each run shows "Incremental · 37 pages (via 2 changes)" or "Full · 5,000 pages". **Details → Rebuilt pages** lists what the run rebuilt and why, with the same filters. Plans of older runs are removed after a while ("Plan details were pruned").
-- **While editing.** The **Impact** panel in the template editor, the media drawer (below **Referenced by**) and the page editor answers "if I change this, what rebuilds?": "Changing this rebuilds 12 pages (24 files)", by kind of dependency, and a table with each page's chain back to this asset (pages link to their editor). It loads when you open it, always reflects the current state (also while viewing an old revision), and reloads after you save. It counts the most a change could rebuild; a small edit may rebuild less. Navigation matters: renaming a page that a navigation lists, or editing the navigation, rebuilds every page showing that navigation.
+- **While editing.** The **Impact** panel in the template editor, the media drawer (on the **Used by** tab, below the list of usages) and the page editor answers "if I change this, what rebuilds?": "Changing this rebuilds 12 pages (24 files)", by kind of dependency, and a table with each page's chain back to this asset (pages link to their editor). It loads when you open it, always reflects the current state (also while viewing an old revision), and reloads after you save. It counts the most a change could rebuild; a small edit may rebuild less. Navigation matters: renaming a page that a navigation lists, or editing the navigation, rebuilds every page showing that navigation.
 - **Record sets.** Editing a record rebuilds the pages showing its set only if the set's query shows that record (before or after the edit); changing the set's query, name or place rebuilds every page showing the set. The reasons read "reads record set containing", "reads record set with changed query" and, after a developer changes how a dataset's records look, "renders through record template of".
 
 ### Quality checks and issues (M30)
@@ -530,7 +568,7 @@ the pages that link to it.
 Every page, media file and folder has a **URL**, assigned the first time a build (or a preview) publishes it. From then
 on it stays: renaming a page, moving it to another folder or changing its template keeps its address, so links from
 outside your site never break by accident. **Settings → URLs** lists every URL — filter by type, channel, language,
-area (*Build* or *Preview*) or search by name or address — and the page editor, the media details and the folder panel
+area (*Build* or *Preview*) or search by name or address — and the page editor, the media drawer's **Used by** tab and the folder panel
 show an asset's own URLs.
 
 - **Override** sets an address by hand (developers). The next build writes the page or file there, updates every link
@@ -663,7 +701,7 @@ When two people edit the same asset, the second save shows a conflict drawer wit
 
 ## Keyboard
 
-Everything is reachable without a pointer (§24.6): `Cmd/Ctrl+K` search (see [Search](#search)), `g p` pages, `g m` media, `g t` templates, `g r` revisions, `Cmd/Ctrl+S` save, `Cmd/Ctrl+Enter` refresh preview, `Alt+↑/↓` move section, `?` shortcut sheet.
+Everything is reachable without a pointer (§24.6): `Cmd/Ctrl+K` search (see [Search](#search)), `g p` pages, `g m` media, `g t` templates, `g r` revisions, `Cmd/Ctrl+S` save, `Cmd/Ctrl+Enter` refresh preview, `Alt+↑/↓` move section, `?` shortcut sheet. In **Media**: arrow keys, `Home` and `End` move between files, `Space` selects, `Ctrl+A` selects all, `Enter` opens, `F2` renames, `Shift+F10` opens a file's menu, `Delete` deletes; in the open drawer `←`/`→` (focus in its header) step between files and `Esc` closes it. The `?` sheet lists them for the screen you are on.
 
 In a project with several languages, the **Editing language** picker above the content area is an ordinary select you
 can `Tab` to; changing it switches every editor, the preview and the search palette to that language.

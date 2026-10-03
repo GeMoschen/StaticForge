@@ -1,6 +1,6 @@
 <section class="uploads" aria-labelledby="sample-media-uploads-title">
   <header class="uploads__head">
-    <h2 class="uploads__title" id="sample-media-uploads-title">{{ 'styleguide.sample.media.uploads.title' | transloco }}</h2>
+    <h2 class="uploads__title" id="sample-media-uploads-title">{{ title() }}</h2>
     <span class="uploads__summary" aria-live="polite">{{ summary() }}</span>
     <sf-button
       variant="ghost"
@@ -49,10 +49,41 @@
               <span class="upload__status">{{ 'styleguide.sample.media.uploads.percent' | transloco: { value: upload.progress } }}</span>
             }
             @case ('done') {
-              <span class="upload__status">{{ 'styleguide.sample.media.uploads.done' | transloco }}</span>
+              <span class="upload__status">{{ doneText(upload) }}</span>
+              @if (asksForAlt(upload)) {
+                <form class="upload__alt" (submit)="$event.preventDefault(); saveAlt(upload)">
+                  <sf-input
+                    class="upload__alt-input"
+                    autocomplete="off"
+                    [value]="altOf(upload)"
+                    [placeholder]="'styleguide.sample.media.uploads.altPlaceholder' | transloco"
+                    [aria-label]="'styleguide.sample.media.uploads.altLabel' | transloco: { name: upload.name }"
+                    (valueChange)="setAlt(upload, $event)"
+                  />
+                  <sf-button variant="secondary" size="sm" [disabled]="altOf(upload).trim() === ''" (click)="saveAlt(upload)">{{
+                    'styleguide.sample.media.uploads.altSave' | transloco
+                  }}</sf-button>
+                </form>
+              }
             }
             @default {
-              <span class="upload__status upload__status--error">{{ 'styleguide.sample.media.uploads.error' | transloco }}</span>
+              <span class="upload__status upload__status--error">{{ errorText(upload) }}</span>
+              @if (upload.error === 'network' || upload.error === 'duplicate') {
+                <span class="upload__buttons">
+                  @if (upload.error === 'network') {
+                    <sf-button variant="secondary" size="sm" icon="refresh" (click)="state.retryUpload(upload.id)">{{
+                      'styleguide.sample.media.uploads.retry' | transloco
+                    }}</sf-button>
+                  } @else {
+                    <sf-button variant="secondary" size="sm" icon="swap_horiz" (click)="state.resolveDuplicate(upload.id, 'replaced')">{{
+                      'styleguide.sample.media.uploads.replace' | transloco
+                    }}</sf-button>
+                    <sf-button variant="secondary" size="sm" icon="content_copy" (click)="state.resolveDuplicate(upload.id, 'copy')">{{
+                      'styleguide.sample.media.uploads.keepBoth' | transloco
+                    }}</sf-button>
+                  }
+                </span>
+              }
             }
           }
         </div>
@@ -68,14 +99,22 @@
               />
             }
             @case ('done') {
-              <sf-button variant="secondary" size="sm" (click)="addAltText(upload)">{{
-                'styleguide.sample.media.uploads.addAlt' | transloco
-              }}</sf-button>
+              <sf-button
+                variant="ghost"
+                size="sm"
+                icon="open_in_new"
+                [label]="'styleguide.sample.media.uploads.details' | transloco: { name: upload.name }"
+                (click)="openDetails(upload)"
+              />
             }
             @default {
-              <sf-button variant="secondary" size="sm" icon="refresh" (click)="state.retryUpload(upload.id)">{{
-                'styleguide.sample.media.uploads.retry' | transloco
-              }}</sf-button>
+              <sf-button
+                variant="ghost"
+                size="sm"
+                icon="close"
+                [label]="'styleguide.sample.media.uploads.remove' | transloco: { name: upload.name }"
+                (click)="state.cancelUpload(upload.id)"
+              />
             }
           }
         </div>

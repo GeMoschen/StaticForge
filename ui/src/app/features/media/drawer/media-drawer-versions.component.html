@@ -1,0 +1,46 @@
+@if (store.loading() && store.entries().length === 0) {
+  <sf-skeleton shape="row" [rows]="4" />
+} @else if (store.failed()) {
+  <p class="note">{{ 'media.drawer.versions.loadFailed' | transloco }}</p>
+  <div>
+    <sf-button variant="secondary" size="sm" (click)="store.load(true)">{{ 'media.drawer.versions.retry' | transloco }}</sf-button>
+  </div>
+} @else {
+  <ol class="list">
+    @for (entry of store.entries(); track entry.revision) {
+      <li class="version">
+        <sf-avatar size="sm" [name]="entry.changedByName ?? ''" />
+        <span class="row__text">
+          <span class="row__title">
+            {{ 'media.drawer.versions.version' | transloco: { version: entry.revision } }}
+            @if (entry.revision === store.current()) {
+              <sf-badge tone="accent" [label]="'media.drawer.versions.current' | transloco" />
+            }
+            @if (entry.deleted) {
+              <sf-badge [label]="'media.drawer.versions.deleted' | transloco" />
+            }
+          </span>
+          <span class="row__meta">
+            @if (entry.changedByName) {
+              {{ entry.changedByName }} ·
+            }
+            <sf-relative-time [value]="entry.changedAt" />
+          </span>
+        </span>
+        @if (entry.revision !== store.current() && !entry.deleted) {
+          <sf-button
+            variant="secondary"
+            size="sm"
+            icon="restore"
+            [disabled]="core.readOnly() || unsaved() || store.restoring() !== null"
+            [disabledReason]="
+              core.readOnly() ? core.readOnlyLabel() : unsaved() ? ('media.drawer.versions.saveFirst' | transloco) : null
+            "
+            (click)="store.restore(entry)"
+            >{{ 'media.drawer.versions.restore' | transloco }}</sf-button
+          >
+        }
+      </li>
+    }
+  </ol>
+}

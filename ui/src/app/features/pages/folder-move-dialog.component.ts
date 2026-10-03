@@ -60,6 +60,8 @@ export class FolderMoveDialogComponent {
   /** Folders being moved: they and what lies inside them are not valid targets. */
   readonly excluded = input<readonly string[]>([]);
   readonly count = input(1);
+  /** What the first node, the project root, is called; the Pages area's own name when omitted. */
+  readonly rootLabel = input<string | null>(null);
 
   readonly chosen = output<string | null>();
   readonly cancelled = output<void>();
@@ -92,7 +94,7 @@ export class FolderMoveDialogComponent {
 
   protected readonly loader = computed<SfTreeLoader<FolderView>>(() => {
     const wrapper = this.tree()[0] ?? null;
-    const rootLabel = this.transloco.translate('pages.folder.root');
+    const rootLabel: string = this.rootLabel() ?? this.transloco.translate('pages.folder.root') ?? '';
     const blocked = this.blocked();
     const toNode = (folder: FolderView): SfTreeNode<FolderView> => {
       const disabled = !!folder.uuid && blocked.has(folder.uuid);

@@ -1,0 +1,56 @@
+:host {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: 100%;
+  block-size: 100%;
+  overflow: hidden;
+  background: var(--sf-surface-sunken);
+}
+
+// Transparent files (PNG, GIF, WebP) show a checkerboard behind them.
+:host(.preview--checker) {
+  background: repeating-conic-gradient(var(--sf-surface-muted) 0 25%, var(--sf-surface) 0 50%) 0 0 / var(--sf-space-3)
+    var(--sf-space-3);
+}
+
+:host(.preview--row.preview--checker) {
+  background-size: var(--sf-space-2) var(--sf-space-2);
+}
+
+.preview__img {
+  inline-size: 100%;
+  block-size: 100%;
+  object-fit: cover;
+}
+
+.preview__img--contain {
+  object-fit: contain;
+}
+
+:host(.preview--card) .preview__img--contain {
+  padding: var(--sf-space-2);
+}
+
+.preview__code {
+  inline-size: 100%;
+  block-size: 100%;
+  margin: 0;
+  padding: var(--sf-space-2) var(--sf-space-3);
+  overflow: hidden;
+  background: var(--sf-code-bg);
+  color: var(--sf-code-fg);
+  font-family: var(--sf-font-mono);
+  font-size: var(--sf-fs-12);
+  line-height: var(--sf-lh-12);
+  white-space: pre;
+}
+
+.preview__icon {
+  color: var(--sf-text-subtle);
+  font-size: var(--sf-fs-30);
+}
+
+:host(.preview--row) .preview__icon {
+  font-size: var(--sf-fs-18);
+}

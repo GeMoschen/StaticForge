@@ -105,16 +105,7 @@
 .code {
   align-self: stretch;
   width: 100%;
-  max-height: 20rem;
-  margin: 0;
-  padding: var(--sf-space-3) var(--sf-space-4);
-  overflow: auto;
-  border-radius: var(--sf-radius-sm);
-  background: var(--sf-code-bg);
-  color: var(--sf-code-fg);
-  font-family: var(--sf-font-mono);
-  font-size: var(--sf-fs-12);
-  line-height: var(--sf-lh-12);
+  --sf-code-max-height: 20rem;
 }
 
 .focal-hint {

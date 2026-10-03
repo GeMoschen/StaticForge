@@ -1,0 +1,117 @@
+<div
+  class="library"
+  (dragenter)="uploads.onDragEnter($event)"
+  (dragover)="uploads.onDragOver($event)"
+  (dragleave)="uploads.onDragLeave($event)"
+  (drop)="uploads.onDrop($event)"
+>
+  @if (library.favoritesView()) {
+    <sf-favorites-view class="library__body" />
+  } @else {
+    <sf-page-header class="library__header" [title]="title()" [subtitle]="subtitle()" [secondaryActions]="folderActions()" (secondaryAction)="folderAction($event)" />
+
+    @if (library.libraryEmpty()) {
+      <sf-empty-state
+        class="library__body"
+        icon="photo_library"
+        [title]="'media.empty.libraryTitle' | transloco"
+        [description]="'media.empty.libraryHint' | transloco"
+        [primaryLabel]="uploads.canUpload() ? ('media.toolbar.upload' | transloco) : null"
+        primaryIcon="upload"
+        [secondaryLabel]="library.canEdit() ? ('media.folders.new' | transloco) : null"
+        (primary)="picker.click()"
+        (secondary)="folders.startCreate(null)"
+      />
+    } @else {
+      <sf-media-library-toolbar />
+
+      @if (library.view() === 'grid' && library.selectedItems().length > 0) {
+        <div class="bulk" role="group" [attr.aria-label]="'shared.dataTable.bulkActions' | transloco">
+          <span class="bulk__count">{{ 'shared.dataTable.selected' | transloco: { count: library.selectedItems().length } }}</span>
+          <span class="bulk__actions">
+            @if (library.canEdit()) {
+              <sf-button size="sm" variant="secondary" icon="drive_file_move" (click)="mover.moveFiles(library.selectedItems())">{{ 'media.bulk.move' | transloco }}</sf-button>
+            }
+            <sf-button size="sm" variant="secondary" icon="download" (click)="items.download(library.selectedItems())">{{ 'media.bulk.download' | transloco }}</sf-button>
+            @if (library.canEdit()) {
+              <sf-button size="sm" variant="danger" icon="delete" (click)="items.deleteSelection()">{{ 'media.bulk.delete' | transloco }}</sf-button>
+            }
+          </span>
+          <sf-button size="sm" variant="ghost" (click)="library.clearSelection()">{{ 'shared.dataTable.clearSelection' | transloco }}</sf-button>
+        </div>
+      }
+
+      @switch (bodyState()) {
+        @case ('error') {
+          <div class="library__body">
+            <sf-banner tone="danger" live="assertive">
+              {{ 'media.library.error' | transloco: { folder: folderName() } }}
+              <sf-button sfBannerActions variant="secondary" size="sm" icon="refresh" (click)="retry()">{{
+                'media.library.retry' | transloco
+              }}</sf-button>
+            </sf-banner>
+          </div>
+        }
+        @case ('loading') {
+          @if (library.view() === 'grid') {
+            <div class="library__body skeleton" role="status" aria-busy="true">
+              <span class="sf-sr-only">{{ 'media.library.loading' | transloco: { folder: folderName() } }}</span>
+              <div class="skeleton__grid" aria-hidden="true">
+                @for (card of skeletonCards; track card) {
+                  <div class="skeleton__card">
+                    <div class="skeleton__thumb"></div>
+                    <sf-skeleton class="skeleton__text" shape="text" [lines]="2" />
+                  </div>
+                }
+              </div>
+            </div>
+          } @else {
+            <sf-media-library-list class="library__body" loading />
+          }
+        }
+        @case ('empty') {
+          <sf-empty-state
+            class="library__body"
+            icon="photo_library"
+            [title]="'media.empty.title' | transloco"
+            [description]="'media.empty.description' | transloco: { folder: folderName() }"
+            [primaryLabel]="uploads.canUpload() ? ('media.toolbar.upload' | transloco) : null"
+            primaryIcon="upload"
+            (primary)="picker.click()"
+          />
+        }
+        @case ('noMatch') {
+          <sf-empty-state
+            class="library__body"
+            icon="search_off"
+            [title]="'media.empty.noMatch' | transloco"
+            [description]="'media.empty.noMatchHint' | transloco"
+            [primaryLabel]="'media.empty.clearFilters' | transloco"
+            primaryIcon="filter_alt_off"
+            (primary)="library.clearFilters()"
+          />
+        }
+        @default {
+          @if (library.view() === 'grid') {
+            <sf-media-library-grid class="library__body" />
+          } @else {
+            <sf-media-library-list class="library__body" />
+          }
+        }
+      }
+    }
+  }
+
+  <input #picker class="sf-sr-only" type="file" multiple tabindex="-1" aria-hidden="true" [disabled]="!uploads.canUpload()" (change)="uploads.onFileInput($event)" />
+
+  @if (uploads.dragActive()) {
+    <div class="drop" aria-hidden="true">
+      <div class="drop__inner">
+        <sf-icon class="drop__icon" name="upload" />
+        <span class="drop__text">{{ 'media.dropzone.text' | transloco: { folder: folderName() } }}</span>
+      </div>
+    </div>
+  }
+
+  <sf-media-library-uploads />
+</div>

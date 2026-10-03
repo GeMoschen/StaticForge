@@ -2,6 +2,7 @@ package com.acme.staticforge.api;
 
 import com.acme.staticforge.api.dto.FocalPointView;
 import com.acme.staticforge.api.dto.MediaBulkItemResult;
+import com.acme.staticforge.api.dto.MediaDownloadRequest;
 import com.acme.staticforge.api.dto.MediaImageView;
 import com.acme.staticforge.api.dto.MediaLocaleFileView;
 import com.acme.staticforge.api.dto.MediaLocalizedRequest;
@@ -39,11 +40,17 @@ import com.acme.staticforge.security.SecuritySupport;
 import com.acme.staticforge.template.diagnostic.Diagnostic;
 import com.fasterxml.jackson.databind.JsonNode;
 import jakarta.servlet.http.HttpServletRequest;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
+import java.util.Set;
 import java.util.UUID;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.CacheControl;
@@ -58,6 +65,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -75,6 +83,12 @@ import org.springframework.web.multipart.MultipartFile;
 public class MediaController {
 
     private static final int THUMBNAIL_CACHE_SECONDS = 86_400;
+
+    /** The most files one ZIP download holds. */
+    static final int MAX_DOWNLOAD_FILES = 500;
+
+    /** The most bytes (uncompressed) one ZIP download holds: it is built in memory. */
+    static final long MAX_DOWNLOAD_BYTES = 100L * 1024 * 1024;
 
     /** Carries the diagnostic when a processed media file is served as its unrendered source (M18.3.2). */
     static final String RENDER_ERROR_HEADER = "X-SF-Render-Error";
@@ -130,7 +144,9 @@ public class MediaController {
         List<UUID> uuids = result.getContent().stream().map(AssetVersionView::uuid).toList();
         var release = releaseBlocks.of(projectId, uuids);
         var scheduled = releaseBlocks.scheduled(projectId, uuids);
-        return result.map(v -> toSummary(v, release.get(v.uuid()), scheduled.getOrDefault(v.uuid(), List.of())));
+        var usages = mediaService.usageCounts(projectId, uuids);
+        return result.map(v -> toSummary(
+                v, usages.getOrDefault(v.uuid(), 0), release.get(v.uuid()), scheduled.getOrDefault(v.uuid(), List.of())));
     }
 
     /**
@@ -194,6 +210,73 @@ public class MediaController {
             }
         }
         return ResponseEntity.ok(results);
+    }
+
+    /**
+     * Several files as one ZIP (the library's multi-file Download, M35.19): the entries are the names the library shows, in the
+     * order asked for; a name that is already taken in the archive gets {@code -2}, {@code -3}, … before its extension.
+     * Reads only ({@code VIEWER}). At most {@value #MAX_DOWNLOAD_FILES} files and {@code MAX_DOWNLOAD_BYTES} bytes.
+     */
+    @PostMapping("/download")
+    @PreAuthorize("@projectAuth.has(#projectKey, " + ProjectRoleExpr.VIEWER + ")")
+    public ResponseEntity<byte[]> download(@PathVariable String projectKey, @RequestBody MediaDownloadRequest request) {
+        List<UUID> uuids = request.uuids() == null ? List.of() : request.uuids().stream().distinct().toList();
+        if (uuids.isEmpty()) {
+            throw new SfException(ProblemFactory.badRequest("Name at least one file to download.", "uuids"));
+        }
+        if (uuids.size() > MAX_DOWNLOAD_FILES) {
+            throw new SfException(ProblemFactory.badRequest(
+                    "At most " + MAX_DOWNLOAD_FILES + " files can be downloaded at once.", "uuids"));
+        }
+        long projectId = projectId(projectKey);
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        Set<String> taken = new HashSet<>();
+        long total = 0;
+        try (ZipOutputStream zip = new ZipOutputStream(out)) {
+            for (UUID uuid : uuids) {
+                MediaBinary binary = mediaService.binary(projectId, uuid, null, null, null);
+                total += binary.bytes().length;
+                if (total > MAX_DOWNLOAD_BYTES) {
+                    throw new SfException(ProblemFactory.of(
+                            413,
+                            "SF-MEDIA-0413",
+                            "Download too large",
+                            "The files add up to more than " + MAX_DOWNLOAD_BYTES / (1024 * 1024)
+                                    + " MB; download fewer files at once."));
+                }
+                // The name the library shows (a rename changes it, not the stored file name).
+                String shown = mediaService.require(projectId, uuid).displayName();
+                zip.putNextEntry(new ZipEntry(uniqueEntryName(shown == null || shown.isBlank() ? binary.fileName() : shown, taken)));
+                zip.write(binary.bytes());
+                zip.closeEntry();
+            }
+        } catch (IOException e) {
+            throw new IllegalStateException("Could not build the ZIP.", e);
+        }
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.parseMediaType("application/zip"));
+        headers.setContentDisposition(
+                ContentDisposition.attachment().filename(zipFileName(request.name()), StandardCharsets.UTF_8).build());
+        return new ResponseEntity<>(out.toByteArray(), headers, HttpStatus.OK);
+    }
+
+    /** {@code photo.jpg} → {@code photo-2.jpg} while the name is taken (compared without regard to case). */
+    static String uniqueEntryName(String fileName, Set<String> taken) {
+        String name = fileName == null || fileName.isBlank() ? "file" : fileName.replaceAll("[\\\\/:*?\"<>|]", "_");
+        int dot = name.lastIndexOf('.');
+        String base = dot <= 0 ? name : name.substring(0, dot);
+        String extension = dot <= 0 ? "" : name.substring(dot);
+        String candidate = name;
+        for (int n = 2; !taken.add(candidate.toLowerCase(Locale.ROOT)); n++) {
+            candidate = base + "-" + n + extension;
+        }
+        return candidate;
+    }
+
+    /** The archive's file name: the requested name without characters a file system or header can't take, plus {@code .zip}. */
+    static String zipFileName(String requested) {
+        String base = requested == null ? "" : requested.trim().replaceAll("[\\\\/:*?\"<>|\\p{Cntrl}]", "_");
+        return (base.isEmpty() ? "media" : base) + ".zip";
     }
 
     @PutMapping("/{uuid}")
@@ -588,6 +671,7 @@ public class MediaController {
 
     private MediaSummaryView toSummary(
             AssetVersionView v,
+            int usageCount,
             java.util.Map<String, com.acme.staticforge.api.dto.LocaleReleaseView> release,
             List<ScheduledRefView> scheduled) {
         JsonNode payload = v.payload();
@@ -602,8 +686,17 @@ public class MediaController {
                 TextMediaTypes.isProcessed(payload),
                 payload != null && TextMediaTypes.isText(text(payload, "mimeType")),
                 MediaFiles.isLocalized(payload),
+                imageSize(payload, "width"),
+                imageSize(payload, "height"),
+                v.changedAt(),
+                usageCount,
                 release,
                 scheduled);
+    }
+
+    private static Integer imageSize(JsonNode payload, String field) {
+        JsonNode img = payload == null ? null : payload.get("image");
+        return img == null || img.isNull() ? null : intOrNull(img, field);
     }
 
     private MediaView toMediaView(String projectKey, AssetVersionView v) {

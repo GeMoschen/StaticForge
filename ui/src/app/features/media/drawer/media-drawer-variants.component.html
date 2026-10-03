@@ -1,14 +1,49 @@
-@if (core.variants().length > 0) {
-  <section class="section">
-    <h3 class="section__title">Variants</h3>
-    <ul class="variants">
-      @for (variant of core.variants(); track variant.name) {
-        <li>
-          <span>{{ variant.name }}</span>
-          <span class="meta">{{ variant.width ?? 0 }}px · {{ variant.format }}</span>
-          <button type="button" class="link-button" (click)="preview.downloadVariant(variant.name)">Download</button>
-        </li>
+<p class="intro">{{ 'media.drawer.variants.intro' | transloco }}</p>
+<div class="table-wrap">
+  <table class="table">
+    <thead>
+      <tr>
+        <th scope="col">{{ 'media.drawer.variants.columns.variant' | transloco }}</th>
+        <th scope="col">{{ 'media.drawer.variants.columns.format' | transloco }}</th>
+        <th scope="col" class="num">{{ 'media.drawer.variants.columns.dimensions' | transloco }}</th>
+        <th scope="col" class="num">{{ 'media.drawer.variants.columns.size' | transloco }}</th>
+        <th scope="col">
+          <span class="sf-sr-only">{{ 'media.drawer.variants.columns.actions' | transloco }}</span>
+        </th>
+      </tr>
+    </thead>
+    <tbody>
+      @for (row of rows(); track row.id) {
+        <tr>
+          <td>
+            @if (row.name === null) {
+              <sf-badge [label]="'media.drawer.variants.original' | transloco" />
+            } @else {
+              <span class="mono">{{ row.name }}</span>
+            }
+          </td>
+          <td>{{ row.format }}</td>
+          <td class="num">
+            @if (row.width && row.height) {
+              {{ row.width }} × {{ row.height }}
+            } @else if (row.width) {
+              {{ 'media.drawer.variants.widthPx' | transloco: { width: row.width } }}
+            } @else {
+              {{ 'media.drawer.variants.none' | transloco }}
+            }
+          </td>
+          <td class="num">{{ row.sizeBytes !== null ? (row.sizeBytes | sfFileSize) : ('media.drawer.variants.none' | transloco) }}</td>
+          <td class="actions">
+            <sf-button
+              variant="ghost"
+              size="sm"
+              icon="download"
+              [label]="'media.drawer.variants.download' | transloco: { variant: row.name === null ? row.format : row.name + ' ' + row.format }"
+              (click)="download(row)"
+            />
+          </td>
+        </tr>
       }
-    </ul>
-  </section>
-}
+    </tbody>
+  </table>
+</div>

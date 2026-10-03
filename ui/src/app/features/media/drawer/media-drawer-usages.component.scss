@@ -1,27 +1,29 @@
-@use 'drawer-parts';
+@use 'drawer-tabs';
 
-:host {
-  display: contents;
+@include drawer-tabs.stack;
+@include drawer-tabs.text;
+@include drawer-tabs.rows('.usage');
+
+.usage__icon {
+  flex: none;
+  color: var(--sf-text-subtle);
+  font-size: var(--sf-fs-18);
 }
 
-@include drawer-parts.section;
-@include drawer-parts.muted;
+.usage__link {
+  color: var(--sf-accent);
+  font-size: var(--sf-fs-13);
+  line-height: var(--sf-lh-13);
+  font-weight: var(--sf-weight-medium);
+  text-decoration: none;
 
-.usages {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--sf-1);
-}
+  &:hover {
+    text-decoration: underline;
+  }
 
-.usages li {
-  display: flex;
-  flex-direction: column;
-  gap: var(--sf-1);
-  padding: var(--sf-2) var(--sf-3);
-  border: 1px solid var(--sf-line);
-  border-radius: var(--sf-radius-md);
-  font-size: var(--sf-text-xs);
+  &:focus-visible {
+    outline: 2px solid var(--sf-focus-ring);
+    outline-offset: 2px;
+    border-radius: var(--sf-radius-sm);
+  }
 }

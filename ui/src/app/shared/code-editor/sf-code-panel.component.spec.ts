@@ -155,3 +155,37 @@ describe('SfCodePanelComponent', () => {
     expect(host.panel().cursor()).toEqual({ line: 3, column: 2 });
   });
 });
+
+@Component({
+  standalone: true,
+  imports: [SfCodePanelComponent],
+  template: `<div style="height: 20rem; display: flex; flex-direction: column">
+    <sf-code-panel fileName="logo.svg" languageLabel="SVG" value="<svg></svg>" language="octl" format="XML" [svg]="true" [names]="['media:logo']" label="Source">
+      <button sfCodePanelTools type="button">Highlighted as XML</button>
+    </sf-code-panel>
+  </div>`,
+})
+class ToolsHostComponent {}
+
+describe('SfCodePanelComponent header tools and editor options', () => {
+  it('projects the host’s tools into the header, before the actions, and hands svg and names to the editor', () => {
+    TestBed.configureTestingModule({ imports: [ToolsHostComponent] });
+    const fixture = TestBed.createComponent(ToolsHostComponent);
+    fixture.detectChanges();
+    const root = fixture.nativeElement as HTMLElement;
+
+    const tools = root.querySelector('.sf-code-panel__header .sf-code-panel__tools');
+    expect(tools?.textContent).toBe('Highlighted as XML');
+    expect(tools?.nextElementSibling?.classList.contains('sf-code-panel__actions')).toBe(true);
+    const editor = fixture.debugElement.query(By.directive(SfCodeEditorComponent)).componentInstance as SfCodeEditorComponent;
+    expect(editor.svg()).toBe(true);
+    expect(editor.names()).toEqual(['media:logo']);
+  });
+
+  it('has no tools wrapper content when the host projects none', () => {
+    TestBed.configureTestingModule({ imports: [HostComponent] });
+    const fixture = TestBed.createComponent(HostComponent);
+    fixture.detectChanges();
+    expect((fixture.nativeElement as HTMLElement).querySelector('.sf-code-panel__tools')?.childElementCount).toBe(0);
+  });
+});

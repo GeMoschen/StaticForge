@@ -6,7 +6,7 @@
 .uploads {
   display: flex;
   flex-direction: column;
-  max-block-size: 22rem;
+  max-block-size: 28rem;
   overflow: hidden;
   border: 1px solid var(--sf-border);
   border-radius: var(--sf-radius-lg);
@@ -50,7 +50,7 @@
 
 .upload {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: var(--sf-space-3);
   padding: var(--sf-space-2) var(--sf-space-4);
 
@@ -109,6 +109,7 @@
 
 .upload__status--error {
   color: var(--sf-danger-text);
+  white-space: normal;
 }
 
 .upload__bar {
@@ -128,6 +129,25 @@
 
 .upload__actions {
   flex: none;
+  align-self: flex-start;
+}
+
+// Text buttons (Retry; Replace, Keep both) and the alt text field sit under the message, using the row's width.
+.upload__buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sf-space-2);
+}
+
+.upload__alt {
+  display: flex;
+  align-items: center;
+  gap: var(--sf-space-2);
+}
+
+.upload__alt-input {
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 @media (prefers-reduced-motion: reduce) {

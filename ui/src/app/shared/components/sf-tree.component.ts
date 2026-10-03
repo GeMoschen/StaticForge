@@ -133,6 +133,14 @@ export interface SfTreeReorderRequest<T = unknown> {
   completed: SfTreeCompleted;
 }
 
+/** A drag that started outside the tree (a card of the main pane) was dropped on a node of it (or, `null`, on the root). */
+export interface SfTreeForeignDrop<T = unknown> {
+  /** The node dropped on; `null` = the root level. */
+  target: SfTreeNode<T> | null;
+  /** The drop event: the dragged payload is in its `dataTransfer`. */
+  event: DragEvent;
+}
+
 interface DropTarget {
   /** The row under the pointer; `null` = the empty area (the root). */
   id: string | null;
@@ -221,6 +229,13 @@ export class SfTreeComponent<T = unknown> implements OnInit, OnDestroy {
   readonly canDrop = input<((dragged: readonly SfTreeNode<T>[], target: SfTreeNode<T> | null) => boolean) | null>(
     null,
   );
+  /**
+   * Whether a drag that did not start in this tree — e.g. cards of the main pane — may be dropped on `target` (`null` =
+   * the root), on top of the built-in check that the target is droppable. Without it foreign drags are ignored; with it
+   * the node highlights as a drop target and the drop is reported through {@link foreignDrop}. The function sees only
+   * what a drag reveals before the drop (`dataTransfer.types`), not the payload.
+   */
+  readonly acceptForeignDrag = input<((event: DragEvent, target: SfTreeNode<T> | null) => boolean) | null>(null);
   /** Nodes may be dropped or pasted at the root level. */
   readonly rootDroppable = input(false, { transform: booleanAttribute });
   /** What "New …" entries the `create` action offers. */
@@ -262,6 +277,8 @@ export class SfTreeComponent<T = unknown> implements OnInit, OnDestroy {
   readonly moveTo = output<SfTreeNode<T>[]>();
   /** A sibling reorder ({@link reorderable}): the host applies it, then calls {@link refresh} and `completed`. */
   readonly reorder = output<SfTreeReorderRequest<T>>();
+  /** A foreign drag ({@link acceptForeignDrag}) was dropped on a node: the host does what the drop means. */
+  readonly foreignDrop = output<SfTreeForeignDrop<T>>();
 
   private readonly prefs = inject(PreferencesService);
   private readonly confirms = inject(ConfirmService);
@@ -1218,11 +1235,12 @@ export class SfTreeComponent<T = unknown> implements OnInit, OnDestroy {
   }
 
   protected onDragOver(event: DragEvent, row: SfTreeNodeRow<T> | null): void {
-    if (!this.dragged) {
-      return;
-    }
     if (row === null && event.target instanceof Element && event.target.closest('.sf-tree__row')) {
       return; // the row's own handler decided
+    }
+    if (!this.dragged) {
+      this.onForeignDragOver(event, row);
+      return;
     }
     const target = row?.node ?? null;
     const position = row ? this.dropPosition(event, row) : 'inside';
@@ -1258,6 +1276,47 @@ export class SfTreeComponent<T = unknown> implements OnInit, OnDestroy {
     }
   }
 
+  /** Whether a foreign drag may land on `target` (`null` = the root). */
+  private acceptsForeign(event: DragEvent, target: SfTreeNode<T> | null): boolean {
+    const accept = this.acceptForeignDrag();
+    if (!accept) {
+      return false;
+    }
+    const droppable = target === null ? this.rootDroppable() : this.isDroppable(target);
+    return droppable && accept(event, target);
+  }
+
+  private onForeignDragOver(event: DragEvent, row: SfTreeNodeRow<T> | null): void {
+    if (!this.acceptForeignDrag()) {
+      return;
+    }
+    const target = row?.node ?? null;
+    const valid = this.acceptsForeign(event, target);
+    if (valid) {
+      event.preventDefault();
+    }
+    if (event.dataTransfer) {
+      event.dataTransfer.dropEffect = valid ? 'move' : 'none';
+    }
+    const id = row?.id ?? null;
+    const current = this.dropTarget();
+    if (current?.id === id && current.valid === valid) {
+      return;
+    }
+    this.dropTarget.set({ id, valid, position: 'inside' });
+    if (current === null || current.id !== id) {
+      this.announce(valid ? this.t('dropInto', { name: target?.label ?? this.label() }) : this.t('cannotDrop'));
+    }
+    this.clearTimer(this.dragExpandTimer);
+    if (valid && row && row.expandable && !row.expanded) {
+      this.dragExpandTimer = setTimeout(() => {
+        if (this.dropTarget()?.id === row.id) {
+          void this.expandNode(row.id);
+        }
+      }, DRAG_EXPAND_MS);
+    }
+  }
+
   protected onDragLeave(event: DragEvent, row: SfTreeNodeRow<T>): void {
     const related = event.relatedTarget;
     if (related instanceof Node && (event.currentTarget as HTMLElement).contains(related)) {
@@ -1269,11 +1328,18 @@ export class SfTreeComponent<T = unknown> implements OnInit, OnDestroy {
   }
 
   protected onDrop(event: DragEvent, row: SfTreeNodeRow<T> | null): void {
-    const nodes = this.dragged;
-    if (!nodes) {
+    if (row === null && event.target instanceof Element && event.target.closest('.sf-tree__row')) {
       return;
     }
-    if (row === null && event.target instanceof Element && event.target.closest('.sf-tree__row')) {
+    const nodes = this.dragged;
+    if (!nodes) {
+      const target = row?.node ?? null;
+      if (this.acceptsForeign(event, target)) {
+        event.preventDefault();
+        event.stopPropagation();
+        this.endDrag();
+        this.foreignDrop.emit({ target, event });
+      }
       return;
     }
     event.preventDefault();

@@ -1,0 +1,11 @@
+<sf-dialog size="sm" [title]="t('rename.title', { name: data.name })">
+  <form (submit)="$event.preventDefault(); apply()">
+    <sf-field [label]="t('rename.label')" [hint]="t('rename.hint')" required [error]="error()">
+      <sf-input autocomplete="off" [spellcheck]="false" [value]="value()" (valueChange)="value.set($event)" />
+    </sf-field>
+  </form>
+  <ng-container sfDialogFooter>
+    <sf-button variant="ghost" (click)="cancel()">{{ t('rename.cancel') }}</sf-button>
+    <sf-button [disabled]="!valid()" (click)="apply()">{{ t('rename.apply') }}</sf-button>
+  </ng-container>
+</sf-dialog>

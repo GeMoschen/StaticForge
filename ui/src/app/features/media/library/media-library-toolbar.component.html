@@ -1,44 +1,31 @@
-<div class="toolbar">
-  <input
-    class="search"
-    type="search"
-    placeholder="Search media"
-    aria-label="Search media"
+<!-- The search field keeps ←/→, so a roving toolbar could not be left toward the other controls: all of them are tab stops. -->
+<sf-toolbar [label]="'media.toolbar.label' | transloco" [roving]="false">
+  <sf-search-input
+    class="toolbar__search"
     [value]="library.search()"
-    (input)="onSearchInput($event)"
+    [placeholder]="'media.toolbar.search' | transloco"
+    [aria-label]="'media.toolbar.search' | transloco"
+    (valueChange)="library.setSearch($event)"
   />
-
-  <select
-    [value]="library.mimeFilter()"
-    (change)="onMimeChange($event)"
-    aria-label="Filter by media type"
-  >
-    <option value="">All types</option>
-    <option value="image/">Images</option>
-    <option value="video/">Videos</option>
-    <option value="audio/">Audio</option>
-    <option value="application/">Documents</option>
-  </select>
-
-  @if (library.selected().length > 0) {
-    <sf-button variant="danger" [disabled]="library.readOnly()" (click)="items.deleteSelection()">
-      Delete ({{ library.selected().length }})
-    </sf-button>
-  }
-
+  <sf-select
+    class="toolbar__type"
+    [options]="typeOptions()"
+    [value]="library.typeFilter()"
+    [aria-label]="'media.toolbar.type' | transloco"
+    (valueChange)="library.setTypeFilter($event ?? 'all')"
+  />
+  <sf-menu variant="secondary" align="start" [text]="sortText()" [label]="'media.toolbar.sort' | transloco" [items]="sortItems()" />
   <span class="toolbar__spacer"></span>
-
-  @if (library.readOnly()) {
-    <span class="toolbar__readonly">{{ library.readOnlyLabel() }}</span>
-  }
-
-  <sf-button variant="secondary" [disabled]="library.readOnly()" (click)="fileInput.click()">Upload</sf-button>
-  <input
-    #fileInput
-    class="sf-sr-only"
-    type="file"
-    multiple
-    [disabled]="library.readOnly()"
-    (change)="uploads.onFileInput($event)"
+  <sf-segmented
+    size="sm"
+    [options]="viewOptions()"
+    [value]="library.view()"
+    [aria-label]="'media.toolbar.view' | transloco"
+    (valueChange)="library.setView($event ?? 'grid')"
   />
-</div>
+  @if (!uploads.canUpload()) {
+    <span class="toolbar__readonly">{{ uploads.blockedReason() }}</span>
+  }
+  <sf-button icon="upload" [disabled]="!uploads.canUpload()" (click)="fileInput.click()">{{ 'media.toolbar.upload' | transloco }}</sf-button>
+  <input #fileInput class="sf-sr-only" type="file" multiple tabindex="-1" aria-hidden="true" [disabled]="!uploads.canUpload()" (change)="uploads.onFileInput($event)" />
+</sf-toolbar>

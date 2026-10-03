@@ -1,20 +1,48 @@
-@use 'drawer-parts';
+@use 'drawer-tabs';
 
-:host {
-  display: contents;
-}
+@include drawer-tabs.stack;
+@include drawer-tabs.text;
 
-.process {
+.diags {
   display: flex;
   flex-direction: column;
-  gap: var(--sf-2);
-  flex-shrink: 0;
+  gap: var(--sf-space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
-@include drawer-parts.switch;
-@include drawer-parts.hint;
-@include drawer-parts.diagnostics;
+.diag {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--sf-space-1) var(--sf-space-2);
+  padding: var(--sf-space-2) var(--sf-space-3);
+  border: 1px solid var(--sf-border);
+  border-inline-start: 3px solid var(--sf-warning);
+  border-radius: var(--sf-radius-sm);
+  background: var(--sf-warning-subtle);
+  font-size: var(--sf-fs-13);
+  line-height: var(--sf-lh-13);
+}
 
-.hint code {
-  font-family: var(--sf-font-mono, monospace);
+.diag--error {
+  border-inline-start-color: var(--sf-danger);
+  background: var(--sf-danger-subtle);
+}
+
+.diag__code {
+  font-family: var(--sf-font-mono);
+  font-size: var(--sf-fs-12);
+  font-weight: var(--sf-weight-semibold);
+}
+
+.diag__pos {
+  color: var(--sf-text-muted);
+  font-size: var(--sf-fs-12);
+}
+
+.diag__message {
+  flex-basis: 100%;
+  color: var(--sf-text);
 }

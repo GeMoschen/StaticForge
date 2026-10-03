@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, computed, effect, inject, input, signal, untracked } from '@angular/core';
+import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
 import { ChannelsService } from '../channels/channels.service';
 import { LocalesStore } from '../../core/project/locales.store';
 import { ProjectPermissionsStore } from '../../core/project/project-permissions.store';
@@ -23,59 +24,65 @@ import {
   selector: 'sf-asset-urls',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [SfButtonComponent],
+  imports: [SfButtonComponent, TranslocoPipe],
   template: `
     <div class="urls">
-      <h3 class="urls__title">URLs</h3>
+      <h3 class="urls__title">{{ 'shared.assetUrls.title' | transloco }}</h3>
       @if (loading()) {
-        <span class="muted">Loading…</span>
-      } @else if (error()) {
-        <span class="urls__error" role="alert">{{ error() }}</span>
+        <span class="muted">{{ 'common.loading' | transloco }}</span>
+      } @else if (failed()) {
+        <p class="muted urls__unavailable" role="status">
+          {{ 'shared.assetUrls.unavailable' | transloco }}
+          <sf-button variant="ghost" size="sm" (click)="reload()">{{ 'common.retry' | transloco }}</sf-button>
+        </p>
       }
-      @if (!loading() && !error() && view(); as v) {
+      @if (!loading() && !failed() && view(); as v) {
         @for (index of v.indexPages ?? []; track index.channelKey) {
           <p class="urls__note">
-            Uses the URL of its index page <strong>{{ index.pageLabel ?? index.pageUuid }}</strong>
-            <span class="muted">({{ index.channelKey }})</span>.
+            {{ 'shared.assetUrls.indexPage' | transloco }} <strong>{{ index.pageLabel ?? index.pageUuid }}</strong>
+            <span class="muted">({{ index.channelKey }})</span>
           </p>
         }
         @if (!v.targetType) {
-          <span class="muted">This asset has no URL of its own.</span>
+          <span class="muted">{{ 'shared.assetUrls.none' | transloco }}</span>
         } @else {
           @if ((v.entries ?? []).length === 0) {
-            <span class="muted">No URL yet — the next build or preview assigns one.</span>
+            <span class="muted">{{ 'shared.assetUrls.noneYet' | transloco }}</span>
           } @else {
             <ul class="urls__list">
               @for (entry of v.entries ?? []; track entry.id) {
                 <li class="urls__row">
                   <span class="urls__where">
-                    {{ entry.area === 'PREVIEW' ? 'Preview' : 'Build' }}{{ entry.channelKey ? ' · ' + entry.channelKey : '' }}{{
-                      entry.locale ? ' · ' + entry.locale : ''
-                    }}{{ outputText(entry) }}
+                    {{ (entry.area === 'PREVIEW' ? 'shared.assetUrls.areaPreview' : 'shared.assetUrls.areaBuild') | transloco
+                    }}{{ entry.channelKey ? ' · ' + entry.channelKey : '' }}{{ entry.locale ? ' · ' + entry.locale : '' }}{{
+                      outputText(entry)
+                    }}
                   </span>
                   @if (editingId() === entry.id) {
                     <input
                       class="urls__input"
                       type="text"
-                      aria-label="URL"
+                      [attr.aria-label]="'shared.assetUrls.url' | transloco"
                       [value]="editUrl()"
                       (input)="editUrl.set($any($event.target).value)"
                       (keydown.enter)="save(entry)"
                       (keydown.escape)="cancel()"
                     />
-                    <sf-button variant="primary" [disabled]="saving() || !editUrl().trim()" (click)="save(entry)">Save</sf-button>
-                    <sf-button variant="ghost" (click)="cancel()">Cancel</sf-button>
+                    <sf-button variant="primary" [disabled]="saving() || !editUrl().trim()" (click)="save(entry)">{{
+                      'common.save' | transloco
+                    }}</sf-button>
+                    <sf-button variant="ghost" (click)="cancel()">{{ 'common.cancel' | transloco }}</sf-button>
                   } @else {
                     <code class="urls__url">{{ entry.url }}</code>
                     @if (entry.overridden) {
-                      <span class="urls__badge">manual</span>
+                      <span class="urls__badge">{{ 'shared.assetUrls.manual' | transloco }}</span>
                     }
                     <span class="urls__row-actions">
                       @if (canOverride()) {
-                        <sf-button variant="ghost" (click)="edit(entry)">Override</sf-button>
+                        <sf-button variant="ghost" (click)="edit(entry)">{{ 'shared.assetUrls.override' | transloco }}</sf-button>
                       }
                       @if (canReset()) {
-                        <sf-button variant="ghost" (click)="reset(entry)">Reset</sf-button>
+                        <sf-button variant="ghost" (click)="reset(entry)">{{ 'shared.assetUrls.reset' | transloco }}</sf-button>
                       }
                     </span>
                   }
@@ -88,118 +95,53 @@ import {
           }
           <div class="urls__actions">
             @if (canOverride() && !adding()) {
-              <sf-button variant="ghost" (click)="startAdd()">Set URL</sf-button>
+              <sf-button variant="ghost" (click)="startAdd()">{{ 'shared.assetUrls.setUrl' | transloco }}</sf-button>
             }
             @if (canReset() && (v.entries ?? []).length > 0) {
-              <sf-button variant="ghost" (click)="resetAll()">Reset all URLs</sf-button>
+              <sf-button variant="ghost" (click)="resetAll()">{{ 'shared.assetUrls.resetAll' | transloco }}</sf-button>
             }
           </div>
           @if (adding()) {
             <div class="urls__add">
-              <select class="urls__select" aria-label="Area" [value]="addArea()" (change)="addArea.set($any($event.target).value)">
-                <option value="GENERATED">Build</option>
-                <option value="PREVIEW">Preview</option>
+              <select class="urls__select" [attr.aria-label]="'shared.assetUrls.area' | transloco" [value]="addArea()" (change)="addArea.set($any($event.target).value)">
+                <option value="GENERATED">{{ 'shared.assetUrls.areaBuild' | transloco }}</option>
+                <option value="PREVIEW">{{ 'shared.assetUrls.areaPreview' | transloco }}</option>
               </select>
               @if (v.targetType !== 'MEDIA') {
-                <select class="urls__select" aria-label="Channel" [value]="addChannel()" (change)="addChannel.set($any($event.target).value)">
+                <select class="urls__select" [attr.aria-label]="'shared.assetUrls.channel' | transloco" [value]="addChannel()" (change)="addChannel.set($any($event.target).value)">
                   @for (key of channels(); track key) {
                     <option [value]="key">{{ key }}</option>
                   }
                 </select>
               }
               @if (locales().length > 0) {
-                <select class="urls__select" aria-label="Language" [value]="addLocale()" (change)="addLocale.set($any($event.target).value)">
+                <select class="urls__select" [attr.aria-label]="'shared.assetUrls.language' | transloco" [value]="addLocale()" (change)="addLocale.set($any($event.target).value)">
                   @for (locale of locales(); track locale.code) {
                     <option [value]="locale.code">{{ locale.label ?? locale.code }}</option>
                   }
                   @if (v.targetType === 'MEDIA') {
-                    <option value="">Not localized</option>
+                    <option value="">{{ 'shared.assetUrls.notLocalized' | transloco }}</option>
                   }
                 </select>
               }
               <input
                 class="urls__input"
                 type="text"
-                aria-label="New URL"
-                placeholder="e.g. company/about.html"
+                [attr.aria-label]="'shared.assetUrls.newUrl' | transloco"
+                [attr.placeholder]="'shared.assetUrls.placeholder' | transloco"
                 [value]="addUrl()"
                 (input)="addUrl.set($any($event.target).value)"
                 (keydown.enter)="add()"
               />
-              <sf-button variant="primary" [disabled]="saving() || !addUrl().trim()" (click)="add()">Save</sf-button>
-              <sf-button variant="ghost" (click)="adding.set(false)">Cancel</sf-button>
+              <sf-button variant="primary" [disabled]="saving() || !addUrl().trim()" (click)="add()">{{ 'common.save' | transloco }}</sf-button>
+              <sf-button variant="ghost" (click)="adding.set(false)">{{ 'common.cancel' | transloco }}</sf-button>
             </div>
           }
         }
       }
     </div>
   `,
-  styles: [
-    `
-      .urls {
-        display: flex;
-        flex-direction: column;
-        gap: var(--sf-2);
-        font-size: var(--sf-text-sm);
-      }
-      .urls__title {
-        margin: 0;
-        font-size: var(--sf-text-sm);
-        font-weight: 600;
-        color: var(--sf-ink);
-      }
-      .urls__list {
-        list-style: none;
-        margin: 0;
-        padding: 0;
-        display: flex;
-        flex-direction: column;
-        gap: var(--sf-1);
-      }
-      .urls__row,
-      .urls__add,
-      .urls__actions {
-        display: flex;
-        align-items: center;
-        flex-wrap: wrap;
-        gap: var(--sf-2);
-        min-width: 0;
-      }
-      .urls__row-actions {
-        display: inline-flex;
-        gap: var(--sf-1);
-        margin-left: auto;
-        flex-wrap: nowrap;
-      }
-      .urls__where {
-        color: var(--sf-slate);
-        min-width: 8rem;
-      }
-      .urls__url {
-        overflow-wrap: anywhere;
-        min-width: 0;
-      }
-      .urls__badge {
-        font-size: var(--sf-text-xs);
-        padding: 0 var(--sf-1);
-        border: 1px solid var(--sf-line);
-        border-radius: var(--sf-radius-sm);
-      }
-      .urls__input {
-        flex: 1 1 12rem;
-        min-width: 0;
-      }
-      .urls__note {
-        margin: 0;
-      }
-      .urls__error {
-        color: var(--sf-rust);
-      }
-      .muted {
-        color: var(--sf-slate);
-      }
-    `,
-  ],
+  styleUrl: './asset-urls.component.scss',
 })
 export class SfAssetUrlsComponent {
   readonly projectKey = input.required<string>();
@@ -210,12 +152,14 @@ export class SfAssetUrlsComponent {
   private readonly api = inject(UrlRegistryService);
   private readonly channelsApi = inject(ChannelsService);
   private readonly toasts = inject(ToastService);
+  private readonly transloco = inject(TranslocoService);
   private readonly permissions = inject(ProjectPermissionsStore);
   protected readonly locales = inject(LocalesStore).locales;
 
   protected readonly view = signal<UrlRegistryAssetView | null>(null);
   protected readonly loading = signal(false);
-  protected readonly error = signal<string | null>(null);
+  /** The registry could not be read (a project that never built, an old server): a quiet note with Retry, no toast. */
+  protected readonly failed = signal(false);
 
   protected readonly editingId = signal<number | null>(null);
   protected readonly editUrl = signal('');
@@ -254,7 +198,7 @@ export class SfAssetUrlsComponent {
       return;
     }
     this.loading.set(true);
-    this.error.set(null);
+    this.failed.set(false);
     this.api.forAsset(key, uuid).subscribe({
       next: (view) => {
         this.view.set(view);
@@ -262,9 +206,14 @@ export class SfAssetUrlsComponent {
       },
       error: () => {
         this.loading.set(false);
-        this.error.set('Could not load the URLs.');
+        this.view.set(null);
+        this.failed.set(true);
       },
     });
+  }
+
+  protected reload(): void {
+    this.load(this.projectKey(), this.assetUuid());
   }
 
   protected edit(entry: UrlRegistryEntryView): void {
@@ -289,7 +238,7 @@ export class SfAssetUrlsComponent {
         this.saving.set(false);
         this.editingId.set(null);
         this.editError.set(null);
-        this.toasts.show('URL saved — the next build moves the output there', 'success');
+        this.toasts.show(this.transloco.translate('shared.assetUrls.saved'), 'success');
         this.load(this.projectKey(), this.assetUuid());
       },
       error: (err) => {
@@ -337,7 +286,7 @@ export class SfAssetUrlsComponent {
           this.saving.set(false);
           this.adding.set(false);
           this.editError.set(null);
-          this.toasts.show('URL saved — the next build moves the output there', 'success');
+          this.toasts.show(this.transloco.translate('shared.assetUrls.saved'), 'success');
           this.load(this.projectKey(), this.assetUuid());
         },
         error: (err) => {
@@ -353,20 +302,20 @@ export class SfAssetUrlsComponent {
     }
     this.api.reset(this.projectKey(), { entryId: entry.id }).subscribe({
       next: () => {
-        this.toasts.show('URL reset — the next build or preview assigns the computed one', 'success');
+        this.toasts.show(this.transloco.translate('shared.assetUrls.wasReset'), 'success');
         this.load(this.projectKey(), this.assetUuid());
       },
-      error: () => this.toasts.show('Could not reset the URL — try again in a moment.', 'error'),
+      error: () => this.toasts.show(this.transloco.translate('shared.assetUrls.resetFailed'), 'error'),
     });
   }
 
   protected resetAll(): void {
     this.api.reset(this.projectKey(), { targetUuid: this.assetUuid() }).subscribe({
       next: () => {
-        this.toasts.show('URLs reset — the next build or preview assigns the computed ones', 'success');
+        this.toasts.show(this.transloco.translate('shared.assetUrls.allWereReset'), 'success');
         this.load(this.projectKey(), this.assetUuid());
       },
-      error: () => this.toasts.show('Could not reset the URLs — try again in a moment.', 'error'),
+      error: () => this.toasts.show(this.transloco.translate('shared.assetUrls.resetAllFailed'), 'error'),
     });
   }
 }

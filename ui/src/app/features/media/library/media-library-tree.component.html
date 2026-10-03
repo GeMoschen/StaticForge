@@ -1,0 +1,78 @@
+<section class="pane" aria-labelledby="media-folders-title">
+  <div class="pane__head">
+    <span class="pane__title" id="media-folders-title">{{ 'media.folders.title' | transloco }}</span>
+    <sf-button variant="secondary" size="sm" icon="create_new_folder" [disabled]="!library.canEdit()" (click)="folders.startCreate()">{{
+      'media.folders.new' | transloco
+    }}</sf-button>
+  </div>
+  @if (library.treeLoading()) {
+    <sf-skeleton class="pane__skeleton" shape="tree" [rows]="6" [label]="'media.folders.loading' | transloco" />
+  } @else if (library.treeError()) {
+    <div class="pane__state">
+      <sf-banner tone="danger" live="assertive">
+        {{ 'media.folders.loadFailed' | transloco }}
+        <sf-button sfBannerActions variant="secondary" size="sm" icon="refresh" (click)="library.reloadTree()">{{
+          'media.library.retry' | transloco
+        }}</sf-button>
+      </sf-banner>
+    </div>
+  } @else {
+    @if (library.topLevelFolders().length > 0) {
+      <div class="pane__filter">
+        <sf-search-input
+          [value]="filter()"
+          [placeholder]="'media.folders.filter' | transloco"
+          [aria-label]="'media.folders.filterLabel' | transloco"
+          (valueChange)="filter.set($event)"
+        />
+      </div>
+    }
+    @if (library.treeReady() && library.topLevelFolders().length === 0) {
+      <sf-empty-state
+        class="pane__empty"
+        icon="create_new_folder"
+        [level]="3"
+        [title]="'media.folders.emptyTitle' | transloco"
+        [description]="'media.folders.emptyHint' | transloco"
+        [primaryLabel]="library.canEdit() ? ('media.folders.new' | transloco) : null"
+        primaryIcon="create_new_folder"
+        (primary)="folders.startCreate()"
+      />
+    } @else if (noMatch()) {
+      <sf-empty-state
+        class="pane__empty"
+        icon="search_off"
+        [level]="3"
+        [title]="'media.folders.noMatch' | transloco: { query: filter().trim() }"
+        [secondaryLabel]="'media.folders.clearFilter' | transloco"
+        (secondary)="filter.set('')"
+      />
+    }
+    <sf-tree
+      class="pane__tree"
+      treeId="media"
+      [label]="'media.folders.title' | transloco"
+      [projectKey]="library.projectKey()"
+      [loadChildren]="loader()"
+      [(selection)]="selection"
+      [multiselect]="false"
+      [filterable]="false"
+      [expandActions]="false"
+      rootDroppable
+      [actions]="treeActions"
+      [createKinds]="createKinds"
+      [allowAction]="allowAction"
+      [validateName]="validateName"
+      [confirmDelete]="confirmDelete"
+      [canDrop]="canDrop"
+      [menuItems]="menuItems"
+      [acceptForeignDrag]="acceptDrag"
+      (open)="onOpen($event)"
+      (create)="onCreate($event)"
+      (rename)="onRename($event)"
+      (move)="onMove($event)"
+      (moveTo)="onMoveTo($event)"
+      (foreignDrop)="onForeignDrop($event)"
+    />
+  }
+</section>

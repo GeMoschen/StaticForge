@@ -3,7 +3,7 @@
   [width]="state.drawerWidth()"
   [minWidth]="360"
   (widthChange)="state.drawerWidth.set($event)"
-  (closed)="state.openAsset(null)"
+  (closed)="state.requestOpenAsset(null)"
   (keydown)="onKeydown($event)"
 >
   <div sfDrawerActions class="head">
@@ -16,7 +16,7 @@
       icon="chevron_left"
       [label]="'styleguide.sample.media.detail.previous' | transloco"
       aria-keyshortcuts="ArrowLeft"
-      (click)="state.step(-1)"
+      (click)="state.requestStep(-1)"
     />
     <sf-button
       variant="ghost"
@@ -24,7 +24,7 @@
       icon="chevron_right"
       [label]="'styleguide.sample.media.detail.next' | transloco"
       aria-keyshortcuts="ArrowRight"
-      (click)="state.step(1)"
+      (click)="state.requestStep(1)"
     />
     <sf-menu size="sm" [items]="fileActions()" [label]="'styleguide.sample.media.detail.more' | transloco" />
   </div>
@@ -193,24 +193,15 @@
             [languageLabel]="languageLabel()"
             [value]="rendered()"
             language="octl"
-            [format]="codeFormat()"
+            [format]="highlight().format"
+            [svg]="highlight().svg"
             [readOnly]="true"
             [label]="'styleguide.sample.media.rendered.label' | transloco: { name: file().name }"
           />
         }
 
         @case ('source') {
-          <sf-code-panel
-            class="code"
-            [fileName]="file().name"
-            [languageLabel]="languageLabel()"
-            [value]="source()"
-            language="octl"
-            [format]="codeFormat()"
-            [diagnostics]="diagnostics()"
-            [label]="'styleguide.sample.media.source.label' | transloco: { name: file().name }"
-            (valueChange)="state.sourceDraft.set($event)"
-          />
+          <sf-sample-media-source />
         }
 
         @case ('usedby') {
@@ -274,11 +265,11 @@
 
   @if (state.currentTab() === 'details' || state.currentTab() === 'source') {
     <div sfDrawerFooter class="footer">
-      @if (dirty()) {
-        <span class="footer__note">{{ 'styleguide.sample.media.detail.unsaved' | transloco }}</span>
-        <sf-button variant="ghost" (click)="revert()">{{ 'styleguide.sample.media.detail.revert' | transloco }}</sf-button>
+      <sf-save-status class="footer__status" [state]="state.dirty() ? 'dirty' : 'saved'" [savedAt]="state.savedAt()" />
+      @if (state.dirty()) {
+        <sf-button variant="ghost" (click)="state.discard()">{{ 'styleguide.sample.media.detail.revert' | transloco }}</sf-button>
       }
-      <sf-button [disabled]="!dirty()" [disabledReason]="dirty() ? null : ('styleguide.sample.media.detail.nothingToSave' | transloco)" (click)="save()">{{
+      <sf-button [disabled]="!state.dirty()" [disabledReason]="state.dirty() ? null : ('styleguide.sample.media.detail.nothingToSave' | transloco)" (click)="save()">{{
         'styleguide.sample.media.detail.save' | transloco
       }}</sf-button>
     </div>

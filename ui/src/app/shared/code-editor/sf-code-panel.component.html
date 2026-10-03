@@ -8,6 +8,7 @@
       {{ 'shared.codePanel.readOnly' | transloco }}
     </span>
   }
+  <span class="sf-code-panel__tools"><ng-content select="[sfCodePanelTools]" /></span>
   <span class="sf-code-panel__actions">
     @if (canFormat()) {
       <sf-button variant="ghost" size="sm" icon="format_align_left" (click)="formatCode()">{{
@@ -27,6 +28,8 @@
   [language]="language()"
   [label]="label()"
   [format]="format()"
+  [svg]="svg()"
+  [names]="names()"
   [diagnostics]="diagnostics()"
   [readOnly]="readOnly()"
   [invalid]="errorCount() > 0"
