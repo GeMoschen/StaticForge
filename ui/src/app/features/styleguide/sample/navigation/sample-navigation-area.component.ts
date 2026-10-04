@@ -14,14 +14,15 @@ import { toSignal } from '@angular/core/rxjs-interop';
 import { ActivatedRoute } from '@angular/router';
 import { HashMap, TranslocoPipe, TranslocoService } from '@jsverse/transloco';
 import { ToastService } from '../../../../core/ui/toast.service';
-import { SfDataTableColumn } from '../../../../shared/components/data-table/data-table.types';
+import { SfDataTableBulkAction, SfDataTableColumn } from '../../../../shared/components/data-table/data-table.types';
 import { SfDataTableCellDirective } from '../../../../shared/components/data-table/sf-data-table-templates.directive';
 import { SfDataTableComponent } from '../../../../shared/components/data-table/sf-data-table.component';
 import { SfBadgeComponent } from '../../../../shared/components/display/sf-badge.component';
 import { SfCopyableComponent } from '../../../../shared/components/display/sf-copyable.component';
 import { SfStatusComponent } from '../../../../shared/components/display/sf-status.component';
 import { SfInputComponent } from '../../../../shared/components/forms/sf-input.component';
-import { SfSelectComponent, SfSelectOption } from '../../../../shared/components/forms/sf-select.component';
+import { SfRadioGroupComponent, SfRadioOption } from '../../../../shared/components/forms/sf-radio-group.component';
+import { SfDrawerComponent, SfDrawerFooterDirective } from '../../../../shared/components/dialog/sf-drawer.component';
 import { SfSwitchComponent } from '../../../../shared/components/forms/sf-switch.component';
 import { SfPageHeaderComponent } from '../../../../shared/components/layout/sf-page-header.component';
 import { SfSectionComponent } from '../../../../shared/components/layout/sf-section.component';
@@ -40,10 +41,12 @@ import {
 } from '../../../../shared/components/sf-tree.component';
 import { SfSplitterComponent } from '../../../../shared/components/splitter/sf-splitter.component';
 import { SfTreeLoader, SfTreeNode } from '../../../../shared/components/tree/tree-model';
+import type { ContextMenuItem } from '../../../../shared/services/context-menu.service';
 import { SampleEntry, SampleLang } from '../sample-data';
 import { STATUS_ICONS, STATUS_TONES, SampleState } from '../sample-state';
 import {
   SampleNavEntry,
+  ROOT_ID,
   SampleNavOrder,
   initialNavEntries,
   initialNavOrder,
@@ -106,7 +109,9 @@ function replaceQuery(location: Location, values: Readonly<Record<string, string
     SfMenuComponent,
     SfPageHeaderComponent,
     SfSectionComponent,
-    SfSelectComponent,
+    SfRadioGroupComponent,
+    SfDrawerComponent,
+    SfDrawerFooterDirective,
     SfSplitterComponent,
     SfStatusComponent,
     SfSwitchComponent,
@@ -144,13 +149,17 @@ export class SampleNavigationAreaComponent {
   private created = 0;
 
   protected readonly selected = computed(() => this.entryOf(this.selectedId()));
+  protected readonly isRoot = computed(() => this.selectedId() === ROOT_ID);
+  protected readonly entryDrawerOpen = signal(false);
+  /** The choice in the entry-page drawer before Apply: `''` for none. */
+  protected readonly entryDraft = signal('');
   protected readonly selectedItem = computed(() => {
     const entry = this.selected();
     return entry?.kind === 'item' ? entry : null;
   });
   protected readonly treeSelection = computed(() => {
     const id = this.selectedId();
-    return id === null ? [] : [id];
+    return id === null || id === ROOT_ID ? [] : [id];
   });
 
   /** Each entry with the public URL it leads to and, in developer mode, its UID; hidden ones marked. */
@@ -160,6 +169,24 @@ export class SampleNavigationAreaComponent {
     // Read at load time: a reorder or move refreshes the affected parents.
     return (parent) => untracked(() => this.childrenOf(parent?.id ?? null).map((entry) => this.toNode(entry, dev, hidden)));
   });
+
+  /** The tree's context menu: *Entry page…* on a folder, *Hide from menu* / *Show in menu* on any entry. */
+  protected readonly treeMenu = (nodes: readonly SfTreeNode<SampleNavEntry>[]): ContextMenuItem[] => {
+    const entry = nodes.length === 1 ? nodes[0].data : null;
+    if (!entry) {
+      return [];
+    }
+    const items: ContextMenuItem[] = [];
+    if (entry.kind === 'folder') {
+      items.push({ label: this.t('actions.entry'), icon: 'login', action: () => this.openEntryDrawer(entry.id) });
+    }
+    items.push(
+      entry.visible
+        ? { label: this.t('actions.hide'), icon: 'visibility_off', action: () => this.setVisibility([entry.id], false) }
+        : { label: this.t('actions.show'), icon: 'visibility', action: () => this.setVisibility([entry.id], true) },
+    );
+    return items;
+  };
 
   protected readonly newItems = computed<SfMenuItem[]>(() => [
     { id: 'item', label: this.t('newItem'), icon: 'add_link', action: () => this.create('item') },
@@ -184,24 +211,55 @@ export class SampleNavigationAreaComponent {
     { id: 'label', header: this.t('columns.label'), value: (r) => r.entry.label, hideable: false, width: 220 },
     { id: 'target', header: this.t('columns.target'), value: (r) => r.target?.name ?? '', width: 200 },
     { id: 'url', header: this.t('columns.url'), value: (r) => r.url ?? '', width: 220 },
-    { id: 'visible', header: this.t('columns.visible'), value: (r) => (r.entry.visible ? 1 : 0), width: 150 },
+    { id: 'visible', header: this.t('columns.visible'), value: (r) => (r.entry.visible ? 1 : 0), sortable: true, width: 170 },
   ]);
-  protected readonly entryOptions = computed<SfSelectOption<string>[]>(() => {
-    const folder = this.selected();
-    return folder?.kind === 'folder'
-      ? this.childrenOf(folder.id).filter((e) => e.kind === 'item').map((e) => ({ value: e.id, label: e.label }))
-      : [];
-  });
+  /** The bulk actions of the table's selection (decision 168). */
+  protected readonly bulkActions = computed<SfDataTableBulkAction<NavRow>[]>(() => [
+    { id: 'show', label: this.t('bulk.show'), icon: 'visibility', action: (selection) => this.setVisibility(selection.rows.map((r) => r.entry.id), true) },
+    { id: 'hide', label: this.t('bulk.hide'), icon: 'visibility_off', action: (selection) => this.setVisibility(selection.rows.map((r) => r.entry.id), false) },
+  ]);
+  /** The folder's entry page: the line in its header and the drawer's choices (decision 169). */
   protected readonly entryPage = computed(() => {
     const folder = this.selected();
     return folder?.kind === 'folder' ? this.entryPageOf(folder) : null;
   });
+  protected readonly entryPageEntry = computed(() => this.entryOf(this.entryPage()));
+  protected readonly entryTarget = computed(() => this.targetOf(this.entryOf(this.selectedId()))?.name ?? null);
   protected readonly folderUrl = computed(() => this.targetOf(this.entryOf(this.entryPage()))?.url ?? null);
+  protected readonly entryOptions = computed<SfRadioOption<string>[]>(() => {
+    const folder = this.selected();
+    if (folder?.kind !== 'folder') {
+      return [];
+    }
+    return [
+      { value: '', label: this.t('entry.none'), description: this.t('entry.noneHint') },
+      ...this.childrenOf(folder.id).map((child) => {
+        const url = this.targetOf(child)?.url;
+        const kind = this.t(child.kind === 'item' ? 'entry.kindItem' : 'entry.kindFolder');
+        return {
+          value: child.id,
+          label: child.label,
+          description: url ? this.t('entry.leadsTo', { kind, where: url }) : this.t('entry.leadsNowhere', { kind }),
+        };
+      }),
+    ];
+  });
 
-  protected readonly folderActions = computed<SfMenuItem[]>(() => [
-    { id: 'rename', label: this.t('actions.rename'), icon: 'edit', shortcut: 'F2' },
-    { id: 'delete', label: this.t('actions.delete'), icon: 'delete', danger: true, separatorBefore: true },
-  ]);
+  protected readonly folderActions = computed<SfMenuItem[]>(() => {
+    const folder = this.selected();
+    const entry: SfMenuItem = { id: 'entry', label: this.t('actions.entry'), icon: 'login' };
+    if (!folder || folder.id === ROOT_ID) {
+      return [entry];
+    }
+    return [
+      entry,
+      { id: 'rename', label: this.t('actions.rename'), icon: 'edit', shortcut: 'F2', separatorBefore: true },
+      folder.visible
+        ? { id: 'hide', label: this.t('actions.hide'), icon: 'visibility_off' }
+        : { id: 'show', label: this.t('actions.show'), icon: 'visibility' },
+      { id: 'delete', label: this.t('actions.delete'), icon: 'delete', danger: true, separatorBefore: true },
+    ];
+  });
   protected readonly itemActions = computed<SfMenuItem[]>(() => [
     { id: 'duplicate', label: this.t('actions.duplicate'), icon: 'content_copy' },
     { id: 'delete', label: this.t('actions.delete'), icon: 'delete', danger: true, separatorBefore: true },
@@ -244,6 +302,11 @@ export class SampleNavigationAreaComponent {
   }
 
   // ── Selection ──────────────────────────────────────────────────────────────
+
+  /** The tree title: the "All navigation" wrapper with the menu's own entry page. */
+  protected openRoot(): void {
+    this.select(ROOT_ID);
+  }
 
   protected select(id: string | null): void {
     this.pickerOpen.set(false);
@@ -305,6 +368,41 @@ export class SampleNavigationAreaComponent {
     this.update(folderId, { entryId });
   }
 
+  /** *Entry page…*: the drawer starts on the folder's current entry page. */
+  protected openEntryDrawer(folderId: string): void {
+    this.select(folderId);
+    this.entryDraft.set(this.entryOf(folderId)?.entryId ?? '');
+    this.entryDrawerOpen.set(true);
+  }
+
+  protected applyEntry(): void {
+    const folder = this.selected();
+    if (!folder) {
+      return;
+    }
+    const before = folder.entryId;
+    const next = this.entryDraft() || null;
+    this.entryDrawerOpen.set(false);
+    if (next === before) {
+      return;
+    }
+    this.setEntryPage(folder.id, next);
+    const name = this.entryOf(next)?.label ?? '';
+    this.toasts.undo(this.t(next ? 'entryToast' : 'entryClearedToast', { name }), () => this.setEntryPage(folder.id, before));
+  }
+
+  /** *Show in menu* / *Hide from menu* on entries (the table's selection, a folder's ⋮ menu, the tree's menu), with Undo. */
+  protected setVisibility(ids: readonly string[], visible: boolean): void {
+    const changed = ids.map((id) => this.entryOf(id)).filter((e): e is SampleNavEntry => !!e && e.visible !== visible && e.id !== ROOT_ID);
+    if (changed.length === 0) {
+      return;
+    }
+    changed.forEach((entry) => this.update(entry.id, { visible }));
+    this.toasts.undo(this.t(visible ? 'shownToast' : 'hiddenToast', { count: changed.length, name: changed[0].label }), () =>
+      changed.forEach((entry) => this.update(entry.id, { visible: !visible })),
+    );
+  }
+
   protected setTarget(itemId: string, pageId: string): void {
     this.pickerOpen.set(false);
     this.update(itemId, { targetId: pageId });
@@ -320,7 +418,11 @@ export class SampleNavigationAreaComponent {
 
   protected onAction(item: SfMenuItem): void {
     const entry = this.selected();
-    if (entry && item.id === 'delete') {
+    if (entry && item.id === 'entry') {
+      this.openEntryDrawer(entry.id);
+    } else if (entry && (item.id === 'hide' || item.id === 'show')) {
+      this.setVisibility([entry.id], item.id === 'show');
+    } else if (entry && item.id === 'delete') {
       const undo = this.remove([entry.id]);
       this.toasts.undo(this.t('deleted', { name: entry.label }), undo);
     } else {
@@ -353,7 +455,7 @@ export class SampleNavigationAreaComponent {
   }
 
   private childrenOf(parentId: string | null): SampleNavEntry[] {
-    return (this.order().get(parentId) ?? []).map((id) => this.entryOf(id)).filter((e): e is SampleNavEntry => !!e);
+    return (this.order().get(parentId === ROOT_ID ? null : parentId) ?? []).map((id) => this.entryOf(id)).filter((e): e is SampleNavEntry => !!e);
   }
 
   private parentOf(id: string): string | null {
@@ -367,7 +469,7 @@ export class SampleNavigationAreaComponent {
 
   /** A folder's entry page while it is still one of its items. */
   private entryPageOf(folder: SampleNavEntry): string | null {
-    return folder.entryId && (this.order().get(folder.id) ?? []).includes(folder.entryId) ? folder.entryId : null;
+    return folder.entryId && (this.order().get(folder.id === ROOT_ID ? null : folder.id) ?? []).includes(folder.entryId) ? folder.entryId : null;
   }
 
   /** The page an entry leads to: an item's target, a folder's entry page's target. */
@@ -392,6 +494,7 @@ export class SampleNavigationAreaComponent {
       icon: isFolder ? 'folder' : 'link',
       secondary: secondary || null,
       badges: entry.visible ? [] : [{ label: hidden, tone: 'neutral', icon: 'visibility_off' }],
+      muted: !entry.visible,
       hasChildren: isFolder && (this.order().get(entry.id)?.length ?? 0) > 0,
       droppable: isFolder,
       data: entry,
@@ -452,7 +555,7 @@ export class SampleNavigationAreaComponent {
 
   private async reveal(): Promise<void> {
     const id = this.selectedId();
-    if (id === null) {
+    if (id === null || id === ROOT_ID) {
       return;
     }
     const path: string[] = [];

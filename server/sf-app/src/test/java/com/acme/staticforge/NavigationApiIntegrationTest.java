@@ -117,6 +117,9 @@ class NavigationApiIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].children[0].resolvedPageUuid").value(page.uuid().toString()))
                 .andExpect(jsonPath("$[0].children[0].resolvedPageName").value("Home"))
+                .andExpect(jsonPath("$[0].children[0].startNode.kind").value("PAGE_REFERENCE"))
+                .andExpect(jsonPath("$[0].children[0].startNode.assetUuid").value(refUuid.toString()))
+                .andExpect(jsonPath("$[0].children[0].visibleInMenu").value(true))
                 .andExpect(jsonPath("$[0].children[0].children[0].uuid").value(refUuid.toString()));
 
         // rename via PATCH .../references/{uuid}
@@ -341,6 +344,100 @@ class NavigationApiIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"childUuids\":[]}"))
                 .andExpect(status().isUnprocessableEntity());
+    }
+
+    /**
+     * "Visible in menu": absent means visible; a reference takes the flag with its other fields or on its own (target and
+     * label stay), a folder through its PATCH; the tree and the item views report it, each change is one revision and
+     * the flag does not touch the folder's entry page.
+     */
+    @Test
+    void visibleInMenuDefaultsToTrueAndIsSetThroughTheUpdateEndpoints() throws Exception {
+        Fixture fx = newFixture();
+        AssetVersionView navRoot = navRoot(fx);
+        String base = "/api/v1/projects/" + fx.project().getKey() + "/navigation";
+        UUID ref = createReference(fx, navRoot, "Alpha");
+        AssetVersionView sub = folderService.create(navRoot.uuid(), "Sub " + SEQ.incrementAndGet(), FolderScope.NAVIGATION, fx.ctx());
+
+        // Everything stored before the flag existed is visible.
+        JsonNode before = nodeOf(fx, navRoot, ref);
+        assertThat(before.get("visibleInMenu").asBoolean()).isTrue();
+        long refRevision = before.get("revision").asLong();
+
+        // Only the flag: target and label are left alone.
+        JsonNode hidden = objectMapper.readTree(mvc.perform(patch(base + "/references/" + ref)
+                        .header("Authorization", "Bearer " + fx.editorToken())
+                        .header("If-Match", "\"rev-" + refRevision + "\"")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"visibleInMenu\":false}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.visibleInMenu").value(false))
+                .andExpect(jsonPath("$.targetKind").value("PAGE"))
+                .andReturn().getResponse().getContentAsString());
+        assertThat(hidden.get("revision").asLong()).isGreaterThan(refRevision);
+        assertThat(nodeOf(fx, navRoot, ref).get("visibleInMenu").asBoolean()).isFalse();
+        // Hidden items stay in the editor's tree and keep their resolved page.
+        assertThat(nodeOf(fx, navRoot, ref).get("resolvedPageUuid").asText()).isNotBlank();
+
+        // The full update writes the flag with the label; omitting it leaves it as it was.
+        UUID pageUuid = UUID.fromString(nodeOf(fx, navRoot, ref).get("resolvedPageUuid").asText());
+        mvc.perform(patch(base + "/references/" + ref)
+                        .header("Authorization", "Bearer " + fx.editorToken())
+                        .header("If-Match", "\"rev-" + hidden.get("revision").asLong() + "\"")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"targetKind\":\"PAGE\",\"targetAssetUuid\":\"%s\",\"label\":\"Renamed\"}".formatted(pageUuid)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.label").value("Renamed"))
+                .andExpect(jsonPath("$.visibleInMenu").value(false));
+
+        // A folder: its own PATCH; the revision it returns is the next If-Match.
+        JsonNode folderHidden = objectMapper.readTree(mvc.perform(patch(base + "/folders/" + sub.uuid())
+                        .header("Authorization", "Bearer " + fx.editorToken())
+                        .header("If-Match", "\"rev-" + sub.validFromRevision() + "\"")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"visibleInMenu\":false}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.visibleInMenu").value(false))
+                .andReturn().getResponse().getContentAsString());
+        assertThat(nodeOf(fx, navRoot, sub.uuid()).get("visibleInMenu").asBoolean()).isFalse();
+        mvc.perform(patch(base + "/folders/" + sub.uuid())
+                        .header("Authorization", "Bearer " + fx.editorToken())
+                        .header("If-Match", "\"rev-" + folderHidden.get("revision").asLong() + "\"")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"visibleInMenu\":true}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.visibleInMenu").value(true));
+
+        // Not a boolean: 400. Viewers cannot change it.
+        mvc.perform(patch(base + "/folders/" + sub.uuid())
+                        .header("Authorization", "Bearer " + fx.editorToken())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"visibleInMenu\":\"no\"}"))
+                .andExpect(status().isBadRequest());
+        mvc.perform(patch(base + "/references/" + ref)
+                        .header("Authorization", "Bearer " + fx.viewerToken())
+                        .header("If-Match", "\"rev-1\"")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"visibleInMenu\":true}"))
+                .andExpect(status().isForbidden());
+    }
+
+    /** The tree node of {@code uuid}, a direct child of {@code folder}. */
+    private JsonNode nodeOf(Fixture fx, AssetVersionView folder, UUID uuid) throws Exception {
+        JsonNode tree = objectMapper.readTree(mvc.perform(get("/api/v1/projects/" + fx.project().getKey() + "/navigation/tree")
+                        .header("Authorization", "Bearer " + fx.viewerToken()))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString());
+        for (JsonNode top : tree.get(0).get("children")) {
+            if (top.get("uuid").asText().equals(folder.uuid().toString())) {
+                for (JsonNode child : top.get("children")) {
+                    if (child.get("uuid").asText().equals(uuid.toString())) {
+                        return child;
+                    }
+                }
+            }
+        }
+        throw new AssertionError("node not in the tree");
     }
 
     /** The uuids of {@code folder}'s children in the order the navigation tree returns them. */

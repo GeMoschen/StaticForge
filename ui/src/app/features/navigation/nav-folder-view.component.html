@@ -1,12 +1,40 @@
 <div class="view__head">
   <sf-page-header [title]="folder().label" [subtitle]="subtitle()" [secondaryActions]="moreActions()" (secondaryAction)="onMenu($event)">
     <span sfPageHeaderStatus class="view__title-extras">
-      <sf-asset-favorite type="FOLDER" [uuid]="folder().uuid" [name]="folder().label" [folderPath]="pathOf(folder())" />
+      @if (!isRoot()) {
+        <sf-asset-favorite type="FOLDER" [uuid]="folder().uuid" [name]="folder().label" [folderPath]="pathOf(folder())" />
+        @if (!folder().visible) {
+          <sf-status size="sm" tone="neutral" icon="visibility_off" [label]="'navigation.status.hidden' | transloco" />
+        }
+      }
     </span>
     <ng-container sfPageHeaderActions>
       <sf-button icon="add_link" [disabled]="!canEdit()" (click)="newItem.emit()">{{ 'navigation.tree.newMenuItem' | transloco }}</sf-button>
     </ng-container>
   </sf-page-header>
+  <div class="view__entry" role="group" [attr.aria-label]="'navigation.folder.entryPage' | transloco">
+    <sf-icon class="view__entry-icon" name="login" />
+    <span class="view__entry-label">{{ 'navigation.folder.entryPage' | transloco }}</span>
+    @if (entryChild(); as child) {
+      <span class="view__entry-value">{{ child.label }}</span>
+      @if (entryTarget(); as page) {
+        <span class="view__entry-where">→ {{ page }}</span>
+      } @else {
+        <span class="view__entry-where">{{ 'navigation.folder.entryNoPage' | transloco }}</span>
+      }
+    } @else {
+      <span class="view__entry-none">{{ 'navigation.folder.noEntryPage' | transloco }}</span>
+    }
+    <sf-button
+      class="view__entry-change"
+      variant="secondary"
+      size="sm"
+      icon="swap_horiz"
+      [disabled]="!canEdit()"
+      (click)="changeEntry.emit(folder())"
+      >{{ 'navigation.folder.entryChange' | transloco }}</sf-button
+    >
+  </div>
   @if (developerMode()) {
     <dl class="view__meta">
       <div class="view__meta-item">
@@ -18,20 +46,6 @@
 </div>
 
 <div class="view__body">
-  <sf-field
-    class="view__entry"
-    labelPosition="inline"
-    [label]="'navigation.folder.entryPage' | transloco"
-    [hint]="'navigation.folder.entryPageHint' | transloco"
-  >
-    <sf-select
-      [options]="entryOptions()"
-      [value]="entryValue()"
-      [disabled]="!canEdit() || savingEntry()"
-      [placeholder]="'navigation.folder.noEntryPage' | transloco"
-      (valueChange)="setEntry($event)"
-    />
-  </sf-field>
   <sf-data-table
     class="view__table"
     selectable
@@ -52,7 +66,7 @@
     <ng-template sfDataTableCell="label" [sfDataTableCellRows]="rows()" let-row>
       <span class="cell-label">
         <sf-icon class="cell-label__icon" [name]="row.entry.kind === 'folder' ? 'folder' : 'link'" />
-        <span class="cell-label__text">{{ row.entry.label }}</span>
+        <span class="cell-label__text" [class.cell-label__text--muted]="!row.entry.visible">{{ row.entry.label }}</span>
         @if (row.isEntryPage) {
           <sf-badge tone="accent" icon="login" [label]="'navigation.folder.entryPage' | transloco" />
         }
@@ -78,6 +92,13 @@
         <code class="cell-url">{{ row.url }}</code>
       } @else {
         <span class="cell-muted">—</span>
+      }
+    </ng-template>
+    <ng-template sfDataTableCell="visible" [sfDataTableCellRows]="rows()" let-row>
+      @if (row.entry.visible) {
+        <sf-status size="sm" tone="success" icon="visibility" [label]="'navigation.status.visible' | transloco" />
+      } @else {
+        <sf-status size="sm" tone="neutral" icon="visibility_off" [label]="'navigation.status.hidden' | transloco" />
       }
     </ng-template>
   </sf-data-table>

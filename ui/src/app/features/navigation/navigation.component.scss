@@ -48,6 +48,26 @@
   font-weight: var(--sf-weight-semibold);
 }
 
+// The title opens the fixed "All navigation" wrapper (its entry page): a button that looks like the title.
+.nav__title--link {
+  padding: var(--sf-space-1) var(--sf-space-2);
+  margin-inline-start: calc(var(--sf-space-2) * -1);
+  border: 0;
+  border-radius: var(--sf-radius-sm);
+  background: transparent;
+  cursor: pointer;
+  font-family: inherit;
+
+  &:hover:not(:disabled),
+  &[aria-current='page'] {
+    background: var(--sf-hover);
+  }
+
+  &:disabled {
+    cursor: default;
+  }
+}
+
 .nav__treebody {
   flex: 1 1 auto;
   min-height: 0;

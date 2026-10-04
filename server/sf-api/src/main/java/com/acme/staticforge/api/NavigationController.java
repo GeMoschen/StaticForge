@@ -10,10 +10,12 @@ import com.acme.staticforge.api.dto.PageReferenceView;
 import com.acme.staticforge.api.dto.ScheduledRefView;
 import com.acme.staticforge.api.dto.UpdatePageReferenceRequest;
 import com.acme.staticforge.asset.AssetService;
+import com.acme.staticforge.asset.AssetType;
 import com.acme.staticforge.asset.AssetVersionView;
 import com.acme.staticforge.asset.folder.FolderNode;
 import com.acme.staticforge.asset.folder.FolderScope;
 import com.acme.staticforge.asset.folder.FolderService;
+import com.acme.staticforge.asset.folder.MenuVisibility;
 import com.acme.staticforge.asset.folder.StartNode;
 import com.acme.staticforge.asset.folder.StartNodeKind;
 import com.acme.staticforge.asset.navigation.CreatePageReferenceCommand;
@@ -135,17 +137,23 @@ public class NavigationController {
         AssetVersionView page = node.resolvedPageUuid() == null
                 ? null
                 : assetService.requireCurrent(projectId, node.resolvedPageUuid());
+        AssetVersionView current = assetService.requireCurrent(projectId, node.assetUuid());
+        StartNode startNode = node.type() == AssetType.FOLDER ? StartNode.fromPayload(current.payload()) : null;
         return new NavTreeView(
                 node.assetUuid(), node.type().name(), node.uid(), node.displayName(), node.label(),
                 node.resolvedPageUuid(), page == null ? null : page.folderPath(),
-                page == null ? null : page.displayName(), node.protectedFolder(),
-                assetService.requireCurrent(projectId, node.assetUuid()).validFromRevision(),
+                page == null ? null : page.displayName(), node.protectedFolder(), node.visibleInMenu(),
+                startNode == null ? null : new NavigationStartNodeView(startNode.kind().name(), startNode.assetUuid()),
+                current.validFromRevision(),
                 node.children().stream().map(c -> toView(projectId, c, release, scheduled)).toList(),
                 release.get(node.assetUuid()),
                 scheduled.getOrDefault(node.assetUuid(), List.of()));
     }
 
-    /** Renames a navigation folder and/or sets (or clears) its {@code startNode}. */
+    /**
+     * Renames a navigation folder and/or sets (or clears) its {@code startNode} and/or sets its "Visible in menu"
+     * flag ({@code visibleInMenu}, a boolean). Each part present is one revision, applied in that order.
+     */
     @PatchMapping("/folders/{uuid}")
     @PreAuthorize("@projectAuth.has(#projectKey, " + ProjectRoleExpr.EDITOR + ")")
     public ResponseEntity<NavigationFolderView> updateFolder(
@@ -164,6 +172,15 @@ public class NavigationController {
             JsonNode startNodeNode = body.get("startNode");
             StartNode startNode = startNodeNode == null || startNodeNode.isNull() ? null : readStartNode(startNodeNode);
             view = folderService.updateStartNode(uuid, startNode, expectedRevision, ctx(projectKey, "update navigation folder startNode"));
+            expectedRevision = view.validFromRevision();
+        }
+        if (body.has("visibleInMenu")) {
+            JsonNode visible = body.get("visibleInMenu");
+            if (visible == null || !visible.isBoolean()) {
+                throw new SfException(ProblemFactory.badRequest("visibleInMenu must be true or false."));
+            }
+            view = folderService.updateVisibleInMenu(
+                    uuid, visible.asBoolean(), expectedRevision, ctx(projectKey, "update navigation folder visibility"));
         }
         if (view == null) {
             view = assetService.requireCurrent(projectId(projectKey), uuid);
@@ -211,14 +228,25 @@ public class NavigationController {
             @RequestHeader(value = "If-Match", required = false) String ifMatch,
             @RequestParam(value = "locale", required = false) String locale,
             @RequestBody UpdatePageReferenceRequest body) {
-        AssetVersionView view = pageReferenceService.update(
-                uuid,
-                parseTargetKind(body.targetKind()),
-                body.targetAssetUuid(),
-                body.label(),
-                locale,
-                RevisionHeaders.expectedRevision(ifMatch),
-                ctx(projectKey, "update page reference"));
+        AssetVersionView view;
+        if (body.targetKind() == null && body.targetAssetUuid() == null && body.visibleInMenu() != null) {
+            // Only the flag: target and label stay as stored.
+            view = pageReferenceService.setVisibleInMenu(
+                    uuid,
+                    body.visibleInMenu(),
+                    RevisionHeaders.expectedRevision(ifMatch),
+                    ctx(projectKey, "update page reference visibility"));
+        } else {
+            view = pageReferenceService.update(
+                    uuid,
+                    parseTargetKind(body.targetKind()),
+                    body.targetAssetUuid(),
+                    body.label(),
+                    locale,
+                    body.visibleInMenu(),
+                    RevisionHeaders.expectedRevision(ifMatch),
+                    ctx(projectKey, "update page reference"));
+        }
         return ResponseEntity.ok().header(HttpHeaders.ETAG, RevisionHeaders.etag(view.validFromRevision()))
                 .body(toReferenceView(
                         view,
@@ -297,7 +325,7 @@ public class NavigationController {
                 startNode == null ? null : new NavigationStartNodeView(startNode.kind().name(), startNode.assetUuid());
         return new NavigationFolderView(
                 v.uuid(), v.uid(), v.displayName(), v.validFromRevision(), v.folderPath(),
-                FolderScope.isProtected(v.payload()), startNodeView);
+                FolderScope.isProtected(v.payload()), startNodeView, MenuVisibility.fromPayload(v.payload()));
     }
 
 
@@ -328,6 +356,6 @@ public class NavigationController {
         }
         return new PageReferenceView(
                 v.uuid(), v.uid(), v.displayName(), v.validFromRevision(), v.folderPath(), targetKind, targetUuid,
-                label, labelL10n, release, scheduled);
+                label, labelL10n, MenuVisibility.fromPayload(payload), release, scheduled);
     }
 }

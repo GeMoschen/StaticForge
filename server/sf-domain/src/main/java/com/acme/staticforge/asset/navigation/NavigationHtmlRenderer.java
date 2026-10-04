@@ -8,7 +8,8 @@ import com.fasterxml.jackson.databind.JsonNode;
  * the {@link NavigationTreeJson} shape (`M8.1.4`). A grouping-only node (no {@code href}) renders
  * as a non-linked {@code <span>} rather than an anchor (spec §17.2, "a folder with no startNode
  * renders as a non-linked grouping"). {@code active}/{@code trail} become CSS classes on the
- * {@code <li>}, matching the old §17.2 step 5 semantics.
+ * {@code <li>}, matching the old §17.2 step 5 semantics. A node whose JSON has {@code "visibleInMenu": false} is
+ * skipped with its subtree (an absent field means visible).
  *
  * <p>{@link #renderChildren} is also the exact body of
  * {@code BlockResolver#renderNavigationRecurse}'s default implementation in both render callers —
@@ -31,8 +32,17 @@ public final class NavigationHtmlRenderer {
             return "";
         }
         StringBuilder out = new StringBuilder("<ul class=\"nav\">");
+        boolean any = false;
         for (JsonNode child : children) {
+            // The tree JSON already omits hidden nodes; a hand-built node can still say so (the default is visible).
+            if (!child.path("visibleInMenu").asBoolean(true)) {
+                continue;
+            }
             out.append(renderItem(child));
+            any = true;
+        }
+        if (!any) {
+            return "";
         }
         out.append("</ul>");
         return out.toString();

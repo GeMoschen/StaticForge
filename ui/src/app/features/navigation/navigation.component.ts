@@ -47,7 +47,8 @@ import { assetRoute } from '../../shared/asset-route.util';
 import { FavoritesViewComponent } from '../favorites/favorites-view.component';
 import { FolderMoveDialogComponent } from '../pages/folder-move-dialog.component';
 import { ReleaseEventsStore } from '../release/release-events.store';
-import { NavFolderViewComponent } from './nav-folder-view.component';
+import { NavEntryDrawerComponent } from './nav-entry-drawer.component';
+import { NavFolderViewComponent, type NavVisibilityRequest } from './nav-folder-view.component';
 import { NavItemDetailComponent, storedLabel } from './nav-item-detail.component';
 import { NavigationItemActions } from './navigation-item-actions.service';
 import { NavigationStoreRefresh } from './navigation-store-refresh.service';
@@ -78,8 +79,11 @@ const WIDE_QUERY = '(min-width: 1280px)';
  * in its stored order — each entry with where it leads ("Company → /about-us/": the label, then the public URL of its
  * target page) — and can be reordered among siblings by drag before/after and `Alt+↑/↓`, and moved into folders, each with
  * one Undo. A *Favorites* node is pinned on top while the project has favorites. The main pane shows what is selected:
- * a menu folder's table of items with its entry page, a menu item's detail (label, target page as a picker card, public
- * URL), the Favorites list, or "Select a menu item".
+ * a menu folder's table of items with its entry page line, a menu item's detail (label, "Visible in menu", target page as
+ * a picker card, public URL), the Favorites list, or "Select a menu item". The tree title opens the fixed "All navigation"
+ * wrapper as a folder too, so the menu's own entry page is reachable; *Entry page…* (a folder's ⋮ menu, the tree's context
+ * menu, the entry line's *Change…*) opens the entry-page drawer. An entry hidden from the menu stays listed here, muted
+ * and marked, until shown again (*Hide from menu* / *Show in menu* on the table's selection and a folder's ⋮ menu).
  *
  * <p>The selection is in the URL (`?asset=<uuid>`, or `?favorites=1`) so a reload, the browser's back button and the
  * recents find it; a change of selection with unsaved edits in the open item asks first (the route's leave guard). The
@@ -95,6 +99,7 @@ const WIDE_QUERY = '(min-width: 1280px)';
   imports: [
     FavoritesViewComponent,
     FolderMoveDialogComponent,
+    NavEntryDrawerComponent,
     NavFolderViewComponent,
     NavItemDetailComponent,
     SfCreateAssetDialogComponent,
@@ -160,6 +165,7 @@ export class NavigationComponent {
       dev: this.developerMode.enabled(),
       locale: this.editingLocale.locale(),
       urls: this.urls(),
+      hiddenLabel: t('hidden'),
       labels: {
         released: t('released'),
         changed: t('changed'),
@@ -173,10 +179,21 @@ export class NavigationComponent {
 
   // ── What is open ───────────────────────────────────────────────────────────
 
+  /** The fixed "All navigation" wrapper as the folder view shows it (its stored name is not the label). */
+  private readonly rootEntry = computed<NavEntry | null>(() => {
+    this.language();
+    const root = this.index().root;
+    return root ? { ...root, label: this.transloco.translate('navigation.folder.root') } : null;
+  });
   protected readonly selected = computed<NavEntry | null>(() => {
     const uuid = this.asset();
-    return uuid ? (this.index().entries.get(uuid) ?? null) : null;
+    if (!uuid) {
+      return null;
+    }
+    const index = this.index();
+    return uuid === index.rootUuid ? this.rootEntry() : (index.entries.get(uuid) ?? null);
   });
+  protected readonly selectedIsRoot = computed(() => this.selected() !== null && this.selected()?.uuid === this.index().rootUuid);
   protected readonly mode = computed<'favorites' | 'folder' | 'item' | 'empty'>(() => {
     if (this.favoritesParam()) {
       return 'favorites';
@@ -188,7 +205,7 @@ export class NavigationComponent {
       return [FAVORITES_NODE];
     }
     const selected = this.selected();
-    return selected ? [selected.uuid] : [];
+    return selected && !this.selectedIsRoot() ? [selected.uuid] : [];
   });
   protected readonly emptyMenu = computed(() => this.loaded() && !this.failed() && isEmptyNavIndex(this.index()));
 
@@ -243,7 +260,8 @@ export class NavigationComponent {
 
   /**
    * The host's entries of the one menu, between the tree's own (*New folder*, *Rename*, *Cut*, *Paste*, *Move to…*) and
-   * *Delete*: *New menu item* in a folder, *Open page* on an item, *Add to favorites*.
+   * *Delete*: *New menu item* and *Entry page…* in a folder, *Hide from menu* / *Show in menu*, *Open page* on an item,
+   * *Add to favorites*.
    */
   protected readonly menuItems = (nodes: readonly SfTreeNode<NavEntry>[]): ContextMenuItem[] => {
     const node = nodes.length === 1 ? nodes[0] : null;
@@ -255,6 +273,14 @@ export class NavigationComponent {
     const items: ContextMenuItem[] = [];
     if (this.canEdit() && entry.kind === 'folder') {
       items.push({ label: t('navigation.tree.newMenuItem'), icon: 'add_link', action: () => this.openNewItem(node.id) });
+      items.push({ label: t('navigation.folder.menu.entryPage'), icon: 'login', action: () => this.openEntryDrawer(entry) });
+    }
+    if (this.canEdit()) {
+      items.push(
+        entry.visible
+          ? { label: t('navigation.folder.menu.hide'), icon: 'visibility_off', action: () => void this.setVisibility({ entries: [entry], visible: false }) }
+          : { label: t('navigation.folder.menu.show'), icon: 'visibility', action: () => void this.setVisibility({ entries: [entry], visible: true }) },
+      );
     }
     if (entry.kind === 'item' && entry.targetUuid) {
       items.push({ label: t('navigation.tree.openPage'), icon: 'open_in_new', action: () => this.openPage(entry.targetUuid!) });
@@ -294,6 +320,16 @@ export class NavigationComponent {
   /** The folder the open "New menu item" dialog creates into (`null` = the top level). */
   private createTarget: string | null = null;
   protected readonly moving = signal<readonly NavEntry[] | null>(null);
+  /** The folder whose entry-page drawer is open (`null` = closed); looked up in the menu, so it follows reads and goes with a deleted folder. */
+  private readonly entryDrawerUuid = signal<string | null>(null);
+  protected readonly entryDrawerFolder = computed<NavEntry | null>(() => {
+    const uuid = this.entryDrawerUuid();
+    if (uuid === null) {
+      return null;
+    }
+    const index = this.index();
+    return uuid === index.rootUuid ? this.rootEntry() : (index.entries.get(uuid) ?? null);
+  });
 
   constructor() {
     // The menu again whenever something changed: a create, move, reorder, delete or undo, a save in the detail, a release.
@@ -386,7 +422,7 @@ export class NavigationComponent {
   /** The folder an action without a target aims at: the open folder, the folder of the open item, else the top level. */
   private openFolderUuid(): string | null {
     const selected = this.selected();
-    if (!selected) {
+    if (!selected || this.selectedIsRoot()) {
       return null;
     }
     return selected.kind === 'folder' ? selected.uuid : (this.index().parentOf.get(selected.uuid) ?? null);
@@ -425,6 +461,49 @@ export class NavigationComponent {
   /** Opens a folder or item: the selection lives in the URL. */
   protected openEntry(uuid: string | null): void {
     void this.router.navigate(['/p', this.projectKey(), 'navigation'], { queryParams: uuid ? { asset: uuid } : {} });
+  }
+
+  /** The tree title: the fixed "All navigation" wrapper, with the menu's own entry page. */
+  protected openRoot(): void {
+    this.openEntry(this.index().rootUuid);
+  }
+
+  /** Opens the entry-page drawer of a menu folder (the wrapper included). */
+  protected openEntryDrawer(folder: NavEntry): void {
+    if (folder.kind === 'folder') {
+      this.entryDrawerUuid.set(folder.uuid);
+    }
+  }
+
+  protected closeEntryDrawer(): void {
+    this.entryDrawerUuid.set(null);
+  }
+
+  /**
+   * *Show in menu* / *Hide from menu*: one revision per entry, one Undo for the group. An entry that already has the value
+   * is left alone; the area reads the menu again afterwards.
+   */
+  protected async setVisibility(request: NavVisibilityRequest): Promise<void> {
+    if (!this.canEdit() || request.entries.length === 0) {
+      return;
+    }
+    const change = await this.actions.setVisibility(this.projectKey(), request.entries, request.visible);
+    if (change.done.length > 0) {
+      const message = this.transloco.translate(request.visible ? 'navigation.tree.toast.shown' : 'navigation.tree.toast.hidden', {
+        count: change.done.length,
+        name: change.done[0].label,
+      });
+      this.undo.offerGroup(message, this.withRefresh(change.steps));
+    } else if (!change.failed) {
+      this.toasts.show(this.transloco.translate('navigation.tree.toast.visibilityUnchanged'), 'info');
+    }
+    if (change.failed) {
+      this.toasts.show(
+        this.transloco.translate('navigation.tree.toast.visibilityFailed', { name: request.entries[change.done.length]?.label ?? '' }),
+        'error',
+      );
+    }
+    this.changed();
   }
 
   protected openPage(pageUuid: string): void {
@@ -489,7 +568,7 @@ export class NavigationComponent {
 
   /** The folder view's *New menu item* creates in the folder it shows. */
   protected openNewItemHere(): void {
-    this.openNewItem(this.selected()?.kind === 'folder' ? this.selected()!.uuid : null);
+    this.openNewItem(this.openFolderUuid());
   }
 
   protected submitNewItem(value: CreateAssetFormValue): void {

@@ -17,6 +17,7 @@ import { UndoService } from '../../core/ui/undo.service';
 import { ConfirmService } from '../../shared/components/dialog/confirm.service';
 import { FavoritesViewComponent } from '../favorites/favorites-view.component';
 import { TimeTravelStore } from '../revisions/time-travel.store';
+import { NavEntryDrawerComponent } from './nav-entry-drawer.component';
 import { NavFolderViewComponent } from './nav-folder-view.component';
 import { NavItemDetailComponent } from './nav-item-detail.component';
 import { NavigationComponent } from './navigation.component';
@@ -40,6 +41,21 @@ class FolderViewStub {
   readonly moveEntries = output<unknown>();
   readonly deleteEntries = output<unknown>();
   readonly retry = output<void>();
+  readonly changeEntry = output<unknown>();
+  readonly setVisible = output<unknown>();
+}
+
+@Component({
+  selector: 'sf-nav-entry-drawer',
+  standalone: true,
+  template: '<p data-testid="entry-drawer">{{ folder().label }}</p><button type="button" (click)="closed.emit()">close drawer</button>',
+})
+class EntryDrawerStub {
+  readonly projectKey = input.required<string>();
+  readonly folder = input.required<{ label: string }>();
+  readonly index = input<unknown>();
+  readonly urls = input<unknown>();
+  readonly closed = output<void>();
   readonly changed = output<void>();
 }
 
@@ -120,6 +136,7 @@ async function setup(options: SetupOptions = {}) {
     createReference: vi.fn().mockReturnValue(of({ uuid: 'item-new' })),
     renameFolder: vi.fn().mockReturnValue(of({ revision: 6 })),
     updateReference: vi.fn().mockReturnValue(of({ revision: 7 })),
+    setVisibleInMenu: vi.fn().mockReturnValue(of({ revision: 8 })),
     moveFolder: vi.fn().mockReturnValue(of({})),
     moveReference: vi.fn().mockReturnValue(of({})),
     deleteReference: vi.fn().mockReturnValue(of(undefined)),
@@ -164,8 +181,8 @@ async function setup(options: SetupOptions = {}) {
     ],
     configureTestBed: (tb) => {
       tb.overrideComponent(NavigationComponent, {
-        remove: { imports: [NavFolderViewComponent, NavItemDetailComponent, FavoritesViewComponent] },
-        add: { imports: [FolderViewStub, ItemDetailStub, FavoritesViewStub] },
+        remove: { imports: [NavFolderViewComponent, NavEntryDrawerComponent, NavItemDetailComponent, FavoritesViewComponent] },
+        add: { imports: [FolderViewStub, EntryDrawerStub, ItemDetailStub, FavoritesViewStub] },
       });
     },
   });
@@ -177,6 +194,8 @@ async function setup(options: SetupOptions = {}) {
     deleteEntries(entries: unknown[]): Promise<void>;
     openMoveDialog(entries: unknown[]): void;
     menuItems(nodes: unknown[]): { label: string; action: () => void }[];
+    setVisibility(request: unknown): Promise<void>;
+    openEntryDrawer(folder: unknown): void;
     validateName(name: string, context: unknown): string | null;
   };
   const toasts = TestBed.inject(ToastService);
@@ -197,7 +216,7 @@ const names = () => screen.queryAllByRole('treeitem').map((r) => r.querySelector
 const node = (uuid: string, label: string, kind: 'folder' | 'item' = 'item') => ({
   id: uuid,
   label,
-  data: { kind, uuid, label, displayName: label, uid: uuid, targetUuid: null, targetName: null, release: null, scheduled: false, revision: 1 },
+  data: { kind, uuid, label, displayName: label, uid: uuid, targetUuid: null, targetName: null, release: null, scheduled: false, revision: 1, visible: true, protectedFolder: false, entry: null },
 });
 
 describe('NavigationComponent (menu)', () => {
@@ -481,6 +500,118 @@ describe('NavigationComponent (menu)', () => {
       const { instance } = await setup();
       const labels = instance.menuItems([node('n-company', 'Company', 'folder')]).map((i) => i.label);
       expect(labels).toContain('New menu item');
+    });
+  });
+
+  describe('the "All navigation" wrapper and its entry page', () => {
+    it('opens from the tree title as a folder view named "All navigation"', async () => {
+      const { navigate } = await setup();
+      await waitFor(() => expect(names().length).toBe(3));
+      fireEvent.click(screen.getByRole('button', { name: 'Open All navigation, with the menu’s entry page' }));
+      expect(navigate).toHaveBeenLastCalledWith(['/p', 'proj', 'navigation'], { queryParams: { asset: 'root' } });
+    });
+
+    it('shows the wrapper selected by ?asset= as a folder view, with no tree row selected', async () => {
+      await setup({ inputs: { asset: 'root' } });
+      expect(await screen.findByTestId('folder-view')).toHaveTextContent('All navigation');
+      await waitFor(() => expect(names().length).toBe(3));
+      expect(screen.queryAllByRole('treeitem', { selected: true })).toHaveLength(0);
+    });
+
+    it('offers to open it from the "Select a menu item" state', async () => {
+      const { navigate } = await setup();
+      fireEvent.click(await screen.findByRole('button', { name: 'Open All navigation' }));
+      expect(navigate).toHaveBeenLastCalledWith(['/p', 'proj', 'navigation'], { queryParams: { asset: 'root' } });
+    });
+
+    it('offers Entry page… in a folder\'s context menu (editors only) and opens the drawer for that folder', async () => {
+      const { instance } = await setup();
+      await waitFor(() => expect(names().length).toBe(3));
+      const items = instance.menuItems([node('n-company', 'Company', 'folder')]);
+      items.find((i) => i.label === 'Entry page…')!.action();
+      expect(await screen.findByTestId('entry-drawer')).toHaveTextContent('Company');
+      fireEvent.click(screen.getByRole('button', { name: 'close drawer' }));
+      await waitFor(() => expect(screen.queryByTestId('entry-drawer')).toBeNull());
+
+      expect(instance.menuItems([node('n-about', 'About us')]).map((i) => i.label)).not.toContain('Entry page…');
+    });
+
+    it('offers no Entry page… to a viewer', async () => {
+      const { instance } = await setup({ role: 'VIEWER' });
+      await waitFor(() => expect(names().length).toBe(3));
+      expect(instance.menuItems([node('n-company', 'Company', 'folder')]).map((i) => i.label)).not.toContain('Entry page…');
+    });
+  });
+
+  describe('Visible in menu', () => {
+    const HIDDEN: NavTreeView[] = [
+      {
+        ...FOREST[0],
+        children: [
+          FOREST[0].children![0],
+          { ...FOREST[0].children![2], visibleInMenu: false },
+        ],
+      },
+    ];
+
+    it('lists a hidden entry in the tree, muted and marked "Hidden"', async () => {
+      await setup({ forest: HIDDEN });
+      await waitFor(() => expect(names()).toEqual(['Home', 'Blog']));
+      expect(row('Blog').textContent).toContain('Hidden');
+      expect(row('Blog').querySelector('.sf-tree__name--muted')).toBeTruthy();
+      expect(row('Home').querySelector('.sf-tree__name--muted')).toBeNull();
+    });
+
+    it('hides entries with one revision each and one Undo that shows them again', async () => {
+      const { instance, nav, toasts } = await setup();
+      await waitFor(() => expect(names().length).toBe(3));
+      const entries = ['n-home', 'n-blog'].map((uuid) => node(uuid, uuid).data);
+
+      await instance.setVisibility({ entries, visible: false });
+
+      expect(nav.setVisibleInMenu).toHaveBeenCalledTimes(2);
+      expect(nav.setVisibleInMenu).toHaveBeenNthCalledWith(1, 'proj', expect.objectContaining({ uuid: 'n-home' }), false, '"rev-1"');
+      expect(toasts.toasts().at(-1)?.message).toBe('2 entries are hidden from the menu.');
+      await waitFor(() => expect(nav.tree).toHaveBeenCalledTimes(2));
+
+      clickUndo(toasts);
+      await waitFor(() => expect(nav.setVisibleInMenu).toHaveBeenCalledTimes(4));
+      // Undo writes the previous value back against the revision the write produced, last first.
+      expect(nav.setVisibleInMenu).toHaveBeenNthCalledWith(3, 'proj', expect.objectContaining({ uuid: 'n-blog' }), true, '"rev-8"');
+    });
+
+    it('says so when nothing needs to change, and when a write fails (what was done stays undoable)', async () => {
+      const failing = vi.fn().mockReturnValueOnce(of({ revision: 8 })).mockReturnValue(throwError(() => new Error('409')));
+      const { instance, toasts } = await setup({ nav: { setVisibleInMenu: failing } });
+      await waitFor(() => expect(names().length).toBe(3));
+
+      await instance.setVisibility({ entries: [node('n-home', 'Home').data], visible: true });
+      expect(toasts.toasts().at(-1)?.message).toBe('Nothing changed — the selection already has that setting.');
+
+      const two = ['n-home', 'n-blog'].map((uuid) => ({ ...node(uuid, uuid).data }));
+      await instance.setVisibility({ entries: two, visible: false });
+      const messages = toasts.toasts().map((toast) => toast.message);
+      expect(messages).toContain('“n-home” is hidden from the menu.');
+      expect(messages).toContain('Could not change “n-blog” — try again in a moment.');
+    });
+
+    it('offers Hide from menu / Show in menu in the tree\'s context menu', async () => {
+      const { instance, nav } = await setup();
+      await waitFor(() => expect(names().length).toBe(3));
+      instance.menuItems([node('n-about', 'About us')]).find((i) => i.label === 'Hide from menu')!.action();
+      await waitFor(() => expect(nav.setVisibleInMenu).toHaveBeenCalledWith('proj', expect.objectContaining({ uuid: 'n-about' }), false, '"rev-1"'));
+
+      const hidden = { ...node('n-about', 'About us').data, visible: false };
+      const labels = instance.menuItems([{ id: 'n-about', label: 'About us', data: hidden }]).map((i) => i.label);
+      expect(labels).toContain('Show in menu');
+      expect(labels).not.toContain('Hide from menu');
+    });
+
+    it('does nothing for a viewer', async () => {
+      const { instance, nav } = await setup({ role: 'VIEWER' });
+      await waitFor(() => expect(names().length).toBe(3));
+      await instance.setVisibility({ entries: [node('n-home', 'Home').data], visible: false });
+      expect(nav.setVisibleInMenu).not.toHaveBeenCalled();
     });
   });
 

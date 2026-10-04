@@ -47,6 +47,11 @@ const ENTRIES: readonly SampleNavEntry[] = [
   item('n-imprint', 'Imprint', 'p-imprint', false),
 ];
 
+/** The fixed "All navigation" wrapper (its children are the top level); selectable like any folder, for its entry page. */
+export const ROOT_ID = 'n-root';
+
+const ROOT: SampleNavEntry = { id: ROOT_ID, kind: 'folder', label: 'All navigation', uid: 'navigation_root', visible: true, targetId: null, entryId: 'n-home' };
+
 const ORDER: readonly (readonly [string | null, readonly string[]])[] = [
   [null, ['n-home', 'n-coffee', 'n-roastery', 'n-news', 'n-contact', 'n-imprint']],
   ['n-coffee', ['n-single-origins', 'n-blends', 'n-equipment']],
@@ -55,7 +60,7 @@ const ORDER: readonly (readonly [string | null, readonly string[]])[] = [
 
 /** A fresh copy of the menu (each area instance edits its own). */
 export function initialNavEntries(): ReadonlyMap<string, SampleNavEntry> {
-  return new Map(ENTRIES.map((entry) => [entry.id, entry]));
+  return new Map([...ENTRIES, ROOT].map((entry) => [entry.id, entry]));
 }
 
 export function initialNavOrder(): SampleNavOrder {
@@ -65,6 +70,7 @@ export function initialNavOrder(): SampleNavOrder {
 /** The scripted selections of the `nav` query parameter in the screenshots. */
 export const FIXED_NAV_FOLDER = 'n-coffee';
 export const FIXED_NAV_ITEM = 'n-company';
+export const FIXED_NAV_ROOT = ROOT_ID;
 
 // ── Pages (the picker's targets) ─────────────────────────────────────────────
 

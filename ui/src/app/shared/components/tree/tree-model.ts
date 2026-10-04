@@ -20,6 +20,8 @@ export interface SfTreeNode<T = unknown> {
   /** Secondary text (the developer-mode UID, decision 19): monospace and muted, shown only when given. */
   secondary?: string | null;
   badges?: readonly SfTreeBadge[];
+  /** The name is shown muted: the node is listed but not in effect (Navigation: hidden from the menu). */
+  muted?: boolean;
   /** Whether the node can be expanded; its children are loaded on first expansion. */
   hasChildren?: boolean;
   /** Whether the node can be dragged (default: true when moving is enabled). */

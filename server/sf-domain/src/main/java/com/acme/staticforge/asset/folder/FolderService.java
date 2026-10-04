@@ -64,6 +64,14 @@ public interface FolderService {
      */
     AssetVersionView updateChildOrder(UUID uuid, java.util.List<UUID> childUuids, long expectedRevision, RevisionContext ctx);
 
+    /**
+     * Sets a {@code NAVIGATION} folder's "Visible in menu" flag ({@link MenuVisibility}): a hidden folder is left out
+     * of generated menus with everything below it; the editor still lists it and its entry page still resolves.
+     * One new revision of the folder. Rejected for folders outside the {@code NAVIGATION} scope, and for the protected
+     * root (it is no menu entry).
+     */
+    AssetVersionView updateVisibleInMenu(UUID uuid, boolean visibleInMenu, long expectedRevision, RevisionContext ctx);
+
     /** Moves a folder and rewrites the entire subtree's paths in a single revision. */
     MoveResult move(UUID folderUuid, UUID targetParentFolderUuid, RevisionContext ctx);
 

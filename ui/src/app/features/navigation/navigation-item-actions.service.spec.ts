@@ -41,6 +41,7 @@ describe('NavigationItemActions', () => {
     nav = {
       reorderChildren: vi.fn().mockImplementation((_k: string, _f: string, _c: string[], _e?: string) => of({ revision: 10 })),
       moveReference: vi.fn().mockReturnValue(of({})),
+      setVisibleInMenu: vi.fn().mockReturnValue(of({ revision: 20 })),
       moveFolder: vi.fn().mockReturnValue(of({})),
       deleteReference: vi.fn().mockReturnValue(of(undefined)),
     };
@@ -111,6 +112,39 @@ describe('NavigationItemActions', () => {
       expect(change.failed).toBe(true);
       expect(change.done.map((e) => e.uuid)).toEqual(['a']);
       expect(change.steps).toHaveLength(1);
+    });
+  });
+
+  describe('setVisibility', () => {
+    it('writes the flag per entry against its own revision and undoes it against the revision each write produced', async () => {
+      const change = await actions.setVisibility('proj', [entry('a'), entry('f')], false);
+
+      expect(change.failed).toBe(false);
+      expect(change.done.map((e) => e.uuid)).toEqual(['a', 'f']);
+      expect(nav['setVisibleInMenu']).toHaveBeenNthCalledWith(1, 'proj', entry('a'), false, '"rev-1"');
+      expect(nav['setVisibleInMenu']).toHaveBeenNthCalledWith(2, 'proj', entry('f'), false, '"rev-4"');
+
+      await actions.runUndo(change.steps);
+      // Last to first, back to visible, with If-Match of the produced revision.
+      expect(nav['setVisibleInMenu']).toHaveBeenNthCalledWith(3, 'proj', entry('f'), true, '"rev-20"');
+      expect(nav['setVisibleInMenu']).toHaveBeenNthCalledWith(4, 'proj', entry('a'), true, '"rev-20"');
+    });
+
+    it('skips entries that already have the value and the protected wrapper', async () => {
+      const hidden = { ...entry('a'), visible: false };
+      const wrapper = { ...entry('b'), protectedFolder: true };
+      const change = await actions.setVisibility('proj', [hidden, wrapper, entry('f')], false);
+      expect(change.done.map((e) => e.uuid)).toEqual(['f']);
+      expect(nav['setVisibleInMenu']).toHaveBeenCalledTimes(1);
+    });
+
+    it('stops at the first failure and keeps what was changed undoable', async () => {
+      nav['setVisibleInMenu'].mockReturnValueOnce(of({ revision: 20 })).mockReturnValueOnce(throwError(() => new Error('409')));
+      const change = await actions.setVisibility('proj', [entry('a'), entry('b'), entry('f')], false);
+      expect(change.failed).toBe(true);
+      expect(change.done.map((e) => e.uuid)).toEqual(['a']);
+      expect(change.steps).toHaveLength(1);
+      expect(nav['setVisibleInMenu']).toHaveBeenCalledTimes(2);
     });
   });
 

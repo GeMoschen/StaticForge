@@ -80,16 +80,68 @@ named there first, then the rest alphabetically. `PUT /api/v1/projects/{key}/nav
 previous list back. `NavTreeView` gains `resolvedPageName`.
 
 **Deviations from the sample — need approval (sample-first rule):**
-1. Navigation: no "Visible in menu" column/switch (no such backend field).
-2. "Change target…" uses the shared `sf-asset-picker-dialog` (pages only), not the sample's own picker dialog.
-3. Menu item detail saves explicitly (Save/Ctrl+S, target change is a draft); sample applies at once; no "Duplicate".
-4. Tree rename (F2) on an item writes its label for the editing language.
-5. A reference to a Pages folder shows "Leads to the first page of a folder".
-6. Globals: Schema tab keeps `sf-cdl-sections-editor` (Content + Rules) instead of one code panel.
-7. Globals: usage chips are one header chip plus a "Use in templates" list (the M35.17 form has no per-field slot).
-8. Globals: a folder shows a name header and "select a global set" state (sample has no folder pane).
-9. Globals: create/rename/move/delete need `canEditTemplates` (developer, not time travel); the old screen only checked read-only.
+1. "Change target…" uses the shared `sf-asset-picker-dialog` (pages only), not the sample's own picker dialog.
+2. Menu item detail saves explicitly (Save/Ctrl+S, target change is a draft); sample applies at once; no "Duplicate".
+3. Tree rename (F2) on an item writes its label for the editing language.
+4. A reference to a Pages folder shows "Leads to the first page of a folder".
+5. Globals: Schema tab keeps `sf-cdl-sections-editor` (Content + Rules) instead of one code panel.
+6. Globals: usage chips are one header chip plus a "Use in templates" list (the M35.17 form has no per-field slot).
+7. Globals: a folder shows a name header and "select a global set" state (sample has no folder pane).
+8. Globals: create/rename/move/delete need `canEditTemplates` (developer, not time travel); the old screen only checked read-only.
 
-**Open:** the navigation-level entry page (wrapper's `startNode`) has no entry point any more; item breadcrumb has no
-folder trail; deleting the open dirty global set from the tree can still show the leave dialog; `e2e/m8-journeys.spec.ts`
+**Open:** item breadcrumb has no folder trail; deleting the open dirty global set from the tree can still show the leave dialog; `e2e/m8-journeys.spec.ts`
 uses the old controls (M35.31); no browser check yet.
+
+
+## Notes (M35.22 follow-up — 2026-10-04, user decisions)
+
+Two features the first build left out, both decided by the user on 2026-10-04 and designed in gate round 14 (decisions 168–171,
+"signed off 2026-10-04 (user instruction)"): **Visible in menu** and the **navigation Entry page** (this resolves the removed
+deviation 1 and the entry-page item of *Open*).
+
+**Visible in menu — backend.** The payload field `visibleInMenu` (boolean, `MenuVisibility` in `asset.folder`) on
+`PAGE_REFERENCE` items and navigation folders; **absent = true**, so all existing data stays visible, and it is stored in the
+payload like `label`/`startNode`, so export/import archives and releases carry it with no change (payloads round-trip generically).
+- Set through the existing update endpoints: `PATCH …/navigation/references/{uuid}` takes `visibleInMenu` with the other fields, or
+  **alone** (no `targetKind`/`targetAssetUuid`: a partial update that keeps target and label — `PageReferenceService#setVisibleInMenu`);
+  `PATCH …/navigation/folders/{uuid}` takes `visibleInMenu` (400 if not a boolean; `FolderService#updateVisibleInMenu`, navigation scope
+  only, not for the protected wrapper). One change = one revision, undone by writing the previous value (`If-Match` = the revision the
+  write produced).
+- Read: `NavTreeView.visibleInMenu` (+ **`startNode`**, new, so the UI needs no extra read for entry pages), `NavigationFolderView.visibleInMenu`,
+  `PageReferenceView.visibleInMenu`; `NavTreeNode.visibleInMenu` (the old 8-argument constructor stays and means visible).
+- **Hidden = left out of generated menus:** `NavigationTreeJson.toJson` omits a hidden child with its whole subtree (so `$CMS_NAVIGATION`,
+  `$CMS_FOR … nav:` and the default `NavigationHtmlRenderer` HTML never see it, and it never puts an ancestor on the `trail`); the
+  renderer also skips JSON nodes marked `"visibleInMenu": false`. The editor tree (`GET …/navigation/tree`) still lists every entry; the
+  target page exists and builds. `resolveFolderEntry`, `resolve`, `firstNavigablePage`, `indexPage` and `danglingPageReferences` ignore the
+  flag (a hidden item can be a folder's entry page). `$CMS_PAGINATION` over a navigation folder is a content listing, not a menu: it is
+  unchanged (it keeps honouring the *page's* `nav.visible`).
+
+**Visible in menu — UI.** `NavEntry.visible`; folder table column **Visible in menu** (sortable, icon + *In menu* / *Hidden from menu*,
+hidden rows muted); **Visible in menu** switch in the menu item detail (a draft saved with Save/Ctrl+S together with label and target; the
+header shows the saved state); **Show in menu / Hide from menu** as bulk actions of the table, in a folder's ⋮ menu and in the tree's context
+menu — `NavigationItemActions#setVisibility` writes one revision per entry, skips entries that already have the value and the wrapper, stops
+at the first failure, and offers one Undo toast for the group. Hidden entries in the tree: muted name (`SfTreeNode.muted`, new) plus the
+neutral eye-off badge. Sample: bulk actions, hidden marker, the wording *Visible in menu*.
+
+**Entry page (navigation) — UI.** The backend already had it (`PATCH …/navigation/folders/{uuid}` with `startNode`: a direct child,
+`PAGE_REFERENCE` or `FOLDER`; `NavigationService#resolveFolderEntry`); the old pre-M35.22 screen set it in the folder drawer (`nav-folder-detail`,
+reached from "All navigation"), the rewrite kept an inline select for non-root folders only. Now, for **every** folder including the wrapper:
+the folder view header has an **Entry page** line (the chosen child and the page it leads to, or *None — grouping only*) with **Change…**;
+*Entry page…* is in the folder's ⋮ menu and the tree's folder context menu; all open `NavEntryDrawerComponent` (`sf-drawer`, radio list of None +
+the direct children, **Apply** = one revision, Undo toast). The wrapper ("All navigation") is a folder view of its own: the tree title is a
+button that opens it (`?asset=<wrapper uuid>`; the empty state offers the same), with only *Entry page…* in its ⋮ menu. Read-only for viewers,
+time travel and archived projects (`canEditContent`).
+- Decision taken: the server accepts only a **direct child** as `startNode`, so "pick a page" means picking the menu item that leads to it
+  (create one first with *New menu item*); no new endpoint was needed.
+
+**Tests.** Backend: `NavigationServiceImplTest` (flag in the tree, default, entry/page resolution unaffected), `NavigationHtmlGoldenTest`
+(hidden item + subtree, all-hidden folder, JSON flag; corpus case `05-hidden-items`), `NavigationApiIntegrationTest` (flag through both
+PATCH endpoints, defaults, 400/403, `startNode` in the tree). UI: specs for the util (flag, muted node, wrapper, entry), service, actions
+(`setVisibility`), folder view (entry line, column, sort, bulk, ⋮, wrapper), item detail (switch), entry drawer, the area (wrapper, context menu,
+visibility with Undo) and the sample.
+
+**Not verified:** Gradle cannot run offline here, so the Java was compiled with `javac` against the jars in `~/.gradle` and the existing
+`build/classes` (sf-domain, sf-api and the changed tests, including the `@SpringBootTest` classes) and `NavigationServiceImplTest` +
+`NavigationHtmlGoldenTest` (28 tests) were run with a small reflective JUnit-less runner — the Spring/DB integration tests
+(`NavigationApiIntegrationTest` and the rest of `sf-app`) were compiled but **not run**; there is no generation-level test (sf-generate) of a
+hidden item yet, and no browser check.

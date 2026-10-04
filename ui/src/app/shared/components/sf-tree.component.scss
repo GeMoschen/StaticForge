@@ -161,6 +161,11 @@
   white-space: nowrap;
 }
 
+// A node that is there but not in effect (a menu item hidden from the menu): its name recedes.
+.sf-tree__name--muted {
+  color: var(--sf-text-muted);
+}
+
 .sf-tree__secondary {
   flex: 0 1000 auto;
   min-width: 0;

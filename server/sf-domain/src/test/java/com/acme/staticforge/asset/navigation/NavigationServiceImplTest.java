@@ -229,6 +229,59 @@ class NavigationServiceImplTest {
     }
 
     @Test
+    void anItemIsVisibleInTheMenuUnlessItSaysOtherwise() {
+        FakeNavigationLookup lookup = new FakeNavigationLookup();
+        UUID root = lookup.addFolder(null, "Navigation");
+        UUID shown = lookup.addPageReferenceToPage(root, "Shown", lookup.addPage(null, "S", 0), null);
+        UUID hiddenRef = lookup.addPageReferenceToPage(root, "Hidden ref", lookup.addPage(null, "H", 0), null);
+        UUID hiddenFolder = lookup.addFolder(root, "Hidden folder");
+        UUID explicitlyShown = lookup.addFolder(root, "Explicit");
+        lookup.setVisibleInMenu(hiddenRef, false);
+        lookup.setVisibleInMenu(hiddenFolder, false);
+        lookup.setVisibleInMenu(explicitlyShown, true);
+
+        NavTreeNode tree = service.tree(1L, root, -1, lookup, new ArrayList<>());
+
+        assertThat(tree.visibleInMenu()).as("a payload without the field").isTrue();
+        // The tree itself lists hidden entries too (the editor shows them); it only flags them.
+        assertThat(tree.children()).extracting(NavTreeNode::assetUuid)
+                .containsExactly(explicitlyShown, hiddenFolder, hiddenRef, shown);
+        assertThat(tree.children()).extracting(NavTreeNode::visibleInMenu).containsExactly(true, false, false, true);
+    }
+
+    @Test
+    void hidingAnItemChangesNeitherEntryPageNorPageResolution() {
+        FakeNavigationLookup lookup = new FakeNavigationLookup();
+        UUID root = lookup.addFolder(null, "Navigation");
+        UUID section = lookup.addFolder(root, "Company");
+        UUID page = lookup.addPage(null, "Our story", 0);
+        UUID ref = lookup.addPageReferenceToPage(section, "Our story", page, null);
+        lookup.setStartNode(section, "PAGE_REFERENCE", ref);
+        lookup.setVisibleInMenu(ref, false);
+        lookup.setVisibleInMenu(section, false);
+
+        assertThat(service.resolve(1L, ref, lookup)).isEqualTo(page);
+        assertThat(service.resolveFolderEntry(1L, section, lookup)).contains(page);
+        NavTreeNode sectionNode = service.tree(1L, root, -1, lookup, new ArrayList<>()).children().get(0);
+        assertThat(sectionNode.visibleInMenu()).isFalse();
+        assertThat(sectionNode.resolvedPageUuid()).isEqualTo(page);
+        assertThat(sectionNode.children().get(0).resolvedPageUuid()).isEqualTo(page);
+    }
+
+    @Test
+    void aNonBooleanFlagCountsAsVisible() {
+        FakeNavigationLookup lookup = new FakeNavigationLookup();
+        UUID root = lookup.addFolder(null, "Navigation");
+        UUID ref = lookup.addPageReferenceToPage(root, "Link", lookup.addPage(null, "P", 0), null);
+        lookup.setVisibleInMenu(ref, false);
+        assertThat(service.tree(1L, root, -1, lookup, new ArrayList<>()).children().get(0).visibleInMenu()).isFalse();
+        assertThat(com.acme.staticforge.asset.folder.MenuVisibility.fromPayload(null)).isTrue();
+        assertThat(com.acme.staticforge.asset.folder.MenuVisibility.fromPayload(
+                        new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode().put("visibleInMenu", "no")))
+                .isTrue();
+    }
+
+    @Test
     void treeDepthZeroReturnsOnlyTheRootNode() {
         FakeNavigationLookup lookup = new FakeNavigationLookup();
         UUID root = lookup.addFolder(null, "Navigation");

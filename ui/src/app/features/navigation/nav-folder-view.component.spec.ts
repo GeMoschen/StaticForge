@@ -2,23 +2,23 @@ import '@angular/compiler';
 import { signal } from '@angular/core';
 import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
-import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/angular';
+import { fireEvent, render, screen, within } from '@testing-library/angular';
 import { of } from 'rxjs';
 import { describe, expect, it, vi } from 'vitest';
-import { ApiClient } from '../../core/api/api.client';
 import { provideFavoritesStub } from '../../core/assets/testing/favorites.testing';
 import { DeveloperModeService } from '../../core/frame/developer-mode.service';
 import { FrameContextStore } from '../../core/frame/frame-context.store';
 import { ProjectPermissionsStore } from '../../core/project/project-permissions.store';
-import { ToastService } from '../../core/ui/toast.service';
 import { NavFolderViewComponent } from './nav-folder-view.component';
 import { buildNavIndex } from './navigation-tree.util';
 import { NavigationService } from './navigation.service';
 import type { NavTreeView } from './navigation.service';
 
-/** The menu folder view (M35.22): the entry page, the table of items (label, target page, public URL) and the bulk actions. */
+/**
+ * The menu folder view (M35.22): the entry page line, the table of items (label, target page, public URL, visible in menu)
+ * and the bulk actions (move, show / hide in the menu, delete); also for the fixed "All navigation" wrapper.
+ */
 
 const TREE: NavTreeView[] = [
   {
@@ -26,6 +26,7 @@ const TREE: NavTreeView[] = [
     uid: 'navigation_root',
     type: 'FOLDER',
     displayName: 'All Navigation',
+    protectedFolder: true,
     revision: 9,
     children: [
       {
@@ -36,10 +37,11 @@ const TREE: NavTreeView[] = [
         label: 'Company',
         resolvedPageUuid: 'p-about',
         resolvedPageName: 'About us',
+        startNode: { kind: 'PAGE_REFERENCE', assetUuid: 'n-about' },
         revision: 4,
         children: [
           { uuid: 'n-about', uid: 'about', type: 'PAGE_REFERENCE', displayName: 'About', label: 'About us', resolvedPageUuid: 'p-about', resolvedPageName: 'About us', revision: 1, children: [] },
-          { uuid: 'n-team', uid: 'team', type: 'PAGE_REFERENCE', displayName: 'Team', label: 'Our team', resolvedPageUuid: 'p-team', resolvedPageName: 'Team', revision: 1, children: [] },
+          { uuid: 'n-team', uid: 'team', type: 'PAGE_REFERENCE', displayName: 'Team', label: 'Our team', resolvedPageUuid: 'p-team', resolvedPageName: 'Team', visibleInMenu: false, revision: 1, children: [] },
           { uuid: 'n-loose', uid: 'loose', type: 'PAGE_REFERENCE', displayName: 'Loose', label: 'Loose end', revision: 1, children: [] },
           { uuid: 'n-sub', uid: 'sub', type: 'FOLDER', displayName: 'Careers', label: 'Careers', revision: 1, children: [] },
         ],
@@ -52,19 +54,13 @@ const URLS = new Map([
   ['p-team', '/about-us/team/'],
 ]);
 
-async function open(options: { canEdit?: boolean; dev?: boolean; startNode?: unknown; nav?: Record<string, unknown>; failed?: boolean } = {}) {
+async function open(options: { canEdit?: boolean; dev?: boolean; folder?: 'n-company' | 'n-sub' | 'root'; failed?: boolean } = {}) {
   const index = buildNavIndex(TREE);
-  const nav = {
-    updateFolder: vi.fn().mockReturnValue(of({ revision: 5 })),
-    ...options.nav,
-  };
-  const api = {
-    assetDetail: vi.fn().mockReturnValue(of({ revision: 4, payload: { startNode: options.startNode ?? { kind: 'PAGE_REFERENCE', assetUuid: 'n-about' } } })),
-  };
+  const folder = options.folder === 'root' ? index.root! : index.entries.get(options.folder ?? 'n-company')!;
   const view = await render(NavFolderViewComponent, {
     componentInputs: {
       projectKey: 'proj',
-      folder: index.entries.get('n-company')!,
+      folder,
       index,
       urls: URLS,
       failed: options.failed ?? false,
@@ -74,8 +70,7 @@ async function open(options: { canEdit?: boolean; dev?: boolean; startNode?: unk
       provideHttpClient(),
       provideHttpClientTesting(),
       provideFavoritesStub(),
-      { provide: NavigationService, useValue: nav },
-      { provide: ApiClient, useValue: api },
+      { provide: NavigationService, useValue: {} },
       { provide: FrameContextStore, useValue: { setItem: vi.fn() } },
       { provide: DeveloperModeService, useValue: { enabled: signal(options.dev ?? false) } },
       { provide: ProjectPermissionsStore, useValue: { canEditContent: signal(options.canEdit ?? true) } },
@@ -89,12 +84,13 @@ async function open(options: { canEdit?: boolean; dev?: boolean; startNode?: unk
     moveEntries: vi.fn(),
     deleteEntries: vi.fn(),
     retry: vi.fn(),
-    changed: vi.fn(),
+    changeEntry: vi.fn(),
+    setVisible: vi.fn(),
   };
   for (const [name, spy] of Object.entries(outputs)) {
     component[name].subscribe(spy);
   }
-  return { view, nav, api, outputs, toasts: TestBed.inject(ToastService) };
+  return { view, outputs, folder };
 }
 
 describe('the menu folder view', () => {
@@ -124,7 +120,7 @@ describe('the menu folder view', () => {
   it('marks the entry page with a badge', async () => {
     await open();
     const rows = await screen.findAllByRole('row');
-    await waitFor(() => expect(within(rows[1]).getByText('Entry page')).toBeTruthy());
+    expect(within(rows[1]).getByText('Entry page')).toBeTruthy();
     expect(within(rows[2]).queryByText('Entry page')).toBeNull();
   });
 
@@ -161,36 +157,100 @@ describe('the menu folder view', () => {
   });
 
   describe('the entry page', () => {
-    it('is a select of the folder\'s own entries, set to the stored one', async () => {
+    const line = () => document.querySelector('.view__entry') as HTMLElement;
+
+    it('is a line in the header with the chosen entry and the page it leads to', async () => {
       await open();
-      const select = await screen.findByRole('combobox', { name: /Entry page/ });
-      await waitFor(() => expect(select.textContent).toContain('About us'));
+      expect(within(line()).getByText('Entry page')).toBeTruthy();
+      expect(within(line()).getByText('About us', { selector: '.view__entry-value' })).toBeTruthy();
+      expect(within(line()).getByText('→ About us')).toBeTruthy();
+      expect(within(line()).getByRole('button', { name: 'Change…' })).toBeTruthy();
     });
 
-    it('changes it with a toast that offers Undo (which writes the previous one back)', async () => {
-      const { nav, toasts, outputs } = await open();
-      const select = await screen.findByRole('combobox', { name: /Entry page/ });
-      await waitFor(() => expect(select.textContent).toContain('About us'));
-      fireEvent.change(select, { target: { value: '1' } });
-
-      await waitFor(() =>
-        expect(nav['updateFolder']).toHaveBeenCalledWith('proj', 'n-company', { startNode: { kind: 'PAGE_REFERENCE', assetUuid: 'n-team' } }, '"rev-4"'),
-      );
-      await waitFor(() => expect(outputs.changed).toHaveBeenCalled());
-      const toast = toasts.toasts().at(-1)!;
-      expect(toast.message).toBe('“Our team” is now the entry page.');
-      expect(toast.action).toBeTruthy();
-
-      toast.action!.run();
-      await waitFor(() =>
-        expect(nav['updateFolder']).toHaveBeenLastCalledWith('proj', 'n-company', { startNode: { kind: 'PAGE_REFERENCE', assetUuid: 'n-about' } }, '"rev-5"'),
-      );
+    it('says "None — grouping only" for a folder without one', async () => {
+      await open({ folder: 'n-sub' });
+      expect(within(line()).getByText('None — grouping only')).toBeTruthy();
+      expect(within(line()).queryByText(/→/)).toBeNull();
     });
 
-    it('is disabled for a viewer', async () => {
+    it('asks the area to open the entry-page drawer from Change… and from the ⋮ menu', async () => {
+      const { outputs, folder } = await open();
+      fireEvent.click(within(line()).getByRole('button', { name: 'Change…' }));
+      expect(outputs.changeEntry).toHaveBeenLastCalledWith(folder);
+
+      fireEvent.click(screen.getByRole('button', { name: 'More actions' }));
+      fireEvent.click(await screen.findByRole('menuitem', { name: /^Entry page…/ }));
+      expect(outputs.changeEntry).toHaveBeenCalledTimes(2);
+    });
+
+    it('cannot be changed by a viewer', async () => {
       await open({ canEdit: false });
-      expect(await screen.findByRole('combobox', { name: /Entry page/ })).toBeDisabled();
+      expect(within(line()).getByRole('button', { name: 'Change…' })).toBeDisabled();
       expect(screen.getByRole('button', { name: 'New menu item' })).toBeDisabled();
+    });
+  });
+
+  describe('Visible in menu', () => {
+    it('is a column: hidden rows say so and are muted, the others are in the menu', async () => {
+      await open();
+      expect(screen.getByText('Visible in menu', { selector: '*' })).toBeTruthy();
+      const rows = await screen.findAllByRole('row');
+      expect(within(rows[1]).getByText('In menu')).toBeTruthy();
+      expect(within(rows[2]).getByText('Hidden from menu')).toBeTruthy();
+      expect(within(rows[2]).getByText('Our team', { selector: '.cell-label__text' }).classList.contains('cell-label__text--muted')).toBe(true);
+      expect(within(rows[1]).getByText('About us', { selector: '.cell-label__text' }).classList.contains('cell-label__text--muted')).toBe(false);
+    });
+
+    it('sorts by the column (hidden first when ascending)', async () => {
+      await open();
+      fireEvent.click(screen.getByRole('button', { name: /Visible in menu/ }));
+      const rows = await screen.findAllByRole('row');
+      expect(within(rows[1]).getByText('Our team', { selector: '.cell-label__text' })).toBeTruthy();
+    });
+
+    it('has bulk Show in menu and Hide from menu on the selected rows', async () => {
+      const { outputs } = await open();
+      const rows = await screen.findAllByRole('row');
+      fireEvent.click(within(rows[1]).getByRole('checkbox'));
+      fireEvent.click(within(rows[2]).getByRole('checkbox'));
+
+      fireEvent.click(await screen.findByRole('button', { name: 'Hide from menu' }));
+      expect(outputs.setVisible).toHaveBeenLastCalledWith({ entries: expect.any(Array), visible: false });
+      expect(outputs.setVisible.mock.calls[0][0].entries.map((e: { uuid: string }) => e.uuid)).toEqual(['n-about', 'n-team']);
+
+      fireEvent.click(screen.getByRole('button', { name: 'Show in menu' }));
+      expect(outputs.setVisible).toHaveBeenLastCalledWith({ entries: expect.any(Array), visible: true });
+    });
+
+    it('offers no bulk actions to a viewer', async () => {
+      await open({ canEdit: false });
+      const rows = await screen.findAllByRole('row');
+      fireEvent.click(within(rows[1]).getByRole('checkbox'));
+      expect(screen.queryByRole('button', { name: 'Hide from menu' })).toBeNull();
+    });
+
+    it('hides and shows the folder itself from its ⋮ menu', async () => {
+      const { outputs } = await open();
+      fireEvent.click(screen.getByRole('button', { name: 'More actions' }));
+      fireEvent.click(await screen.findByRole('menuitem', { name: /^Hide from menu/ }));
+      expect(outputs.setVisible).toHaveBeenCalledWith({ entries: [expect.objectContaining({ uuid: 'n-company' })], visible: false });
+    });
+  });
+
+  describe('the "All navigation" wrapper', () => {
+    it('is a folder view of the top level with its entry page, but nothing to rename, move, hide or delete', async () => {
+      await open({ folder: 'root' });
+      const rows = await screen.findAllByRole('row');
+      expect(rows.length).toBe(2);
+      expect(within(rows[1]).getByText('Company')).toBeTruthy();
+      expect(document.querySelector('.view__entry')?.textContent).toContain('None — grouping only');
+      expect(document.querySelector('.view__title-extras sf-asset-favorite')).toBeNull();
+
+      fireEvent.click(screen.getByRole('button', { name: 'More actions' }));
+      expect(await screen.findByRole('menuitem', { name: /^Entry page…/ })).toBeTruthy();
+      expect(screen.queryByRole('menuitem', { name: /^Rename/ })).toBeNull();
+      expect(screen.queryByRole('menuitem', { name: /^Delete/ })).toBeNull();
+      expect(screen.queryByRole('menuitem', { name: /^Hide from menu/ })).toBeNull();
     });
   });
 

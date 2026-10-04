@@ -10,6 +10,7 @@ import com.acme.staticforge.asset.AssetVersionView;
 import com.acme.staticforge.asset.CreateAssetCommand;
 import com.acme.staticforge.asset.UpdateAssetCommand;
 import com.acme.staticforge.asset.folder.FolderScope;
+import com.acme.staticforge.asset.folder.MenuVisibility;
 import com.acme.staticforge.common.JsonUtil;
 import com.acme.staticforge.common.ProblemFactory;
 import com.acme.staticforge.common.SfException;
@@ -89,6 +90,20 @@ public class PageReferenceServiceImpl implements PageReferenceService {
             String locale,
             long expectedRevision,
             RevisionContext ctx) {
+        return update(uuid, targetKind, targetAssetUuid, label, locale, null, expectedRevision, ctx);
+    }
+
+    @Override
+    @Transactional
+    public AssetVersionView update(
+            UUID uuid,
+            PageReferenceTargetKind targetKind,
+            UUID targetAssetUuid,
+            String label,
+            String locale,
+            Boolean visibleInMenu,
+            long expectedRevision,
+            RevisionContext ctx) {
         requireValidTarget(ctx.projectId(), targetKind, targetAssetUuid);
 
         Asset pageReference = requirePageReference(ctx.projectId(), uuid);
@@ -104,7 +119,21 @@ public class PageReferenceServiceImpl implements PageReferenceService {
         } else {
             writeLabel(payload, label);
         }
+        if (visibleInMenu != null) {
+            MenuVisibility.write(payload, visibleInMenu);
+        }
 
+        return assetService.update(
+                uuid, new UpdateAssetCommand(current.getDisplayName(), payload), expectedRevision, ctx);
+    }
+
+    @Override
+    @Transactional
+    public AssetVersionView setVisibleInMenu(UUID uuid, boolean visibleInMenu, long expectedRevision, RevisionContext ctx) {
+        Asset pageReference = requirePageReference(ctx.projectId(), uuid);
+        AssetVersion current = requireOpen(pageReference.getId());
+        ObjectNode payload = current.getPayload().deepCopy();
+        MenuVisibility.write(payload, visibleInMenu);
         return assetService.update(
                 uuid, new UpdateAssetCommand(current.getDisplayName(), payload), expectedRevision, ctx);
     }

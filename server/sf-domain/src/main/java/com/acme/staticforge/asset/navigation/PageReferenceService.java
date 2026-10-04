@@ -36,5 +36,25 @@ public interface PageReferenceService {
             long expectedRevision,
             RevisionContext ctx);
 
+    /**
+     * Like {@link #update(UUID, PageReferenceTargetKind, UUID, String, String, long, RevisionContext)}, also setting the
+     * "Visible in menu" flag when {@code visibleInMenu} is non-null ({@code null} leaves it as stored). One revision.
+     */
+    AssetVersionView update(
+            UUID uuid,
+            PageReferenceTargetKind targetKind,
+            UUID targetAssetUuid,
+            String label,
+            String locale,
+            Boolean visibleInMenu,
+            long expectedRevision,
+            RevisionContext ctx);
+
+    /**
+     * Sets only the "Visible in menu" flag ({@code MenuVisibility}) of a reference, leaving its target and label
+     * untouched. One revision (a no-op write is still one revision, like any other update).
+     */
+    AssetVersionView setVisibleInMenu(UUID uuid, boolean visibleInMenu, long expectedRevision, RevisionContext ctx);
+
     AssetVersionView find(long projectId, UUID uuid);
 }

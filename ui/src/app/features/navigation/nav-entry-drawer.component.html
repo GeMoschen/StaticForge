@@ -1,0 +1,21 @@
+<sf-drawer [title]="title()" [width]="460" (closed)="closed.emit()">
+  <p class="entry__lead">{{ 'navigation.entry.lead' | transloco }}</p>
+  @if (!canEdit()) {
+    <p class="entry__note">{{ 'navigation.entry.readOnly' | transloco }}</p>
+  }
+  <sf-radio-group
+    class="entry__choices"
+    [options]="options()"
+    [value]="chosen()"
+    [disabled]="!canEdit() || saving()"
+    [aria-label]="'navigation.entry.choices' | transloco"
+    (valueChange)="choose($event)"
+  />
+  @if (children().length === 0) {
+    <p class="entry__note">{{ 'navigation.entry.empty' | transloco }}</p>
+  }
+  <div sfDrawerFooter class="entry__footer">
+    <sf-button variant="ghost" (click)="closed.emit()">{{ 'navigation.entry.cancel' | transloco }}</sf-button>
+    <sf-button [disabled]="!canEdit() || !dirty() || saving()" (click)="apply()">{{ 'navigation.entry.apply' | transloco }}</sf-button>
+  </div>
+</sf-drawer>

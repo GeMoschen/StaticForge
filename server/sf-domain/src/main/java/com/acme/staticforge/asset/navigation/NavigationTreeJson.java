@@ -17,11 +17,17 @@ import java.util.function.Function;
  * one place a tree gets flattened into the generic {@code JsonNode} shape (mirrors how a CATALOG
  * editor's {@code cards} array is passed to {@code BlockResolver#renderCatalog} as plain JSON).
  *
- * <p>Each node gets: {@code assetUuid, type, uid, displayName, label, resolvedPageUuid, href,
- * active, trail, children[]}. {@code active} marks the node that IS the page being rendered;
+ * <p>Each node gets: {@code assetUuid, type, uid, displayName, label, visibleInMenu, resolvedPageUuid,
+ * href, active, trail, children[]}. {@code active} marks the node that IS the page being rendered;
  * {@code trail} marks an ancestor of that page in the resolved tree (never both at once) — the
  * same semantics the deleted grammar's §17.2 step 5 used. {@code href} is {@code null} for a
  * grouping-only node (no {@code resolvedPageUuid}) — callers must not render it as a link.
+ *
+ * <p>An item whose "Visible in menu" flag is off ({@link NavTreeNode#visibleInMenu()}) is hidden from the menu: it is
+ * left out of its parent's {@code children[]} together with its whole subtree, so neither the default HTML nor a
+ * template iterating the nodes ever sees it (and it never makes an ancestor part of the {@code trail}). The root passed
+ * to {@link #toJson} is always built — it is the folder the template asked for. The flag only concerns menus: the
+ * entry-page chain ({@code NavigationService#resolveFolderEntry}) and {@link #danglingPageReferences} still see every node.
  */
 public final class NavigationTreeJson {
 
@@ -85,6 +91,9 @@ public final class NavigationTreeJson {
         ArrayNode children = JsonNodeFactory.instance.arrayNode();
         boolean descendantOnTrail = false;
         for (NavTreeNode child : node.children()) {
+            if (!child.visibleInMenu()) {
+                continue;
+            }
             ObjectNode childJson = build(child, currentPageUuid, hrefResolver);
             children.add(childJson);
             if (childJson.path("active").asBoolean(false) || childJson.path("trail").asBoolean(false)) {
@@ -97,6 +106,7 @@ public final class NavigationTreeJson {
         json.put("uid", node.uid());
         json.put("displayName", node.displayName());
         json.put("label", node.label());
+        json.put("visibleInMenu", node.visibleInMenu());
         json.put("resolvedPageUuid", resolvedPageUuid == null ? null : resolvedPageUuid.toString());
         String href = resolvedPageUuid == null || hrefResolver == null ? null : hrefResolver.apply(node);
         json.put("href", href);

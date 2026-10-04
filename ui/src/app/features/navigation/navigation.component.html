@@ -9,7 +9,17 @@
 >
   <section sfSplitterStart class="nav__pane nav__tree" aria-labelledby="nav-tree-title">
     <div class="nav__head">
-      <span class="nav__title" id="nav-tree-title">{{ 'navigation.tree.title' | transloco }}</span>
+      <button
+        type="button"
+        class="nav__title nav__title--link"
+        id="nav-tree-title"
+        [attr.aria-current]="selectedIsRoot() ? 'page' : null"
+        [attr.aria-label]="'navigation.tree.openRoot' | transloco"
+        [disabled]="!index().rootUuid"
+        (click)="openRoot()"
+      >
+        {{ 'navigation.tree.title' | transloco }}
+      </button>
       <sf-menu
         variant="secondary"
         size="sm"
@@ -71,8 +81,9 @@
           (rename)="renameInTree($event)"
           (moveEntries)="openMoveDialog($event)"
           (deleteEntries)="deleteEntries($event)"
+          (changeEntry)="openEntryDrawer($event)"
+          (setVisible)="setVisibility($event)"
           (retry)="changed()"
-          (changed)="changed()"
         />
       }
       @case ('item') {
@@ -105,6 +116,9 @@
               icon="menu"
               [title]="'navigation.shell.emptyTitle' | transloco"
               [description]="'navigation.shell.emptyText' | transloco"
+              [primaryLabel]="loaded() && !failed() ? ('navigation.shell.openRoot' | transloco) : null"
+              primaryIcon="login"
+              (primary)="openRoot()"
             />
           }
         </div>
@@ -121,6 +135,17 @@
   (create)="submitNewItem($event)"
   (closed)="newItemOpen.set(false)"
 />
+
+@if (entryDrawerFolder(); as folder) {
+  <sf-nav-entry-drawer
+    [projectKey]="projectKey()"
+    [folder]="folder"
+    [index]="index()"
+    [urls]="urls()"
+    (changed)="changed()"
+    (closed)="closeEntryDrawer()"
+  />
+}
 
 @if (moving(); as entries) {
   <sf-folder-move-dialog

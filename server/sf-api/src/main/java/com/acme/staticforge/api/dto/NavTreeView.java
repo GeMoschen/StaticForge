@@ -11,6 +11,10 @@ import java.util.UUID;
  * {@code FOLDER} or {@code PAGE_REFERENCE}; {@code resolvedPageUuid}/{@code resolvedPagePath}
  * are both {@code null} for a grouping-only folder or an unresolvable/dangling target.
  * {@code resolvedPageName} is that page's display name (M35.22: the menu shows "Company → page name").
+ * {@code visibleInMenu} is the "Visible in menu" flag (absent in storage = {@code true}): the tree lists hidden items too,
+ * generated menus leave them out.
+ * {@code startNode} is a folder's entry page pointer (a direct child, see {@code FolderService#updateStartNode}), absent
+ * for items and for grouping-only folders.
  * {@code revision} is the node's current revision, sent back as {@code If-Match} on a rename.
  */
 public record NavTreeView(
@@ -23,6 +27,8 @@ public record NavTreeView(
         String resolvedPagePath,
         String resolvedPageName,
         boolean protectedFolder,
+        boolean visibleInMenu,
+        NavigationStartNodeView startNode,
         long revision,
         List<NavTreeView> children,
         java.util.Map<String, LocaleReleaseView> release,

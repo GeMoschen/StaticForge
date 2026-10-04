@@ -41,4 +41,38 @@ describe('NavigationService', () => {
     expect(request.request.params.get('size')).toBe('100');
     request.flush({ content: [], last: true });
   });
+
+  it('sets only the Visible in menu flag of an item with PATCH …/references/{uuid} (no target, no label)', () => {
+    const { service, http } = setup();
+    let revision: number | undefined;
+    service.setVisibleInMenu('proj', { kind: 'item', uuid: 'r1' }, false, '"rev-2"').subscribe((view) => (revision = view.revision));
+
+    const request = http.expectOne('/api/v1/projects/proj/navigation/references/r1');
+    expect(request.request.method).toBe('PATCH');
+    expect(request.request.body).toEqual({ visibleInMenu: false });
+    expect(request.request.headers.get('If-Match')).toBe('"rev-2"');
+    request.flush({ uuid: 'r1', revision: 3 });
+    expect(revision).toBe(3);
+  });
+
+  it('sets the flag of a folder with PATCH …/folders/{uuid}, leaving name and entry page out of the body', () => {
+    const { service, http } = setup();
+    service.setVisibleInMenu('proj', { kind: 'folder', uuid: 'f1' }, true, '"rev-4"').subscribe();
+    const request = http.expectOne('/api/v1/projects/proj/navigation/folders/f1');
+    expect(request.request.method).toBe('PATCH');
+    expect(request.request.body).toEqual({ visibleInMenu: true });
+    request.flush({});
+  });
+
+  it('clears or sets a folder\'s entry page with the same PATCH', () => {
+    const { service, http } = setup();
+    service.updateFolder('proj', 'f1', { startNode: { kind: 'FOLDER', assetUuid: 'c' } }, '"rev-4"').subscribe();
+    const set = http.expectOne('/api/v1/projects/proj/navigation/folders/f1');
+    expect(set.request.body).toEqual({ startNode: { kind: 'FOLDER', assetUuid: 'c' } });
+    set.flush({});
+    service.updateFolder('proj', 'f1', { startNode: null }).subscribe();
+    const clear = http.expectOne('/api/v1/projects/proj/navigation/folders/f1');
+    expect(clear.request.body).toEqual({ startNode: null });
+    clear.flush({});
+  });
 });

@@ -53,8 +53,33 @@
   padding: var(--sf-space-4) var(--sf-space-6);
 }
 
+// The entry page line in the header: what the folder opens when it is clicked in the menu, and the button to change it.
 .view__entry {
-  max-width: 40rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sf-space-2);
+  min-width: 0;
+  font-size: var(--sf-fs-14);
+}
+
+.view__entry-icon {
+  color: var(--sf-text-subtle);
+  font-size: var(--sf-fs-18);
+}
+
+.view__entry-label {
+  color: var(--sf-text-muted);
+}
+
+.view__entry-value {
+  color: var(--sf-text);
+  font-weight: var(--sf-weight-medium);
+}
+
+.view__entry-where,
+.view__entry-none {
+  color: var(--sf-text-muted);
 }
 
 .view__table {
@@ -99,6 +124,11 @@
 .cell-label:focus-within .cell-fav,
 .cell-fav:focus-within {
   opacity: 1;
+}
+
+.cell-label__text--muted {
+  color: var(--sf-text-muted);
+  font-weight: var(--sf-weight-regular);
 }
 
 .cell-target {

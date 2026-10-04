@@ -1,0 +1,69 @@
+{
+  "assetUuid": "00000000-0000-0000-0000-000000000001",
+  "type": "FOLDER",
+  "uid": "root",
+  "displayName": "Main Navigation",
+  "label": "Main Navigation",
+  "resolvedPageUuid": null,
+  "children": [
+    {
+      "assetUuid": "00000000-0000-0000-0000-000000000002",
+      "type": "PAGE_REFERENCE",
+      "uid": "home-ref",
+      "displayName": "home-ref",
+      "label": "Home",
+      "resolvedPageUuid": "00000000-0000-0000-0000-000000000102",
+      "children": []
+    },
+    {
+      "assetUuid": "00000000-0000-0000-0000-000000000003",
+      "type": "FOLDER",
+      "uid": "secret",
+      "displayName": "Secret",
+      "label": "Secret",
+      "visibleInMenu": false,
+      "resolvedPageUuid": "00000000-0000-0000-0000-000000000103",
+      "children": [
+        {
+          "assetUuid": "00000000-0000-0000-0000-000000000004",
+          "type": "PAGE_REFERENCE",
+          "uid": "inner-ref",
+          "displayName": "inner-ref",
+          "label": "Inner",
+          "resolvedPageUuid": "00000000-0000-0000-0000-000000000103",
+          "children": []
+        }
+      ]
+    },
+    {
+      "assetUuid": "00000000-0000-0000-0000-000000000005",
+      "type": "FOLDER",
+      "uid": "company",
+      "displayName": "Company",
+      "label": "Company",
+      "visibleInMenu": true,
+      "resolvedPageUuid": "00000000-0000-0000-0000-000000000104",
+      "children": [
+        {
+          "assetUuid": "00000000-0000-0000-0000-000000000006",
+          "type": "PAGE_REFERENCE",
+          "uid": "imprint-ref",
+          "displayName": "imprint-ref",
+          "label": "Imprint",
+          "visibleInMenu": false,
+          "resolvedPageUuid": "00000000-0000-0000-0000-000000000105",
+          "children": []
+        },
+        {
+          "assetUuid": "00000000-0000-0000-0000-000000000007",
+          "type": "PAGE_REFERENCE",
+          "uid": "team-ref",
+          "displayName": "team-ref",
+          "label": "Team",
+          "resolvedPageUuid": "00000000-0000-0000-0000-000000000106",
+          "children": []
+        }
+      ]
+    }
+  ]
+}

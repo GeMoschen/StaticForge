@@ -178,3 +178,70 @@ describe('the order a reorder stores', () => {
     expect(orderWith(index, null, 'n-home', -3)).toEqual(['n-home', 'n-company']);
   });
 });
+
+describe('Visible in menu, the wrapper and the entry page', () => {
+  const forest: NavTreeView[] = [
+    {
+      uuid: 'root',
+      uid: 'navigation_root',
+      type: 'FOLDER',
+      displayName: 'All Navigation',
+      protectedFolder: true,
+      startNode: { kind: 'PAGE_REFERENCE', assetUuid: 'n-home' },
+      revision: 9,
+      children: [
+        { uuid: 'n-home', uid: 'home', type: 'PAGE_REFERENCE', displayName: 'Home', label: 'Home', revision: 2, children: [] },
+        { uuid: 'n-old', uid: 'old', type: 'PAGE_REFERENCE', displayName: 'Old', label: 'Old', visibleInMenu: false, revision: 2, children: [] },
+        {
+          uuid: 'n-co',
+          uid: 'co',
+          type: 'FOLDER',
+          displayName: 'Co',
+          visibleInMenu: false,
+          startNode: { kind: 'FOLDER', assetUuid: 'n-sub' },
+          revision: 3,
+          children: [{ uuid: 'n-sub', uid: 'sub', type: 'FOLDER', displayName: 'Sub', visibleInMenu: true, revision: 1, children: [] }],
+        },
+      ],
+    },
+  ];
+  const index = buildNavIndex(forest);
+  const options = { dev: false, locale: null, labels: LABELS, urls: new Map<string, string>(), hiddenLabel: 'Hidden' };
+
+  it('is on unless the server says false (an absent flag is visible)', () => {
+    expect(index.entries.get('n-home')!.visible).toBe(true);
+    expect(index.entries.get('n-old')!.visible).toBe(false);
+    expect(index.entries.get('n-co')!.visible).toBe(false);
+    expect(index.entries.get('n-sub')!.visible).toBe(true);
+  });
+
+  it('mutes a hidden node in the tree and marks it with an eye-off badge, whatever its release status', () => {
+    const [home, old, folder] = navNodes(index, null, options);
+    expect(home).toMatchObject({ muted: false, badges: [] });
+    expect(old.muted).toBe(true);
+    expect(old.badges).toEqual([{ label: 'Hidden', tone: 'neutral', icon: 'visibility_off' }]);
+    expect(folder.muted).toBe(true);
+    // Release status first, then Hidden.
+    const changed = buildNavIndex([{ ...forest[0], children: [{ ...forest[0].children![1], release: { '': { status: 'CHANGED' } } as never }] }]);
+    expect(navNodes(changed, null, options)[0].badges?.map((b) => b.label)).toEqual(['Changed', 'Hidden']);
+  });
+
+  it('keeps hidden entries in their place in the menu order and in the filter', () => {
+    expect(navChildren(index, null).map((e) => e.uuid)).toEqual(['n-home', 'n-old', 'n-co']);
+    expect(navSearchPaths(index, 'old', new Map())).toEqual([['n-old']]);
+  });
+
+  it('knows the entry page of a folder (a direct child, item or folder) and none for items', () => {
+    expect(index.entries.get('n-co')!.entry).toEqual({ kind: 'FOLDER', uuid: 'n-sub' });
+    expect(index.entries.get('n-home')!.entry).toBeNull();
+    expect(index.entries.get('n-sub')!.entry).toBeNull();
+  });
+
+  it('keeps the wrapper as a protected folder entry with its own entry page, and lists the top level as its children', () => {
+    expect(index.root).toMatchObject({ kind: 'folder', uuid: 'root', protectedFolder: true, revision: 9, entry: { kind: 'PAGE_REFERENCE', uuid: 'n-home' } });
+    expect(index.entries.has('root')).toBe(false);
+    expect(navChildren(index, 'root').map((e) => e.uuid)).toEqual(['n-home', 'n-old', 'n-co']);
+    expect(navChildren(index, null)).toEqual(navChildren(index, 'root'));
+    expect(buildNavIndex([]).root).toBeNull();
+  });
+});

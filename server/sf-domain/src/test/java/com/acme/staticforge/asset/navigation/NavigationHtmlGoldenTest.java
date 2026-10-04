@@ -72,6 +72,54 @@ class NavigationHtmlGoldenTest {
         assertThat(html).contains("<span>Empty</span>").doesNotContain("<a href");
     }
 
+    /** A hidden item leaves the menu with its whole subtree; its siblings and the trail of the rest are unaffected. */
+    @Test
+    void aHiddenItemAndItsSubtreeAreNotRendered() {
+        UUID visiblePage = UUID.randomUUID();
+        UUID hiddenPage = UUID.randomUUID();
+        UUID nestedPage = UUID.randomUUID();
+        NavTreeNode nested = node(UUID.randomUUID(), AssetType.PAGE_REFERENCE, "nested", "Nested under hidden", nestedPage, true, List.of());
+        NavTreeNode hiddenFolder = node(UUID.randomUUID(), AssetType.FOLDER, "hidden-folder", "Hidden folder", hiddenPage, false, List.of(nested));
+        NavTreeNode hiddenLeaf = node(UUID.randomUUID(), AssetType.PAGE_REFERENCE, "hidden-leaf", "Hidden leaf", UUID.randomUUID(), false, List.of());
+        NavTreeNode shown = node(UUID.randomUUID(), AssetType.PAGE_REFERENCE, "shown", "Shown", visiblePage, true, List.of());
+        NavTreeNode root = node(UUID.randomUUID(), AssetType.FOLDER, "root", "Root", null, true, List.of(shown, hiddenFolder, hiddenLeaf));
+
+        // The page being rendered lies in the hidden subtree: it marks nothing in the menu.
+        JsonNode json = NavigationTreeJson.toJson(root, nestedPage, n -> "/page/" + n.resolvedPageUuid() + "/");
+        String html = NavigationHtmlRenderer.renderRoot(json);
+
+        assertThat(html).isEqualTo("<ul class=\"nav\"><li class=\"nav-item\"><a href=\"/page/" + visiblePage + "/\">Shown</a></li></ul>");
+        assertThat(json.path("children")).hasSize(1);
+        assertThat(json.path("children").get(0).path("visibleInMenu").asBoolean()).isTrue();
+    }
+
+    /** Every child hidden: no empty list is rendered. */
+    @Test
+    void aFolderWhoseChildrenAreAllHiddenRendersNoList() {
+        NavTreeNode hidden = node(UUID.randomUUID(), AssetType.PAGE_REFERENCE, "h", "Hidden", UUID.randomUUID(), false, List.of());
+        NavTreeNode root = node(UUID.randomUUID(), AssetType.FOLDER, "root", "Root", null, true, List.of(hidden));
+
+        assertThat(NavigationHtmlRenderer.renderRoot(NavigationTreeJson.toJson(root, null, n -> "/x/"))).isEmpty();
+    }
+
+    /** The renderer also honours the flag in hand-built JSON (the default is visible). */
+    @Test
+    void theRendererSkipsJsonNodesMarkedInvisible() throws Exception {
+        JsonNode json = mapper.readTree("""
+                {"children":[
+                  {"label":"A","href":"/a/","children":[]},
+                  {"label":"B","href":"/b/","visibleInMenu":false,"children":[{"label":"C","href":"/c/","children":[]}]}
+                ]}""");
+
+        assertThat(NavigationHtmlRenderer.renderRoot(json))
+                .isEqualTo("<ul class=\"nav\"><li class=\"nav-item\"><a href=\"/a/\">A</a></li></ul>");
+    }
+
+    private static NavTreeNode node(
+            UUID assetUuid, AssetType type, String uid, String label, UUID resolvedPageUuid, boolean visible, List<NavTreeNode> children) {
+        return new NavTreeNode(assetUuid, type, uid, label, label, resolvedPageUuid, false, visible, children);
+    }
+
     // ------------------------------------------------------------------
     // tree.json -> NavTreeNode (manual walk; avoids relying on Jackson's record-deserialization
     // support, which needs -parameters/a names module this module doesn't otherwise need).
@@ -84,11 +132,12 @@ class NavigationHtmlGoldenTest {
         String displayName = textOrNull(json, "displayName");
         String label = textOrNull(json, "label");
         UUID resolvedPageUuid = parseUuidOrNull(textOrNull(json, "resolvedPageUuid"));
+        boolean visibleInMenu = json.path("visibleInMenu").asBoolean(true);
         List<NavTreeNode> children = new ArrayList<>();
         for (JsonNode child : json.path("children")) {
             children.add(readTree(child));
         }
-        return new NavTreeNode(assetUuid, type, uid, displayName, label, resolvedPageUuid, false, children);
+        return new NavTreeNode(assetUuid, type, uid, displayName, label, resolvedPageUuid, false, visibleInMenu, children);
     }
 
     private static String textOrNull(JsonNode node, String field) {

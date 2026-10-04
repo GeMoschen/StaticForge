@@ -8,7 +8,16 @@
 >
   <section sfSplitterStart class="pane" aria-labelledby="sample-nav-title">
     <div class="pane__head">
-      <span class="pane__title" id="sample-nav-title">{{ 'styleguide.sample.navigation.title' | transloco }}</span>
+      <button
+        type="button"
+        class="pane__title pane__title--link"
+        id="sample-nav-title"
+        [attr.aria-current]="isRoot() ? 'page' : null"
+        [attr.aria-label]="'styleguide.sample.navigation.openRoot' | transloco"
+        (click)="openRoot()"
+      >
+        {{ 'styleguide.sample.navigation.title' | transloco }}
+      </button>
       <sf-menu
         variant="secondary"
         size="sm"
@@ -27,6 +36,7 @@
       [selection]="treeSelection()"
       [multiselect]="false"
       [actions]="treeActions"
+      [menuItems]="treeMenu"
       [expandActions]="false"
       (open)="onOpen($event)"
       (reorder)="onReorder($event)"
@@ -62,26 +72,28 @@
           }
         </div>
         <div class="detail__table">
-          <sf-field
-            class="folder__entry"
-            labelPosition="inline"
-            [label]="'styleguide.sample.navigation.entryPage' | transloco"
-            [hint]="'styleguide.sample.navigation.entryPageHint' | transloco"
-          >
-            <sf-select
-              [options]="entryOptions()"
-              [value]="entryPage()"
-              [placeholder]="'styleguide.sample.navigation.noEntryPage' | transloco"
-              (valueChange)="setEntryPage(entry.id, $event)"
-            />
-          </sf-field>
+          <div class="folder__entry" role="group" [attr.aria-label]="'styleguide.sample.navigation.entryPage' | transloco">
+            <sf-icon class="folder__entry-icon" name="login" />
+            <span class="folder__entry-label">{{ 'styleguide.sample.navigation.entryPage' | transloco }}</span>
+            @if (entryPageEntry(); as child) {
+              <span class="folder__entry-value">{{ child.label }}</span>
+              <span class="folder__entry-where">{{ entryTarget() ? '→ ' + entryTarget() : ('styleguide.sample.navigation.entryNoPage' | transloco) }}</span>
+            } @else {
+              <span class="folder__entry-where">{{ 'styleguide.sample.navigation.noEntryPage' | transloco }}</span>
+            }
+            <sf-button variant="secondary" size="sm" icon="swap_horiz" (click)="openEntryDrawer(entry.id)">{{
+              'styleguide.sample.navigation.entryChange' | transloco
+            }}</sf-button>
+          </div>
           <sf-data-table
             class="folder__table"
             [columns]="columns()"
             [rows]="rows()"
             [rowKey]="rowKey"
             [rowLabel]="rowLabel"
+            selectable
             [columnChooser]="false"
+            [bulkActions]="bulkActions()"
             [label]="'styleguide.sample.navigation.table' | transloco: { name: entry.label }"
             [emptyTitle]="'styleguide.sample.navigation.tableEmpty' | transloco"
             (rowOpen)="openRow($event)"
@@ -89,7 +101,7 @@
             <ng-template sfDataTableCell="label" [sfDataTableCellRows]="rows()" let-row>
               <span class="cell-label">
                 <sf-icon class="cell-label__icon" [name]="row.entry.kind === 'folder' ? 'folder' : 'link'" />
-                <span class="cell-label__text">{{ row.entry.label }}</span>
+                <span class="cell-label__text" [class.cell-label__text--muted]="!row.entry.visible">{{ row.entry.label }}</span>
                 @if (row.isEntryPage) {
                   <sf-badge tone="accent" icon="login" [label]="'styleguide.sample.navigation.entryPage' | transloco" />
                 }
@@ -215,6 +227,25 @@
     }
   </div>
 </sf-splitter>
+
+@if (entryDrawerOpen() && selected(); as folder) {
+  <sf-drawer [title]="'styleguide.sample.navigation.entry.title' | transloco: { name: folder.label }" [width]="460" (closed)="entryDrawerOpen.set(false)">
+    <p class="entry__lead">{{ 'styleguide.sample.navigation.entry.lead' | transloco }}</p>
+    <sf-radio-group
+      [options]="entryOptions()"
+      [value]="entryDraft()"
+      [aria-label]="'styleguide.sample.navigation.entry.choices' | transloco"
+      (valueChange)="entryDraft.set($event ?? '')"
+    />
+    @if (entryOptions().length === 1) {
+      <p class="entry__note">{{ 'styleguide.sample.navigation.entry.empty' | transloco }}</p>
+    }
+    <div sfDrawerFooter class="entry__footer">
+      <sf-button variant="ghost" (click)="entryDrawerOpen.set(false)">{{ 'styleguide.sample.navigation.entry.cancel' | transloco }}</sf-button>
+      <sf-button (click)="applyEntry()">{{ 'styleguide.sample.navigation.entry.apply' | transloco }}</sf-button>
+    </div>
+  </sf-drawer>
+}
 
 @if (pickerOpen() && selectedItem(); as item) {
   <sf-sample-page-picker [current]="item.targetId" [lang]="lang()" (picked)="setTarget(item.id, $event)" (closed)="pickerOpen.set(false)" />

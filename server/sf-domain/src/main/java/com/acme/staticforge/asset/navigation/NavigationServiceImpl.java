@@ -2,6 +2,7 @@ package com.acme.staticforge.asset.navigation;
 
 import com.acme.staticforge.asset.AssetType;
 import com.acme.staticforge.asset.folder.FolderScope;
+import com.acme.staticforge.asset.folder.MenuVisibility;
 import com.acme.staticforge.asset.folder.PathService;
 import com.acme.staticforge.asset.folder.StartNode;
 import com.acme.staticforge.asset.folder.StartNodeKind;
@@ -227,7 +228,8 @@ public class NavigationServiceImpl implements NavigationService {
 
         return new NavTreeNode(
                 asset.uuid(), asset.type(), asset.uid(), asset.displayName(), label(projectId, asset, lookup, localeChain),
-                resolvedPageUuid, FolderScope.isProtected(asset.payload()), children);
+                resolvedPageUuid, FolderScope.isProtected(asset.payload()), MenuVisibility.fromPayload(asset.payload()),
+                children);
     }
 
     /**

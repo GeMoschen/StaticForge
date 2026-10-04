@@ -13,6 +13,7 @@ import type { SaveResult } from '../../shared/components/dialog/unsaved-changes.
 import { SfCopyableComponent } from '../../shared/components/display/sf-copyable.component';
 import { SfStatusComponent } from '../../shared/components/display/sf-status.component';
 import { SfInputComponent } from '../../shared/components/forms/sf-input.component';
+import { SfSwitchComponent } from '../../shared/components/forms/sf-switch.component';
 import { SfBannerComponent } from '../../shared/components/layout/sf-banner.component';
 import { SfPageHeaderComponent } from '../../shared/components/layout/sf-page-header.component';
 import { SfSaveStatusComponent, type SfSaveState } from '../../shared/components/layout/sf-save-status.component';
@@ -36,6 +37,8 @@ interface ItemDetail {
   readonly targetUuid: string | null;
   /** The label as stored (a string, or the per-language wrapper); read for the editing language by {@link storedLabel}. */
   readonly rawLabel: unknown;
+  /** "Visible in menu" as stored (absent = visible). */
+  readonly visible: boolean;
 }
 
 /** The label as stored for `locale`: a plain string, or the `L10N` wrapper's value for that language (`''` when untranslated). */
@@ -80,6 +83,7 @@ export function storedLabel(raw: unknown, locale: string | null): string {
     SfSaveStatusComponent,
     SfSectionComponent,
     SfStatusComponent,
+    SfSwitchComponent,
     TranslocoPipe,
   ],
   templateUrl: './nav-item-detail.component.html',
@@ -119,7 +123,13 @@ export class NavItemDetailComponent {
   /** The label as stored for the language being edited: what "has it changed?" compares against. */
   private readonly labelSeed = signal('');
 
-  protected readonly dirty = computed(() => this.picked() !== null || this.labelDraft() !== this.labelSeed());
+  /** "Visible in menu" as being edited, and as the server holds it. */
+  protected readonly visibleDraft = signal(true);
+  protected readonly visibleSeed = signal(true);
+
+  protected readonly dirty = computed(
+    () => this.picked() !== null || this.labelDraft() !== this.labelSeed() || this.visibleDraft() !== this.visibleSeed(),
+  );
   protected readonly saveState = computed<SfSaveState>(() =>
     this.saveError() ? 'error' : this.saving() ? 'saving' : this.dirty() ? 'dirty' : 'saved',
   );
@@ -239,6 +249,7 @@ export class NavItemDetailComponent {
             targetKind: this.picked() ? 'PAGE' : detail.targetKind,
             targetAssetUuid: targetUuid,
             label: this.labelDraft().trim() || undefined,
+            visibleInMenu: this.visibleDraft(),
           },
           detail.revision == null ? undefined : etagFor(detail.revision),
           // The label belongs to the language being edited (M24.4.1).
@@ -265,6 +276,7 @@ export class NavItemDetailComponent {
     this.picked.set(null);
     this.saveError.set(null);
     this.seedLabel();
+    this.seedVisible();
   }
 
   private editorState(): EditorStateService {
@@ -289,7 +301,7 @@ export class NavItemDetailComponent {
       if (this.entry().uuid !== uuid) {
         return;
       }
-      const payload = (view.payload ?? {}) as { target?: { kind?: string; assetUuid?: string }; label?: unknown };
+      const payload = (view.payload ?? {}) as { target?: { kind?: string; assetUuid?: string }; label?: unknown; visibleInMenu?: unknown };
       this.detail.set({
         uuid,
         revision: view.revision ?? null,
@@ -297,15 +309,23 @@ export class NavItemDetailComponent {
         targetKind: payload.target?.kind === 'FOLDER' ? 'FOLDER' : 'PAGE',
         targetUuid: payload.target?.assetUuid ?? null,
         rawLabel: payload.label,
+        visible: payload.visibleInMenu !== false,
       });
       this.loadFailed.set(false);
       if (!keepDrafts || !this.dirty()) {
         this.picked.set(null);
         this.seedLabel();
+        this.seedVisible();
       }
     } catch {
       this.loadFailed.set(true);
     }
+  }
+
+  private seedVisible(): void {
+    const visible = this.detail()?.visible ?? true;
+    this.visibleSeed.set(visible);
+    this.visibleDraft.set(visible);
   }
 
   private seedLabel(): void {

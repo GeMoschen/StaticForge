@@ -28,6 +28,8 @@ export interface StartNodeInput {
 export interface NavigationFolderPatch {
   displayName?: string;
   startNode?: StartNodeInput | null;
+  /** The "Visible in menu" flag; omitted = untouched. */
+  visibleInMenu?: boolean;
 }
 
 const BASE = '/api/v1';
@@ -111,6 +113,9 @@ export class NavigationService {
     if ('startNode' in patch) {
       body['startNode'] = patch.startNode;
     }
+    if (patch.visibleInMenu !== undefined) {
+      body['visibleInMenu'] = patch.visibleInMenu;
+    }
     return this.http.patch<NavigationFolderView>(
       `${BASE}/projects/${projectKey}/navigation/folders/${uuid}`,
       body,
@@ -132,6 +137,27 @@ export class NavigationService {
     const body: ReorderNavigationRequest = { childUuids: [...childUuids] };
     return this.http.put<NavigationFolderView>(
       `${BASE}/projects/${projectKey}/navigation/folders/${folderUuid}/order`,
+      body,
+      this.mutationOptions(etag),
+    );
+  }
+
+  /**
+   * Sets only the "Visible in menu" flag of a menu folder or item (one revision); an item keeps its target and label.
+   * Answers the revision the write produced.
+   */
+  setVisibleInMenu(
+    projectKey: string,
+    entry: { readonly kind: 'folder' | 'item'; readonly uuid: string },
+    visibleInMenu: boolean,
+    etag?: string,
+  ): Observable<{ revision?: number }> {
+    if (entry.kind === 'folder') {
+      return this.updateFolder(projectKey, entry.uuid, { visibleInMenu }, etag);
+    }
+    const body: UpdatePageReferenceRequest = { visibleInMenu };
+    return this.http.patch<PageReferenceView>(
+      `${BASE}/projects/${projectKey}/navigation/references/${entry.uuid}`,
       body,
       this.mutationOptions(etag),
     );

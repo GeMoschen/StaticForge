@@ -106,6 +106,31 @@ export class NavigationItemActions {
   }
 
   /**
+   * Shows or hides entries in the generated menu ("Visible in menu"), one revision each, in order; it stops at the first
+   * failure and what was changed before stays so. Entries that already have the value are skipped (they are not in
+   * `done`). Undo writes each entry's previous value back against the revision its own write produced.
+   */
+  async setVisibility(projectKey: string, entries: readonly NavEntry[], visible: boolean): Promise<NavChange> {
+    const done: NavEntry[] = [];
+    const steps: UndoStep[] = [];
+    try {
+      for (const entry of entries) {
+        if (entry.visible === visible || entry.protectedFolder) {
+          continue;
+        }
+        const result = await firstValueFrom(
+          this.nav.setVisibleInMenu(projectKey, entry, visible, entry.revision == null ? undefined : etagFor(entry.revision)),
+        );
+        done.push(entry);
+        steps.push(() => this.nav.setVisibleInMenu(projectKey, entry, !visible, result.revision == null ? undefined : etagFor(result.revision)));
+      }
+    } catch {
+      return { done, steps, failed: true };
+    }
+    return { done, steps, failed: false };
+  }
+
+  /**
    * Stores `order` as the order of `folderId`'s children (`null` = the top level, the wrapper); `previous` is what
    * Undo writes back. A stale folder revision (someone else changed the folder) fails like any write.
    */

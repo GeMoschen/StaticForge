@@ -69,8 +69,67 @@
   padding: var(--sf-space-4) var(--sf-space-6);
 }
 
+// The entry page line of a folder: what it opens when clicked in the menu, and the button that changes it (decision 169).
 .folder__entry {
-  max-width: 40rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sf-space-2);
+  min-width: 0;
+  font-size: var(--sf-fs-14);
+}
+
+.folder__entry-icon {
+  color: var(--sf-text-subtle);
+  font-size: var(--sf-fs-18);
+}
+
+.folder__entry-label,
+.folder__entry-where {
+  color: var(--sf-text-muted);
+}
+
+.folder__entry-value {
+  color: var(--sf-text);
+  font-weight: var(--sf-weight-medium);
+}
+
+.entry__lead {
+  margin: 0 0 var(--sf-space-3);
+  color: var(--sf-text-muted);
+}
+
+.entry__note {
+  margin: var(--sf-space-3) 0 0;
+  color: var(--sf-text-subtle);
+  font-size: var(--sf-fs-12);
+}
+
+.entry__footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--sf-space-2);
+}
+
+// The tree title opens the "All navigation" wrapper (decision 169): a button that looks like the title.
+.pane__title--link {
+  padding: var(--sf-space-1) var(--sf-space-2);
+  margin-inline-start: calc(var(--sf-space-2) * -1);
+  border: 0;
+  border-radius: var(--sf-radius-sm);
+  background: transparent;
+  cursor: pointer;
+  font-family: inherit;
+
+  &:hover,
+  &[aria-current='page'] {
+    background: var(--sf-hover);
+  }
+}
+
+.cell-label__text--muted {
+  color: var(--sf-text-muted);
+  font-weight: var(--sf-weight-regular);
 }
 
 .folder__table {

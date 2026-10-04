@@ -2288,26 +2288,26 @@
         "resize": "Resize the navigation tree",
         "reorderHint": "Drag to reorder, or press Alt+↑/↓.",
         "visible": "In menu",
-        "hidden": "Hidden in menu",
+        "hidden": "Hidden from menu",
         "emptyTitle": "Select a menu item",
         "emptyText": "Choose a menu item or folder in the tree to see where it leads.",
         "folderUrl": "Opens {url}",
         "entryPage": "Entry page",
         "entryPageHint": "Opens when the folder itself is clicked in the menu.",
-        "noEntryPage": "None",
+        "noEntryPage": "None — grouping only",
         "table": "Menu items in {name}",
         "tableEmpty": "This folder has no menu items yet",
         "columns": {
           "label": "Label",
           "target": "Target page",
           "url": "Public URL",
-          "visible": "In menu"
+          "visible": "Visible in menu"
         },
         "item": {
           "section": "Menu item",
           "label": "Label",
-          "showInMenu": "Show in menu",
-          "showInMenuHint": "A hidden item keeps its place but doesn’t appear on the website.",
+          "showInMenu": "Visible in menu",
+          "showInMenuHint": "A hidden item keeps its place and its page still exists, but the website’s menu leaves it out, with everything below it.",
           "target": "Target page",
           "noTarget": "No target page yet",
           "open": "Open",
@@ -2321,7 +2321,10 @@
         "actions": {
           "rename": "Rename",
           "duplicate": "Duplicate",
-          "delete": "Delete"
+          "delete": "Delete",
+          "entry": "Entry page…",
+          "show": "Show in menu",
+          "hide": "Hide from menu"
         },
         "deleted": "Deleted “{name}”",
         "targetChanged": "Now links to “{name}”",
@@ -2335,6 +2338,32 @@
           "folder": "A folder can’t be a target — choose a page in it.",
           "ok": "OK",
           "cancel": "Cancel"
+        },
+        "root": "All navigation",
+        "openRoot": "Open All navigation, with the menu’s entry page",
+        "entryChange": "Change…",
+        "entryNoPage": "→ no page yet",
+        "bulk": {
+          "show": "Show in menu",
+          "hide": "Hide from menu"
+        },
+        "hiddenToast": "{count, plural, one {“{name}” is hidden from the menu.} other {# entries are hidden from the menu.}}",
+        "shownToast": "{count, plural, one {“{name}” is in the menu again.} other {# entries are in the menu again.}}",
+        "entryToast": "“{name}” is now the entry page.",
+        "entryClearedToast": "The folder has no entry page now.",
+        "entry": {
+          "title": "Entry page — {name}",
+          "lead": "What this folder opens when it is clicked in the website’s menu. Choose one of the items or sub-folders inside it; a folder with no entry page only groups its items.",
+          "choices": "Entry page of the folder",
+          "none": "None — grouping only",
+          "noneHint": "The folder is not a link in the menu.",
+          "kindItem": "Menu item",
+          "kindFolder": "Folder",
+          "leadsTo": "{kind} · leads to {where}",
+          "leadsNowhere": "{kind} · leads to no page yet",
+          "empty": "This folder has nothing inside yet. Add a menu item or a sub-folder, then choose it here.",
+          "cancel": "Cancel",
+          "apply": "Apply"
         }
       },
       "globals": {
@@ -6306,7 +6335,8 @@
         "draft": "Draft",
         "scheduled": "Scheduled",
         "unpublished": "Unpublished",
-        "deletion": "Deletion pending"
+        "deletion": "Deletion pending",
+        "hidden": "Hidden from menu"
       },
       "delete": {
         "folderMessage": "A folder is deleted with every menu item inside it.",
@@ -6326,20 +6356,25 @@
         "reorderFailed": "Could not reorder “{name}” — the menu may have changed; it was read again.",
         "entrySet": "“{name}” is now the entry page.",
         "entryCleared": "The folder has no entry page now.",
-        "entryFailed": "Could not change the entry page — try again in a moment."
-      }
+        "entryFailed": "Could not change the entry page — try again in a moment.",
+        "shown": "{count, plural, one {“{name}” is in the menu again.} other {# entries are in the menu again.}}",
+        "hidden": "{count, plural, one {“{name}” is hidden from the menu.} other {# entries are hidden from the menu.}}",
+        "visibilityUnchanged": "Nothing changed — the selection already has that setting.",
+        "visibilityFailed": "Could not change “{name}” — try again in a moment."
+      },
+      "openRoot": "Open All navigation, with the menu’s entry page"
     },
     "shell": {
       "emptyTitle": "Select a menu item",
       "emptyText": "Choose a menu item or folder in the tree to see where it leads.",
       "emptyMenuTitle": "No menu yet",
-      "emptyMenuText": "Add menu items that lead to your pages, and group them in folders."
+      "emptyMenuText": "Add menu items that lead to your pages, and group them in folders.",
+      "openRoot": "Open All navigation"
     },
     "folder": {
       "folderUrl": "Opens {url}",
       "entryPage": "Entry page",
-      "entryPageHint": "Opens when the folder itself is clicked in the menu.",
-      "noEntryPage": "None",
+      "noEntryPage": "None — grouping only",
       "table": "Menu items in {name}",
       "tableEmpty": "This folder has no menu items yet",
       "tableEmptyHint": "Add a menu item with “New menu item”.",
@@ -6347,18 +6382,27 @@
       "columns": {
         "label": "Label",
         "target": "Target page",
-        "url": "Public URL"
+        "url": "Public URL",
+        "visible": "Visible in menu"
       },
       "bulk": {
         "move": "Move…",
-        "delete": "Delete"
+        "delete": "Delete",
+        "show": "Show in menu",
+        "hide": "Hide from menu"
       },
       "menu": {
+        "entryPage": "Entry page…",
         "rename": "Rename",
         "move": "Move…",
+        "show": "Show in menu",
+        "hide": "Hide from menu",
         "delete": "Delete…"
       },
-      "newMenuItem": "New menu item"
+      "newMenuItem": "New menu item",
+      "root": "All navigation",
+      "entryChange": "Change…",
+      "entryNoPage": "→ no page yet"
     },
     "item": {
       "section": "Menu item",
@@ -6387,7 +6431,28 @@
         "save": "Save now",
         "move": "Move…",
         "delete": "Delete…"
-      }
+      },
+      "visibleInMenu": "Visible in menu",
+      "visibleInMenuHint": "A hidden item keeps its place here and its page still exists, but the website’s menu leaves it out, with everything below it."
+    },
+    "entry": {
+      "title": "Entry page — {name}",
+      "lead": "What this folder opens when it is clicked in the website’s menu. Choose one of the items or sub-folders inside it; a folder with no entry page only groups its items.",
+      "choices": "Entry page of the folder",
+      "none": "None — grouping only",
+      "noneHint": "The folder is not a link in the menu.",
+      "kindItem": "Menu item",
+      "kindFolder": "Folder",
+      "leadsTo": "{kind} · leads to {where}",
+      "leadsNowhere": "{kind} · leads to no page yet",
+      "empty": "This folder has nothing inside yet. Add a menu item or a sub-folder, then choose it here.",
+      "readOnly": "You can look at the entry page, but not change it here.",
+      "cancel": "Cancel",
+      "apply": "Apply"
+    },
+    "status": {
+      "visible": "In menu",
+      "hidden": "Hidden from menu"
     }
   },
   "media": {

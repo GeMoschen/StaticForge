@@ -2,6 +2,13 @@
   <sf-page-header [title]="title()" [secondaryActions]="moreActions()" (secondaryAction)="onMore($event)">
     <span sfPageHeaderStatus class="detail__title-extras">
       <sf-asset-favorite type="PAGE_REFERENCE" [uuid]="entry().uuid" [name]="title()" [folderPath]="detail()?.folderPath ?? undefined" />
+      @if (detail()) {
+        @if (visibleSeed()) {
+          <sf-status size="sm" tone="success" icon="visibility" [label]="'navigation.status.visible' | transloco" />
+        } @else {
+          <sf-status size="sm" tone="neutral" icon="visibility_off" [label]="'navigation.status.hidden' | transloco" />
+        }
+      }
     </span>
     <ng-container sfPageHeaderActions>
       <sf-save-status class="detail__status" [state]="saveState()" [savedAt]="savedAt()" />
@@ -42,6 +49,10 @@
             [disabled]="!canEdit()"
             (valueChange)="labelDraft.set($event)"
           />
+        </sf-field>
+
+        <sf-field class="form__wide" [label]="'navigation.item.visibleInMenu' | transloco" [hint]="'navigation.item.visibleInMenuHint' | transloco">
+          <sf-switch [value]="visibleDraft()" [disabled]="!canEdit()" (valueChange)="visibleDraft.set($event)" />
         </sf-field>
 
         <sf-field class="form__wide" [label]="'navigation.item.target' | transloco">

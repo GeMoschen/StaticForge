@@ -86,6 +86,14 @@ final class FakeNavigationLookup implements NavigationLookup {
         assets.put(folderUuid, new NavigationAsset(folderUuid, AssetType.FOLDER, existing.uid(), existing.displayName(), payload));
     }
 
+    /** Sets the "Visible in menu" flag of a folder or page reference (absent in a fresh asset = visible). */
+    void setVisibleInMenu(UUID uuid, boolean visible) {
+        NavigationAsset existing = assets.get(uuid);
+        ObjectNode payload = existing.payload().deepCopy();
+        payload.put("visibleInMenu", visible);
+        assets.put(uuid, new NavigationAsset(uuid, existing.type(), existing.uid(), existing.displayName(), payload));
+    }
+
     /** A page with an explicit UID (every other page's UID is its uuid). */
     UUID addPageWithUid(UUID parent, String uid, String displayName, int navPosition) {
         UUID uuid = addPage(parent, displayName, navPosition);

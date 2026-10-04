@@ -126,7 +126,7 @@
                   }
                 </span>
               } @else {
-                <span class="sf-tree__name" [attr.data-node-id]="row.id">
+                <span class="sf-tree__name" [class.sf-tree__name--muted]="row.node.muted" [attr.data-node-id]="row.id">
                   @for (segment of segments(row); track $index) {
                     @if (segment.match) {
                       <mark class="sf-tree__match">{{ segment.text }}</mark>

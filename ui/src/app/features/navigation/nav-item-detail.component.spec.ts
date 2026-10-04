@@ -59,6 +59,9 @@ const ENTRY: NavEntry = {
   release: null,
   scheduled: false,
   revision: 3,
+  visible: true,
+  protectedFolder: false,
+  entry: null,
 };
 const URLS = new Map([
   ['p-about', '/about-us/'],
@@ -176,7 +179,7 @@ describe('NavItemDetailComponent (menu item)', () => {
         expect(nav['updateReference']).toHaveBeenCalledWith(
           'proj',
           'n-about',
-          { targetKind: 'PAGE', targetAssetUuid: 'p-new', label: 'About us' },
+          { targetKind: 'PAGE', targetAssetUuid: 'p-new', label: 'About us', visibleInMenu: true },
           '"rev-3"',
           undefined,
         ),
@@ -198,13 +201,64 @@ describe('NavItemDetailComponent (menu item)', () => {
         expect(nav['updateReference']).toHaveBeenCalledWith(
           'proj',
           'n-about',
-          { targetKind: 'PAGE', targetAssetUuid: 'p-about', label: 'Wer wir sind' },
+          { targetKind: 'PAGE', targetAssetUuid: 'p-about', label: 'Wer wir sind', visibleInMenu: true },
           '"rev-3"',
           'de',
         ),
       );
       await waitFor(() => expect(toasts.toasts().at(-1)?.message).toBe('Menu item saved.'));
       expect(fixture.componentInstance).toBeTruthy();
+    });
+
+    describe('Visible in menu', () => {
+      const visibleSwitch = () => screen.getByRole('switch', { name: /Visible in menu/ });
+
+      it('is a switch that is on when the item has no flag stored (everything stored before it is visible)', async () => {
+        await setup();
+        await waitFor(() => expect(visibleSwitch()).toBeChecked());
+        expect(await screen.findByText('In menu')).toBeTruthy();
+      });
+
+      it('is a draft until saved: turning it off makes the item dirty, Save sends it with the target and label', async () => {
+        const { nav, editors } = await setup();
+        await waitFor(() => expect(labelInput().value).toBe('About us'));
+        fireEvent.click(visibleSwitch());
+
+        expect(visibleSwitch()).not.toBeChecked();
+        expect(editors.active()!.dirty()).toBe(true);
+        expect(nav['updateReference']).not.toHaveBeenCalled();
+
+        fireEvent.click(saveButton());
+        await waitFor(() =>
+          expect(nav['updateReference']).toHaveBeenCalledWith(
+            'proj',
+            'n-about',
+            { targetKind: 'PAGE', targetAssetUuid: 'p-about', label: 'About us', visibleInMenu: false },
+            '"rev-3"',
+            undefined,
+          ),
+        );
+      });
+
+      it('shows a stored false as off with the Hidden status, and discard gives a change up', async () => {
+        const { editors } = await setup({
+          entry: { ...ENTRY, visible: false },
+          payload: { target: { kind: 'PAGE', assetUuid: 'p-about' }, label: 'About us', visibleInMenu: false },
+        });
+        await waitFor(() => expect(visibleSwitch()).not.toBeChecked());
+        expect(screen.getByText('Hidden from menu')).toBeTruthy();
+
+        fireEvent.click(visibleSwitch());
+        expect(editors.active()!.dirty()).toBe(true);
+        await editors.active()!.discard();
+        await waitFor(() => expect(visibleSwitch()).not.toBeChecked());
+        expect(editors.active()!.dirty()).toBe(false);
+      });
+
+      it('cannot be changed by a viewer', async () => {
+        await setup({ role: 'VIEWER' });
+        expect(visibleSwitch()).toBeDisabled();
+      });
     });
 
     it('registers as an editor: unsaved edits are dirty for Ctrl+S and the leave guard, and discard gives them up', async () => {

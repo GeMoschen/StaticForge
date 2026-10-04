@@ -331,6 +331,21 @@ public class FolderServiceImpl implements FolderService {
 
     @Override
     @Transactional
+    public AssetVersionView updateVisibleInMenu(UUID uuid, boolean visibleInMenu, long expectedRevision, RevisionContext ctx) {
+        Asset folder = requireFolder(uuid, ctx.projectId());
+        AssetVersion current = requireOpen(folder.getId());
+        FolderScope scope = FolderScope.fromPayload(current.getPayload());
+        if (scope != FolderScope.NAVIGATION) {
+            throw new SfException(ProblemFactory.unprocessableEntity("Visible in menu only applies to navigation folders."));
+        }
+        requireNotProtected(current, "hidden from the menu");
+        ObjectNode payload = current.getPayload().deepCopy();
+        MenuVisibility.write(payload, visibleInMenu);
+        return assetService.update(uuid, new UpdateAssetCommand(current.getDisplayName(), payload), expectedRevision, ctx);
+    }
+
+    @Override
+    @Transactional
     public MoveResult move(UUID folderUuid, UUID targetParentFolderUuid, RevisionContext ctx) {
         Asset folder = requireFolder(folderUuid, ctx.projectId());
         AssetVersion current = requireOpen(folder.getId());

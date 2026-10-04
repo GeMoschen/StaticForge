@@ -1,6 +1,6 @@
 import type { components } from '../../core/api/generated/schema.d.ts';
 import type { Crumb } from '../../core/frame/breadcrumb.util';
-import type { SfTreeNode } from '../../shared/components/tree/tree-model';
+import type { SfTreeBadge, SfTreeNode } from '../../shared/components/tree/tree-model';
 import { type TreeStatusLabels, treeBadge } from '../pages/pages-tree.util';
 import type { ReleaseBlock } from '../release/release-status.util';
 import type { NavTreeView } from './navigation.service';
@@ -22,6 +22,12 @@ export interface NavEntry {
   readonly release: ReleaseBlock;
   readonly scheduled: boolean;
   readonly revision: number | null;
+  /** The "Visible in menu" flag: a hidden entry stays here but is left out of the website's menu (absent on the server = visible). */
+  readonly visible: boolean;
+  /** The fixed "All Navigation" wrapper (no rename, move or delete). */
+  readonly protectedFolder: boolean;
+  /** A folder's entry page: its direct child opened when the folder itself is clicked in the menu; `null` for none and for items. */
+  readonly entry: { readonly kind: 'PAGE_REFERENCE' | 'FOLDER'; readonly uuid: string } | null;
 }
 
 /**
@@ -31,6 +37,8 @@ export interface NavEntry {
  */
 export interface NavIndex {
   readonly rootUuid: string | null;
+  /** The wrapper as a folder entry (its label is the server's name; the screen shows "All navigation"); `null` before the first read. */
+  readonly root: NavEntry | null;
   /** The wrapper's revision: the `If-Match` of a reorder at the top level. */
   readonly rootRevision: number | null;
   readonly entries: ReadonlyMap<string, NavEntry>;
@@ -42,6 +50,7 @@ export interface NavIndex {
 
 export const EMPTY_NAV_INDEX: NavIndex = {
   rootUuid: null,
+  root: null,
   rootRevision: null,
   entries: new Map(),
   parentOf: new Map(),
@@ -62,6 +71,12 @@ function entryOf(node: NavTreeView): NavEntry {
     release: node.release,
     scheduled: (node.scheduled?.length ?? 0) > 0,
     revision: node.revision ?? null,
+    visible: node.visibleInMenu !== false,
+    protectedFolder: node.protectedFolder === true,
+    entry:
+      folder && node.startNode?.assetUuid && (node.startNode.kind === 'PAGE_REFERENCE' || node.startNode.kind === 'FOLDER')
+        ? { kind: node.startNode.kind, uuid: node.startNode.assetUuid }
+        : null,
   };
 }
 
@@ -90,7 +105,14 @@ export function buildNavIndex(forest: readonly NavTreeView[]): NavIndex {
   for (const child of root?.children ?? []) {
     walk(child, null);
   }
-  return { rootUuid: root?.uuid ?? null, rootRevision: root?.revision ?? null, entries, parentOf, childrenOf };
+  return {
+    rootUuid: root?.uuid ?? null,
+    root: root?.uuid ? entryOf(root) : null,
+    rootRevision: root?.revision ?? null,
+    entries,
+    parentOf,
+    childrenOf,
+  };
 }
 
 /** Whether the menu has anything in it. */
@@ -98,9 +120,10 @@ export function isEmptyNavIndex(index: NavIndex): boolean {
   return index.entries.size === 0;
 }
 
-/** The entries directly inside a folder (`null` = the top level), in menu order. Pure. */
+/** The entries directly inside a folder (`null`, or the wrapper's uuid = the top level), in menu order. Pure. */
 export function navChildren(index: NavIndex, parentId: string | null): NavEntry[] {
-  return (index.childrenOf.get(parentId) ?? []).flatMap((uuid) => {
+  const key = parentId !== null && parentId === index.rootUuid ? null : parentId;
+  return (index.childrenOf.get(key) ?? []).flatMap((uuid) => {
     const entry = index.entries.get(uuid);
     return entry ? [entry] : [];
   });
@@ -130,6 +153,8 @@ export interface NavNodeOptions {
   readonly locale: string | null;
   readonly labels: TreeStatusLabels;
   readonly urls: NavUrls;
+  /** The word for an entry hidden from the menu (the tree marks it with this and an eye-off icon). */
+  readonly hiddenLabel?: string;
 }
 
 /** The public URL an entry leads to, `null` while it has none or none is known yet. */
@@ -151,12 +176,17 @@ export function navSecondary(entry: NavEntry, options: Pick<NavNodeOptions, 'dev
 function nodeOf(entry: NavEntry, index: NavIndex, options: NavNodeOptions): SfTreeNode<NavEntry> {
   const folder = entry.kind === 'folder';
   const status = treeBadge(entry.release, entry.scheduled, options.locale, options.labels);
+  const badges: SfTreeBadge[] = status ? [status] : [];
+  if (!entry.visible) {
+    badges.push({ label: options.hiddenLabel ?? 'Hidden', tone: 'neutral', icon: 'visibility_off' });
+  }
   return {
     id: entry.uuid,
     label: entry.label,
     icon: folder ? 'folder' : 'link',
     secondary: navSecondary(entry, options),
-    badges: status ? [status] : [],
+    badges,
+    muted: !entry.visible,
     hasChildren: folder && (index.childrenOf.get(entry.uuid)?.length ?? 0) > 0,
     droppable: folder,
     data: entry,

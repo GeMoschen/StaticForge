@@ -101,7 +101,7 @@ off this task.
     items can be reordered among their siblings — drag before/after and `Alt+↑/↓` in the tree. `sf-tree` gets this as
     an opt-in (`reorderable`, only with `sort="none"`); M35.22 needs a backend for sibling order (note added there).
 24. **Navigation area:** the tree in navigation order with labels as "Company → /about-us/"; a selected menu folder
-    shows an `sf-data-table` of its items (label, target page, public URL, visible in menu); a menu item's detail
+    shows an `sf-data-table` of its items (label, target page, public URL, visible in menu — see decisions 168–171); a menu item's detail
     shows the target page as a picker card, and "Change target" opens the restyled page picker dialog.
 25. **Globals area:** a tree of global sets with a filter; "Site settings" (site name, contact e-mail, opening hours
     as a list, social links as a catalog of cards, footer text localized with language chips) and "Shop settings"
@@ -684,6 +684,29 @@ Review links (they combine with the usual `dev`, `theme`, `density`; read once, 
 166. **Code highlighting palette (decision 18, decided 2026-10-04):** *Current* stays the default and *Refined* stays selectable, **per user in the account preferences** (next to Theme and Density); the switch leaves the template header.
 167. **Dataset editing:** the sample's dataset view is read-only (overview, schema, rules, record templates); **Decided 2026-10-04: the dataset editor is redone** on the sample's tabs (overview with fields table and Used by, schema and rules as CDL code panels, record template per channel as OCTL panels) with the same editing behaviour as the app. Its ⋮ has the
     same Rename… / Duplicate / Used by / Delete as the other items.
+
+## Review round 14 (2026-10-04): navigation — Visible in menu and the entry page (signed off 2026-10-04 (user instruction))
+
+Added to the sample for the M35.22 follow-up (`/styleguide/sample?area=navigation&nav=…`). **Signed off 2026-10-04 (user instruction)** — the user decided both features
+and the app was built to match; decisions continue after 167.
+
+| Param | What it shows |
+|---|---|
+| `area=navigation&nav=n-coffee` | a folder: the *Entry page* line with **Change…**, the table with **Visible in menu**, bulk *Show in menu* / *Hide from menu* once rows are selected |
+| `area=navigation&nav=n-root` (or click the tree title *Navigation*) | the fixed "All navigation" wrapper: its entry page and the top level; ⋮ has only *Entry page…* |
+| `area=navigation&nav=n-imprint` | a hidden item: muted in the tree with its *Hidden from menu* marker, the switch off |
+
+168. **Visible in menu (end to end):** every menu item and menu folder has the flag, **on unless it says otherwise** (everything stored before is visible). An entry that is off is **left out of
+    the generated menus** (`$CMS_NAVIGATION`, `$CMS_FOR … nav:`, the default HTML) **together with everything below it**; it stays in the Navigation tree and table, its page still exists and builds, and
+    entry-page, breadcrumb and first-page resolution ignore the flag. UI: a **Visible in menu** column (sortable; *In menu* / *Hidden from menu* with an eye icon), a **Visible in menu** switch in the menu
+    item (saved with Save / Ctrl+S like label and target; the header shows the saved state), **Hide from menu / Show in menu** in a folder's ⋮ menu, the tree's context menu and as **bulk actions** on the
+    selected rows — one revision per entry, one Undo toast for the group. The sample's wording changed from *In menu* / *Show in menu* to **Visible in menu** (column and switch) to match.
+169. **Entry page (navigation):** every menu folder **including the "All navigation" wrapper** has an *Entry page* — the direct child (menu item or sub-folder) its link in the menu opens; label *Entry page*
+    here, *Start page* for pages. The folder view's header carries a line **Entry page: *Company* → Our story** (or **None — grouping only**) with **Change…**; *Entry page…* is also in the folder's ⋮ menu and
+    the tree's context menu. It opens a right-hand **drawer** (non-modal `sf-drawer`) with a radio list — *None — grouping only* and every direct child with where it leads — and **Apply** (one revision, Undo toast).
+    A page is chosen through its menu item (the server accepts only a direct child). Read-only for viewers, time travel and archived projects. This replaces the inline select of the first sample.
+170. **Reaching the wrapper:** the tree title (*Navigation*) is a button that opens "All navigation" as a folder view (the empty state offers the same); it has no rename, move, hide, delete or favorite.
+171. **Hidden marker in the tree:** a hidden entry's name is **muted** and carries the neutral eye-off badge *Hidden from menu* (after any release status); it keeps its place in the menu order and in the filter.
 
 ## Notes / hazards
 

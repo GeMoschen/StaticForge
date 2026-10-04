@@ -3084,6 +3084,7 @@ export interface components {
             folderPath?: string;
             protectedFolder?: boolean;
             startNode?: components["schemas"]["NavigationStartNodeView"];
+            visibleInMenu?: boolean;
         };
         NavigationStartNodeView: {
             kind?: string;
@@ -3748,6 +3749,7 @@ export interface components {
             labelL10n?: {
                 [key: string]: string;
             };
+            visibleInMenu?: boolean;
             release?: {
                 [key: string]: components["schemas"]["LocaleReleaseView"];
             };
@@ -4218,6 +4220,7 @@ export interface components {
             /** Format: uuid */
             targetAssetUuid?: string;
             label?: string;
+            visibleInMenu?: boolean;
         };
         UidChangeRequest: {
             uid?: string;
@@ -4590,6 +4593,8 @@ export interface components {
             resolvedPagePath?: string;
             resolvedPageName?: string;
             protectedFolder?: boolean;
+            visibleInMenu?: boolean;
+            startNode?: components["schemas"]["NavigationStartNodeView"];
             /** Format: int64 */
             revision?: number;
             children?: components["schemas"]["NavTreeView"][];
