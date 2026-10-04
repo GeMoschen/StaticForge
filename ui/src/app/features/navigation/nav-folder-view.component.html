@@ -55,6 +55,8 @@
     [rowKey]="rowKey"
     [rowLabel]="rowLabel"
     [bulkActions]="bulkActions()"
+  [rowMenu]="rowMenu"
+  [emptyMenu]="emptyMenu"
     [loading]="loading()"
     [error]="failed() ? ('navigation.folder.loadFailed' | transloco) : null"
     [label]="'navigation.folder.table' | transloco: { name: folder().label }"
@@ -65,7 +67,7 @@
   >
     <ng-template sfDataTableCell="label" [sfDataTableCellRows]="rows()" let-row>
       <span class="cell-label">
-        <sf-icon class="cell-label__icon" [name]="row.entry.kind === 'folder' ? 'folder' : 'link'" />
+        <sf-icon class="cell-label__icon" [class.is-folder]="row.entry.kind === 'folder'" [name]="row.entry.kind === 'folder' ? 'folder' : 'link'" />
         <span class="cell-label__text" [class.cell-label__text--muted]="!row.entry.visible">{{ row.entry.label }}</span>
         @if (row.isEntryPage) {
           <sf-badge tone="accent" icon="login" [label]="'navigation.folder.entryPage' | transloco" />

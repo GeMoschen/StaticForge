@@ -99,6 +99,7 @@
   tabindex="-1"
   (scroll)="onScroll()"
   (keydown)="onScrollerKeydown($event)"
+  (contextmenu)="onContextMenu($event)"
 >
   @if (showSkeleton()) {
     <sf-skeleton shape="table" [rows]="8" />

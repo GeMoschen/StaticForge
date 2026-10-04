@@ -21,12 +21,8 @@
 }
 
 .card__folder-icon {
-  color: var(--sf-text-muted);
+  color: var(--sf-accent);
   font-size: var(--sf-fs-30);
-}
-
-.card--folder:hover .card__folder-icon {
-  color: var(--sf-text);
 }
 
 .grid__sentinel {

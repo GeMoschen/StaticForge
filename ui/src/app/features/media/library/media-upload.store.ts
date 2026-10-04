@@ -130,6 +130,21 @@ export class MediaUploadStore implements OnDestroy {
 
   // ── Picking and dropping ───────────────────────────────────────────────────
 
+  /** Opens the browser's file dialog (for entries other than the toolbar's Upload button, which has its own input). */
+  pickFiles(folderUuid: string = this.library.folderUuid()): void {
+    if (!this.canUpload()) {
+      return;
+    }
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.multiple = true;
+    input.addEventListener('change', () => {
+      const files = Array.from(input.files ?? []);
+      this.upload(files, folderUuid);
+    });
+    input.click();
+  }
+
   onFileInput(event: Event): void {
     const input = event.target as HTMLInputElement;
     const files = Array.from(input.files ?? []);
@@ -168,8 +183,8 @@ export class MediaUploadStore implements OnDestroy {
     this.upload(Array.from(event.dataTransfer?.files ?? []));
   }
 
-  /** Checks the files and starts the ones that pass, into the folder that is open now. */
-  upload(files: readonly File[]): void {
+  /** Checks the files and starts the ones that pass, into `folderUuid` (default: the folder that is open now; `''` is the top level). */
+  upload(files: readonly File[], folderUuid: string = this.library.folderUuid()): void {
     if (files.length === 0) {
       return;
     }
@@ -178,7 +193,6 @@ export class MediaUploadStore implements OnDestroy {
       return;
     }
     const projectKey = this.library.projectKey();
-    const folderUuid = this.library.folderUuid();
     const folderLabel = this.folderLabel(folderUuid);
     const rows: UploadItem[] = [];
     for (const file of files) {

@@ -1,3 +1,5 @@
+import { bulkActionsAsMenu } from '../../shared/components/data-table/data-table-menu';
+import type { ContextMenuItem } from '../../shared/services/context-menu.service';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -169,6 +171,23 @@ export class FolderViewComponent {
     }
     return columns;
   });
+
+  /** A right click on a row: *Open* (one row) and the bulk actions, acting on the row or on the selection it is part of. */
+  protected readonly rowMenu = (rows: FolderRow[]): ContextMenuItem[] => [
+    ...(rows.length === 1
+      ? [{ label: this.transloco.translate('shared.dataTable.open'), icon: 'open_in_new', shortcut: 'Enter', action: () => this.open(rows[0]) }]
+      : []),
+    ...bulkActionsAsMenu(this.bulkActions(), rows, this.rowKey),
+  ];
+
+  /** A right click on empty space acts as one on the open folder: only the *New …* options. */
+  protected readonly emptyMenu = (): ContextMenuItem[] =>
+    this.readOnly()
+      ? []
+      : [
+          { label: this.transloco.translate('pages.folder.newPage'), icon: 'note_add', action: () => this.newPage() },
+          { label: this.transloco.translate('pages.folder.newFolder'), icon: 'create_new_folder', action: () => this.newFolder() },
+        ];
 
   protected readonly bulkActions = computed<SfDataTableBulkAction<FolderRow>[]>(() => {
     const t = (id: string) => this.transloco.translate(`pages.bulk.${id}`);

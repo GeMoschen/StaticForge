@@ -1,3 +1,5 @@
+import { bulkActionsAsMenu } from '../../shared/components/data-table/data-table-menu';
+import type { ContextMenuItem } from '../../shared/services/context-menu.service';
 import { ChangeDetectionStrategy, Component, computed, inject, input, output } from '@angular/core';
 import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
 import { DeveloperModeService } from '../../core/frame/developer-mode.service';
@@ -124,6 +126,18 @@ export class NavFolderViewComponent {
       { id: 'visible', header: t('visible'), value: (row) => (row.entry.visible ? 1 : 0), sortable: true, width: 170 },
     ];
   });
+
+  /** A right click on a row: *Open* (one row) and the bulk actions, acting on the row or on the selection it is part of. */
+  protected readonly rowMenu = (rows: NavRow[]): ContextMenuItem[] => [
+    ...(rows.length === 1
+      ? [{ label: this.transloco.translate('shared.dataTable.open'), icon: 'open_in_new', shortcut: 'Enter', action: () => this.openEntry.emit(rows[0].entry.uuid) }]
+      : []),
+    ...bulkActionsAsMenu(this.bulkActions(), rows, this.rowKey),
+  ];
+
+  /** A right click on empty space acts as one on the open folder: only the *New …* option. */
+  protected readonly emptyMenu = (): ContextMenuItem[] =>
+    this.canEdit() ? [{ label: this.transloco.translate('navigation.tree.newMenuItem'), icon: 'add_link', action: () => this.newItem.emit() }] : [];
 
   protected readonly bulkActions = computed<SfDataTableBulkAction<NavRow>[]>(() => {
     if (!this.canEdit()) {

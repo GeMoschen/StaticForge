@@ -99,6 +99,10 @@
   flex-shrink: 0;
   color: var(--sf-text-subtle);
   font-size: var(--sf-fs-18);
+
+  &.is-folder {
+    color: var(--sf-accent);
+  }
 }
 
 .cell-label__text {

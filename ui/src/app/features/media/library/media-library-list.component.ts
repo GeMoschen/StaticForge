@@ -6,7 +6,6 @@ import { SfDataTableComponent } from '../../../shared/components/data-table/sf-d
 import { SfRelativeTimeComponent } from '../../../shared/components/display/sf-relative-time.component';
 import { SfStatusComponent } from '../../../shared/components/display/sf-status.component';
 import { SfIconComponent } from '../../../shared/components/sf-icon.component';
-import { SfMenuComponent } from '../../../shared/components/menu/sf-menu.component';
 import { SfAssetFavoriteComponent } from '../../../shared/components/sf-asset-favorite.component';
 import { SfFileSizePipe } from '../../../shared/pipes/sf-file-size.pipe';
 import { MediaFolderActions } from './media-folder-actions';
@@ -48,7 +47,6 @@ const area = (row: MediaListRow): number => (isFolderRow(row) ? 0 : (row.width ?
     SfAssetFavoriteComponent,
     SfFileSizePipe,
     SfIconComponent,
-    SfMenuComponent,
     SfRelativeTimeComponent,
     SfStatusComponent,
     TranslocoPipe,
@@ -99,7 +97,6 @@ export class MediaLibraryListComponent {
       { id: 'size', header: header('size'), value: (r) => (isFolderRow(r) ? 0 : (r.sizeBytes ?? 0)), sortable: true, align: 'end', width: 84 },
       { id: 'modified', header: header('modified'), value: (r) => (isFolderRow(r) ? 0 : changedTime(r)), sortable: true, width: 104 },
       { id: 'usages', header: header('usages'), value: (r) => (isFolderRow(r) ? 0 : (r.usageCount ?? 0)), sortable: true, align: 'end', width: 92 },
-      { id: 'actions', header: header('actions'), searchable: false, hideable: false, width: 72 },
     ];
   });
 
@@ -152,6 +149,10 @@ export class MediaLibraryListComponent {
   protected onContextMenu(event: MouseEvent): void {
     const hit = this.rowTarget(event.target);
     if (!hit) {
+      // Empty space below the rows (not the header): the open folder's menu.
+      if (event.target instanceof Element && event.target.closest('.sf-data-table__scroller') && !event.target.closest('thead')) {
+        this.folders.openFolderContextMenu(event);
+      }
       return;
     }
     if (this.suppressContextMenu) {

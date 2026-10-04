@@ -549,6 +549,7 @@
       "moveColumnLeft": "Move {name} left",
       "moveColumnRight": "Move {name} right",
       "bulkActions": "Bulk actions",
+      "open": "Open",
       "filterChip": "{filter}: {value}"
     },
     "splitter": {
@@ -6544,8 +6545,7 @@
         "dimensions": "Dimensions",
         "size": "Size",
         "modified": "Modified",
-        "usages": "Used by",
-        "actions": "Actions"
+        "usages": "Used by"
       }
     },
     "empty": {

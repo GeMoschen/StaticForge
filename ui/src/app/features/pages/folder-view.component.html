@@ -19,6 +19,8 @@
   [label]="'pages.folder.table' | transloco: { name: title() }"
   [searchPlaceholder]="'pages.folder.search' | transloco"
   [bulkActions]="bulkActions()"
+  [rowMenu]="rowMenu"
+  [emptyMenu]="emptyMenu"
   [loading]="loading()"
   [error]="failed() ? ('pages.folder.loadFailed' | transloco) : null"
   [emptyTitle]="'pages.folder.empty' | transloco"

@@ -209,7 +209,8 @@ export class ShortcutService implements OnDestroy {
   }
 
   private onKeydown(event: KeyboardEvent): void {
-    if (event.defaultPrevented || event.repeat || event.isComposing || isModifierKey(event) || this.overlays.hasModal) {
+    // Autofill and password managers dispatch keydown events without a `key`: not a key press.
+    if (typeof event.key !== 'string' || event.defaultPrevented || event.repeat || event.isComposing || isModifierKey(event) || this.overlays.hasModal) {
       return;
     }
     const typing = this.isEditable(event.target);

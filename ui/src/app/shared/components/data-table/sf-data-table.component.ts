@@ -24,6 +24,7 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, ParamMap, Router } from '@angular/router';
 import { TranslocoPipe } from '@jsverse/transloco';
 import { ShortcutService } from '../../../core/ui/shortcut.service';
+import { ContextMenuService, type ContextMenuItem } from '../../services/context-menu.service';
 import { PreferencesService } from '../../../core/preferences/preferences.service';
 import type { TableColumnsPreference } from '../../../core/preferences/preferences.types';
 import { SfVirtualScrollDirective } from '../../virtual/virtual-window';
@@ -205,6 +206,13 @@ export class SfDataTableComponent<T> implements OnInit, OnDestroy {
   readonly rowsOpenable = input(true, { transform: booleanAttribute });
   readonly selectable = input(false, { transform: booleanAttribute });
   readonly bulkActions = input<readonly SfDataTableBulkAction<T>[]>([]);
+  /**
+   * The menu of a right click on a row (or Shift+F10 / the menu key on it): the entries for the rows it acts on — the
+   * selection when the row is part of a selection of several, else the row alone. No entries, no menu.
+   */
+  readonly rowMenu = input<((rows: T[]) => ContextMenuItem[]) | null>(null);
+  /** The menu of a right click on empty space (below the rows); no entries, no menu. */
+  readonly emptyMenu = input<(() => ContextMenuItem[]) | null>(null);
   readonly searchable = input(false, { transform: booleanAttribute });
   readonly searchPlaceholder = input<string | null>(null);
   /** Search typing settles for this long (ms) before the query changes; 0 applies every keystroke. */
@@ -239,6 +247,7 @@ export class SfDataTableComponent<T> implements OnInit, OnDestroy {
   private readonly scroller = viewChild<ElementRef<HTMLElement>>('scroller');
 
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef).nativeElement;
+  private readonly contextMenu = inject(ContextMenuService);
   private readonly changeDetector = inject(ChangeDetectorRef);
   private readonly injector = inject(Injector);
   private readonly destroyRef = inject(DestroyRef);
@@ -800,6 +809,43 @@ export class SfDataTableComponent<T> implements OnInit, OnDestroy {
 
   // ── Row keyboard and pointer ──────────────────────────────────────────────
 
+  /** A right click: a row's menu, or the empty-space menu below the rows (the header has none). */
+  protected onContextMenu(event: MouseEvent): void {
+    const target = event.target instanceof Element ? event.target : null;
+    if (target?.closest('thead, .sf-data-table__spacer')) {
+      return;
+    }
+    const rowElement = target?.closest<HTMLElement>('tr.sf-data-table__row');
+    if (!rowElement) {
+      const items = this.emptyMenu()?.() ?? [];
+      if (items.length) {
+        event.preventDefault();
+        this.contextMenu.open(event, items);
+      }
+      return;
+    }
+    const row = this.pageRows()[Number(rowElement.dataset['rowIndex'])];
+    if (row !== undefined) {
+      this.openRowMenu(event, row);
+    }
+  }
+
+  private openRowMenu(target: MouseEvent | KeyboardEvent | HTMLElement, row: T): void {
+    const builder = this.rowMenu();
+    if (!builder) {
+      return;
+    }
+    const selected = this.selection().rows;
+    const rows = this.isSelected(row) && selected.length > 1 ? selected : [row];
+    const items = builder(rows);
+    if (items.length) {
+      if (!(target instanceof HTMLElement)) {
+        target.preventDefault();
+      }
+      this.contextMenu.open(target, items);
+    }
+  }
+
   protected onRowKeydown(event: KeyboardEvent, row: T, index: number): void {
     if (event.target !== event.currentTarget) {
       return; // keys typed into a control inside a cell are its own
@@ -843,6 +889,14 @@ export class SfDataTableComponent<T> implements OnInit, OnDestroy {
       case 'Enter':
         event.preventDefault();
         this.rowOpen.emit(row);
+        break;
+      case 'ContextMenu':
+        this.openRowMenu(event, row);
+        break;
+      case 'F10':
+        if (event.shiftKey) {
+          this.openRowMenu(event, row);
+        }
         break;
       case 'a':
       case 'A':

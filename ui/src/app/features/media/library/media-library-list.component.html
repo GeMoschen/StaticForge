@@ -79,13 +79,4 @@
       <span class="list-muted">—</span>
     }
   </ng-template>
-  <ng-template sfDataTableCell="actions" [sfDataTableCellRows]="rows()" let-row>
-    @if (fileOf(row); as file) {
-      <sf-menu size="sm" [items]="items.menuItems(file)" [label]="'media.menu.label' | transloco: { name: file.displayName }" />
-    } @else {
-      @if (folderOf(row); as folderRow) {
-        <sf-menu size="sm" [items]="folders.menuItems(folderRow.folder)" [label]="'media.menu.label' | transloco: { name: folderRow.name }" />
-      }
-    }
-  </ng-template>
 </sf-data-table>

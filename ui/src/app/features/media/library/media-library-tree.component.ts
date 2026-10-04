@@ -22,6 +22,7 @@ import {
   type SfTreeRenameRequest,
 } from '../../../shared/components/sf-tree.component';
 import type { SfTreeLoader, SfTreeNode } from '../../../shared/components/tree/tree-model';
+import { MediaUploadStore } from './media-upload.store';
 import { MediaFolderActions } from './media-folder-actions';
 import { MediaMover } from './media-mover';
 import { type FolderView, MediaLibraryStore } from './media-library.store';
@@ -72,6 +73,7 @@ export class MediaLibraryTreeComponent {
   private readonly toasts = inject(ToastService);
   private readonly router = inject(Router);
   private readonly mover = inject(MediaMover);
+  private readonly uploads = inject(MediaUploadStore);
   private readonly favorites = inject(FavoritesService);
   private readonly favoriteTree = inject(FavoriteTreeService);
   private readonly tree = viewChild<SfTreeComponent<FolderView>>(SfTreeComponent);
@@ -153,6 +155,9 @@ export class MediaLibraryTreeComponent {
     }
     const on = this.favorites.isFavorite(node.id);
     return [
+      ...(this.uploads.canUpload() && !this.library.favoritesView()
+        ? [{ label: this.transloco.translate('media.toolbar.upload'), icon: 'upload', action: () => this.uploads.pickFiles(node.id) }]
+        : []),
       {
         label: this.transloco.translate(on ? 'shared.favorite.remove' : 'shared.favorite.add', { name: node.label }),
         icon: 'star',
@@ -161,11 +166,14 @@ export class MediaLibraryTreeComponent {
     ];
   };
 
-  /** A right click on empty space acts as one on the top level: only *New folder*. */
+  /** A right click on empty space acts as one on the top level: *Upload* and *New folder*. */
   protected readonly rootMenuItems = (): ContextMenuItem[] =>
-    this.library.canEdit()
-      ? [{ label: this.transloco.translate('shared.tree.newFolder'), icon: 'create_new_folder', action: () => void this.tree()?.startCreate(null, 'folder') }]
-      : [];
+    [
+      ...(this.uploads.canUpload() ? [{ label: this.transloco.translate('media.toolbar.upload'), icon: 'upload', action: () => this.uploads.pickFiles('') }] : []),
+      ...(this.library.canEdit()
+        ? [{ label: this.transloco.translate('shared.tree.newFolder'), icon: 'create_new_folder', action: () => void this.tree()?.startCreate(null, 'folder') }]
+        : []),
+    ];
 
   /** A folder name is free among its siblings (the server enforces it; this answers before the round trip). */
   protected readonly validateName = (name: string, context: SfTreeNameContext<FolderView>): string | null => {

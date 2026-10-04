@@ -7,6 +7,7 @@ import { RouterTestingHarness } from '@angular/router/testing';
 import { fireEvent, render, screen, within } from '@testing-library/angular';
 import { afterEach, describe, expect, it } from 'vitest';
 import { PreferencesService } from '../../../core/preferences/preferences.service';
+import { ContextMenuService } from '../../services/context-menu.service';
 import { SfButtonComponent } from '../sf-button.component';
 import type {
   SfDataTableBulkAction,
@@ -103,6 +104,8 @@ let config: Config = DEFAULTS;
       [loading]="loading()"
       [error]="error()"
       [bulkActions]="bulkActions"
+      [rowMenu]="rowMenu"
+      [emptyMenu]="emptyMenu"
       (queryChange)="queries.push($event)"
       (sortChange)="sorts.push($event)"
       (pageChange)="pages.push($event)"
@@ -123,6 +126,12 @@ class Host {
   readonly columns = COLUMNS;
   readonly filters = FILTERS;
   readonly bulkActions: SfDataTableBulkAction<Item>[] = [{ id: 'archive', label: 'Archive' }];
+  menuRows: Item[][] = [];
+  readonly rowMenu = (rows: Item[]) => {
+    this.menuRows.push(rows);
+    return [{ label: `Open ${rows.length}`, action: () => undefined }];
+  };
+  readonly emptyMenu = () => [{ label: 'New item', action: () => undefined }];
   readonly rows = signal(config.rows);
   readonly mode = signal(config.mode);
   readonly total = signal(config.total);
@@ -415,6 +424,35 @@ describe('SfDataTableComponent', () => {
 
       fireEvent.click(within(bar).getByRole('button', { name: 'Delete' }));
       expect(host.deleted).toBe(true);
+    });
+  });
+
+  describe('context menus', () => {
+    it('opens the row menu on a right click, for the selection when the row is part of a selection of several', async () => {
+      const { host } = await setup({ selectable: true });
+      const menu = TestBed.inject(ContextMenuService);
+
+      fireEvent.contextMenu(dataRows()[0]);
+      expect(menu.state()?.items.map((i) => i.label)).toEqual(['Open 1']);
+      expect(host.menuRows.at(-1)).toEqual([ITEMS[0]]);
+
+      menu.close();
+      fireEvent.click(within(dataRows()[0]).getByRole('checkbox'));
+      fireEvent.click(within(dataRows()[1]).getByRole('checkbox'));
+      fireEvent.contextMenu(dataRows()[1]);
+      expect(host.menuRows.at(-1)).toEqual([ITEMS[0], ITEMS[1]]);
+    });
+
+    it('opens the empty-space menu below the rows, but not on the header', async () => {
+      const { container } = await setup();
+      const menu = TestBed.inject(ContextMenuService);
+
+      fireEvent.contextMenu(container.querySelector<HTMLElement>('.sf-data-table__scroller')!);
+      expect(menu.state()?.items.map((i) => i.label)).toEqual(['New item']);
+
+      menu.close();
+      fireEvent.contextMenu(screen.getByRole('columnheader', { name: /Name/ }));
+      expect(menu.state()).toBeNull();
     });
   });
 

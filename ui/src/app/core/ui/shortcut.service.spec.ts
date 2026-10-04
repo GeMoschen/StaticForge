@@ -81,6 +81,18 @@ describe('ShortcutService', () => {
     });
   });
 
+  describe('events without a key', () => {
+    it('ignores the keydown events autofill dispatches, which carry no key', () => {
+      const go = vi.fn();
+      service.register(def('go.pages', 'g', go));
+
+      expect(() => document.body.dispatchEvent(new Event('keydown', { bubbles: true }))).not.toThrow();
+      expect(go).not.toHaveBeenCalled();
+      press({ key: 'g' });
+      expect(go).toHaveBeenCalledTimes(1);
+    });
+  });
+
   describe('typing', () => {
     it('ignores a shortcut in a text field unless it says allowInInput', () => {
       const create = vi.fn();

@@ -1,3 +1,5 @@
+import { bulkActionsAsMenu } from '../../shared/components/data-table/data-table-menu';
+import type { ContextMenuItem } from '../../shared/services/context-menu.service';
 import { ChangeDetectionStrategy, Component, computed, inject, input, output, signal } from '@angular/core';
 import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
 import type { components } from '../../core/api/generated/schema.d.ts';
@@ -162,6 +164,14 @@ export class TemplatesFolderViewComponent {
   ]);
 
   /** A selection that has the fixed top-level folders in it cannot be moved or deleted. */
+  /** A right click on a row: *Open* (one row) and the bulk actions, acting on the row or on the selection it is part of. */
+  protected readonly rowMenu = (rows: TemplateEntry[]): ContextMenuItem[] => [
+    ...(rows.length === 1
+      ? [{ label: this.transloco.translate('shared.dataTable.open'), icon: 'open_in_new', shortcut: 'Enter', action: () => this.open(rows[0]) }]
+      : []),
+    ...bulkActionsAsMenu(this.bulkActions(), rows, this.rowKey),
+  ];
+
   protected readonly bulkActions = computed<SfDataTableBulkAction<TemplateEntry>[]>(() => {
     if (!this.canEdit()) {
       return [];

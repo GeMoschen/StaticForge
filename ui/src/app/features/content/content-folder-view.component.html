@@ -24,6 +24,8 @@
   [label]="'content.folder.table' | transloco: { name: title() }"
   [searchPlaceholder]="'content.folder.search' | transloco"
   [bulkActions]="bulkActions()"
+  [rowMenu]="rowMenu"
+  [emptyMenu]="emptyMenu"
   [loading]="loading()"
   [error]="failed() ? ('content.folder.loadFailed' | transloco) : null"
   [emptyTitle]="'content.folder.empty' | transloco"

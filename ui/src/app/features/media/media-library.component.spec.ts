@@ -226,7 +226,7 @@ describe('MediaLibraryComponent', () => {
       const menu = TestBed.inject(ContextMenuService);
 
       fireEvent.contextMenu(grid().parentElement!);
-      expect(menu.state()?.items.map((i) => i.label).filter(Boolean)).toEqual(['New folder', 'Rename folder…', 'Move folder…', 'Delete folder…']);
+      expect(menu.state()?.items.map((i) => i.label).filter(Boolean)).toEqual(['Upload', 'New folder']);
 
       menu.close();
       fireEvent.contextMenu(card('yirgacheffe.jpg'));

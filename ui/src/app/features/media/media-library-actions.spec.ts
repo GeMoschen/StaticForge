@@ -484,14 +484,9 @@ describe('the media library actions (phase B)', () => {
   });
 
   describe('the list view', () => {
-    it('has a ⋮ column with the same menu, and a star in the name cell', async () => {
+    it('has a star in the name cell', async () => {
       const { favorites, toasts } = await setup({ inputs: { folder: 'products-uuid' }, view: 'list' });
       const row = (await screen.findByText('brand.css')).closest('tr')!;
-
-      fireEvent.click(within(row).getByRole('button', { name: 'Actions for brand.css' }));
-      const menu = await screen.findByRole('menu');
-      expect(menuItemNames(menu)).toHaveLength(7);
-      fireEvent.keyDown(menu, { key: 'Escape' });
 
       fireEvent.click(within(row).getByRole('button', { name: 'Add “brand.css” to favorites' }));
       expect(favorites.toggle).toHaveBeenCalledWith(expect.objectContaining({ type: 'MEDIA', uuid: 'uuid-brand-css' }));

@@ -11,6 +11,7 @@ import type { SfMenuItem } from '../../../shared/components/menu/sf-menu-item';
 import { type ContextMenuItem, ContextMenuService, type ContextMenuTarget } from '../../../shared/services/context-menu.service';
 import { isOnline } from '../../release/release-status.util';
 import { MediaMover } from './media-mover';
+import { MediaUploadStore } from './media-upload.store';
 import { type FolderView, MediaLibraryStore } from './media-library.store';
 import { findParentFolder, folderContentCount } from './media-library.util';
 import { type MediaRenameDialogData, MediaRenameDialogComponent } from './media-rename-dialog.component';
@@ -88,26 +89,18 @@ export class MediaFolderActions {
   }
 
   /**
-   * The menu of a right click on empty space of the open folder: *New folder* inside it, and — below the top level — its
-   * own *Rename…, Move…, Delete…*. A read-only project has none.
+   * The menu of a right click on empty space of the open folder: *Upload*, *New folder* inside it — nothing that
+   * changes the folder itself. A read-only project has none.
    */
   openFolderContextMenu(event: MouseEvent): void {
-    if (!this.library.canEdit()) {
+    const uploads = this.injector.get(MediaUploadStore);
+    if (!this.library.canEdit() && !uploads.canUpload()) {
       return;
     }
-    const folder = this.library.folderNode();
-    const t = (id: string) => this.transloco.translate(`media.library.${id}`);
+    const writable = this.library.canEdit();
     const items: ContextMenuItem[] = [
-      { label: this.transloco.translate('shared.tree.newFolder'), icon: 'create_new_folder', action: () => this.startCreate() },
-      ...(folder
-        ? [
-            { label: '', separator: true },
-            { label: t('rename'), icon: 'edit', shortcut: 'F2', action: () => void this.rename(folder) },
-            { label: t('move'), icon: 'drive_file_move', action: () => void this.injector.get(MediaMover).moveFolders(folder.uuid ? [folder.uuid] : []) },
-            { label: '', separator: true },
-            { label: t('delete'), icon: 'delete', danger: true, action: () => void this.deleteFolder(folder) },
-          ]
-        : []),
+      ...(uploads.canUpload() ? [{ label: this.transloco.translate('media.toolbar.upload'), icon: 'upload', action: () => uploads.pickFiles() }] : []),
+      ...(writable ? [{ label: this.transloco.translate('shared.tree.newFolder'), icon: 'create_new_folder', action: () => this.startCreate() }] : []),
     ];
     event.preventDefault();
     this.contextMenu.open(event, items);

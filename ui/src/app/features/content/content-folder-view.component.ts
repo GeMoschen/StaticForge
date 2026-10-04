@@ -1,3 +1,5 @@
+import { bulkActionsAsMenu } from '../../shared/components/data-table/data-table-menu';
+import type { ContextMenuItem } from '../../shared/services/context-menu.service';
 import { ChangeDetectionStrategy, Component, computed, inject, input, output, signal } from '@angular/core';
 import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
 import type { components } from '../../core/api/generated/schema.d.ts';
@@ -142,6 +144,25 @@ export class ContentFolderViewComponent {
       match: (row, values) => row.datasetUuid !== null && values.includes(row.datasetUuid),
     },
   ]);
+
+  /** A right click on a row: *Open* (one row) and the bulk actions, acting on the row or on the selection it is part of. */
+  protected readonly rowMenu = (rows: ContentEntry[]): ContextMenuItem[] => [
+    ...(rows.length === 1
+      ? [{ label: this.transloco.translate('shared.dataTable.open'), icon: 'open_in_new', shortcut: 'Enter', action: () => this.open(rows[0]) }]
+      : []),
+    ...bulkActionsAsMenu(this.bulkActions(), rows, this.rowKey),
+  ];
+
+  /** A right click on empty space acts as one on the open folder: only the *New …* options. */
+  protected readonly emptyMenu = (): ContextMenuItem[] =>
+    !this.canEdit()
+      ? []
+      : [
+          { label: this.transloco.translate('content.folder.newFolder'), icon: 'create_new_folder', action: () => this.newFolder.emit() },
+          ...(this.datasets().length === 0
+            ? []
+            : [{ label: this.transloco.translate('content.folder.newRecordSet'), icon: 'playlist_add', action: () => this.newRecordSet.emit() }]),
+        ];
 
   protected readonly bulkActions = computed<SfDataTableBulkAction<ContentEntry>[]>(() => {
     if (!this.canEdit()) {
