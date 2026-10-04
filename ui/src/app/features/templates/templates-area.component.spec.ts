@@ -466,6 +466,23 @@ describe('the Templates area', () => {
       expect(store.usedByUuid()).toBeNull();
     });
 
+    it('does what the open template\'s header (⋮) asks through the store: Rename… and Move to… open the dialogs', async () => {
+      const { store, fixture } = await ready();
+
+      store.itemRequest.set({ action: 'rename', uuid: 'article' });
+      fixture.detectChanges();
+      fixture.detectChanges();
+      expect(await screen.findByRole('dialog', { name: 'Rename' })).toBeInTheDocument();
+      expect(store.itemRequest()).toBeNull();
+      fireEvent.click(within(screen.getByRole('dialog', { name: 'Rename' })).getByRole('button', { name: 'Close' }));
+
+      store.itemRequest.set({ action: 'move', uuid: 'article' });
+      fixture.detectChanges();
+      fixture.detectChanges();
+      expect(await screen.findByRole('dialog', { name: /Move/ })).toBeInTheDocument();
+      expect(store.itemRequest()).toBeNull();
+    });
+
     it('deleting from the tree asks naming what uses it, deletes, and Undo restores through the tree\'s toast', async () => {
       const { instance, http, confirm } = await ready();
       const node = { id: 'teaser', label: 'Teaser', data: instance.index().entries.get('teaser') };
