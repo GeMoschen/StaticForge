@@ -117,13 +117,13 @@ export class NavFolderViewComponent {
   protected readonly folderUrl = computed(() => entryUrl(this.folder(), this.urls()));
   protected readonly subtitle = computed(() => {
     const url = this.folderUrl();
-    return url ? this.transloco.translate('navigation.folderUrl', { url }) : null;
+    return url ? this.transloco.translate('navigation.folder.folderUrl', { url }) : null;
   });
 
   protected readonly rowKey = (row: NavRow): string => row.entry.uuid;
   protected readonly rowLabel = (row: NavRow): string => row.entry.label;
   protected readonly columns = computed<SfDataTableColumn<NavRow>[]>(() => {
-    const t = (id: string) => this.transloco.translate(`navigation.columns.${id}`);
+    const t = (id: string) => this.transloco.translate(`navigation.folder.columns.${id}`);
     return [
       { id: 'label', header: t('label'), value: (row) => row.entry.label, hideable: false, width: 240 },
       { id: 'target', header: t('target'), value: (row) => row.targetName ?? '', width: 200 },
@@ -135,7 +135,7 @@ export class NavFolderViewComponent {
     if (!this.canEdit()) {
       return [];
     }
-    const t = (id: string) => this.transloco.translate(`navigation.bulk.${id}`);
+    const t = (id: string) => this.transloco.translate(`navigation.folder.bulk.${id}`);
     return [
       { id: 'move', label: t('move'), icon: 'drive_file_move', action: (selection) => this.moveEntries.emit(selection.rows.map((row) => row.entry)) },
       { id: 'delete', label: t('delete'), icon: 'delete', variant: 'danger', action: (selection) => this.deleteEntries.emit(selection.rows.map((row) => row.entry)) },
@@ -143,7 +143,7 @@ export class NavFolderViewComponent {
   });
 
   protected readonly moreActions = computed<SfMenuItem[]>(() => {
-    const t = (id: string) => this.transloco.translate(`navigation.menu.${id}`);
+    const t = (id: string) => this.transloco.translate(`navigation.folder.menu.${id}`);
     const disabled = !this.canEdit();
     return [
       { id: 'rename', label: t('rename'), icon: 'edit', shortcut: 'F2', disabled },
@@ -165,7 +165,7 @@ export class NavFolderViewComponent {
         keys: 'F2',
         scope: 'screen',
         group: 'screen',
-        description: 'navigation.menu.rename',
+        description: 'navigation.folder.menu.rename',
         enabled: () => this.canEdit(),
         handler: () => this.rename.emit(this.folder().uuid),
       },
@@ -223,7 +223,7 @@ export class NavFolderViewComponent {
       const updated = await write(next, this.folder().revision);
       this.storedEntry.set(next);
       const name = this.entryOptions().find((option) => option.value === next)?.label ?? '';
-      const message = this.transloco.translate(next === NONE ? 'navigation.toast.entryCleared' : 'navigation.toast.entrySet', { name });
+      const message = this.transloco.translate(next === NONE ? 'navigation.tree.toast.entryCleared' : 'navigation.tree.toast.entrySet', { name });
       // Undo writes the previous entry page back, against the revision this write produced.
       this.undo.offer(message, () =>
         write(before, updated.revision ?? null).then(() => {
@@ -233,7 +233,7 @@ export class NavFolderViewComponent {
       );
       this.changed.emit();
     } catch {
-      this.toasts.show(this.transloco.translate('navigation.toast.entryFailed'), 'error');
+      this.toasts.show(this.transloco.translate('navigation.tree.toast.entryFailed'), 'error');
       await this.readEntry(uuid);
     } finally {
       this.savingEntry.set(false);

@@ -5,17 +5,17 @@
   [defaultSize]="treeWidth"
   [min]="220"
   [max]="460"
-  [label]="'navigation.resize' | transloco"
+  [label]="'navigation.tree.resize' | transloco"
 >
   <section sfSplitterStart class="nav__pane nav__tree" aria-labelledby="nav-tree-title">
     <div class="nav__head">
-      <span class="nav__title" id="nav-tree-title">{{ 'navigation.title' | transloco }}</span>
+      <span class="nav__title" id="nav-tree-title">{{ 'navigation.tree.title' | transloco }}</span>
       <sf-menu
         variant="secondary"
         size="sm"
         align="end"
-        [text]="'navigation.new' | transloco"
-        [label]="'navigation.newLabel' | transloco"
+        [text]="'navigation.tree.new' | transloco"
+        [label]="'navigation.tree.newLabel' | transloco"
         [items]="newItems()"
         [disabled]="!canEdit()"
       />
@@ -27,7 +27,7 @@
       sort="none"
       reorderable
       rootDroppable
-      [label]="'navigation.title' | transloco"
+      [label]="'navigation.tree.title' | transloco"
       [projectKey]="projectKey()"
       [loadChildren]="loader()"
       [selection]="treeSelection()"
@@ -49,7 +49,7 @@
       (reorder)="onReorder($event)"
     />
     @if (canEdit()) {
-      <p class="nav__hint">{{ 'navigation.reorderHint' | transloco }}</p>
+      <p class="nav__hint">{{ 'navigation.tree.reorderHint' | transloco }}</p>
     }
   </section>
 
@@ -88,23 +88,23 @@
       }
       @default {
         <div class="nav__empty">
-          <sf-page-header [title]="'navigation.title' | transloco" />
+          <sf-page-header [title]="'navigation.tree.title' | transloco" />
           @if (emptyMenu()) {
             <sf-empty-state
               icon="menu"
-              [title]="'navigation.emptyMenuTitle' | transloco"
-              [description]="'navigation.emptyMenuText' | transloco"
-              [primaryLabel]="canEdit() ? ('navigation.newItem' | transloco) : null"
+              [title]="'navigation.shell.emptyMenuTitle' | transloco"
+              [description]="'navigation.shell.emptyMenuText' | transloco"
+              [primaryLabel]="canEdit() ? ('navigation.tree.newItem' | transloco) : null"
               primaryIcon="add_link"
-              [secondaryLabel]="canEdit() ? ('navigation.newFolder' | transloco) : null"
+              [secondaryLabel]="canEdit() ? ('navigation.tree.newFolder' | transloco) : null"
               (primary)="openNewItem(null)"
               (secondary)="createFolderAtRoot()"
             />
           } @else {
             <sf-empty-state
               icon="menu"
-              [title]="'navigation.emptyTitle' | transloco"
-              [description]="'navigation.emptyText' | transloco"
+              [title]="'navigation.shell.emptyTitle' | transloco"
+              [description]="'navigation.shell.emptyText' | transloco"
             />
           }
         </div>
@@ -127,7 +127,7 @@
     [tree]="folderTree()"
     [excluded]="movingFolders()"
     [count]="entries.length"
-    [rootLabel]="'navigation.title' | transloco"
+    [rootLabel]="'navigation.tree.title' | transloco"
     (chosen)="onMoveChosen($event)"
     (cancelled)="moving.set(null)"
   />

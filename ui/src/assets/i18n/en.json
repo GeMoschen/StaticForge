@@ -6288,70 +6288,77 @@
     }
   },
   "navigation": {
-    "title": "Navigation",
-    "new": "New",
-    "newLabel": "New menu item or folder",
-    "newItem": "Menu item",
-    "newFolder": "Menu folder",
-    "newMenuItem": "New menu item",
-    "resize": "Resize the navigation tree",
-    "reorderHint": "Drag to reorder, or press Alt+↑/↓.",
-    "favorites": "Favorites",
-    "nameTaken": "A menu item or folder with this name already exists here.",
-    "emptyTitle": "Select a menu item",
-    "emptyText": "Choose a menu item or folder in the tree to see where it leads.",
-    "emptyMenuTitle": "No menu yet",
-    "emptyMenuText": "Add menu items that lead to your pages, and group them in folders.",
-    "openPage": "Open the page",
-    "folderUrl": "Opens {url}",
-    "entryPage": "Entry page",
-    "entryPageHint": "Opens when the folder itself is clicked in the menu.",
-    "noEntryPage": "None",
-    "table": "Menu items in {name}",
-    "tableEmpty": "This folder has no menu items yet",
-    "tableEmptyHint": "Add a menu item with “New menu item”.",
-    "loadFailed": "Could not load the menu.",
-    "columns": {
-      "label": "Label",
-      "target": "Target page",
-      "url": "Public URL"
+    "tree": {
+      "title": "Navigation",
+      "new": "New",
+      "newLabel": "New menu item or folder",
+      "newItem": "Menu item",
+      "newFolder": "Menu folder",
+      "newMenuItem": "New menu item",
+      "resize": "Resize the navigation tree",
+      "reorderHint": "Drag to reorder, or press Alt+↑/↓.",
+      "favorites": "Favorites",
+      "nameTaken": "A menu item or folder with this name already exists here.",
+      "openPage": "Open the page",
+      "status": {
+        "released": "Released",
+        "changed": "Changed",
+        "draft": "Draft",
+        "scheduled": "Scheduled",
+        "unpublished": "Unpublished",
+        "deletion": "Deletion pending"
+      },
+      "delete": {
+        "folderMessage": "A folder is deleted with every menu item inside it.",
+        "inside": "{count, plural, one {Its # entry is deleted with it.} other {The # entries inside are deleted with it.}}",
+        "online": "Published items stay online until you release the deletion."
+      },
+      "toast": {
+        "loadFailed": "Could not load the menu — check your connection and try again.",
+        "folderCreated": "Folder “{name}” created.",
+        "folderCreateFailed": "Could not create the folder — a folder with that name may already exist here.",
+        "itemCreated": "Menu item “{name}” created.",
+        "itemCreateFailed": "Could not create the menu item — try again in a moment.",
+        "renamed": "Renamed “{from}” to “{to}”.",
+        "renameFailed": "Could not rename “{name}” — try again in a moment.",
+        "deleteFailed": "Could not delete “{name}” — try again in a moment.",
+        "moveFailed": "Could not move “{name}” — the target may be inside what you are moving.",
+        "reorderFailed": "Could not reorder “{name}” — the menu may have changed; it was read again.",
+        "entrySet": "“{name}” is now the entry page.",
+        "entryCleared": "The folder has no entry page now.",
+        "entryFailed": "Could not change the entry page — try again in a moment."
+      }
     },
-    "bulk": {
-      "move": "Move…",
-      "delete": "Delete"
+    "shell": {
+      "emptyTitle": "Select a menu item",
+      "emptyText": "Choose a menu item or folder in the tree to see where it leads.",
+      "emptyMenuTitle": "No menu yet",
+      "emptyMenuText": "Add menu items that lead to your pages, and group them in folders."
     },
-    "menu": {
-      "rename": "Rename",
-      "move": "Move…",
-      "delete": "Delete…"
-    },
-    "status": {
-      "released": "Released",
-      "changed": "Changed",
-      "draft": "Draft",
-      "scheduled": "Scheduled",
-      "unpublished": "Unpublished",
-      "deletion": "Deletion pending"
-    },
-    "delete": {
-      "folderMessage": "A folder is deleted with every menu item inside it.",
-      "inside": "{count, plural, one {Its # entry is deleted with it.} other {The # entries inside are deleted with it.}}",
-      "online": "Published items stay online until you release the deletion."
-    },
-    "toast": {
-      "loadFailed": "Could not load the menu — check your connection and try again.",
-      "folderCreated": "Folder “{name}” created.",
-      "folderCreateFailed": "Could not create the folder — a folder with that name may already exist here.",
-      "itemCreated": "Menu item “{name}” created.",
-      "itemCreateFailed": "Could not create the menu item — try again in a moment.",
-      "renamed": "Renamed “{from}” to “{to}”.",
-      "renameFailed": "Could not rename “{name}” — try again in a moment.",
-      "deleteFailed": "Could not delete “{name}” — try again in a moment.",
-      "moveFailed": "Could not move “{name}” — the target may be inside what you are moving.",
-      "reorderFailed": "Could not reorder “{name}” — the menu may have changed; it was read again.",
-      "entrySet": "“{name}” is now the entry page.",
-      "entryCleared": "The folder has no entry page now.",
-      "entryFailed": "Could not change the entry page — try again in a moment."
+    "folder": {
+      "folderUrl": "Opens {url}",
+      "entryPage": "Entry page",
+      "entryPageHint": "Opens when the folder itself is clicked in the menu.",
+      "noEntryPage": "None",
+      "table": "Menu items in {name}",
+      "tableEmpty": "This folder has no menu items yet",
+      "tableEmptyHint": "Add a menu item with “New menu item”.",
+      "loadFailed": "Could not load the menu.",
+      "columns": {
+        "label": "Label",
+        "target": "Target page",
+        "url": "Public URL"
+      },
+      "bulk": {
+        "move": "Move…",
+        "delete": "Delete"
+      },
+      "menu": {
+        "rename": "Rename",
+        "move": "Move…",
+        "delete": "Delete…"
+      },
+      "newMenuItem": "New menu item"
     },
     "item": {
       "section": "Menu item",

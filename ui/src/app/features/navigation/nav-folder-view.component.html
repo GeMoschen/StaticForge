@@ -4,7 +4,7 @@
       <sf-asset-favorite type="FOLDER" [uuid]="folder().uuid" [name]="folder().label" [folderPath]="pathOf(folder())" />
     </span>
     <ng-container sfPageHeaderActions>
-      <sf-button icon="add_link" [disabled]="!canEdit()" (click)="newItem.emit()">{{ 'navigation.newMenuItem' | transloco }}</sf-button>
+      <sf-button icon="add_link" [disabled]="!canEdit()" (click)="newItem.emit()">{{ 'navigation.tree.newMenuItem' | transloco }}</sf-button>
     </ng-container>
   </sf-page-header>
   @if (developerMode()) {
@@ -21,14 +21,14 @@
   <sf-field
     class="view__entry"
     labelPosition="inline"
-    [label]="'navigation.entryPage' | transloco"
-    [hint]="'navigation.entryPageHint' | transloco"
+    [label]="'navigation.folder.entryPage' | transloco"
+    [hint]="'navigation.folder.entryPageHint' | transloco"
   >
     <sf-select
       [options]="entryOptions()"
       [value]="entryValue()"
       [disabled]="!canEdit() || savingEntry()"
-      [placeholder]="'navigation.noEntryPage' | transloco"
+      [placeholder]="'navigation.folder.noEntryPage' | transloco"
       (valueChange)="setEntry($event)"
     />
   </sf-field>
@@ -42,10 +42,10 @@
     [rowLabel]="rowLabel"
     [bulkActions]="bulkActions()"
     [loading]="loading()"
-    [error]="failed() ? ('navigation.loadFailed' | transloco) : null"
-    [label]="'navigation.table' | transloco: { name: folder().label }"
-    [emptyTitle]="'navigation.tableEmpty' | transloco"
-    [emptyDescription]="'navigation.tableEmptyHint' | transloco"
+    [error]="failed() ? ('navigation.folder.loadFailed' | transloco) : null"
+    [label]="'navigation.folder.table' | transloco: { name: folder().label }"
+    [emptyTitle]="'navigation.folder.tableEmpty' | transloco"
+    [emptyDescription]="'navigation.folder.tableEmptyHint' | transloco"
     (rowOpen)="openEntry.emit($event.entry.uuid)"
     (retry)="retry.emit()"
   >
@@ -54,7 +54,7 @@
         <sf-icon class="cell-label__icon" [name]="row.entry.kind === 'folder' ? 'folder' : 'link'" />
         <span class="cell-label__text">{{ row.entry.label }}</span>
         @if (row.isEntryPage) {
-          <sf-badge tone="accent" icon="login" [label]="'navigation.entryPage' | transloco" />
+          <sf-badge tone="accent" icon="login" [label]="'navigation.folder.entryPage' | transloco" />
         }
         <sf-asset-favorite
           class="cell-fav"

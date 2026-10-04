@@ -51,9 +51,9 @@ export class NavigationItemActions {
     const t = (key: string, params?: Record<string, unknown>) => this.transloco.translate(key, params);
     const inside = entries.reduce((sum, entry) => sum + (entry.kind === 'folder' ? this.countInside(index, entry.uuid) : 0), 0);
     const messages = [
-      entries.some((entry) => entry.kind === 'folder') ? t('navigation.delete.folderMessage') : null,
-      inside > 0 ? t('navigation.delete.inside', { count: inside }) : null,
-      entries.some((entry) => isOnline(entry.release)) ? t('navigation.delete.online') : null,
+      entries.some((entry) => entry.kind === 'folder') ? t('navigation.tree.delete.folderMessage') : null,
+      inside > 0 ? t('navigation.tree.delete.inside', { count: inside }) : null,
+      entries.some((entry) => isOnline(entry.release)) ? t('navigation.tree.delete.online') : null,
     ].filter((message): message is string => message !== null);
     const params = { count: entries.length, name: entries[0]?.label ?? '' };
     return this.confirms.confirm({
@@ -121,26 +121,28 @@ export class NavigationItemActions {
       return Promise.resolve({ ok: false });
     }
     const known = folderRevision(index, folderId);
-    const write = async (children: readonly string[]): Promise<void> => {
-      const revision = this.revisions.get(folder) ?? known;
+    // Writes the order against `revision`; answers the revision the write produced.
+    const write = async (children: readonly string[], revision: number | null | undefined): Promise<number | null> => {
       const result = await firstValueFrom(
         this.nav.reorderChildren(projectKey, folder, children, revision == null ? undefined : etagFor(revision)),
       );
-      if (result.revision != null) {
-        this.revisions.set(folder, result.revision);
+      const produced = result.revision ?? null;
+      if (produced != null) {
+        this.revisions.set(folder, produced);
       }
+      return produced;
     };
-    const run = this.writes.then(
-      async (): Promise<NavReorder> => {
-        try {
-          await write(order);
-          return { ok: true, undo: () => this.queue(() => write(previous)) };
-        } catch {
-          this.revisions.delete(folder);
-          return { ok: false };
-        }
-      },
-    );
+    const run = this.writes.then(async (): Promise<NavReorder> => {
+      try {
+        const produced = await write(order, this.revisions.get(folder) ?? known);
+        // Undo writes the previous list against the latest revision we know — else the one this write produced, as
+        // the menu read again since (which forgets ours) shows the same.
+        return { ok: true, undo: () => this.queue(() => write(previous, this.revisions.get(folder) ?? produced)) };
+      } catch {
+        this.revisions.delete(folder);
+        return { ok: false };
+      }
+    });
     this.writes = run;
     return run;
   }

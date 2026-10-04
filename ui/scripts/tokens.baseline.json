@@ -23,10 +23,6 @@
     "colors": 4,
     "zIndex": 0
   },
-  "src/app/features/navigation/nav-reference-detail.component.scss": {
-    "colors": 1,
-    "zIndex": 0
-  },
   "src/app/features/pages/conflict-drawer.component.scss": {
     "colors": 3,
     "zIndex": 0

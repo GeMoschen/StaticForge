@@ -155,7 +155,7 @@ export class NavigationComponent {
   private readonly language = toSignal(this.transloco.langChanges$, { initialValue: this.transloco.getActiveLang() });
   private readonly nodeOptions = computed<NavNodeOptions>(() => {
     this.language();
-    const t = (key: string) => this.transloco.translate(`navigation.status.${key}`);
+    const t = (key: string) => this.transloco.translate(`navigation.tree.status.${key}`);
     return {
       dev: this.developerMode.enabled(),
       locale: this.editingLocale.locale(),
@@ -199,7 +199,7 @@ export class NavigationComponent {
     const options = this.nodeOptions();
     const favorites = this.favorites.list();
     const key = this.projectKey();
-    const label = this.transloco.translate('navigation.favorites');
+    const label = this.transloco.translate('navigation.tree.favorites');
     return (parent) => {
       if (parent === null) {
         const nodes = navNodes(index, null, options);
@@ -231,7 +231,7 @@ export class NavigationComponent {
     const taken = navChildren(this.index(), context.parent?.id ?? null).some(
       (sibling) => sibling.uuid !== context.node?.id && sibling.kind === kind && sibling.label.toLowerCase() === name.toLowerCase(),
     );
-    return taken ? this.transloco.translate('navigation.nameTaken') : null;
+    return taken ? this.transloco.translate('navigation.tree.nameTaken') : null;
   };
 
   protected readonly confirmDelete = (nodes: readonly SfTreeNode<NavEntry>[]): Promise<boolean> =>
@@ -254,10 +254,10 @@ export class NavigationComponent {
     const t = (key: string, params?: Record<string, unknown>) => this.transloco.translate(key, params);
     const items: ContextMenuItem[] = [];
     if (this.canEdit() && entry.kind === 'folder') {
-      items.push({ label: t('navigation.newMenuItem'), icon: 'add_link', action: () => this.openNewItem(node.id) });
+      items.push({ label: t('navigation.tree.newMenuItem'), icon: 'add_link', action: () => this.openNewItem(node.id) });
     }
     if (entry.kind === 'item' && entry.targetUuid) {
-      items.push({ label: t('navigation.openPage'), icon: 'open_in_new', action: () => this.openPage(entry.targetUuid!) });
+      items.push({ label: t('navigation.tree.openPage'), icon: 'open_in_new', action: () => this.openPage(entry.targetUuid!) });
     }
     const on = this.favorites.isFavorite(node.id);
     items.push({
@@ -274,13 +274,13 @@ export class NavigationComponent {
     return [
       {
         id: 'item',
-        label: this.transloco.translate('navigation.newItem'),
+        label: this.transloco.translate('navigation.tree.newItem'),
         icon: 'add_link',
         action: () => this.openNewItem(this.openFolderUuid()),
       },
       {
         id: 'folder',
-        label: this.transloco.translate('navigation.newFolder'),
+        label: this.transloco.translate('navigation.tree.newFolder'),
         icon: 'create_new_folder',
         action: () => void this.tree()?.startCreate(this.openFolderUuid(), 'folder'),
       },
@@ -353,7 +353,7 @@ export class NavigationComponent {
       error: () => {
         this.failed.set(true);
         this.loaded.set(true);
-        this.toasts.show(this.transloco.translate('navigation.toast.loadFailed'), 'error');
+        this.toasts.show(this.transloco.translate('navigation.tree.toast.loadFailed'), 'error');
       },
     });
   }
@@ -466,7 +466,7 @@ export class NavigationComponent {
     }
     this.nav.createFolder(this.projectKey(), request.name, request.parent?.id).subscribe({
       next: (created) => {
-        this.toasts.show(this.transloco.translate('navigation.toast.folderCreated', { name: request.name }), 'success');
+        this.toasts.show(this.transloco.translate('navigation.tree.toast.folderCreated', { name: request.name }), 'success');
         this.changed();
         if (request.parent) {
           void this.tree()?.expand(request.parent.id);
@@ -475,7 +475,7 @@ export class NavigationComponent {
           this.openEntry(created.uuid);
         }
       },
-      error: () => this.toasts.show(this.transloco.translate('navigation.toast.folderCreateFailed'), 'error'),
+      error: () => this.toasts.show(this.transloco.translate('navigation.tree.toast.folderCreateFailed'), 'error'),
     });
   }
 
@@ -508,7 +508,7 @@ export class NavigationComponent {
         next: (created) => {
           this.creating.set(false);
           this.newItemOpen.set(false);
-          this.toasts.show(this.transloco.translate('navigation.toast.itemCreated', { name: value.displayName }), 'success');
+          this.toasts.show(this.transloco.translate('navigation.tree.toast.itemCreated', { name: value.displayName }), 'success');
           this.changed();
           if (created.uuid) {
             this.openEntry(created.uuid);
@@ -516,7 +516,7 @@ export class NavigationComponent {
         },
         error: () => {
           this.creating.set(false);
-          this.toasts.show(this.transloco.translate('navigation.toast.itemCreateFailed'), 'error');
+          this.toasts.show(this.transloco.translate('navigation.tree.toast.itemCreateFailed'), 'error');
         },
       });
   }
@@ -540,12 +540,12 @@ export class NavigationComponent {
     try {
       const renamed = await rename(name, entry.revision);
       // Undo renames back; the etag is the revision the rename produced.
-      this.undo.offer(this.transloco.translate('navigation.toast.renamed', { from, to: name }), () =>
+      this.undo.offer(this.transloco.translate('navigation.tree.toast.renamed', { from, to: name }), () =>
         rename(from, renamed.revision).then(() => this.changed()),
       );
       this.changed();
     } catch {
-      this.toasts.show(this.transloco.translate('navigation.toast.renameFailed', { name: from }), 'error');
+      this.toasts.show(this.transloco.translate('navigation.tree.toast.renameFailed', { name: from }), 'error');
       this.changed();
     }
   }
@@ -574,12 +574,12 @@ export class NavigationComponent {
           ),
         );
       const updated = await write(name, detail.revision);
-      this.undo.offer(this.transloco.translate('navigation.toast.renamed', { from, to: name }), () =>
+      this.undo.offer(this.transloco.translate('navigation.tree.toast.renamed', { from, to: name }), () =>
         write(before, updated.revision).then(() => this.changed()),
       );
       this.changed();
     } catch {
-      this.toasts.show(this.transloco.translate('navigation.toast.renameFailed', { name: from }), 'error');
+      this.toasts.show(this.transloco.translate('navigation.tree.toast.renameFailed', { name: from }), 'error');
       this.changed();
     }
   }
@@ -597,7 +597,7 @@ export class NavigationComponent {
       this.changed();
       if (change.failed) {
         // What was deleted before the failure stays deleted and stays undoable.
-        this.toasts.show(this.transloco.translate('navigation.toast.deleteFailed', { name: entries[change.done.length]?.label ?? '' }), 'error');
+        this.toasts.show(this.transloco.translate('navigation.tree.toast.deleteFailed', { name: entries[change.done.length]?.label ?? '' }), 'error');
         if (change.done.length > 0) {
           this.undo.offerGroup(this.transloco.translate('shared.tree.deleted', { count: change.done.length, name: change.done[0].label }), this.withRefresh(change.steps));
         }
@@ -618,7 +618,7 @@ export class NavigationComponent {
       this.undo.offerGroup(this.transloco.translate('shared.tree.deleted', { count: change.done.length, name: change.done[0].label }), this.withRefresh(change.steps));
     }
     if (change.failed) {
-      this.toasts.show(this.transloco.translate('navigation.toast.deleteFailed', { name: entries[change.done.length]?.label ?? '' }), 'error');
+      this.toasts.show(this.transloco.translate('navigation.tree.toast.deleteFailed', { name: entries[change.done.length]?.label ?? '' }), 'error');
     }
     this.changed();
   }
@@ -682,7 +682,7 @@ export class NavigationComponent {
     const change = await this.actions.move(this.projectKey(), entries, target, (entry) => index.parentOf.get(entry.uuid) ?? null);
     this.changed();
     if (change.failed) {
-      this.toasts.show(this.transloco.translate('navigation.toast.moveFailed', { name: entries[change.done.length]?.label ?? '' }), 'error');
+      this.toasts.show(this.transloco.translate('navigation.tree.toast.moveFailed', { name: entries[change.done.length]?.label ?? '' }), 'error');
       if (change.done.length === 0) {
         return;
       }
@@ -709,7 +709,7 @@ export class NavigationComponent {
       if (from !== parentId) {
         const moved = await this.actions.move(key, [entry], parentId, () => from);
         if (moved.failed) {
-          this.toasts.show(this.transloco.translate('navigation.toast.moveFailed', { name: entry.label }), 'error');
+          this.toasts.show(this.transloco.translate('navigation.tree.toast.moveFailed', { name: entry.label }), 'error');
           this.changed();
           return;
         }
@@ -719,7 +719,7 @@ export class NavigationComponent {
       const result = await this.actions.reorder(key, snapshot, parentId, orderWith(snapshot, parentId, entry.uuid, request.index), previous);
       this.changed();
       if (!result.ok) {
-        this.toasts.show(this.transloco.translate('navigation.toast.reorderFailed', { name: entry.label }), 'error');
+        this.toasts.show(this.transloco.translate('navigation.tree.toast.reorderFailed', { name: entry.label }), 'error');
         return;
       }
       if (result.undo) {

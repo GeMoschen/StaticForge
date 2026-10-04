@@ -219,7 +219,7 @@ describe('NavigationComponent (menu)', () => {
     });
 
     it('names the target page while no URL is registered', async () => {
-      await setup({ nav: { pageUrlRows: vi.fn().mockReturnValue(throwError(() => new Error('403'))) } });
+      await setup({ nav: { pageUrlRows: vi.fn().mockReturnValue(of({ last: true, content: [] })) } });
       await waitFor(() => expect(row('Blog').textContent).toContain('→ News'));
     });
 
