@@ -461,7 +461,7 @@ Source tab of text media (decisions 102–106, **signed off 2026-10-03**; added 
     (decision 82/19: `sf-uid-rename`, links to the item break, Undo toast); it changes the UID on its own, apart from the name's Apply. Folders get the
     same dialog (*Rename…* in the tree's menu, *Rename folder…* in the page header's ⋮); F2 in the tree remains the in-place name edit as signed off.
 
-## Review round 10 (2026-10-03): content — the New record set dialog (**awaiting sign-off**)
+## Review round 10 (2026-10-03): content — the New record set dialog (signed off 2026-10-04)
 
 Added to the sample for M35.20 (`/styleguide/sample?area=content&view=contentfolder`; `&newset=1` opens the dialog on arrival; it also opens from the
 folder header's *New record set*, the tree's *New* menu and a folder's context menu). **Not signed off yet** — the app keeps its current
@@ -477,7 +477,7 @@ folder header's *New record set*, the tree's *New* menu and a folder's context m
     *New record set*. The tree's own inline create row now makes **folders only** (a set needs a dataset, so it is no inline item); in the
     sample the entry still only announces what would happen (nothing is saved).
 
-## Review round 11 (2026-10-03): content — what the real M35.20 screens do beyond the signed-off sample (**awaiting sign-off**)
+## Review round 11 (2026-10-03): content — what the real M35.20 screens do beyond the signed-off sample (signed off 2026-10-04)
 
 Added to the sample for M35.20 (`/styleguide/sample?area=content&…`). **Not signed off yet** — M35.20 built these in the app while the sample lacked them (a slip
 against the sample-first rule); the sample now shows exactly what the app does, so the user can review it. Where a decision here is changed or refused, the app screen
@@ -548,7 +548,7 @@ a fourth tour (*Spring cupping*, in the past, sold out) and a stored filter that
     record set's *Delete…* confirmation, release dialogs, and the filter's server-side validation messages (in the app every edit is checked by the server and its errors are
     listed under the panel; the sample has no server).
 
-## Review round 12 (2026-10-03): pages and media — what M35.18 and M35.19 built beyond the signed-off sample (**awaiting sign-off**)
+## Review round 12 (2026-10-03): pages and media — what M35.18 and M35.19 built beyond the signed-off sample (signed off 2026-10-04)
 
 Added to the sample so the user can rule on what the apps do that rounds 8 and 9 did not show (`/styleguide/sample`). **Not signed off yet.** Nothing in the apps changes
 for this round; items 111–122 and 128–133 are new in the sample, 123–127 and 134–135 are differences where the app is *not* like the sample and the user decides which one wins. Decisions are
@@ -634,9 +634,9 @@ Media — the app differs from the sample; the user rules (nothing changed in th
 152. **Tab bar of a text file:** at the drawer's default width (420 px below 1280, else 520) Processing, Rendered and Used by fall into "More". A wider default or another tab order for text
     media — a design question.
 
-## Review round 13 (2026-10-04): templates — what M35.21 needs beyond the signed-off sample (**awaiting sign-off**)
+## Review round 13 (2026-10-04): templates — what M35.21 needs beyond the signed-off sample (signed off 2026-10-04)
 
-Added to the sample for M35.21 (`/styleguide/sample?area=templates&…`). **Not signed off yet** — the app's Templates screens stay as they are until the user rules.
+Added to the sample for M35.21 (`/styleguide/sample?area=templates&…`). **Signed off 2026-10-04** (user: approved as shown; palette, locale rule and table data decided below).
 Screenshots: `round13-shots/` (1440 px, headless Chrome; 20 states). Decisions continue after 152.
 
 Review links (they combine with the usual `dev`, `theme`, `density`; read once, not written back):
@@ -676,14 +676,13 @@ Review links (they combine with the usual `dev`, `theme`, `density`; read once, 
 162. **States of the template view:** loading (skeleton), load error with Retry, and read-only (archived project: "Archived project — read-only"; a past revision: "Revision N — read-only")
     — nothing can be edited, saved, renamed, moved or deleted.
 163. **The `{locale}` warning (app differs from the sample):** the sample warns on the output path of **every** page template that lacks `{locale}` (a client check). The app shows the
-    **server's** warning (SF-GEN-0112, per channel), which applies only in a multi-language project (M35.1 item 10). Keep the server rule as the truth (the sample text already says "this
-    project has two languages") — user to confirm.
+    **server's** warning (SF-GEN-0112, per channel), which applies only in a multi-language project (M35.1 item 10). **Decided 2026-10-04:** both — a client check while typing, only when the project has more than one language, and the server warning stays the authority.
 164. **Data the folder table needs that the API lacks (backend work or fewer columns):** the template summary has **no channels, used-by count or modified** field, and there is no batch usage
-    count (M35.20 added `changedAt` for record sets the same way). Decide: add `channels`, `usedByCount`, `changedAt` to the summaries, or drop *Used by* / *Modified* from the table.
+    count (M35.20 added `changedAt` for record sets the same way). **Decided 2026-10-04:** add `channels`, `usedByCount` and `changedAt` to the template and dataset summaries (backend, as M35.20 did for record sets).
 165. **Selection in the URL:** the app keeps the open template in the store and consumes `?asset=` / `?folder=`; M35.21 moves it to `/templates/:uuid` (folders `?folder=`), so a switch
     goes through the unsaved guard and the open item is recorded as a recent. No sample change.
-166. **Code highlighting palette (decision 18, still open):** *Current* (default) or *Refined*; the template header's switch stays in the sample until the user picks one. Decide before the IDE is built.
-167. **Dataset editing:** the sample's dataset view is read-only (overview, schema, rules, record templates); the app's dataset editor is a full editor and keeps its behaviour. Its ⋮ now has the
+166. **Code highlighting palette (decision 18, decided 2026-10-04):** *Current* stays the default and *Refined* stays selectable, **per user in the account preferences** (next to Theme and Density); the switch leaves the template header.
+167. **Dataset editing:** the sample's dataset view is read-only (overview, schema, rules, record templates); **Decided 2026-10-04: the dataset editor is redone** on the sample's tabs (overview with fields table and Used by, schema and rules as CDL code panels, record template per channel as OCTL panels) with the same editing behaviour as the app. Its ⋮ has the
     same Rename… / Duplicate / Used by / Delete as the other items.
 
 ## Notes / hazards

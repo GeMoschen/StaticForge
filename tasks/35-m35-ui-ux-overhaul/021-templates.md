@@ -80,6 +80,6 @@ for their review and sign-off; record the decisions in `009-style-guide-gate.md`
 
 - Status 2026-10-04: **sample extended, app not changed.** The folder table, Used by, New template dialog, delete / rename / move / duplicate, the definition fields, channel add / remove,
   descendants, save outcomes and the template view's states were missing from the sample; they are now in it as **gate round 13** (decisions 153–167, screenshots in
-  `round13-shots/`). Build the app only as far as the user's sign-off says; open questions: palette (166), the `{locale}` rule (163), backend fields for the table (164).
+  `round13-shots/`). **Signed off 2026-10-04** with decisions: palette per user in account preferences (166), `{locale}` client check + server warning (163), backend `channels` / `usedByCount` / `changedAt` (164), dataset editor redone (167).
 - Plan once signed off: A. shell on `sf-splitter` + `sf-tree` with `/templates/:uuid`, menus and a templates item-actions service (after M35.20's `content-item-actions.service`);
   B. folder view; C. IDE header + Settings + splitter / tabs below 1280 px; D. dialogs (New template with explicit kind, Used by); E. i18n, specs, Chrome check, review.

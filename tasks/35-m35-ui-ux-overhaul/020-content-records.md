@@ -100,7 +100,7 @@ Reference: the sample in `features/styleguide/sample/` (`sample-content-*`, `sam
   none); (4) the tree menu also offers *New record*, *History*, *Used by* on a record set (child-route params `newRecord=1`, `panel=…`).
 - **New record set dialog:** the app still uses `sf-create-asset-dialog` (first dataset preselected). The new design is in the sample
   (gate round 10, decisions 108–110) and **awaits user sign-off** before the app switches to it.
-- **Sample catch-up (gate round 11, decisions 111-127, awaiting sign-off):** the sample now shows everything the app does beyond rounds 1-10: the folder *Status* column, *Shown by the
+- **Sample catch-up (gate round 11, decisions 111-127, signed off 2026-10-04):** the sample now shows everything the app does beyond rounds 1-10: the folder *Status* column, *Shown by the
   filter / All records*, the filter extras (offset/limit, several sort keys, date and Yes/No values, an expression the builder cannot show, Save filter / Revert), *Use as set filter*,
   the record set's and folder's menus with Rename and Move, the records' Move, the tree's menu, and the record editor's menu, Checks and Used by drawer, deleted-record banner and
   error states. Review links are in the round's table. Change the app only as far as the user's sign-off says.
