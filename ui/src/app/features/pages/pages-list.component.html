@@ -36,6 +36,8 @@
       [validateName]="validateName"
       [confirmDelete]="confirmDelete"
       [menuItems]="menuItems"
+      [emptyMenuItems]="rootMenuItems"
+      (emptyClick)="openFolder(null)"
       [search]="search"
       (open)="onOpen($event)"
       (create)="onCreate($event)"

@@ -92,10 +92,11 @@ export class MediaLibraryMainComponent {
     if (!library.loaded() || !library.treeReady()) {
       return 'loading';
     }
-    if (library.items().length === 0) {
+    const folders = library.subfolders().length;
+    if (library.items().length === 0 && folders === 0) {
       return 'empty';
     }
-    return library.visible().length === 0 ? 'noMatch' : 'files';
+    return library.visible().length === 0 && folders === 0 ? 'noMatch' : 'files';
   });
 
   /** The folder's ⋮ menu; the library root (and an empty library) has no rename, move or delete. */

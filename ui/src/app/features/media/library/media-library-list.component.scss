@@ -17,6 +17,16 @@
   vertical-align: middle;
 }
 
+.list-thumb--folder {
+  align-items: center;
+  justify-content: center;
+  background: var(--sf-surface-sunken);
+}
+
+.list-folder-icon {
+  color: var(--sf-text-muted);
+}
+
 .list-name {
   display: flex;
   align-items: center;

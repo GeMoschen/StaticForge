@@ -309,6 +309,15 @@ export class ContentComponent {
     return items;
   };
 
+  /** A right click on empty space acts as one on the root folder: only the *New …* options. */
+  protected readonly rootMenuItems = (): ContextMenuItem[] =>
+    !this.canEdit()
+      ? []
+      : [
+          { label: this.transloco.translate('content.tree.newFolder'), icon: 'create_new_folder', action: () => void this.tree()?.startCreate(null, 'folder') },
+          ...(this.noDatasets() ? [] : [{ label: this.transloco.translate('content.tree.newRecordSet'), icon: 'playlist_add', action: () => this.openNewSet(null) }]),
+        ];
+
   /** The head's *New* menu: where it creates is the open folder (or the folder of the open set). */
   protected readonly newItems = computed<SfMenuItem[]>(() => {
     this.language();

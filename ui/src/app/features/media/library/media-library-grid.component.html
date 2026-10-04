@@ -6,6 +6,29 @@
   (keydown)="onKeydown($event)"
 >
   <div class="grid__row" role="row">
+    @for (folder of library.subfolders(); track folder.uuid) {
+      <div
+        class="card card--folder"
+        role="gridcell"
+        tabindex="0"
+        [attr.aria-label]="folder.displayName ?? folder.uid"
+        [attr.data-folder]="folder.uuid"
+        (click)="openFolder(folder)"
+        (keydown)="onFolderKeydown($event, folder)"
+        (contextmenu)="onFolderContextMenu($event, folder)"
+      >
+        <div class="card__thumb card__thumb--folder">
+          <sf-icon class="card__folder-icon" name="folder" />
+        </div>
+        <span class="card__more" (click)="$event.stopPropagation()">
+          <sf-menu size="sm" [items]="folders.menuItems(folder)" [label]="'media.menu.label' | transloco: { name: folder.displayName ?? folder.uid }" />
+        </span>
+        <div class="card__text">
+          <span class="card__name">{{ folder.displayName ?? folder.uid }}</span>
+          <span class="card__meta">{{ 'media.folders.kind' | transloco }}</span>
+        </div>
+      </div>
+    }
     @for (file of library.shown(); track file.uuid) {
       <div
         class="card"

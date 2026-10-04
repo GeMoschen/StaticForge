@@ -793,6 +793,36 @@ describe('SfTreeComponent', () => {
   });
 
   describe('menus', () => {
+    it('opens the host’s root menu on a right click on empty space, but not on a row', async () => {
+      const { container } = await setup({ inputs: { emptyMenuItems: () => [{ label: 'New thing', action: vi.fn() }] } });
+      const viewport = container.querySelector<HTMLElement>('.sf-tree__viewport')!;
+
+      fireEvent.contextMenu(viewport);
+      expect(TestBed.inject(ContextMenuService).state()?.items.map((i) => i.label)).toEqual(['New thing']);
+
+      TestBed.inject(ContextMenuService).close();
+      fireEvent.contextMenu(item('Beta'));
+      expect(TestBed.inject(ContextMenuService).state()?.items.map((i) => i.label)).not.toContain('New thing');
+    });
+
+    it('emits emptyClick on a left click on empty space, but not on a row', async () => {
+      const { container, tree } = await setup();
+      const emptyClick = vi.fn();
+      tree.emptyClick.subscribe(emptyClick);
+
+      fireEvent.click(item('Beta'));
+      expect(emptyClick).not.toHaveBeenCalled();
+      fireEvent.click(container.querySelector<HTMLElement>('.sf-tree__viewport')!);
+      expect(emptyClick).toHaveBeenCalledTimes(1);
+    });
+
+    it('has no menu on empty space without root entries', async () => {
+      const { container } = await setup();
+
+      fireEvent.contextMenu(container.querySelector<HTMLElement>('.sf-tree__viewport')!);
+      expect(TestBed.inject(ContextMenuService).state()).toBeNull();
+    });
+
     it('opens the context menu below the row with Shift+F10', async () => {
       await setup({ inputs: { menuItems: () => [{ label: 'Preview', action: vi.fn() }] } });
       focus('Beta');

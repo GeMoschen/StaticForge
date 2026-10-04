@@ -66,6 +66,8 @@
       [confirmDelete]="confirmDelete"
       [canDrop]="canDrop"
       [menuItems]="menuItems"
+      [emptyMenuItems]="rootMenuItems"
+      (emptyClick)="onOpenRoot()"
       [acceptForeignDrag]="acceptDrag"
       (open)="onOpen($event)"
       (create)="onCreate($event)"

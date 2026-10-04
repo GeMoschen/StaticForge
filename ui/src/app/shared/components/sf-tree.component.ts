@@ -272,6 +272,11 @@ export class SfTreeComponent<T = unknown> implements OnInit, OnDestroy {
    * {@link startRename}) then ask the host for a rename through {@link renameRequest} instead of editing in place.
    */
   readonly hostMenu = input(false, { transform: booleanAttribute });
+  /**
+   * The menu of a right click on empty space (below or beside the rows): the host's entries for "the root", normally only
+   * its *New …* options. Without it (or with no entries) empty space has no menu.
+   */
+  readonly emptyMenuItems = input<(() => ContextMenuItem[]) | null>(null);
 
   /** Enter, double click, or a plain click with {@link openOnClick}. */
   readonly open = output<SfTreeNode<T>>();
@@ -281,6 +286,8 @@ export class SfTreeComponent<T = unknown> implements OnInit, OnDestroy {
   readonly move = output<SfTreeMoveRequest<T>>();
   /** With {@link hostMenu}: F2 on a node; the host shows its own rename dialog. */
   readonly renameRequest = output<SfTreeNode<T>>();
+  /** A left click on empty space (below or beside the rows): the host opens the root (the store's top level). */
+  readonly emptyClick = output<void>();
   /** "Move to…": the host asks for a destination with a picker and performs the move. */
   readonly moveTo = output<SfTreeNode<T>[]>();
   /** A sibling reorder ({@link reorderable}): the host applies it, then calls {@link refresh} and `completed`. */
@@ -607,6 +614,23 @@ export class SfTreeComponent<T = unknown> implements OnInit, OnDestroy {
 
   protected onRowFocus(row: SfTreeNodeRow<T>): void {
     this.state.focused.set(row.id);
+  }
+
+  protected onEmptyClick(event: MouseEvent): void {
+    if (event.button === 0 && !(event.target instanceof Element && event.target.closest('[role="treeitem"]'))) {
+      this.emptyClick.emit();
+    }
+  }
+
+  protected onEmptyContextMenu(event: MouseEvent): void {
+    if (this.suppressContextMenu || (event.target instanceof Element && event.target.closest('[role="treeitem"]'))) {
+      return; // a row's own menu
+    }
+    const items = this.emptyMenuItems()?.() ?? [];
+    if (items.length) {
+      event.preventDefault();
+      this.contextMenu.open(event, items);
+    }
   }
 
   protected onContextMenu(event: MouseEvent, row: SfTreeNodeRow<T>): void {

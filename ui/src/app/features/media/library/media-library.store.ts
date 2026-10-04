@@ -205,6 +205,14 @@ export class MediaLibraryStore {
     const uuid = this.folderUuid();
     return uuid ? findFolder(this.tree(), uuid) : null;
   });
+  /** The open folder's own folders (the top level's at the root), narrowed by the search; shown before the files. */
+  readonly subfolders = computed<FolderView[]>(() => {
+    const query = this.search().trim().toLowerCase();
+    const folders = this.folderUuid() ? (this.folderNode()?.children ?? []) : this.topLevelFolders();
+    return folders
+      .filter((folder) => !query || (folder.displayName ?? folder.uid ?? '').toLowerCase().includes(query))
+      .sort((a, b) => (a.displayName ?? a.uid ?? '').localeCompare(b.displayName ?? b.uid ?? '', undefined, { sensitivity: 'base', numeric: true }));
+  });
   /** The URL names a folder that is not in the tree (deleted, or from another project). */
   readonly folderGone = computed(() => !!this.folderUuid() && this.treeReady() && this.folderNode() === null);
   readonly folderPath = computed(() => this.folderNode()?.path ?? '');

@@ -294,6 +294,15 @@ export class NavigationComponent {
     return items;
   };
 
+  /** A right click on empty space acts as one on the root folder: only the *New …* options. */
+  protected readonly rootMenuItems = (): ContextMenuItem[] =>
+    !this.canEdit()
+      ? []
+      : [
+          { label: this.transloco.translate('navigation.tree.newItem'), icon: 'add_link', action: () => this.openNewItem(null) },
+          { label: this.transloco.translate('navigation.tree.newFolder'), icon: 'create_new_folder', action: () => void this.tree()?.startCreate(null, 'folder') },
+        ];
+
   /** The head's *New* menu: where it creates is the open folder (or the folder of the open item). */
   protected readonly newItems = computed<SfMenuItem[]>(() => {
     this.language();

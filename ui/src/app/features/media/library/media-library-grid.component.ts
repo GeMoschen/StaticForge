@@ -17,9 +17,11 @@ import { SfStatusComponent } from '../../../shared/components/display/sf-status.
 import { SfCheckboxComponent } from '../../../shared/components/forms/sf-checkbox.component';
 import { SfMenuComponent } from '../../../shared/components/menu/sf-menu.component';
 import { SfFileSizePipe } from '../../../shared/pipes/sf-file-size.pipe';
+import { SfIconComponent } from '../../../shared/components/sf-icon.component';
+import { MediaFolderActions } from './media-folder-actions';
 import { MediaItemActions } from './media-item-actions';
 import { MediaMover } from './media-mover';
-import { MediaLibraryStore, type MediaSummaryView } from './media-library.store';
+import { MediaLibraryStore, type FolderView, type MediaSummaryView } from './media-library.store';
 import { formatOf } from './media-library.util';
 import { MediaPreviewComponent } from './media-preview.component';
 
@@ -41,13 +43,15 @@ const NEAR_END_PX = 200;
   selector: 'sf-media-library-grid',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [MediaPreviewComponent, SfCheckboxComponent, SfFileSizePipe, SfMenuComponent, SfStatusComponent, TranslocoPipe],
+  imports: [MediaPreviewComponent, SfCheckboxComponent, SfIconComponent, SfFileSizePipe, SfMenuComponent, SfStatusComponent, TranslocoPipe],
+  host: { '(contextmenu)': 'onEmptyContextMenu($event)' },
   templateUrl: './media-library-grid.component.html',
   styleUrl: './media-library-grid.component.scss',
 })
 export class MediaLibraryGridComponent implements AfterViewInit {
   protected readonly library = inject(MediaLibraryStore);
   protected readonly items = inject(MediaItemActions);
+  protected readonly folders = inject(MediaFolderActions);
   protected readonly mover = inject(MediaMover);
   private readonly transloco = inject(TranslocoService);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef).nativeElement;
@@ -114,6 +118,45 @@ export class MediaLibraryGridComponent implements AfterViewInit {
     const meta = this.transloco.translate('media.grid.meta', { type: formatOf(file), size: this.fileSize.transform(file.sizeBytes) });
     const status = this.library.statusOf(file);
     return [file.displayName ?? file.uid ?? '', meta, ...(status ? [status.label] : [])].join(', ');
+  }
+
+  /** A right click on empty space (not on a card) opens the menu of the open folder. */
+  protected onEmptyContextMenu(event: MouseEvent): void {
+    if (!(event.target instanceof Element && event.target.closest('.card'))) {
+      this.folders.openFolderContextMenu(event);
+    }
+  }
+
+  protected openFolder(folder: FolderView): void {
+    void this.library.openFolder(folder.uuid ?? null);
+  }
+
+  protected onFolderContextMenu(event: MouseEvent, folder: FolderView): void {
+    event.preventDefault();
+    if (this.suppressContextMenu) {
+      this.suppressContextMenu = false;
+      return;
+    }
+    this.folders.onFolderContextMenu(folder, event);
+  }
+
+  /** Enter opens the folder, F2 renames it, Shift+F10 / the menu key open its menu; Tab moves on to the next tile. */
+  protected onFolderKeydown(event: KeyboardEvent, folder: FolderView): void {
+    if (event.target !== event.currentTarget) {
+      return; // the ⋮ menu button handles its own keys
+    }
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      this.openFolder(folder);
+    } else if (event.key === 'F2' && !event.ctrlKey && !event.metaKey && !event.altKey && this.library.canEdit()) {
+      event.preventDefault();
+      void this.folders.rename(folder);
+    } else if (event.key === 'ContextMenu' || (event.key === 'F10' && event.shiftKey)) {
+      event.preventDefault();
+      this.suppressContextMenu = true;
+      setTimeout(() => (this.suppressContextMenu = false));
+      this.folders.onFolderContextMenu(folder, event.currentTarget as HTMLElement);
+    }
   }
 
   protected onFocus(file: MediaSummaryView): void {

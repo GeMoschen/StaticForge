@@ -50,6 +50,8 @@
   [attr.aria-busy]="state.loading().size > 0 || searching() || null"
   [class.is-drop-root]="dropTarget()?.id === null && dropTarget()?.valid"
   (keydown)="onKeydown($event)"
+  (click)="onEmptyClick($event)"
+  (contextmenu)="onEmptyContextMenu($event)"
   (scroll)="onScroll()"
   (dragover)="onDragOver($event, null)"
   (drop)="onDrop($event, null)"

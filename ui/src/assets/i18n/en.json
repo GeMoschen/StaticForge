@@ -6474,7 +6474,7 @@
       "renamed": "Renamed “{from}” to “{to}”.",
       "renamedOne": "Folder renamed",
       "renameFailed": "Could not rename “{name}” — try again in a moment.",
-      "renameDialog": "Rename…",
+      "kind": "Folder",
       "root": "All media",
       "delete": {
         "title": "Delete “{name}”?",

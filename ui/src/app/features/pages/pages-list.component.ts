@@ -308,6 +308,15 @@ export class PagesListComponent {
     return items;
   };
 
+  /** A right click on empty space acts as one on the root folder: only the *New …* options. */
+  protected readonly rootMenuItems = (): ContextMenuItem[] =>
+    this.readOnly()
+      ? []
+      : [
+          ...(this.hasTemplates() ? [{ label: this.transloco.translate('pages.tree.newPage'), icon: 'note_add', action: () => this.openNewPage(null) }] : []),
+          { label: this.transloco.translate('pages.tree.newFolder'), icon: 'create_new_folder', action: () => void this.tree()?.startCreate(null, 'folder') },
+        ];
+
   protected readonly newItems = computed<SfMenuItem[]>(() => {
     this.language();
     return [

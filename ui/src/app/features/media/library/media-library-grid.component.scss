@@ -14,6 +14,21 @@
   padding: var(--sf-space-1);
 }
 
+.card__thumb--folder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.card__folder-icon {
+  color: var(--sf-text-muted);
+  font-size: var(--sf-fs-30);
+}
+
+.card--folder:hover .card__folder-icon {
+  color: var(--sf-text);
+}
+
 .grid__sentinel {
   block-size: var(--sf-space-0);
 }

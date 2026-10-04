@@ -152,12 +152,7 @@ export class MediaLibraryTreeComponent {
       return [];
     }
     const on = this.favorites.isFavorite(node.id);
-    const folder = node.data;
     return [
-      // F2 and the menu's own *Rename* edit the name in place; this one opens the dialog (name and, in developer mode, UID).
-      ...(this.library.canEdit() && folder
-        ? [{ label: this.transloco.translate('media.folders.renameDialog'), icon: 'edit', action: () => void this.folders.rename(folder) }]
-        : []),
       {
         label: this.transloco.translate(on ? 'shared.favorite.remove' : 'shared.favorite.add', { name: node.label }),
         icon: 'star',
@@ -165,6 +160,12 @@ export class MediaLibraryTreeComponent {
       },
     ];
   };
+
+  /** A right click on empty space acts as one on the top level: only *New folder*. */
+  protected readonly rootMenuItems = (): ContextMenuItem[] =>
+    this.library.canEdit()
+      ? [{ label: this.transloco.translate('shared.tree.newFolder'), icon: 'create_new_folder', action: () => void this.tree()?.startCreate(null, 'folder') }]
+      : [];
 
   /** A folder name is free among its siblings (the server enforces it; this answers before the round trip). */
   protected readonly validateName = (name: string, context: SfTreeNameContext<FolderView>): string | null => {
@@ -245,6 +246,11 @@ export class MediaLibraryTreeComponent {
         await this.tree()?.expand(folder.uuid);
       }
     }
+  }
+
+  /** A left click on empty space opens the top level (the library root). */
+  protected onOpenRoot(): void {
+    void this.library.openFolder(null).then((followed) => this.resyncUnless(followed));
   }
 
   protected onOpen(node: SfTreeNode<FolderView>): void {

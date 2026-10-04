@@ -7,7 +7,10 @@ import { UndoService } from '../../../core/ui/undo.service';
 import { ConfirmService } from '../../../shared/components/dialog/confirm.service';
 import { typeToConfirmFor } from '../../../shared/components/dialog/delete-confirm';
 import { DialogService } from '../../../shared/components/dialog/dialog.service';
+import type { SfMenuItem } from '../../../shared/components/menu/sf-menu-item';
+import { type ContextMenuItem, ContextMenuService, type ContextMenuTarget } from '../../../shared/services/context-menu.service';
 import { isOnline } from '../../release/release-status.util';
+import { MediaMover } from './media-mover';
 import { type FolderView, MediaLibraryStore } from './media-library.store';
 import { findParentFolder, folderContentCount } from './media-library.util';
 import { type MediaRenameDialogData, MediaRenameDialogComponent } from './media-rename-dialog.component';
@@ -35,6 +38,7 @@ export class MediaFolderActions {
   private readonly injector = inject(Injector);
   private readonly transloco = inject(TranslocoService);
   private readonly library = inject(MediaLibraryStore);
+  private readonly contextMenu = inject(ContextMenuService);
 
   /** The tree is asked to start an inline rename or create; the tree performs it and clears the request. */
   readonly treeRequest = signal<MediaTreeRequest | null>(null);
@@ -62,6 +66,61 @@ export class MediaFolderActions {
         },
         error: () => this.toasts.show(this.t('createFailed'), 'error'),
       }),
+    );
+  }
+
+  // ── Menu ────────────────────────────────────────────────────────────────
+
+  /** The entries of a folder tile's menu (card, list row, ⋮ button): *Open, Rename…, Move…, Delete…*; a read-only project only opens. */
+  menuItems(folder: FolderView): SfMenuItem[] {
+    const t = (id: string) => this.transloco.translate(`media.library.${id}`);
+    const writable = this.library.canEdit();
+    return [
+      { id: 'open', label: this.transloco.translate('media.menu.open'), icon: 'open_in_new', shortcut: 'Enter', action: () => void this.library.openFolder(folder.uuid ?? null) },
+      ...(writable
+        ? [
+            { id: 'rename', label: t('rename'), icon: 'edit', shortcut: 'F2', action: () => void this.rename(folder) },
+            { id: 'move', label: t('move'), icon: 'drive_file_move', action: () => void this.injector.get(MediaMover).moveFolders(folder.uuid ? [folder.uuid] : []) },
+            { id: 'delete', label: t('delete'), icon: 'delete', danger: true, separatorBefore: true, action: () => void this.deleteFolder(folder) },
+          ]
+        : []),
+    ];
+  }
+
+  /**
+   * The menu of a right click on empty space of the open folder: *New folder* inside it, and — below the top level — its
+   * own *Rename…, Move…, Delete…*. A read-only project has none.
+   */
+  openFolderContextMenu(event: MouseEvent): void {
+    if (!this.library.canEdit()) {
+      return;
+    }
+    const folder = this.library.folderNode();
+    const t = (id: string) => this.transloco.translate(`media.library.${id}`);
+    const items: ContextMenuItem[] = [
+      { label: this.transloco.translate('shared.tree.newFolder'), icon: 'create_new_folder', action: () => this.startCreate() },
+      ...(folder
+        ? [
+            { label: '', separator: true },
+            { label: t('rename'), icon: 'edit', shortcut: 'F2', action: () => void this.rename(folder) },
+            { label: t('move'), icon: 'drive_file_move', action: () => void this.injector.get(MediaMover).moveFolders(folder.uuid ? [folder.uuid] : []) },
+            { label: '', separator: true },
+            { label: t('delete'), icon: 'delete', danger: true, action: () => void this.deleteFolder(folder) },
+          ]
+        : []),
+    ];
+    event.preventDefault();
+    this.contextMenu.open(event, items);
+  }
+
+  /** The folder tile's context menu: at the pointer for a right click, below the element for Shift+F10 and the ⋮ button. */
+  onFolderContextMenu(folder: FolderView, target: ContextMenuTarget): void {
+    this.contextMenu.open(
+      target,
+      this.menuItems(folder).flatMap((item) => [
+        ...(item.separatorBefore ? [{ label: '', separator: true }] : []),
+        { label: item.label, icon: item.icon, danger: item.danger, shortcut: item.shortcut, action: item.action },
+      ]),
     );
   }
 

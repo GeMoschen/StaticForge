@@ -18,6 +18,7 @@ import { ProjectPermissionsStore } from '../../core/project/project-permissions.
 import { ShortcutService } from '../../core/ui/shortcut.service';
 import { ToastService } from '../../core/ui/toast.service';
 import { ConfirmService } from '../../shared/components/dialog/confirm.service';
+import { ContextMenuService } from '../../shared/services/context-menu.service';
 import { MEDIA_TREE, PRODUCTS, pageOf, productFiles, projectStub, summary } from './library/media-library.testing';
 import { MediaDetailDrawerComponent } from './media-detail-drawer.component';
 import { MediaLibraryComponent } from './media-library.component';
@@ -136,7 +137,8 @@ async function setup(options: SetupOptions = {}) {
 }
 
 const grid = () => screen.getByRole('grid', { name: /^Files in/ });
-const cards = () => within(grid()).getAllByRole('gridcell');
+const cards = () => within(grid()).getAllByRole('gridcell').filter((c) => !c.classList.contains('card--folder'));
+const folderCards = () => within(grid()).getAllByRole('gridcell').filter((c) => c.classList.contains('card--folder'));
 const card = (name: string) => cards().find((c) => c.getAttribute('aria-label')?.startsWith(name + ','))!;
 const cardNames = () => cards().map((c) => c.getAttribute('aria-label')!.split(',')[0]);
 const lastQuery = (navigate: { mock: { lastCall?: unknown[] } }) =>
@@ -150,13 +152,14 @@ describe('MediaLibraryComponent', () => {
   afterEach(() => vi.restoreAllMocks());
 
   describe('the page', () => {
-    it('opens at the library root: one h1, the root’s files, and the folders only in the tree', async () => {
+    it('opens at the library root: one h1, the root’s folders first and then its files', async () => {
       await setup();
       await screen.findAllByRole('gridcell');
 
       expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
       expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('All media');
       expect(cardNames()).toEqual(['root-banner.jpg']);
+      expect(folderCards().map((c) => c.getAttribute('aria-label'))).toEqual(['Archive', 'Products', 'Team']);
       const tree = screen.getByRole('tree', { name: 'Folders' });
       expect(within(tree).getAllByRole('treeitem').map((row) => row.getAttribute('aria-label') ?? row.textContent?.trim().split('\n')[0])).toHaveLength(3);
       expect(within(tree).queryByText('root-banner.jpg')).toBeNull();
@@ -217,6 +220,19 @@ describe('MediaLibraryComponent', () => {
   });
 
   describe('the grid', () => {
+    it('opens the open folder’s menu on a right click on empty space, but a card keeps its own', async () => {
+      await setup({ inputs: { folder: 'products-uuid' } });
+      await screen.findAllByRole('gridcell');
+      const menu = TestBed.inject(ContextMenuService);
+
+      fireEvent.contextMenu(grid().parentElement!);
+      expect(menu.state()?.items.map((i) => i.label).filter(Boolean)).toEqual(['New folder', 'Rename folder…', 'Move folder…', 'Delete folder…']);
+
+      menu.close();
+      fireEvent.contextMenu(card('yirgacheffe.jpg'));
+      expect(menu.state()?.items.map((i) => i.label)).not.toContain('New folder');
+    });
+
     it('is a grid of focusable cards, named by file, type and size, with the status as part of the name', async () => {
       await setup({ inputs: { folder: 'products-uuid' } });
       await screen.findAllByRole('gridcell');
@@ -488,7 +504,8 @@ describe('MediaLibraryComponent', () => {
       const names = within(table())
         .getAllByRole('row')
         .slice(1)
-        .map((row) => within(row).queryByText(/\.(jpg|png|css|svg|pdf)$/)?.textContent);
+        .map((row) => within(row).queryByText(/\.(jpg|png|css|svg|pdf)$/)?.textContent)
+        .filter(Boolean);
       expect(names.slice(0, 3)).toEqual(['yirgacheffe.jpg', 'latte-art.jpg', 'logo-mark.png']);
     });
 
@@ -645,7 +662,8 @@ describe('MediaLibraryComponent', () => {
       fail = false;
       fireEvent.click(within(banner).getByRole('button', { name: 'Retry' }));
 
-      expect((await screen.findAllByRole('gridcell')).length).toBe(6);
+      await screen.findAllByRole('gridcell');
+      expect(cards().length).toBe(6);
       expect(api.listMedia.mock.calls.length).toBeGreaterThan(reads);
       expect(screen.queryByRole('alert')).toBeNull();
     });

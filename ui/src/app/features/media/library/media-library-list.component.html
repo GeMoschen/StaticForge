@@ -3,7 +3,7 @@
   selectable
   tableId="media-list"
   [columns]="columns()"
-  [rows]="library.visible()"
+  [rows]="rows()"
   [rowKey]="rowKey"
   [rowLabel]="rowLabel"
   [currentKey]="library.assetUuid()"
@@ -11,51 +11,81 @@
   [bulkActions]="bulkActions()"
   [loading]="loading()"
   [emptyTitle]="'media.empty.title' | transloco"
-  (selectionChange)="library.setSelection($event.keys)"
-  (rowOpen)="library.openAsset($event.uuid ?? null)"
+  (selectionChange)="onSelection($event.keys)"
+  (rowOpen)="onRowOpen($event)"
   (contextmenu)="onContextMenu($event)"
   (keydown)="onKeydown($event)"
 >
-  <ng-template sfDataTableCell="thumb" [sfDataTableCellRows]="library.visible()" let-row>
-    <span class="list-thumb"><sf-media-preview [item]="row" variant="row" /></span>
+  <ng-template sfDataTableCell="thumb" [sfDataTableCellRows]="rows()" let-row>
+    @if (fileOf(row); as file) {
+      <span class="list-thumb"><sf-media-preview [item]="file" variant="row" /></span>
+    } @else {
+      <span class="list-thumb list-thumb--folder"><sf-icon class="list-folder-icon" name="folder" /></span>
+    }
   </ng-template>
-  <ng-template sfDataTableCell="name" [sfDataTableCellRows]="library.visible()" let-row>
-    <span class="list-name" [attr.data-file]="row.uuid">
-      <span class="list-name__text">{{ row.displayName }}</span>
-      @if (library.statusOf(row); as status) {
-        <sf-status size="sm" iconOnly [tone]="status.tone" [icon]="status.icon" [label]="status.label" />
+  <ng-template sfDataTableCell="name" [sfDataTableCellRows]="rows()" let-row>
+    @if (fileOf(row); as file) {
+      <span class="list-name" [attr.data-file]="file.uuid">
+        <span class="list-name__text">{{ file.displayName }}</span>
+        @if (library.statusOf(file); as status) {
+          <sf-status size="sm" iconOnly [tone]="status.tone" [icon]="status.icon" [label]="status.label" />
+        }
+        <sf-asset-favorite
+          class="list-fav"
+          type="MEDIA"
+          [uuid]="file.uuid"
+          [name]="file.displayName"
+          [folderPath]="file.folderPath"
+          (click)="$event.stopPropagation()"
+        />
+      </span>
+    } @else {
+      @if (folderOf(row); as folderRow) {
+        <span class="list-name" [attr.data-folder]="folderRow.uuid">
+          <span class="list-name__text">{{ folderRow.name }}</span>
+        </span>
       }
-      <sf-asset-favorite
-        class="list-fav"
-        type="MEDIA"
-        [uuid]="row.uuid"
-        [name]="row.displayName"
-        [folderPath]="row.folderPath"
-        (click)="$event.stopPropagation()"
-      />
-    </span>
+    }
   </ng-template>
-  <ng-template sfDataTableCell="dimensions" [sfDataTableCellRows]="library.visible()" let-row>
-    @if (row.width && row.height) {
-      <span class="list-num">{{ row.width }} × {{ row.height }}</span>
+  <ng-template sfDataTableCell="dimensions" [sfDataTableCellRows]="rows()" let-row>
+    @if (fileOf(row); as file) {
+      @if (file.width && file.height) {
+        <span class="list-num">{{ file.width }} × {{ file.height }}</span>
+      } @else {
+        <span class="list-muted">—</span>
+      }
     } @else {
       <span class="list-muted">—</span>
     }
   </ng-template>
-  <ng-template sfDataTableCell="size" [sfDataTableCellRows]="library.visible()" let-row>
-    <span class="list-num">{{ row.sizeBytes | sfFileSize }}</span>
-  </ng-template>
-  <ng-template sfDataTableCell="modified" [sfDataTableCellRows]="library.visible()" let-row>
-    @if (row.changedAt) {
-      <sf-relative-time [value]="row.changedAt" />
+  <ng-template sfDataTableCell="size" [sfDataTableCellRows]="rows()" let-row>
+    @if (fileOf(row); as file) {
+      <span class="list-num">{{ file.sizeBytes | sfFileSize }}</span>
     } @else {
       <span class="list-muted">—</span>
     }
   </ng-template>
-  <ng-template sfDataTableCell="usages" [sfDataTableCellRows]="library.visible()" let-row>
-    <span class="list-num">{{ row.usageCount ?? 0 }}</span>
+  <ng-template sfDataTableCell="modified" [sfDataTableCellRows]="rows()" let-row>
+    @if (fileOf(row)?.changedAt; as changedAt) {
+      <sf-relative-time [value]="changedAt" />
+    } @else {
+      <span class="list-muted">—</span>
+    }
   </ng-template>
-  <ng-template sfDataTableCell="actions" [sfDataTableCellRows]="library.visible()" let-row>
-    <sf-menu size="sm" [items]="items.menuItems(row)" [label]="'media.menu.label' | transloco: { name: row.displayName }" />
+  <ng-template sfDataTableCell="usages" [sfDataTableCellRows]="rows()" let-row>
+    @if (fileOf(row); as file) {
+      <span class="list-num">{{ file.usageCount ?? 0 }}</span>
+    } @else {
+      <span class="list-muted">—</span>
+    }
+  </ng-template>
+  <ng-template sfDataTableCell="actions" [sfDataTableCellRows]="rows()" let-row>
+    @if (fileOf(row); as file) {
+      <sf-menu size="sm" [items]="items.menuItems(file)" [label]="'media.menu.label' | transloco: { name: file.displayName }" />
+    } @else {
+      @if (folderOf(row); as folderRow) {
+        <sf-menu size="sm" [items]="folders.menuItems(folderRow.folder)" [label]="'media.menu.label' | transloco: { name: folderRow.name }" />
+      }
+    }
   </ng-template>
 </sf-data-table>
