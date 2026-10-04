@@ -15,16 +15,28 @@ import {
 } from '@angular/core';
 import { SfAssetFavoriteComponent } from '../../shared/components/sf-asset-favorite.component';
 import { FormGroup } from '@angular/forms';
+import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
+import { firstValueFrom } from 'rxjs';
+import { ActiveEditorService } from '../../core/editor/active-editor.service';
+import { type EditorError, type EditorStateService, saveStateOf } from '../../core/editor/editor-state';
+import { DeveloperModeService } from '../../core/frame/developer-mode.service';
+import { ConfirmService } from '../../shared/components/dialog/confirm.service';
+import type { SaveResult } from '../../shared/components/dialog/unsaved-changes.service';
+import { SfCopyableComponent } from '../../shared/components/display/sf-copyable.component';
+import { SfPageHeaderComponent } from '../../shared/components/layout/sf-page-header.component';
+import { SfSaveStatusComponent } from '../../shared/components/layout/sf-save-status.component';
+import { SfSectionComponent } from '../../shared/components/layout/sf-section.component';
+import { SfSkeletonComponent } from '../../shared/components/layout/sf-skeleton.component';
+import type { SfMenuItem } from '../../shared/components/menu/sf-menu-item';
+import { SfTabsComponent, type SfTab } from '../../shared/components/sf-tabs.component';
+import { HistoryDrawerStore } from '../history/history-drawer.store';
 import { ProjectPermissionsStore } from '../../core/project/project-permissions.store';
 import { ToastService } from '../../core/ui/toast.service';
 import { SfButtonComponent } from '../../shared/components/sf-button.component';
-import { SfFieldComponent } from '../../shared/components/sf-field.component';
-import { SfIconComponent } from '../../shared/components/sf-icon.component';
 import { SfContentFormComponent } from '../forms/sf-content-form.component';
 import {
   EMPTY_SECTIONS,
   firstSectionWithErrors,
-  isSaveShortcut,
   sectionsEqual,
   sectionsOf,
   type CdlSection,
@@ -85,22 +97,43 @@ interface ContentIssue {
   selector: 'sf-global-set-detail',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [SfAssetFavoriteComponent, SfCdlSectionsEditorComponent, SfButtonComponent, SfFieldComponent, SfIconComponent, SfContentFormComponent, ReleaseBarComponent],
+  imports: [
+    ReleaseBarComponent,
+    SfAssetFavoriteComponent,
+    SfButtonComponent,
+    SfCdlSectionsEditorComponent,
+    SfContentFormComponent,
+    SfCopyableComponent,
+    SfPageHeaderComponent,
+    SfSaveStatusComponent,
+    SfSectionComponent,
+    SfSkeletonComponent,
+    SfTabsComponent,
+    TranslocoPipe,
+  ],
   templateUrl: './global-set-detail.component.html',
   styleUrl: './global-set-detail.component.scss',
 })
 export class GlobalSetDetailComponent {
   readonly projectKey = input.required<string>();
   readonly uuid = input.required<string>();
+  /** The tab the URL asks for (`?gtab=`); the Schema tab exists in developer mode only. */
+  readonly tabParam = input<'values' | 'schema' | undefined>(undefined, { alias: 'tab' });
 
   /** The set was saved (values or schema), so the parent can refresh its tree. */
   readonly changed = output<void>();
-  readonly closed = output<void>();
+  /** Another tab was chosen, so the parent can keep it in the URL. */
+  readonly tabChange = output<'values' | 'schema'>();
   /** Emitted after the set was deleted; the store offers the Undo, since this panel closes with the set. */
   readonly deleted = output<DeletedGlobalSet>();
 
   private readonly globals = inject(GlobalsService);
   private readonly api = inject(ApiClient);
+  private readonly transloco = inject(TranslocoService);
+  private readonly confirms = inject(ConfirmService);
+  protected readonly historyDrawer = inject(HistoryDrawerStore);
+  /** Developer mode shows the Schema tab, the UID and how a template reads each field (decision 25). */
+  protected readonly developerMode = inject(DeveloperModeService).enabled;
   /** The language being edited (M24.4.1); `null` in a project without languages. */
   protected readonly editingLocale = inject(EditingLocaleStore).binding;
 
@@ -119,7 +152,9 @@ export class GlobalSetDetailComponent {
 
   protected readonly timeTravelling = this.timeTravel.isTimeTravel;
 
-  protected readonly tab = signal<'values' | 'schema'>('values');
+  private readonly requestedTab = signal<'values' | 'schema'>('values');
+  /** Schema is a developer-mode tab: without developer mode the Values tab shows. */
+  protected readonly tab = computed<'values' | 'schema'>(() => (this.developerMode() ? this.requestedTab() : 'values'));
   protected readonly loading = signal(false);
   protected readonly saving = signal(false);
 
@@ -171,7 +206,9 @@ export class GlobalSetDetailComponent {
       : ((this.detail()?.issues ?? []) as ContentIssue[]);
     return mergeFindings(live, this.valueIssues());
   });
-  protected readonly copied = signal(false);
+  /** Why the last save was refused (shown in the status and the leave dialog); cleared by the next edit or save. */
+  protected readonly saveError = signal<EditorError | null>(null);
+  protected readonly savedAt = signal<string | null>(null);
 
   private readonly permissions = inject(ProjectPermissionsStore);
 
@@ -179,14 +216,86 @@ export class GlobalSetDetailComponent {
   protected readonly canEditValues = this.permissions.canEditContent;
   protected readonly canEditSchema = this.permissions.canEditTemplates;
 
-  /** The snippet a developer pastes into a channel template to read this set. */
+  /** The snippet a developer pastes into a channel template to read this set's first field. */
   protected readonly usageSnippet = computed(() => {
     const uid = this.detail()?.uid ?? 'set';
     const first = this.definition().editors?.[0]?.name ?? 'field';
     return `$CMS_VALUE(CMS_GLOBAL.${uid}.${first})$`;
   });
 
+  /** How a template reads each top-level field (developer mode): lists and catalogs are looped over, the rest read as a value. */
+  protected readonly usages = computed(() => {
+    const uid = this.detail()?.uid ?? 'set';
+    return this.definition().editors
+      .filter((editor) => !editor.hidden)
+      .map((editor) => {
+        const path = `CMS_GLOBAL.${uid}.${editor.name}`;
+        const loop = editor.type === 'LIST' || editor.type === 'CATALOG';
+        return { name: editor.name, label: editor.label ?? editor.name, usage: loop ? `$CMS_FOR(item : ${path})$` : `$CMS_VALUE(${path})$` };
+      });
+  });
+
+  protected readonly saveState = computed(() => saveStateOf({ dirty: this.dirty, saving: this.saving, error: this.saveError }));
+  protected readonly readOnlyLabel = computed(() =>
+    this.timeTravelling()
+      ? this.transloco.translate('globals.detail.status.revision', { revision: this.timeTravel.activeRevision() ?? '—' })
+      : !this.canEditValues() && !this.canEditSchema()
+        ? this.transloco.translate('globals.detail.status.readOnly')
+        : '',
+  );
+
+  protected readonly tabs = computed<SfTab[]>(() => {
+    const tabs: SfTab[] = [
+      { id: 'values', label: this.transloco.translate('globals.detail.tabs.values'), dirty: this.valuesDirty() && this.canEditValues() },
+    ];
+    if (this.developerMode()) {
+      tabs.push({ id: 'schema', label: this.transloco.translate('globals.detail.tabs.schema'), dirty: this.schemaDirty() && this.canEditSchema() });
+    }
+    return tabs;
+  });
+
+  protected readonly moreActions = computed<SfMenuItem[]>(() => {
+    const t = (key: string) => this.transloco.translate(`globals.detail.menu.${key}`);
+    const items: SfMenuItem[] = [
+      {
+        id: 'discard',
+        label: t('discard'),
+        icon: 'undo',
+        disabled: !this.dirty(),
+        disabledReason: this.dirty() ? undefined : t('nothingToDiscard'),
+      },
+      { id: 'history', label: t('history'), icon: 'history' },
+    ];
+    if (this.canEditSchema()) {
+      items.push({ id: 'delete', label: t('delete'), icon: 'delete', danger: true, separatorBefore: true });
+    }
+    return items;
+  });
+
+  /** This set as one editor for the frame: Ctrl+S saves it, and leaving it with unsaved changes asks first (M35.13). */
+  private readonly editor: EditorStateService = {
+    name: computed(() => this.detail()?.displayName ?? this.detail()?.uid ?? ''),
+    dirty: this.dirty,
+    saving: this.saving,
+    lastSaved: this.savedAt,
+    error: this.saveError,
+    autosave: false,
+    save: () => this.save(),
+    discard: async () => this.discard(),
+  };
+
   constructor() {
+    const unregister = inject(ActiveEditorService).register(this.editor);
+    inject(DestroyRef).onDestroy(unregister);
+    effect(
+      () => {
+        const tab = this.tabParam();
+        if (tab) {
+          this.requestedTab.set(tab);
+        }
+      },
+      { allowSignalWrites: true },
+    );
     // The breadcrumb ends with the open set, and the History drawer shows its versions (M35.12).
     useFrameItem(() => {
       const set = this.detail();
@@ -239,7 +348,10 @@ export class GlobalSetDetailComponent {
   private trackValues(form: FormGroup, dirty: boolean): void {
     this.valuesSub?.unsubscribe();
     this.valuesDirty.set(dirty);
-    this.valuesSub = form.valueChanges.subscribe(() => this.valuesDirty.set(dirty || form.dirty));
+    this.valuesSub = form.valueChanges.subscribe(() => {
+      this.valuesDirty.set(dirty || form.dirty);
+      this.saveError.set(null);
+    });
   }
 
   /** Evaluates the set's rules live while its values can be edited (M33.8). */
@@ -268,25 +380,41 @@ export class GlobalSetDetailComponent {
     });
   }
 
-  protected showValues(): void {
-    this.tab.set('values');
+  protected selectTab(id: string): void {
+    const tab = id === 'schema' ? 'schema' : 'values';
+    this.requestedTab.set(tab);
+    this.tabChange.emit(tab);
   }
 
-  protected showSchema(): void {
-    this.tab.set('schema');
+  protected onMore(item: SfMenuItem): void {
+    switch (item.id) {
+      case 'discard':
+        this.discard();
+        break;
+      case 'history':
+        this.historyDrawer.toggle();
+        break;
+      case 'delete':
+        void this.deleteSet();
+        break;
+    }
+  }
+
+  /** Gives the unsaved edits up and shows what is stored again. */
+  protected discard(): void {
+    this.saveError.set(null);
+    this.valueIssues.set([]);
+    this.cdlDiagnostics.set([]);
+    const detail = this.detail();
+    if (detail) {
+      this.apply(detail);
+    }
   }
 
   protected onSectionInput(change: { section: CdlSection; value: string }): void {
     this.sections.update((sections) => ({ ...sections, [change.section]: change.value }));
+    this.saveError.set(null);
     this.scheduleCdlValidation();
-  }
-
-  /** Ctrl+S / ⌘S saves the set (M34). */
-  protected onKeydown(event: KeyboardEvent): void {
-    if (isSaveShortcut(event)) {
-      event.preventDefault();
-      this.save();
-    }
   }
 
   private cdlTimer: ReturnType<typeof setTimeout> | null = null;
@@ -313,46 +441,48 @@ export class GlobalSetDetailComponent {
     }, 500);
   }
 
-  protected copySnippet(): void {
-    void navigator.clipboard?.writeText(this.usageSnippet()).then(
-      () => {
-        this.copied.set(true);
-        setTimeout(() => this.copied.set(false), 1500);
-      },
-      () => this.toasts.show('Could not copy — select the snippet and copy it manually.', 'error'),
-    );
-  }
-
   /**
    * The one Save (M34). A schema change goes to the schema endpoint with the edited values along (when this user may
-   * edit them), so both are one revision; values alone go to the values endpoint.
+   * edit them), so both are one revision; values alone go to the values endpoint. Resolves how it went, for the Save
+   * button, Ctrl+S and the unsaved-changes dialog.
    */
-  protected save(): void {
+  protected async save(): Promise<SaveResult> {
     const current = this.detail();
     const form = this.valuesForm();
     if (!current?.uuid || !this.dirty() || this.saving() || this.timeTravelling()) {
-      return;
+      return { ok: true };
     }
     const withValues = this.valuesDirty() && this.canEditValues() && form !== null;
     const content = withValues ? this.forms.valueOf(this.definition(), form) : undefined;
     const schema = this.schemaDirty() && this.canEditSchema();
     this.saving.set(true);
+    this.saveError.set(null);
     this.valueIssues.set([]);
     const request = schema
       ? this.globals.updateSchema(this.projectKey(), current.uuid, this.sections(), content, etagFor(current.revision ?? 0))
       : this.globals.updateContent(this.projectKey(), current.uuid, content ?? {}, etagFor(current.revision ?? 0));
-    request.subscribe({
-      next: (saved) => {
-        this.saving.set(false);
-        this.cdlDiagnostics.set([]);
-        // A schema change rebuilds the values form from scratch below — reusing the FormGroup would leave
-        // controls behind for editors the new schema no longer declares.
-        this.apply(saved);
-        this.toasts.show(schema && withValues ? 'Schema and values saved' : schema ? 'Schema saved' : 'Values saved', 'success');
-        this.changed.emit();
-      },
-      error: (err) => this.onSaveError(err),
-    });
+    try {
+      const saved = await firstValueFrom(request);
+      this.saving.set(false);
+      this.cdlDiagnostics.set([]);
+      // A schema change rebuilds the values form from scratch below — reusing the FormGroup would leave
+      // controls behind for editors the new schema no longer declares.
+      this.apply(saved);
+      this.savedAt.set(clockTime());
+      this.toasts.show(
+        this.transloco.translate(schema && withValues ? 'globals.detail.toast.savedBoth' : schema ? 'globals.detail.toast.savedSchema' : 'globals.detail.toast.savedValues'),
+        'success',
+      );
+      this.changed.emit();
+      return { ok: true };
+    } catch (err) {
+      return this.onSaveError(err);
+    }
+  }
+
+  /** The Save button and the schema tab's *Validate*. */
+  protected saveNow(): void {
+    void this.save();
   }
 
   protected validateCdl(): void {
@@ -361,34 +491,40 @@ export class GlobalSetDetailComponent {
         const diagnostics = res.diagnostics ?? [];
         this.cdlDiagnostics.set(diagnostics);
         const failed = diagnostics.some((d) => d.severity === 'ERROR');
-        this.toasts.show(failed ? 'CDL has errors' : 'CDL is valid', failed ? 'error' : 'success');
+        this.toasts.show(this.transloco.translate(failed ? 'globals.detail.toast.cdlErrors' : 'globals.detail.toast.cdlValid'), failed ? 'error' : 'success');
       },
-      error: () => this.toasts.show('Could not validate CDL — check your connection and try again.', 'error'),
+      error: () => this.toasts.show(this.transloco.translate('globals.detail.toast.validateFailed'), 'error'),
     });
   }
 
-  protected close(): void {
-    this.closed.emit();
-  }
-
-  protected deleteSet(): void {
+  /** Asks, deletes, and hands the parent what it needs for the Undo. The set's unsaved edits go with it. */
+  protected async deleteSet(): Promise<void> {
     const current = this.detail();
     if (!current?.uuid || !this.canEditSchema()) {
       return;
     }
     const online = isOnline(current.release);
     const uuid = current.uuid;
-    const name = current.displayName ?? current.uid ?? 'the property set';
+    const name: string = current.displayName ?? current.uid ?? this.transloco.translate('globals.detail.thisSet');
+    const t = (key: string, params?: Record<string, unknown>) => this.transloco.translate(key, params);
+    const confirmed = await this.confirms.confirm({
+      title: t('shared.tree.deleteTitle', { count: 1, name }),
+      message: [t('globals.tree.delete.inUse'), online ? t('globals.tree.delete.online') : ''].filter(Boolean).join(' '),
+      confirmLabel: t('shared.tree.deleteConfirm', { count: 1, name }),
+      tone: 'danger',
+    });
+    if (!confirmed) {
+      return;
+    }
     this.globals.delete(this.projectKey(), uuid).subscribe({
-      next: () => this.deleted.emit({ uuid, name, online }),
+      next: () => {
+        // The set is gone: leaving it must not ask about edits that cannot be saved any more.
+        this.discard();
+        this.deleted.emit({ uuid, name, online });
+      },
       error: (err) => {
         const inUse = err instanceof HttpErrorResponse && (err.status === 409 || err.status === 422);
-        this.toasts.show(
-          inUse
-            ? 'Could not delete — a template or page still reads this property set. Check its usages first.'
-            : 'Could not delete — try again in a moment.',
-          'error',
-        );
+        this.toasts.show(t(inUse ? 'globals.detail.toast.deleteInUse' : 'globals.detail.toast.deleteFailed'), 'error');
       },
     });
   }
@@ -414,7 +550,7 @@ export class GlobalSetDetailComponent {
       },
       error: () => {
         this.loading.set(false);
-        this.toasts.show('Could not load the property set — try again in a moment.', 'error');
+        this.toasts.show(this.transloco.translate('globals.detail.toast.loadFailed'), 'error');
       },
     });
   }
@@ -438,47 +574,53 @@ export class GlobalSetDetailComponent {
    * A rejected save. A `409` means someone else wrote a newer version: the set is reloaded so the
    * screen shows what is actually stored rather than silently retrying over a stranger's edit. A
    * `422` carries either CDL diagnostics (the schema tab and the failing section open) or field-level `issues`
-   * (the values tab opens). Every edit is kept.
+   * (the values tab opens). Every edit is kept. The refusal is both said in a toast and kept as the editor's error,
+   * which turns the save status into "Not saved" and fills the unsaved-changes dialog.
    */
-  private onSaveError(err: unknown): void {
+  private onSaveError(err: unknown): SaveResult {
     this.saving.set(false);
+    const t = (key: string, params?: Record<string, unknown>) => this.transloco.translate(`globals.detail.toast.${key}`, params);
+    const refuse = (message: string, count?: number): SaveResult => {
+      this.saveError.set({ message, ...(count ? { count } : {}) });
+      this.toasts.show(message, 'error');
+      return { ok: false, message };
+    };
     if (!(err instanceof HttpErrorResponse)) {
-      this.toasts.show('Could not save — try again in a moment.', 'error');
-      return;
+      return refuse(t('saveFailed'));
     }
     if (err.status === 409) {
-      this.toasts.show('Someone else saved this property set — reloading the current version.', 'error');
+      const result = refuse(t('conflict'));
       this.load(this.projectKey(), this.uuid(), this.timeTravel.activeRevision());
-      return;
+      this.saveError.set(null);
+      return result;
     }
     const body = (err.error ?? {}) as { diagnostics?: Diagnostic[]; issues?: ContentIssue[] };
     if (Array.isArray(body.diagnostics) && body.diagnostics.length > 0) {
       this.cdlDiagnostics.set(body.diagnostics);
-      this.tab.set('schema');
+      this.requestedTab.set('schema');
+      this.tabChange.emit('schema');
       const section = firstSectionWithErrors(body.diagnostics, SET_SECTIONS);
       if (section) {
         this.cdlTab.set(section);
       }
-      this.toasts.show(`The schema has compile errors — see the ${section ?? 'content'} tab.`, 'error');
-      return;
+      return refuse(t('schemaErrors', { section: section ?? 'content' }), body.diagnostics.filter((d) => d.severity === 'ERROR').length);
     }
     if (Array.isArray(body.issues) && body.issues.length > 0) {
       this.valueIssues.set(body.issues);
-      this.tab.set('values');
-      this.toasts.show('Some values are invalid — see the messages on the fields below.', 'error');
-      return;
+      this.requestedTab.set('values');
+      this.tabChange.emit('values');
+      return refuse(t('invalidValues'), body.issues.filter((issue) => issue.severity === 'ERROR').length);
     }
     if (err.status === 403) {
-      this.toasts.show(
-        this.schemaDirty()
-          ? 'Only a developer can change a property set’s schema.'
-          : 'You do not have permission to change these values.',
-        'error',
-      );
-      return;
+      return refuse(this.schemaDirty() ? t('forbiddenSchema') : t('forbiddenValues'));
     }
-    this.toasts.show('Could not save — try again in a moment.', 'error');
+    return refuse(t('saveFailed'));
   }
+}
+
+/** The clock time of a save, "12:04", for the save status. */
+function clockTime(): string {
+  return new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
 /** The backend sends the compiled definition verbatim; an absent one renders an empty form. */

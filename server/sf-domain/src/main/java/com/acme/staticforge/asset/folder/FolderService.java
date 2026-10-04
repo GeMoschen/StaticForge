@@ -54,6 +54,16 @@ public interface FolderService {
      */
     AssetVersionView updateStartNode(UUID uuid, StartNode startNode, long expectedRevision, RevisionContext ctx);
 
+    /**
+     * Stores the order of a {@code NAVIGATION} folder's children (M35.22): the menu shows them in this order, ahead of
+     * any child the list does not name (those follow alphabetically), and entries that are no longer children are
+     * ignored — so moving, deleting or creating children never needs a second write. Every uuid must be a direct
+     * child of this folder and appear once; the list may be partial (and empty, which clears the stored order).
+     * One new revision of the folder, so it is undone by writing the previous list. Rejected for folders outside the
+     * {@code NAVIGATION} scope.
+     */
+    AssetVersionView updateChildOrder(UUID uuid, java.util.List<UUID> childUuids, long expectedRevision, RevisionContext ctx);
+
     /** Moves a folder and rewrites the entire subtree's paths in a single revision. */
     MoveResult move(UUID folderUuid, UUID targetParentFolderUuid, RevisionContext ctx);
 

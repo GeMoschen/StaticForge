@@ -299,6 +299,38 @@ public class FolderServiceImpl implements FolderService {
 
     @Override
     @Transactional
+    public AssetVersionView updateChildOrder(UUID uuid, List<UUID> childUuids, long expectedRevision, RevisionContext ctx) {
+        Asset folder = requireFolder(uuid, ctx.projectId());
+        AssetVersion current = requireOpen(folder.getId());
+        FolderScope scope = FolderScope.fromPayload(current.getPayload());
+        if (scope != FolderScope.NAVIGATION) {
+            throw new SfException(ProblemFactory.unprocessableEntity("A child order only applies to navigation folders."));
+        }
+        List<UUID> order = childUuids == null ? List.of() : childUuids;
+        if (new java.util.HashSet<>(order).size() != order.size()) {
+            throw new SfException(ProblemFactory.unprocessableEntity("The child order lists an entry twice."));
+        }
+        for (UUID childUuid : order) {
+            Asset child = assetRepository.findByProjectIdAndUuid(ctx.projectId(), childUuid)
+                    .orElseThrow(() -> new SfException(ProblemFactory.unprocessableEntity("Child order entry not found: " + childUuid)));
+            AssetVersion childVersion = requireOpen(child.getId());
+            if (childVersion.getFolderId() == null || !childVersion.getFolderId().equals(folder.getId())) {
+                throw new SfException(ProblemFactory.unprocessableEntity(
+                        "The child order must list direct children of this folder only: " + childUuid));
+            }
+        }
+        ObjectNode payload = current.getPayload().deepCopy();
+        if (order.isEmpty()) {
+            payload.remove(FolderScope.CHILD_ORDER_FIELD);
+        } else {
+            var array = payload.putArray(FolderScope.CHILD_ORDER_FIELD);
+            order.forEach(child -> array.add(child.toString()));
+        }
+        return assetService.update(uuid, new UpdateAssetCommand(current.getDisplayName(), payload), expectedRevision, ctx);
+    }
+
+    @Override
+    @Transactional
     public MoveResult move(UUID folderUuid, UUID targetParentFolderUuid, RevisionContext ctx) {
         Asset folder = requireFolder(folderUuid, ctx.projectId());
         AssetVersion current = requireOpen(folder.getId());

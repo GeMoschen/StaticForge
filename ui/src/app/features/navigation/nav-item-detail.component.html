@@ -1,0 +1,110 @@
+<div class="detail__head">
+  <sf-page-header [title]="title()" [secondaryActions]="moreActions()" (secondaryAction)="onMore($event)">
+    <span sfPageHeaderStatus class="detail__title-extras">
+      <sf-asset-favorite type="PAGE_REFERENCE" [uuid]="entry().uuid" [name]="title()" [folderPath]="detail()?.folderPath ?? undefined" />
+    </span>
+    <ng-container sfPageHeaderActions>
+      <sf-save-status class="detail__status" [state]="saveState()" [savedAt]="savedAt()" />
+      <sf-button icon="save" [disabled]="!canEdit() || !dirty() || saving()" (click)="onSaveClick()">{{ 'navigation.item.save' | transloco }}</sf-button>
+      <sf-release-bar
+        class="detail__release"
+        layout="header"
+        [projectKey]="projectKey()"
+        [assetUuid]="entry().uuid"
+        [refreshKey]="entry().revision"
+      />
+    </ng-container>
+  </sf-page-header>
+  @if (developerMode()) {
+    <dl class="detail__meta">
+      <div class="detail__meta-item">
+        <dt>{{ 'navigation.item.uid' | transloco }}</dt>
+        <dd><sf-copyable [value]="entry().uid" [label]="'navigation.item.uid' | transloco" /></dd>
+      </div>
+    </dl>
+  }
+</div>
+
+<div class="detail__scroll">
+  <div class="form">
+    @if (loadFailed()) {
+      <sf-banner tone="danger" [title]="'navigation.item.loadFailed' | transloco" />
+    }
+    @if (saveError(); as error) {
+      <sf-banner tone="danger" [title]="error.message" />
+    }
+    <sf-section [heading]="'navigation.item.section' | transloco">
+      <div class="form__grid">
+        <sf-field class="form__wide" [label]="'navigation.item.label' | transloco" [hint]="'navigation.item.labelHint' | transloco: { name: entry().targetName ?? '' }">
+          <sf-input
+            [value]="labelDraft()"
+            [placeholder]="entry().targetName ?? ''"
+            [disabled]="!canEdit()"
+            (valueChange)="labelDraft.set($event)"
+          />
+        </sf-field>
+
+        <sf-field class="form__wide" [label]="'navigation.item.target' | transloco">
+          @if (target(); as page) {
+            <div class="target">
+              <sf-icon class="target__icon" [name]="folderTarget() ? 'folder_open' : 'description'" />
+              <div class="target__info">
+                <span class="target__name">{{ page.name }}</span>
+                @if (publicUrl(); as url) {
+                  <code class="target__url">{{ url }}</code>
+                } @else {
+                  <span class="target__nourl">{{ 'navigation.item.noUrl' | transloco }}</span>
+                }
+                @if (folderTarget()) {
+                  <span class="target__note">{{ 'navigation.item.folderTarget' | transloco }}</span>
+                }
+              </div>
+              @if (picked()) {
+                <sf-status size="sm" tone="warning" icon="edit" [label]="'navigation.item.changed' | transloco" />
+              }
+              <sf-button
+                variant="ghost"
+                size="sm"
+                icon="open_in_new"
+                [aria-label]="'navigation.item.openLabel' | transloco: { name: page.name }"
+                (click)="openPage.emit(page.uuid)"
+                >{{ 'navigation.item.open' | transloco }}</sf-button
+              >
+              <sf-button variant="secondary" size="sm" icon="swap_horiz" [disabled]="!canEdit()" (click)="openPicker()">{{
+                'navigation.item.change' | transloco
+              }}</sf-button>
+            </div>
+          } @else {
+            <div class="target target--empty">
+              <sf-icon class="target__icon" name="link_off" />
+              <span class="target__none">{{ (dangling() ? 'navigation.item.targetGone' : 'navigation.item.noTarget') | transloco }}</span>
+              <sf-button variant="secondary" size="sm" icon="search" [disabled]="!canEdit()" (click)="openPicker()">{{
+                'navigation.item.choose' | transloco
+              }}</sf-button>
+            </div>
+          }
+        </sf-field>
+
+        <sf-field class="form__wide" [label]="'navigation.item.publicUrl' | transloco" [hint]="'navigation.item.publicUrlHint' | transloco">
+          <sf-input readonly monospace icon="public" [value]="publicUrl() ?? ''" [placeholder]="'navigation.item.noUrl' | transloco" />
+        </sf-field>
+
+        @if (developerMode() && target(); as page) {
+          <sf-field class="form__wide" [label]="'navigation.item.targetUuid' | transloco">
+            <sf-copyable [value]="page.uuid" [label]="'navigation.item.targetUuid' | transloco" />
+          </sf-field>
+        }
+      </div>
+    </sf-section>
+  </div>
+</div>
+
+@if (pickerOpen()) {
+  <sf-asset-picker-dialog
+    [projectKey]="projectKey()"
+    initialType="PAGE"
+    [allowedTypes]="['PAGE']"
+    (picked)="onPicked($event)"
+    (closed)="pickerOpen.set(false)"
+  />
+}

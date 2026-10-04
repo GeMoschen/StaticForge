@@ -1,0 +1,84 @@
+<div class="view__head">
+  <sf-page-header [title]="folder().label" [subtitle]="subtitle()" [secondaryActions]="moreActions()" (secondaryAction)="onMenu($event)">
+    <span sfPageHeaderStatus class="view__title-extras">
+      <sf-asset-favorite type="FOLDER" [uuid]="folder().uuid" [name]="folder().label" [folderPath]="pathOf(folder())" />
+    </span>
+    <ng-container sfPageHeaderActions>
+      <sf-button icon="add_link" [disabled]="!canEdit()" (click)="newItem.emit()">{{ 'navigation.newMenuItem' | transloco }}</sf-button>
+    </ng-container>
+  </sf-page-header>
+  @if (developerMode()) {
+    <dl class="view__meta">
+      <div class="view__meta-item">
+        <dt>{{ 'navigation.item.uid' | transloco }}</dt>
+        <dd><sf-copyable [value]="folder().uid" [label]="'navigation.item.uid' | transloco" /></dd>
+      </div>
+    </dl>
+  }
+</div>
+
+<div class="view__body">
+  <sf-field
+    class="view__entry"
+    labelPosition="inline"
+    [label]="'navigation.entryPage' | transloco"
+    [hint]="'navigation.entryPageHint' | transloco"
+  >
+    <sf-select
+      [options]="entryOptions()"
+      [value]="entryValue()"
+      [disabled]="!canEdit() || savingEntry()"
+      [placeholder]="'navigation.noEntryPage' | transloco"
+      (valueChange)="setEntry($event)"
+    />
+  </sf-field>
+  <sf-data-table
+    class="view__table"
+    selectable
+    [columnChooser]="false"
+    [columns]="columns()"
+    [rows]="rows()"
+    [rowKey]="rowKey"
+    [rowLabel]="rowLabel"
+    [bulkActions]="bulkActions()"
+    [loading]="loading()"
+    [error]="failed() ? ('navigation.loadFailed' | transloco) : null"
+    [label]="'navigation.table' | transloco: { name: folder().label }"
+    [emptyTitle]="'navigation.tableEmpty' | transloco"
+    [emptyDescription]="'navigation.tableEmptyHint' | transloco"
+    (rowOpen)="openEntry.emit($event.entry.uuid)"
+    (retry)="retry.emit()"
+  >
+    <ng-template sfDataTableCell="label" [sfDataTableCellRows]="rows()" let-row>
+      <span class="cell-label">
+        <sf-icon class="cell-label__icon" [name]="row.entry.kind === 'folder' ? 'folder' : 'link'" />
+        <span class="cell-label__text">{{ row.entry.label }}</span>
+        @if (row.isEntryPage) {
+          <sf-badge tone="accent" icon="login" [label]="'navigation.entryPage' | transloco" />
+        }
+        <sf-asset-favorite
+          class="cell-fav"
+          [type]="row.entry.kind === 'folder' ? 'FOLDER' : 'PAGE_REFERENCE'"
+          [uuid]="row.entry.uuid"
+          [name]="row.entry.label"
+          [folderPath]="pathOf(row.entry)"
+          (click)="$event.stopPropagation()"
+        />
+      </span>
+    </ng-template>
+    <ng-template sfDataTableCell="target" [sfDataTableCellRows]="rows()" let-row>
+      @if (row.targetName) {
+        <span class="cell-target">{{ row.targetName }}</span>
+      } @else {
+        <span class="cell-muted">{{ 'navigation.item.noTarget' | transloco }}</span>
+      }
+    </ng-template>
+    <ng-template sfDataTableCell="url" [sfDataTableCellRows]="rows()" let-row>
+      @if (row.url) {
+        <code class="cell-url">{{ row.url }}</code>
+      } @else {
+        <span class="cell-muted">—</span>
+      }
+    </ng-template>
+  </sf-data-table>
+</div>

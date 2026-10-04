@@ -4,6 +4,7 @@ import com.acme.staticforge.api.dto.CreatePageReferenceRequest;
 import com.acme.staticforge.api.dto.NavTreeView;
 import com.acme.staticforge.api.dto.NavigationFolderView;
 import com.acme.staticforge.api.dto.NavigationStartNodeView;
+import com.acme.staticforge.api.dto.ReorderNavigationRequest;
 import com.acme.staticforge.api.dto.PageReferenceResolveView;
 import com.acme.staticforge.api.dto.PageReferenceView;
 import com.acme.staticforge.api.dto.ScheduledRefView;
@@ -40,6 +41,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -130,12 +132,13 @@ public class NavigationController {
             NavTreeNode node,
             java.util.Map<UUID, java.util.Map<String, com.acme.staticforge.api.dto.LocaleReleaseView>> release,
             java.util.Map<UUID, List<ScheduledRefView>> scheduled) {
-        String path = node.resolvedPageUuid() == null
+        AssetVersionView page = node.resolvedPageUuid() == null
                 ? null
-                : assetService.requireCurrent(projectId, node.resolvedPageUuid()).folderPath();
+                : assetService.requireCurrent(projectId, node.resolvedPageUuid());
         return new NavTreeView(
                 node.assetUuid(), node.type().name(), node.uid(), node.displayName(), node.label(),
-                node.resolvedPageUuid(), path, node.protectedFolder(),
+                node.resolvedPageUuid(), page == null ? null : page.folderPath(),
+                page == null ? null : page.displayName(), node.protectedFolder(),
                 assetService.requireCurrent(projectId, node.assetUuid()).validFromRevision(),
                 node.children().stream().map(c -> toView(projectId, c, release, scheduled)).toList(),
                 release.get(node.assetUuid()),
@@ -165,6 +168,26 @@ public class NavigationController {
         if (view == null) {
             view = assetService.requireCurrent(projectId(projectKey), uuid);
         }
+        return ResponseEntity.ok().header(HttpHeaders.ETAG, RevisionHeaders.etag(view.validFromRevision())).body(toFolderView(view));
+    }
+
+    /**
+     * Stores the order of a navigation folder's children (M35.22 sibling reordering): {@code childUuids} are direct
+     * children in the order the menu shows them. Children the list does not name follow alphabetically, so a
+     * partial list is fine, and an empty one restores the alphabetical order. One new revision of the folder.
+     */
+    @PutMapping("/folders/{uuid}/order")
+    @PreAuthorize("@projectAuth.has(#projectKey, " + ProjectRoleExpr.EDITOR + ")")
+    public ResponseEntity<NavigationFolderView> reorderChildren(
+            @PathVariable String projectKey,
+            @PathVariable UUID uuid,
+            @RequestHeader(value = "If-Match", required = false) String ifMatch,
+            @RequestBody ReorderNavigationRequest body) {
+        AssetVersionView view = folderService.updateChildOrder(
+                uuid,
+                body.childUuids(),
+                RevisionHeaders.expectedRevision(ifMatch),
+                ctx(projectKey, "reorder navigation folder"));
         return ResponseEntity.ok().header(HttpHeaders.ETAG, RevisionHeaders.etag(view.validFromRevision())).body(toFolderView(view));
     }
 

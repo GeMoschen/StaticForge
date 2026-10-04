@@ -213,9 +213,13 @@ public class NavigationServiceImpl implements NavigationService {
         List<NavTreeNode> children = List.of();
         boolean depthAllows = (maxDepth < 0 || level < maxDepth) && level < PathService.MAX_DEPTH;
         if (asset.type() == AssetType.FOLDER && depthAllows) {
-            children = lookup.childrenOf(projectId, uuid).stream()
-                    .filter(a -> a.type() == AssetType.FOLDER || a.type() == AssetType.PAGE_REFERENCE)
-                    .sorted(FOLDER_ORDER)
+            children = menuOrder(
+                            asset,
+                            lookup.childrenOf(projectId, uuid).stream()
+                                    .filter(a -> a.type() == AssetType.FOLDER || a.type() == AssetType.PAGE_REFERENCE)
+                                    .sorted(FOLDER_ORDER)
+                                    .toList())
+                    .stream()
                     .map(a -> buildNode(projectId, a.uuid(), maxDepth, lookup, diagnostics, level + 1, localeChain))
                     .filter(Objects::nonNull)
                     .toList();
@@ -224,6 +228,29 @@ public class NavigationServiceImpl implements NavigationService {
         return new NavTreeNode(
                 asset.uuid(), asset.type(), asset.uid(), asset.displayName(), label(projectId, asset, lookup, localeChain),
                 resolvedPageUuid, FolderScope.isProtected(asset.payload()), children);
+    }
+
+    /**
+     * A navigation folder's children in menu order (M35.22): those its stored {@code childOrder} names first, in that
+     * order, then the rest in the {@code children}' own order (alphabetical). A stored name that is no longer a child
+     * is ignored, so a move, delete or create needs no second write.
+     */
+    private static List<NavigationAsset> menuOrder(NavigationAsset folder, List<NavigationAsset> children) {
+        List<UUID> stored = FolderScope.childOrderFromPayload(folder.payload());
+        if (stored.isEmpty() || children.size() < 2) {
+            return children;
+        }
+        java.util.Map<UUID, NavigationAsset> byUuid = new java.util.LinkedHashMap<>();
+        children.forEach(child -> byUuid.put(child.uuid(), child));
+        List<NavigationAsset> ordered = new ArrayList<>(children.size());
+        for (UUID uuid : stored) {
+            NavigationAsset child = byUuid.remove(uuid);
+            if (child != null) {
+                ordered.add(child);
+            }
+        }
+        ordered.addAll(byUuid.values());
+        return ordered;
     }
 
     private String label(

@@ -1,83 +1,137 @@
-<div class="globals">
-  <aside class="globals__tree">
-    <div class="globals__toolbar">
-      <sf-button variant="secondary" [disabled]="readOnly()" (click)="newFolder()">New subfolder</sf-button>
-      <sf-button variant="secondary" [disabled]="readOnly()" (click)="newSet()">New property set</sf-button>
-    </div>
-
-    <button
-      type="button"
-      class="globals__clear"
-      [class.globals__clear--active]="!selectedUuid()"
-      (click)="closeDetail()"
-      (dragover)="onRootDragOver($event)"
-      (drop)="onRootDrop($event)"
-      (contextmenu)="onRootContextMenu($event)"
-    >
-      <sf-icon name="home" />
-      All globals
-    </button>
-
-    @if (loading()) {
-      <sf-spinner label="Loading globals…" />
-    } @else if (treeNodes().length === 0) {
-      <sf-empty-state
-        title="No property sets yet"
-        description="Create a property set to hold site-wide values such as the site title or social links."
+<sf-splitter
+  class="globals"
+  collapsible
+  paneId="globals-tree"
+  [defaultSize]="treeWidth"
+  [min]="200"
+  [max]="440"
+  [label]="'globals.tree.resize' | transloco"
+>
+  <section sfSplitterStart class="globals__pane globals__tree" aria-labelledby="globals-tree-title">
+    <div class="globals__head">
+      <span class="globals__title" id="globals-tree-title">{{ 'globals.tree.title' | transloco }}</span>
+      <sf-menu
+        variant="secondary"
+        size="sm"
+        align="end"
+        [text]="'globals.tree.new' | transloco"
+        [label]="'globals.tree.newLabel' | transloco"
+        [items]="newItems()"
+        [disabled]="!canManage()"
       />
-    } @else {
-      <div>
-        @for (node of treeNodes(); track node.uuid) {
-          <sf-store-tree-node
-            [node]="node"
-            [depth]="0"
-            [selectedUuid]="selectedUuid()"
+    </div>
+    <sf-tree
+      class="globals__treebody"
+      treeId="globals"
+      filterMode="server"
+      rootDroppable
+      [label]="'globals.tree.title' | transloco"
+      [projectKey]="projectKey()"
+      [loadChildren]="loader()"
+      [selection]="treeSelection()"
+      [actions]="treeActions"
+      [createKinds]="['folder']"
+      [allowAction]="allowAction"
+      [canDrop]="canDrop"
+      [validateName]="validateName"
+      [confirmDelete]="confirmDelete"
+      [menuItems]="menuItems"
+      [search]="search"
+      (open)="onOpen($event)"
+      (create)="onCreate($event)"
+      (rename)="onRename($event)"
+      (delete)="onDelete($event)"
+      (move)="onMove($event)"
+      (moveTo)="openMoveDialog($event)"
+    />
+  </section>
+
+  <div sfSplitterEnd class="globals__pane globals__main">
+    @switch (mode()) {
+      @case ('set') {
+        <!-- One detail per set: another set starts from what is stored, never from the last one's edits. -->
+        @for (uuid of [openEntry()!.uuid]; track uuid) {
+          <sf-global-set-detail
             [projectKey]="projectKey()"
-            leafNoun="Property set"
-            [renameFolder]="renameFolder"
-            [undoable]="true"
-            (select)="select($event)"
-            (move)="onMove($event)"
-            (changed)="onSetChanged()"
+            [uuid]="uuid"
+            [tab]="setTab()"
+            (tabChange)="onTabChange($event)"
+            (changed)="changed()"
+            (deleted)="onSetDeleted($event)"
           />
         }
-      </div>
+      }
+      @case ('favorites') {
+        <sf-favorites-view />
+      }
+      @case ('folder') {
+        <div class="globals__plain">
+          <div class="globals__plain-head">
+            <sf-page-header [title]="openEntry()!.name" />
+          </div>
+          <sf-empty-state
+            class="globals__state"
+            icon="folder"
+            [level]="2"
+            [title]="'globals.shell.folder.title' | transloco"
+            [description]="'globals.shell.folder.description' | transloco"
+            [primaryLabel]="canManage() ? ('globals.tree.newSet' | transloco) : null"
+            primaryIcon="note_add"
+            (primary)="openNewSetHere()"
+          />
+        </div>
+      }
+      @default {
+        @if (loaded()) {
+          <div class="globals__plain">
+            <div class="globals__plain-head">
+              <sf-page-header [title]="'globals.tree.title' | transloco" />
+            </div>
+            @if (emptyStore()) {
+              <sf-empty-state
+                class="globals__state"
+                [icon]="setIcon"
+                [level]="2"
+                [title]="'globals.shell.empty.title' | transloco"
+                [description]="(canManage() ? 'globals.shell.empty.developer' : 'globals.shell.empty.editor') | transloco"
+                [primaryLabel]="canManage() ? ('globals.tree.newSet' | transloco) : null"
+                primaryIcon="note_add"
+                [secondaryLabel]="canManage() ? ('globals.shell.empty.createFolder' | transloco) : null"
+                (primary)="openNewSetHere()"
+                (secondary)="createFolderAtRoot()"
+              />
+            } @else {
+              <sf-empty-state
+                class="globals__state"
+                [icon]="setIcon"
+                [level]="2"
+                [title]="'globals.shell.select.title' | transloco"
+                [description]="'globals.shell.select.description' | transloco"
+              />
+            }
+          </div>
+        }
+      }
     }
-  </aside>
-
-  <section class="globals__detail">
-    @if (selectedSet(); as set) {
-      <sf-global-set-detail
-        [projectKey]="projectKey()"
-        [uuid]="set.uuid ?? ''"
-        (closed)="closeDetail()"
-        (changed)="onSetChanged()"
-        (deleted)="onSetDeleted($event)"
-      />
-    } @else {
-      <sf-empty-state
-        title="Select a property set"
-        description="Choose a set from the tree to edit its values, or its schema if you are a developer."
-      />
-    }
-  </section>
-</div>
-
-<sf-create-asset-dialog
-  kind="FOLDER"
-  scope="GLOBALS"
-  [open]="newFolderOpen()"
-  [submitting]="creatingFolder()"
-  [projectKey]="projectKey()"
-  (create)="submitNewFolder($event)"
-  (closed)="closeNewFolder()"
-/>
+  </div>
+</sf-splitter>
 
 <sf-create-asset-dialog
   kind="GLOBAL_SET"
   [open]="newSetOpen()"
-  [submitting]="creatingSet()"
+  [submitting]="creating()"
   [projectKey]="projectKey()"
   (create)="submitNewSet($event)"
-  (closed)="closeNewSet()"
+  (closed)="newSetOpen.set(false)"
 />
+
+@if (moving()) {
+  <sf-folder-move-dialog
+    [tree]="folderTree()"
+    [excluded]="movingFolders()"
+    [count]="moving()!.length"
+    [rootLabel]="'globals.shell.root' | transloco"
+    (chosen)="onMoveChosen($event)"
+    (cancelled)="moving.set(null)"
+  />
+}

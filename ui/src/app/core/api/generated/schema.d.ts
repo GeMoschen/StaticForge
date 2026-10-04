@@ -228,6 +228,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{projectKey}/navigation/folders/{uuid}/order": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["reorderChildren"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{projectKey}/media/{uuid}": {
         parameters: {
             query?: never;
@@ -1076,22 +1092,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/projects/{projectKey}/media/bulk": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["bulk"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/projects/{projectKey}/media/download": {
         parameters: {
             query?: never;
@@ -1102,6 +1102,22 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["download"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectKey}/media/bulk": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["bulk"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3055,15 +3071,30 @@ export interface components {
         ReorderRequest: {
             instanceIds?: string[];
         };
+        ReorderNavigationRequest: {
+            childUuids?: string[];
+        };
+        NavigationFolderView: {
+            /** Format: uuid */
+            uuid?: string;
+            uid?: string;
+            displayName?: string;
+            /** Format: int64 */
+            revision?: number;
+            folderPath?: string;
+            protectedFolder?: boolean;
+            startNode?: components["schemas"]["NavigationStartNodeView"];
+        };
+        NavigationStartNodeView: {
+            kind?: string;
+            /** Format: uuid */
+            assetUuid?: string;
+        };
         FocalPointView: {
             /** Format: double */
             x?: number;
             /** Format: double */
             y?: number;
-        };
-        MediaDownloadRequest: {
-            uuids?: string[];
-            name?: string;
         };
         MediaMetadataRequest: {
             altText?: string;
@@ -3722,6 +3753,10 @@ export interface components {
             };
             scheduled?: components["schemas"]["ScheduledRefView"][];
         };
+        MediaDownloadRequest: {
+            uuids?: string[];
+            name?: string;
+        };
         MediaBulkItemResult: {
             fileName?: string;
             media?: components["schemas"]["MediaView"];
@@ -4184,22 +4219,6 @@ export interface components {
             targetAssetUuid?: string;
             label?: string;
         };
-        NavigationFolderView: {
-            /** Format: uuid */
-            uuid?: string;
-            uid?: string;
-            displayName?: string;
-            /** Format: int64 */
-            revision?: number;
-            folderPath?: string;
-            protectedFolder?: boolean;
-            startNode?: components["schemas"]["NavigationStartNodeView"];
-        };
-        NavigationStartNodeView: {
-            kind?: string;
-            /** Format: uuid */
-            assetUuid?: string;
-        };
         UidChangeRequest: {
             uid?: string;
         };
@@ -4269,10 +4288,10 @@ export interface components {
             archived?: boolean;
         };
         PageUrlRegistryEntryView: {
-            /** Format: int32 */
-            totalPages?: number;
             /** Format: int64 */
             totalElements?: number;
+            /** Format: int32 */
+            totalPages?: number;
             /** Format: int32 */
             size?: number;
             content?: components["schemas"]["UrlRegistryEntryView"][];
@@ -4290,11 +4309,11 @@ export interface components {
             /** Format: int64 */
             offset?: number;
             sort?: components["schemas"]["SortObject"][];
+            paged?: boolean;
             /** Format: int32 */
             pageNumber?: number;
             /** Format: int32 */
             pageSize?: number;
-            paged?: boolean;
             unpaged?: boolean;
         };
         SortObject: {
@@ -4331,10 +4350,10 @@ export interface components {
             orphaned?: string[];
         };
         PageTemplateSummary: {
-            /** Format: int32 */
-            totalPages?: number;
             /** Format: int64 */
             totalElements?: number;
+            /** Format: int32 */
+            totalPages?: number;
             /** Format: int32 */
             size?: number;
             content?: components["schemas"]["TemplateSummary"][];
@@ -4359,12 +4378,12 @@ export interface components {
             revision?: number;
             /** Format: uuid */
             parentTemplateRef?: string;
-            abstract?: boolean;
             channels?: string[];
             /** Format: int32 */
             usedByCount?: number;
             /** Format: date-time */
             changedAt?: string;
+            abstract?: boolean;
         };
         SearchFacets: {
             types?: {
@@ -4552,7 +4571,6 @@ export interface components {
                 [key: string]: components["schemas"]["LocaleReleaseView"];
             };
             scheduled?: components["schemas"]["ScheduledRefView"][];
-            /** The page's template name (page listings). */
             templateName?: string;
             /** Format: date-time */
             changedAt?: string;
@@ -4570,6 +4588,7 @@ export interface components {
             /** Format: uuid */
             resolvedPageUuid?: string;
             resolvedPagePath?: string;
+            resolvedPageName?: string;
             protectedFolder?: boolean;
             /** Format: int64 */
             revision?: number;
@@ -4612,10 +4631,10 @@ export interface components {
             scheduled?: components["schemas"]["ScheduledRefView"][];
         };
         PageMediaSummaryView: {
-            /** Format: int32 */
-            totalPages?: number;
             /** Format: int64 */
             totalElements?: number;
+            /** Format: int32 */
+            totalPages?: number;
             /** Format: int32 */
             size?: number;
             content?: components["schemas"]["MediaSummaryView"][];
@@ -4779,10 +4798,10 @@ export interface components {
             createdAt?: string;
         };
         PageAssetSummaryView: {
-            /** Format: int32 */
-            totalPages?: number;
             /** Format: int64 */
             totalElements?: number;
+            /** Format: int32 */
+            totalPages?: number;
             /** Format: int32 */
             size?: number;
             content?: components["schemas"]["AssetSummaryView"][];
@@ -5691,6 +5710,35 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    reorderChildren: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string;
+            };
+            path: {
+                projectKey: string;
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReorderNavigationRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["NavigationFolderView"];
+                };
             };
         };
     };
@@ -7641,31 +7689,6 @@ export interface operations {
             };
         };
     };
-    bulk: {
-        parameters: {
-            query: {
-                files: string[];
-                folderUuid?: string;
-            };
-            header?: never;
-            path: {
-                projectKey: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["MediaBulkItemResult"][];
-                };
-            };
-        };
-    };
     download: {
         parameters: {
             query?: never;
@@ -7688,6 +7711,31 @@ export interface operations {
                 };
                 content: {
                     "*/*": string;
+                };
+            };
+        };
+    };
+    bulk: {
+        parameters: {
+            query: {
+                files: string[];
+                folderUuid?: string;
+            };
+            header?: never;
+            path: {
+                projectKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["MediaBulkItemResult"][];
                 };
             };
         };

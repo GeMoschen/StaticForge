@@ -59,6 +59,29 @@ public enum FolderScope {
      * schemas (M19.1.1), the third one next to {@link #PAGE_TEMPLATES_UID}/{@link #SECTION_TEMPLATES_UID}. */
     public static final String DATASETS_UID = "datasets";
 
+    /**
+     * The payload field of a {@code NAVIGATION} folder holding the stored order of its children, a JSON array of
+     * uuids (M35.22). Children it does not name come after those it does; names that are no longer children are ignored.
+     */
+    public static final String CHILD_ORDER_FIELD = "childOrder";
+
+    /** The stored child order of a navigation folder's payload; empty when there is none. Never throws on a malformed value. */
+    public static java.util.List<java.util.UUID> childOrderFromPayload(JsonNode payload) {
+        JsonNode array = payload == null ? null : payload.get(CHILD_ORDER_FIELD);
+        if (array == null || !array.isArray()) {
+            return java.util.List.of();
+        }
+        java.util.List<java.util.UUID> order = new java.util.ArrayList<>();
+        for (JsonNode entry : array) {
+            try {
+                order.add(java.util.UUID.fromString(entry.asText("")));
+            } catch (IllegalArgumentException e) {
+                // A malformed entry is skipped: the rest of the order still applies.
+            }
+        }
+        return order;
+    }
+
     /** The scope an asset of this type must be placed under, or {@code null} if the type isn't scoped to a store. */
     public static FolderScope requiredFor(AssetType type) {
         return switch (type) {

@@ -1,99 +1,134 @@
-<div class="navigation">
-  <aside class="navigation__tree">
-    <div class="navigation__toolbar">
-      <sf-button variant="secondary" [disabled]="readOnly()" (click)="newFolder()">New subfolder</sf-button>
-      <sf-button variant="secondary" [disabled]="readOnly()" (click)="newReference()">New reference</sf-button>
+<sf-splitter
+  class="nav"
+  collapsible
+  paneId="navigation-tree"
+  [defaultSize]="treeWidth"
+  [min]="220"
+  [max]="460"
+  [label]="'navigation.resize' | transloco"
+>
+  <section sfSplitterStart class="nav__pane nav__tree" aria-labelledby="nav-tree-title">
+    <div class="nav__head">
+      <span class="nav__title" id="nav-tree-title">{{ 'navigation.title' | transloco }}</span>
+      <sf-menu
+        variant="secondary"
+        size="sm"
+        align="end"
+        [text]="'navigation.new' | transloco"
+        [label]="'navigation.newLabel' | transloco"
+        [items]="newItems()"
+        [disabled]="!canEdit()"
+      />
     </div>
+    <sf-tree
+      class="nav__treebody"
+      treeId="navigation"
+      filterMode="server"
+      sort="none"
+      reorderable
+      rootDroppable
+      [label]="'navigation.title' | transloco"
+      [projectKey]="projectKey()"
+      [loadChildren]="loader()"
+      [selection]="treeSelection()"
+      [multiselect]="false"
+      [actions]="treeActions"
+      [createKinds]="['folder']"
+      [allowAction]="allowAction"
+      [canDrop]="canDrop"
+      [validateName]="validateName"
+      [confirmDelete]="confirmDelete"
+      [menuItems]="menuItems"
+      [search]="search"
+      (open)="onOpen($event)"
+      (create)="onCreate($event)"
+      (rename)="onRename($event)"
+      (delete)="onDelete($event)"
+      (move)="onMove($event)"
+      (moveTo)="openMoveDialogForNodes($event)"
+      (reorder)="onReorder($event)"
+    />
+    @if (canEdit()) {
+      <p class="nav__hint">{{ 'navigation.reorderHint' | transloco }}</p>
+    }
+  </section>
 
-    <button
-      type="button"
-      class="navigation__clear"
-      [class.navigation__clear--active]="!selectedUuid() || rootSelected()"
-      (click)="selectRoot()"
-      (dragover)="onRootDragOver($event)"
-      (drop)="onRootDrop($event)"
-      (contextmenu)="onRootContextMenu($event)"
-    >
-      <sf-icon name="home" />
-      All navigation
-    </button>
-
-    @if (loading()) {
-      <sf-spinner label="Loading navigation…" />
-    } @else {
-      @if (topLevelNodes().length === 0) {
-        <sf-empty-state title="No navigation yet" description="Create a folder or reference to get started." />
-      } @else {
-        <div>
-          @for (node of treeNodes(); track node.uuid) {
-            <sf-store-tree-node
-              [node]="node"
-              [depth]="0"
-              [selectedUuid]="selectedUuid()"
-              [projectKey]="projectKey()"
-              leafNoun="Reference"
-              [undoable]="true"
-              [renameFolder]="renameFolder"
-              (select)="select($event)"
-              (move)="onMove($event)"
-              (changed)="onTreeNodeRenamed()"
+  <div sfSplitterEnd class="nav__pane nav__main">
+    @switch (mode()) {
+      @case ('favorites') {
+        <sf-favorites-view />
+      }
+      @case ('folder') {
+        <sf-nav-folder-view
+          [projectKey]="projectKey()"
+          [folder]="selected()!"
+          [index]="index()"
+          [urls]="urls()"
+          [loading]="!loaded()"
+          [failed]="failed()"
+          (openEntry)="openEntry($event)"
+          (newItem)="openNewItemHere()"
+          (rename)="renameInTree($event)"
+          (moveEntries)="openMoveDialog($event)"
+          (deleteEntries)="deleteEntries($event)"
+          (retry)="changed()"
+          (changed)="changed()"
+        />
+      }
+      @case ('item') {
+        <sf-nav-item-detail
+          [projectKey]="projectKey()"
+          [entry]="selected()!"
+          [urls]="urls()"
+          (changed)="changed()"
+          (move)="openMoveDialog([selected()!])"
+          (remove)="deleteEntries([selected()!])"
+          (openPage)="openPage($event)"
+        />
+      }
+      @default {
+        <div class="nav__empty">
+          <sf-page-header [title]="'navigation.title' | transloco" />
+          @if (emptyMenu()) {
+            <sf-empty-state
+              icon="menu"
+              [title]="'navigation.emptyMenuTitle' | transloco"
+              [description]="'navigation.emptyMenuText' | transloco"
+              [primaryLabel]="canEdit() ? ('navigation.newItem' | transloco) : null"
+              primaryIcon="add_link"
+              [secondaryLabel]="canEdit() ? ('navigation.newFolder' | transloco) : null"
+              (primary)="openNewItem(null)"
+              (secondary)="createFolderAtRoot()"
+            />
+          } @else {
+            <sf-empty-state
+              icon="menu"
+              [title]="'navigation.emptyTitle' | transloco"
+              [description]="'navigation.emptyText' | transloco"
             />
           }
         </div>
       }
     }
-  </aside>
-
-  <section class="navigation__detail">
-    @if (detailLoading()) {
-      <sf-spinner label="Loading…" />
-    } @else {
-      @if (folderDetail(); as folder) {
-        <sf-nav-folder-detail
-          [projectKey]="projectKey()"
-          [folder]="folder"
-          [children]="selectedNode()?.children ?? []"
-          [release]="selectedNode()?.release"
-          (closed)="closeDetail()"
-          (changed)="onFolderChanged()"
-          (deleted)="onFolderDeleted()"
-        />
-      } @else {
-        @if (referenceDetail(); as reference) {
-          <sf-nav-reference-detail
-            [projectKey]="projectKey()"
-            [reference]="reference"
-            [release]="selectedNode()?.release"
-            (closed)="closeDetail()"
-            (changed)="onReferenceChanged()"
-            (deleted)="onReferenceDeleted()"
-          />
-        } @else {
-          <sf-empty-state
-            title="Select a node"
-            description="Choose a folder or reference from the tree to see its details."
-          />
-        }
-      }
-    }
-  </section>
-</div>
-
-<sf-create-asset-dialog
-  kind="FOLDER"
-  scope="NAVIGATION"
-  [open]="newFolderOpen()"
-  [submitting]="creatingFolder()"
-  [projectKey]="projectKey()"
-  (create)="submitNewFolder($event)"
-  (closed)="closeNewFolder()"
-/>
+  </div>
+</sf-splitter>
 
 <sf-create-asset-dialog
   kind="PAGE_REFERENCE"
-  [open]="newReferenceOpen()"
-  [submitting]="creatingReference()"
+  [open]="newItemOpen()"
+  [submitting]="creating()"
   [projectKey]="projectKey()"
-  (create)="submitNewReference($event)"
-  (closed)="closeNewReference()"
+  (create)="submitNewItem($event)"
+  (closed)="newItemOpen.set(false)"
 />
+
+@if (moving(); as entries) {
+  <sf-folder-move-dialog
+    [tree]="folderTree()"
+    [excluded]="movingFolders()"
+    [count]="entries.length"
+    [rootLabel]="'navigation.title' | transloco"
+    (chosen)="onMoveChosen($event)"
+    (cancelled)="moving.set(null)"
+  />
+}

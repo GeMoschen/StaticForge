@@ -1,498 +1,736 @@
-import { ChangeDetectionStrategy, Component, computed, effect, inject, input, signal, untracked } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  Injector,
+  afterNextRender,
+  computed,
+  effect,
+  inject,
+  input,
+  signal,
+  untracked,
+  viewChild,
+} from '@angular/core';
+import { toSignal } from '@angular/core/rxjs-interop';
+import { Router } from '@angular/router';
+import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
+import { Subscription, firstValueFrom } from 'rxjs';
+import { ApiClient } from '../../core/api/api.client';
+import { FAVORITES_NODE, FavoriteTreeService, isFavoriteNode } from '../../core/assets/favorite-tree.service';
+import { FavoritesService } from '../../core/assets/favorites.service';
+import { DeveloperModeService } from '../../core/frame/developer-mode.service';
+import { EditingLocaleStore } from '../../core/project/editing-locale.store';
+import { ProjectPermissionsStore } from '../../core/project/project-permissions.store';
 import { createShortcut } from '../../core/ui/documented-shortcuts';
 import { ShortcutService } from '../../core/ui/shortcut.service';
-import { ActivatedRoute, Router } from '@angular/router';
-import { tap } from 'rxjs';
-import { ApiClient } from '../../core/api/api.client';
 import { ToastService } from '../../core/ui/toast.service';
-import { UndoService } from '../../core/ui/undo.service';
-import { ContextMenuItem, ContextMenuService } from '../../shared/services/context-menu.service';
-import { SfButtonComponent } from '../../shared/components/sf-button.component';
-import { SfEmptyStateComponent } from '../../shared/components/sf-empty-state.component';
-import { SfIconComponent } from '../../shared/components/sf-icon.component';
-import { SfSpinnerComponent } from '../../shared/components/sf-spinner.component';
-import {
-  SfStoreTreeNodeComponent,
-  type FolderRenameFn,
-  type StoreTreeMoveEvent,
-  type StoreTreeNode,
-} from '../../shared/components/sf-store-tree-node.component';
+import { UndoService, type UndoStep } from '../../core/ui/undo.service';
 import { SfCreateAssetDialogComponent, type CreateAssetFormValue } from '../../shared/components/sf-create-asset-dialog.component';
-import { NavFolderDetailComponent } from './nav-folder-detail.component';
-import { NavReferenceDetailComponent } from './nav-reference-detail.component';
-import { etagFor, NavigationService, type NavigationFolderView, type NavTreeView, type PageReferenceView } from './navigation.service';
-import { sortNavTree } from '../../shared/tree-sort.util';
-import { consumeQueryParam } from '../../shared/deep-link';
-import { ProjectAccessStore } from '../../core/project/project-access.store';
+import { SfEmptyStateComponent } from '../../shared/components/sf-empty-state.component';
+import { SfPageHeaderComponent } from '../../shared/components/layout/sf-page-header.component';
+import { SfMenuComponent } from '../../shared/components/menu/sf-menu.component';
+import type { SfMenuItem } from '../../shared/components/menu/sf-menu-item';
+import { SfSplitterComponent } from '../../shared/components/splitter/sf-splitter.component';
+import {
+  type SfTreeAction,
+  SfTreeComponent,
+  type SfTreeCreateRequest,
+  type SfTreeDeleteRequest,
+  type SfTreeMoveRequest,
+  type SfTreeNameContext,
+  type SfTreeRenameRequest,
+  type SfTreeReorderRequest,
+} from '../../shared/components/sf-tree.component';
+import type { SfTreeLoader, SfTreeNode } from '../../shared/components/tree/tree-model';
+import type { ContextMenuItem } from '../../shared/services/context-menu.service';
+import { assetRoute } from '../../shared/asset-route.util';
+import { FavoritesViewComponent } from '../favorites/favorites-view.component';
+import { FolderMoveDialogComponent } from '../pages/folder-move-dialog.component';
 import { ReleaseEventsStore } from '../release/release-events.store';
+import { NavFolderViewComponent } from './nav-folder-view.component';
+import { NavItemDetailComponent, storedLabel } from './nav-item-detail.component';
+import { NavigationItemActions } from './navigation-item-actions.service';
+import { NavigationStoreRefresh } from './navigation-store-refresh.service';
+import {
+  EMPTY_NAV_INDEX,
+  type NavEntry,
+  type NavNodeOptions,
+  type NavUrls,
+  buildNavIndex,
+  entryFolderPath,
+  isEmptyNavIndex,
+  navChildren,
+  navFolderTree,
+  navIdPath,
+  navNodes,
+  navSearchPaths,
+  orderWith,
+} from './navigation-tree.util';
+import { pickPageUrls } from './navigation-urls.util';
+import { NavigationService, type NavTreeView, etagFor } from './navigation.service';
 
-interface RawFolderPayload {
-  scope?: string;
-  protected?: boolean;
-  startNode?: { kind?: string; assetUuid?: string } | null;
-}
-
-interface RawReferencePayload {
-  target?: { kind?: string; assetUuid?: string };
-  label?: string | null;
-}
+const TREE_WIDTH = 300;
+const TREE_WIDTH_NARROW = 260;
+const WIDE_QUERY = '(min-width: 1280px)';
 
 /**
- * Navigation store — the same "tree + detail drawer" shape used by the
- * pages/media stores. Renders `GET .../navigation/tree` (always exactly one
- * top-level entry: the fixed, protected "All Navigation" wrapper root, spec
- * M13.1.2-style, generalized), and opens a folder- or reference-shaped
- * drawer on selection. The wrapper is unwrapped for display (`topLevelNodes`)
- * — its own "All navigation" affordance (the `navigation__clear` button)
- * replaces it, exactly matching Pages/Media's tree visualization — rather
- * than rendering the wrapper a second time as an ordinary folder row. That
- * button selects the wrapper, so its folder drawer (the navigation's own
- * "Entry page") is reachable (M31).
+ * The Navigation store (M35.22, decisions 23 and 24): the website's menu. The tree (`sf-tree`) on the left shows the menu
+ * in its stored order — each entry with where it leads ("Company → /about-us/": the label, then the public URL of its
+ * target page) — and can be reordered among siblings by drag before/after and `Alt+↑/↓`, and moved into folders, each with
+ * one Undo. A *Favorites* node is pinned on top while the project has favorites. The main pane shows what is selected:
+ * a menu folder's table of items with its entry page, a menu item's detail (label, target page as a picker card, public
+ * URL), the Favorites list, or "Select a menu item".
+ *
+ * <p>The selection is in the URL (`?asset=<uuid>`, or `?favorites=1`) so a reload, the browser's back button and the
+ * recents find it; a change of selection with unsaved edits in the open item asks first (the route's leave guard). The
+ * menu is read as one tree (`GET …/navigation/tree`) and kept in memory: the tree loads lazily from it and answers its
+ * own filter locally. Every create, rename, move, reorder and delete control is disabled in time travel and for viewers;
+ * each change offers one Undo (M35.13), and the area reads the menu again whenever anything changed
+ * (`NavigationStoreRefresh`).
  */
 @Component({
   selector: 'sf-navigation',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
-    SfButtonComponent,
-    SfEmptyStateComponent,
-    SfIconComponent,
-    SfSpinnerComponent,
+    FavoritesViewComponent,
+    FolderMoveDialogComponent,
+    NavFolderViewComponent,
+    NavItemDetailComponent,
     SfCreateAssetDialogComponent,
-    NavFolderDetailComponent,
-    NavReferenceDetailComponent,
-    SfStoreTreeNodeComponent,
+    SfEmptyStateComponent,
+    SfMenuComponent,
+    SfPageHeaderComponent,
+    SfSplitterComponent,
+    SfTreeComponent,
+    TranslocoPipe,
   ],
+  providers: [NavigationStoreRefresh],
   templateUrl: './navigation.component.html',
   styleUrl: './navigation.component.scss',
 })
 export class NavigationComponent {
   readonly projectKey = input.required<string>();
-  /** `?asset=<uuid>` selects that page reference or folder (search deep link, M23.4.1). */
+  /** `?asset=<uuid>` is the open menu folder or item (kept in the URL, so recents and deep links find it). */
   readonly asset = input<string | undefined>();
-
-  private readonly router = inject(Router);
-  private readonly route = inject(ActivatedRoute);
+  /** `?favorites=1` shows the Favorites list. */
+  readonly favoritesParam = input<string | undefined>(undefined, { alias: 'favorites' });
 
   private readonly nav = inject(NavigationService);
-  private readonly releaseEvents = inject(ReleaseEventsStore);
   private readonly api = inject(ApiClient);
-  private readonly toasts = inject(ToastService);
+  private readonly actions = inject(NavigationItemActions);
   private readonly undo = inject(UndoService);
-  private readonly menu = inject(ContextMenuService);
+  private readonly toasts = inject(ToastService);
+  private readonly transloco = inject(TranslocoService);
+  private readonly router = inject(Router);
+  private readonly injector = inject(Injector);
+  private readonly refresh = inject(NavigationStoreRefresh);
+  private readonly releaseEvents = inject(ReleaseEventsStore);
+  private readonly favorites = inject(FavoritesService);
+  private readonly favoriteTree = inject(FavoriteTreeService);
+  private readonly editingLocale = inject(EditingLocaleStore);
+  private readonly developerMode = inject(DeveloperModeService);
+  private readonly permissions = inject(ProjectPermissionsStore);
 
-  /** Time travel or an archived project (M26). */
-  protected readonly readOnly = inject(ProjectAccessStore).readOnly;
+  /** Creating, renaming, moving, reordering and deleting: editors, outside time travel and archived projects. */
+  protected readonly canEdit = this.permissions.canEditContent;
 
-  readonly loading = signal(false);
-  readonly forest = signal<NavTreeView[]>([]);
-  readonly selectedUuid = signal<string | null>(null);
+  private readonly tree = viewChild<SfTreeComponent<NavEntry>>(SfTreeComponent);
 
-  readonly folderDetail = signal<NavigationFolderView | null>(null);
-  readonly referenceDetail = signal<PageReferenceView | null>(null);
-  readonly detailLoading = signal(false);
+  protected readonly treeWidth =
+    typeof matchMedia !== 'function' || matchMedia(WIDE_QUERY).matches ? TREE_WIDTH : TREE_WIDTH_NARROW;
+  protected readonly treeActions: readonly SfTreeAction[] = ['rename', 'delete', 'move', 'create'];
 
-  readonly newFolderOpen = signal(false);
-  readonly creatingFolder = signal(false);
-  readonly newReferenceOpen = signal(false);
-  readonly creatingReference = signal(false);
+  // ── Data ───────────────────────────────────────────────────────────────────
 
-  readonly selectedNode = computed<NavTreeView | null>(() => {
-    const uuid = this.selectedUuid();
-    if (!uuid) {
-      return null;
+  protected readonly forest = signal<NavTreeView[]>([]);
+  /** The first read of the menu returned (until then the tree and the empty states say nothing). */
+  protected readonly loaded = signal(false);
+  protected readonly failed = signal(false);
+  protected readonly urls = signal<NavUrls>(new Map());
+  protected readonly index = computed(() => (this.loaded() ? buildNavIndex(this.forest()) : EMPTY_NAV_INDEX));
+  /** The menu folders: where a move can go. */
+  protected readonly folderTree = computed(() => navFolderTree(this.forest()));
+
+  private readonly language = toSignal(this.transloco.langChanges$, { initialValue: this.transloco.getActiveLang() });
+  private readonly nodeOptions = computed<NavNodeOptions>(() => {
+    this.language();
+    const t = (key: string) => this.transloco.translate(`navigation.status.${key}`);
+    return {
+      dev: this.developerMode.enabled(),
+      locale: this.editingLocale.locale(),
+      urls: this.urls(),
+      labels: {
+        released: t('released'),
+        changed: t('changed'),
+        draft: t('draft'),
+        scheduled: t('scheduled'),
+        unpublished: t('unpublished'),
+        deletion: t('deletion'),
+      },
+    };
+  });
+
+  // ── What is open ───────────────────────────────────────────────────────────
+
+  protected readonly selected = computed<NavEntry | null>(() => {
+    const uuid = this.asset();
+    return uuid ? (this.index().entries.get(uuid) ?? null) : null;
+  });
+  protected readonly mode = computed<'favorites' | 'folder' | 'item' | 'empty'>(() => {
+    if (this.favoritesParam()) {
+      return 'favorites';
     }
-    return findNode(this.forest(), uuid);
+    return this.selected()?.kind ?? 'empty';
+  });
+  protected readonly treeSelection = computed<string[]>(() => {
+    if (this.mode() === 'favorites') {
+      return [FAVORITES_NODE];
+    }
+    const selected = this.selected();
+    return selected ? [selected.uuid] : [];
+  });
+  protected readonly emptyMenu = computed(() => this.loaded() && !this.failed() && isEmptyNavIndex(this.index()));
+
+  // ── Tree wiring ────────────────────────────────────────────────────────────
+
+  protected readonly loader = computed<SfTreeLoader<NavEntry>>(() => {
+    const index = this.index();
+    const options = this.nodeOptions();
+    const favorites = this.favorites.list();
+    const key = this.projectKey();
+    const label = this.transloco.translate('navigation.favorites');
+    return (parent) => {
+      if (parent === null) {
+        const nodes = navNodes(index, null, options);
+        return favorites.length > 0 ? [this.favoriteTree.rootNode<NavEntry>(label), ...nodes] : nodes;
+      }
+      if (parent.id === FAVORITES_NODE) {
+        return this.favoriteTree.nodes<NavEntry>(favorites);
+      }
+      if (isFavoriteNode(parent.id)) {
+        return this.favoriteTree.children<NavEntry>(key, parent);
+      }
+      return navNodes(index, parent.id, options);
+    };
   });
 
-  /** The fixed, protected "All Navigation" wrapper root (see the class doc). */
-  readonly navigationRoot = computed<NavTreeView | null>(() => this.forest()[0] ?? null);
+  protected readonly search = (query: string): readonly (readonly string[])[] => navSearchPaths(this.index(), query, this.urls());
 
-  /** The store's real top-level entries — the fixed "All Navigation" wrapper root's children
-   * (see the class doc). */
-  readonly topLevelNodes = computed<NavTreeView[]>(() => this.navigationRoot()?.children ?? []);
+  /** The *Favorites* branch is a view: nothing in it is renamed, deleted, moved, reordered or created. */
+  protected readonly allowAction = (_action: SfTreeAction, nodes: readonly SfTreeNode<NavEntry>[]): boolean =>
+    this.canEdit() && !nodes.some((node) => isFavoriteNode(node.id));
 
-  /** Whether "All navigation" — the wrapper root — is selected. */
-  readonly rootSelected = computed(() => {
-    const selected = this.selectedUuid();
-    return selected !== null && selected === this.navigationRoot()?.uuid;
-  });
+  /** Nothing goes into a favorite, only into a real folder (the tree's own rules cover the rest). */
+  protected readonly canDrop = (_dragged: readonly SfTreeNode<NavEntry>[], target: SfTreeNode<NavEntry> | null): boolean =>
+    target === null || !isFavoriteNode(target.id);
+
+  /** A label is free among the siblings of its kind (the server enforces the UID; this answers before the round trip). */
+  protected readonly validateName = (name: string, context: SfTreeNameContext<NavEntry>): string | null => {
+    const kind = context.node?.data?.kind ?? 'folder';
+    const taken = navChildren(this.index(), context.parent?.id ?? null).some(
+      (sibling) => sibling.uuid !== context.node?.id && sibling.kind === kind && sibling.label.toLowerCase() === name.toLowerCase(),
+    );
+    return taken ? this.transloco.translate('navigation.nameTaken') : null;
+  };
+
+  protected readonly confirmDelete = (nodes: readonly SfTreeNode<NavEntry>[]): Promise<boolean> =>
+    this.actions.confirmDelete(
+      nodes.flatMap((node) => (node.data ? [node.data] : [])),
+      this.index(),
+      this.injector,
+    );
 
   /**
-   * The same entries in the store-agnostic shape {@link SfStoreTreeNodeComponent} renders. A
-   * reference shows its resolved page path as the trailing badge; a folder shows one only when it
-   * actually has a `startNode`, because for a folder an absent path is ambiguous (no entry page at
-   * all vs. a broken one) and flagging it "unresolved" would be wrong.
+   * The host's entries of the one menu, between the tree's own (*New folder*, *Rename*, *Cut*, *Paste*, *Move to…*) and
+   * *Delete*: *New menu item* in a folder, *Open page* on an item, *Add to favorites*.
    */
-  readonly treeNodes = computed<StoreTreeNode[]>(() => this.topLevelNodes().map(toStoreNode));
+  protected readonly menuItems = (nodes: readonly SfTreeNode<NavEntry>[]): ContextMenuItem[] => {
+    const node = nodes.length === 1 ? nodes[0] : null;
+    const entry = node?.data;
+    if (!node || !entry || isFavoriteNode(node.id)) {
+      return [];
+    }
+    const t = (key: string, params?: Record<string, unknown>) => this.transloco.translate(key, params);
+    const items: ContextMenuItem[] = [];
+    if (this.canEdit() && entry.kind === 'folder') {
+      items.push({ label: t('navigation.newMenuItem'), icon: 'add_link', action: () => this.openNewItem(node.id) });
+    }
+    if (entry.kind === 'item' && entry.targetUuid) {
+      items.push({ label: t('navigation.openPage'), icon: 'open_in_new', action: () => this.openPage(entry.targetUuid!) });
+    }
+    const on = this.favorites.isFavorite(node.id);
+    items.push({
+      label: t(on ? 'shared.favorite.remove' : 'shared.favorite.add', { name: node.label }),
+      icon: 'star',
+      action: () => this.toggleFavorite(node),
+    });
+    return items;
+  };
 
-  /** Navigation folders rename through the folder endpoint, not the generic asset one. */
-  protected readonly renameFolder: FolderRenameFn = (projectKey, uuid, displayName, revision) =>
-    this.nav.renameFolder(projectKey, uuid, displayName, revision === undefined ? undefined : etagFor(revision));
-
-  /** The folder currently targeted by "New folder"/"New reference" — the selected folder, or
-   * `undefined` (the project root — matches Pages' "All pages") if the root or nothing
-   * folder-shaped is selected. */
-  readonly targetFolderUuid = computed<string | undefined>(() => {
-    const node = this.selectedNode();
-    return node && node.type === 'FOLDER' && node.uuid && !this.rootSelected() ? node.uuid : undefined;
+  /** The head's *New* menu: where it creates is the open folder (or the folder of the open item). */
+  protected readonly newItems = computed<SfMenuItem[]>(() => {
+    this.language();
+    return [
+      {
+        id: 'item',
+        label: this.transloco.translate('navigation.newItem'),
+        icon: 'add_link',
+        action: () => this.openNewItem(this.openFolderUuid()),
+      },
+      {
+        id: 'folder',
+        label: this.transloco.translate('navigation.newFolder'),
+        icon: 'create_new_folder',
+        action: () => void this.tree()?.startCreate(this.openFolderUuid(), 'folder'),
+      },
+    ];
   });
 
+  // ── Dialogs ────────────────────────────────────────────────────────────────
+
+  protected readonly newItemOpen = signal(false);
+  protected readonly creating = signal(false);
+  /** The folder the open "New menu item" dialog creates into (`null` = the top level). */
+  private createTarget: string | null = null;
+  protected readonly moving = signal<readonly NavEntry[] | null>(null);
+
   constructor() {
+    // The menu again whenever something changed: a create, move, reorder, delete or undo, a save in the detail, a release.
     effect(() => {
       const key = this.projectKey();
-      // Release actions change the statuses the tree shows (M27.6.1).
+      this.refresh.tick();
       this.releaseEvents.version();
-      untracked(() => this.reload(key));
-    });
-    // An open detail's release bar read a new status (e.g. after a save): re-read the tree when it shows another.
-    effect(() => {
-      const observed = this.releaseEvents.observed();
-      const node = observed ? untracked(() => findNode(this.forest(), observed.uuid)) : null;
-      if (observed && node && JSON.stringify(node.release ?? null) !== JSON.stringify(observed.release ?? null)) {
-        untracked(() => this.reload(this.projectKey()));
+      if (key) {
+        untracked(() => this.reload(key));
       }
     });
+
+    // The public URLs again when the project, the editing language or the menu changed.
     effect(() => {
-      const uuid = this.asset();
-      if (!uuid) {
-        return;
+      const key = this.projectKey();
+      this.refresh.tick();
+      this.releaseEvents.version();
+      const locale = this.editingLocale.locale();
+      if (key) {
+        untracked(() => void this.loadUrls(key, locale));
       }
-      untracked(() => {
-        this.select(uuid);
-        consumeQueryParam(this.router, this.route, 'asset');
-      });
     });
-  }
 
-  protected select(uuid: string): void {
-    this.selectedUuid.set(uuid);
-    this.loadDetail(uuid);
-  }
-
-  /** "All navigation" opens the wrapper root's folder drawer — its "Entry page" (M31). */
-  protected selectRoot(): void {
-    const uuid = this.navigationRoot()?.uuid;
-    if (uuid) {
-      this.select(uuid);
-    } else {
-      this.closeDetail();
-    }
-  }
-
-  protected closeDetail(): void {
-    this.selectedUuid.set(null);
-    this.folderDetail.set(null);
-    this.referenceDetail.set(null);
-  }
-
-  protected newFolder(): void {
-    if (this.readOnly()) {
-      return;
-    }
-    this.newFolderOpen.set(true);
-  }
-
-  protected closeNewFolder(): void {
-    this.newFolderOpen.set(false);
-  }
-
-  protected submitNewFolder(value: CreateAssetFormValue): void {
-    if (this.readOnly()) {
-      return;
-    }
-    const parentUuid = this.targetFolderUuid();
-    this.creatingFolder.set(true);
-    this.nav.createFolder(this.projectKey(), value.displayName, parentUuid).subscribe({
-      next: () => {
-        this.creatingFolder.set(false);
-        this.newFolderOpen.set(false);
-        this.toasts.show('Folder created', 'success');
-        this.reload(this.projectKey());
-      },
-      error: () => {
-        this.creatingFolder.set(false);
-        this.toasts.show('Could not create folder — a folder with that name may already exist here.', 'error');
-      },
+    // Keep the open entry visible in the tree (expanding its ancestors).
+    effect(() => {
+      this.asset();
+      this.mode();
+      if (this.loaded()) {
+        untracked(() => afterNextRender(() => void this.revealOpen(), { injector: this.injector }));
+      }
     });
   }
 
   /** `n` creates a menu item (M35.14). */
   private readonly newItemShortcut = inject(ShortcutService).use([
-    createShortcut({ handler: () => this.newReference(), palette: { label: 'frame.shortcuts.items.createMenuItem' } }),
+    createShortcut({
+      handler: () => (this.canEdit() ? this.openNewItem(this.openFolderUuid()) : false),
+      palette: { label: 'frame.shortcuts.items.createMenuItem' },
+    }),
   ]);
 
+  // ── Reading ────────────────────────────────────────────────────────────────
 
-  protected newReference(): void {
-    if (this.readOnly()) {
-      return;
-    }
-    this.newReferenceOpen.set(true);
+  private menuRead: Subscription | null = null;
+  private urlRead = 0;
+
+  /** The menu as one tree, in the stored order; a newer read replaces the one in flight. */
+  private reload(key: string): void {
+    this.menuRead?.unsubscribe();
+    this.menuRead = this.nav.tree(key).subscribe({
+      next: (tree) => {
+        this.actions.forgetRevisions();
+        this.forest.set(tree ?? []);
+        this.failed.set(false);
+        this.loaded.set(true);
+      },
+      error: () => {
+        this.failed.set(true);
+        this.loaded.set(true);
+        this.toasts.show(this.transloco.translate('navigation.toast.loadFailed'), 'error');
+      },
+    });
   }
 
-  protected closeNewReference(): void {
-    this.newReferenceOpen.set(false);
+  /** Every page row of the URL registry (a few requests at most); a failure leaves the URLs as they were. */
+  private async loadUrls(key: string, locale: string | null): Promise<void> {
+    const read = ++this.urlRead;
+    try {
+      const rows = [];
+      for (let page = 0; page < 10; page++) {
+        const result = await firstValueFrom(this.nav.pageUrlRows(key, page));
+        rows.push(...(result.content ?? []));
+        if (result.last !== false) {
+          break;
+        }
+      }
+      if (read === this.urlRead) {
+        this.urls.set(pickPageUrls(rows, locale));
+      }
+    } catch {
+      // The menu shows the target page's name where it has no URL.
+    }
   }
 
-  protected submitNewReference(value: CreateAssetFormValue): void {
-    if (this.readOnly()) {
+  /** Something changed: the area reads the menu again. */
+  protected changed(): void {
+    this.refresh.notify();
+  }
+
+  /** The folder an action without a target aims at: the open folder, the folder of the open item, else the top level. */
+  private openFolderUuid(): string | null {
+    const selected = this.selected();
+    if (!selected) {
+      return null;
+    }
+    return selected.kind === 'folder' ? selected.uuid : (this.index().parentOf.get(selected.uuid) ?? null);
+  }
+
+  private async revealOpen(): Promise<void> {
+    const tree = this.tree();
+    const selected = this.selected();
+    if (!tree || !selected) {
       return;
     }
-    const folderUuid = this.targetFolderUuid();
-    this.creatingReference.set(true);
+    const path = navIdPath(this.index(), selected.uuid);
+    for (const ancestor of selected.kind === 'folder' ? path : path.slice(0, -1)) {
+      await tree.expand(ancestor);
+    }
+  }
+
+  // ── Opening ────────────────────────────────────────────────────────────────
+
+  protected onOpen(node: SfTreeNode<NavEntry>): void {
+    const key = this.projectKey();
+    if (node.id === FAVORITES_NODE) {
+      void this.router.navigate(['/p', key, 'navigation'], { queryParams: { favorites: 1 } });
+      return;
+    }
+    if (isFavoriteNode(node.id)) {
+      const route = this.favoriteTree.routeOf(key, node);
+      if (route) {
+        void this.router.navigate([...route.commands], { queryParams: route.queryParams });
+      }
+      return;
+    }
+    this.openEntry(node.id);
+  }
+
+  /** Opens a folder or item: the selection lives in the URL. */
+  protected openEntry(uuid: string | null): void {
+    void this.router.navigate(['/p', this.projectKey(), 'navigation'], { queryParams: uuid ? { asset: uuid } : {} });
+  }
+
+  protected openPage(pageUuid: string): void {
+    const target = assetRoute(this.projectKey(), { type: 'PAGE', uuid: pageUuid });
+    void this.router.navigate(target.commands, { queryParams: target.queryParams });
+  }
+
+  /** The folder view's header *Rename*: the same in-place edit as F2 in the tree. */
+  protected renameInTree(uuid: string): void {
+    this.tree()?.startRename(uuid);
+  }
+
+  protected createFolderAtRoot(): void {
+    void this.tree()?.startCreate(null, 'folder');
+  }
+
+  // ── Favorites ──────────────────────────────────────────────────────────────
+
+  private toggleFavorite(node: SfTreeNode<NavEntry>): void {
+    const entry = node.data;
+    if (!entry) {
+      return;
+    }
+    const on = this.favorites.toggle({
+      type: entry.kind === 'folder' ? 'FOLDER' : 'PAGE_REFERENCE',
+      uuid: entry.uuid,
+      displayName: entry.label,
+      folderPath: entryFolderPath(this.index(), entry),
+    });
+    this.toasts.show(this.transloco.translate(on ? 'shared.favorite.added' : 'shared.favorite.removed', { name: node.label }), 'info');
+  }
+
+  // ── Create ─────────────────────────────────────────────────────────────────
+
+  /** A folder created in place in the tree. */
+  protected onCreate(request: SfTreeCreateRequest<NavEntry>): void {
+    if (request.kind !== 'folder' || !this.canEdit()) {
+      return;
+    }
+    this.nav.createFolder(this.projectKey(), request.name, request.parent?.id).subscribe({
+      next: (created) => {
+        this.toasts.show(this.transloco.translate('navigation.toast.folderCreated', { name: request.name }), 'success');
+        this.changed();
+        if (request.parent) {
+          void this.tree()?.expand(request.parent.id);
+        }
+        if (created.uuid) {
+          this.openEntry(created.uuid);
+        }
+      },
+      error: () => this.toasts.show(this.transloco.translate('navigation.toast.folderCreateFailed'), 'error'),
+    });
+  }
+
+  /** Opens the "New menu item" dialog; it creates in `folderUuid` (`null` = the top level). */
+  protected openNewItem(folderUuid: string | null): void {
+    if (this.canEdit()) {
+      this.createTarget = folderUuid;
+      this.newItemOpen.set(true);
+    }
+  }
+
+  /** The folder view's *New menu item* creates in the folder it shows. */
+  protected openNewItemHere(): void {
+    this.openNewItem(this.selected()?.kind === 'folder' ? this.selected()!.uuid : null);
+  }
+
+  protected submitNewItem(value: CreateAssetFormValue): void {
+    if (!this.canEdit()) {
+      return;
+    }
+    this.creating.set(true);
     this.nav
       .createReference(this.projectKey(), {
         displayName: value.displayName,
-        folderUuid,
+        folderUuid: this.createTarget ?? undefined,
         targetKind: value.targetKind ?? 'PAGE',
         targetAssetUuid: value.targetAssetUuid,
       })
       .subscribe({
         next: (created) => {
-          this.creatingReference.set(false);
-          this.newReferenceOpen.set(false);
-          this.toasts.show('Reference created', 'success');
-          this.reload(this.projectKey());
+          this.creating.set(false);
+          this.newItemOpen.set(false);
+          this.toasts.show(this.transloco.translate('navigation.toast.itemCreated', { name: value.displayName }), 'success');
+          this.changed();
           if (created.uuid) {
-            this.select(created.uuid);
+            this.openEntry(created.uuid);
           }
         },
         error: () => {
-          this.creatingReference.set(false);
-          this.toasts.show('Could not create reference — try again in a moment.', 'error');
+          this.creating.set(false);
+          this.toasts.show(this.transloco.translate('navigation.toast.itemCreateFailed'), 'error');
         },
       });
   }
 
-  protected onMove(event: StoreTreeMoveEvent): void {
-    if (this.readOnly()) {
+  // ── Rename ─────────────────────────────────────────────────────────────────
+
+  /** F2 in the tree: a folder is renamed, an item's *label* (in the editing language) is what the name stands for. */
+  protected onRename(request: SfTreeRenameRequest<NavEntry>): void {
+    const entry = request.node.data;
+    if (!entry || !this.canEdit()) {
       return;
     }
-    const source = findNode(this.forest(), event.source);
-    if (!source) {
+    void (entry.kind === 'folder' ? this.renameFolder(entry, request.name) : this.renameItem(entry, request.name));
+  }
+
+  private async renameFolder(entry: NavEntry, name: string): Promise<void> {
+    const key = this.projectKey();
+    const from = entry.label;
+    const rename = (to: string, revision: number | null | undefined) =>
+      firstValueFrom(this.nav.renameFolder(key, entry.uuid, to, revision == null ? undefined : etagFor(revision)));
+    try {
+      const renamed = await rename(name, entry.revision);
+      // Undo renames back; the etag is the revision the rename produced.
+      this.undo.offer(this.transloco.translate('navigation.toast.renamed', { from, to: name }), () =>
+        rename(from, renamed.revision).then(() => this.changed()),
+      );
+      this.changed();
+    } catch {
+      this.toasts.show(this.transloco.translate('navigation.toast.renameFailed', { name: from }), 'error');
+      this.changed();
+    }
+  }
+
+  private async renameItem(entry: NavEntry, name: string): Promise<void> {
+    const key = this.projectKey();
+    const locale = this.editingLocale.locale();
+    const from = entry.label;
+    try {
+      const detail = await firstValueFrom(this.api.assetDetail(key, entry.uuid));
+      const payload = (detail.payload ?? {}) as { target?: { kind?: string; assetUuid?: string }; label?: unknown };
+      const targetKind = payload.target?.kind === 'FOLDER' ? 'FOLDER' : 'PAGE';
+      const targetAssetUuid = payload.target?.assetUuid;
+      if (!targetAssetUuid) {
+        throw new Error('no target');
+      }
+      const before = storedLabel(payload.label, locale);
+      const write = (label: string, revision: number | null | undefined) =>
+        firstValueFrom(
+          this.nav.updateReference(
+            key,
+            entry.uuid,
+            { targetKind, targetAssetUuid, label: label || undefined },
+            revision == null ? undefined : etagFor(revision),
+            locale ?? undefined,
+          ),
+        );
+      const updated = await write(name, detail.revision);
+      this.undo.offer(this.transloco.translate('navigation.toast.renamed', { from, to: name }), () =>
+        write(before, updated.revision).then(() => this.changed()),
+      );
+      this.changed();
+    } catch {
+      this.toasts.show(this.transloco.translate('navigation.toast.renameFailed', { name: from }), 'error');
+      this.changed();
+    }
+  }
+
+  // ── Delete ─────────────────────────────────────────────────────────────────
+
+  /** The tree's own delete (it asked already through `confirmDelete`). */
+  protected onDelete(request: SfTreeDeleteRequest<NavEntry>): void {
+    const entries = request.nodes.flatMap((node) => (node.data ? [node.data] : []));
+    void (async () => {
+      const change = await this.actions.delete(this.projectKey(), entries);
+      if (change.done.length > 0) {
+        this.leaveDeleted(change.done.map((entry) => entry.uuid));
+      }
+      this.changed();
+      if (change.failed) {
+        // What was deleted before the failure stays deleted and stays undoable.
+        this.toasts.show(this.transloco.translate('navigation.toast.deleteFailed', { name: entries[change.done.length]?.label ?? '' }), 'error');
+        if (change.done.length > 0) {
+          this.undo.offerGroup(this.transloco.translate('shared.tree.deleted', { count: change.done.length, name: change.done[0].label }), this.withRefresh(change.steps));
+        }
+        return;
+      }
+      request.completed(() => void this.actions.runUndo(this.withRefresh(change.steps)));
+    })();
+  }
+
+  /** A delete from the folder table, the item's ⋮ or the folder's ⋮: asks, deletes, offers the one Undo. */
+  protected async deleteEntries(entries: readonly NavEntry[]): Promise<void> {
+    if (entries.length === 0 || !this.canEdit() || !(await this.actions.confirmDelete(entries, this.index()))) {
       return;
     }
-    this.move(source, event.target, 'Could not move — that may create a cycle.');
+    const change = await this.actions.delete(this.projectKey(), entries);
+    if (change.done.length > 0) {
+      this.leaveDeleted(change.done.map((entry) => entry.uuid));
+      this.undo.offerGroup(this.transloco.translate('shared.tree.deleted', { count: change.done.length, name: change.done[0].label }), this.withRefresh(change.steps));
+    }
+    if (change.failed) {
+      this.toasts.show(this.transloco.translate('navigation.toast.deleteFailed', { name: entries[change.done.length]?.label ?? '' }), 'error');
+    }
+    this.changed();
+  }
+
+  /** What is open was deleted (or lay inside what was): the area goes up to the folder it was in. */
+  private leaveDeleted(uuids: readonly string[]): void {
+    const index = this.index();
+    const open = this.selected()?.uuid;
+    if (open && uuids.some((uuid) => uuid === open || navIdPath(index, open).includes(uuid))) {
+      const parent = uuids.includes(open) ? (index.parentOf.get(open) ?? null) : null;
+      this.openEntry(parent !== null && !uuids.includes(parent) ? parent : null);
+    }
+  }
+
+  // ── Move and reorder ───────────────────────────────────────────────────────
+
+  /** Drag and drop into a folder, and cut + paste in the tree. */
+  protected onMove(request: SfTreeMoveRequest<NavEntry>): void {
+    const entries = request.nodes.flatMap((node) => (node.data ? [node.data] : []));
+    void this.transfer(entries, request.target?.id ?? null, (steps) => request.completed(steps ? () => void this.actions.runUndo(steps) : undefined));
+  }
+
+  /** The tree's *Move to…*, the table's bulk *Move…* and the ⋮ menus' *Move…*: a picker for the destination. */
+  protected openMoveDialog(entries: readonly NavEntry[]): void {
+    if (this.canEdit() && entries.length > 0) {
+      this.moving.set(entries);
+    }
+  }
+
+  protected openMoveDialogForNodes(nodes: SfTreeNode<NavEntry>[]): void {
+    this.openMoveDialog(nodes.flatMap((node) => (node.data ? [node.data] : [])));
+  }
+
+  protected movingFolders(): string[] {
+    return (this.moving() ?? []).filter((entry) => entry.kind === 'folder').map((entry) => entry.uuid);
+  }
+
+  protected onMoveChosen(target: string | null): void {
+    const entries = this.moving();
+    this.moving.set(null);
+    if (!entries) {
+      return;
+    }
+    const to = target === this.index().rootUuid ? null : target;
+    void this.transfer(entries, to, (steps) => {
+      const message = this.transloco.translate('shared.tree.moved', { count: entries.length, name: entries[0]?.label ?? '' });
+      if (steps) {
+        this.undo.offerGroup(message, steps);
+      } else {
+        this.toasts.show(message, 'success');
+      }
+    });
   }
 
   /**
-   * Moves a folder or reference (`target` undefined: to the root) and offers Undo, which moves it back into the folder
-   * it was in — read before the move.
+   * Moves into the folder `target` (`null` = the top level). Undo moves back. Stops at the first failure; what was done up
+   * to there stays and is announced.
    */
-  private move(source: NavTreeView, target: string | undefined, failure: string): void {
+  private async transfer(entries: readonly NavEntry[], target: string | null, completed: (undo?: UndoStep[]) => void): Promise<void> {
+    const index = this.index();
+    const change = await this.actions.move(this.projectKey(), entries, target, (entry) => index.parentOf.get(entry.uuid) ?? null);
+    this.changed();
+    if (change.failed) {
+      this.toasts.show(this.transloco.translate('navigation.toast.moveFailed', { name: entries[change.done.length]?.label ?? '' }), 'error');
+      if (change.done.length === 0) {
+        return;
+      }
+    }
+    completed(change.done.length > 0 ? this.withRefresh(change.steps) : undefined);
+  }
+
+  /**
+   * Drag before/after and `Alt+↑/↓` (decision 23): `node` goes to `index` among the children of `parent`. Dropped next to a
+   * row of another folder it is moved there first. The stored order is the folder's list of children; Undo writes the
+   * previous list (and moves back).
+   */
+  protected onReorder(request: SfTreeReorderRequest<NavEntry>): void {
+    const entry = request.node.data;
+    if (!entry || !this.canEdit()) {
+      return;
+    }
     const key = this.projectKey();
-    const uuid = source.uuid ?? '';
-    const from = this.parentUuidOf(uuid);
-    const label = source.displayName ?? source.uid ?? 'item';
-    const to = target ? (findNode(this.forest(), target)?.displayName ?? 'the folder') : 'All navigation';
-    const moveTo = (folderUuid: string | undefined) =>
-      source.type === 'FOLDER' ? this.nav.moveFolder(key, uuid, folderUuid) : this.nav.moveReference(key, uuid, folderUuid);
-    moveTo(target).subscribe({
-      next: () => {
-        this.undo.offer(`Moved “${label}” to ${to}.`, () => moveTo(from).pipe(tap(() => this.reload(key))));
-        this.reload(key);
-      },
-      error: () => this.toasts.show(failure, 'error'),
-    });
-  }
-
-  /** The folder an entry sits in; `undefined` when it sits in the root ("All navigation"). */
-  private parentUuidOf(uuid: string): string | undefined {
-    const parent = findParent(this.forest(), uuid);
-    return parent && parent.uuid !== this.navigationRoot()?.uuid ? parent.uuid : undefined;
-  }
-
-  protected onFolderChanged(): void {
-    const uuid = this.selectedUuid();
-    this.reload(this.projectKey());
-    if (uuid) {
-      this.loadDetail(uuid);
-    }
-  }
-
-  protected onReferenceChanged(): void {
-    const uuid = this.selectedUuid();
-    this.reload(this.projectKey());
-    if (uuid) {
-      this.loadDetail(uuid);
-    }
-  }
-
-  /** A tree-node's own context-menu Rename (folder or reference) succeeded — reload the tree, and the open detail drawer if it's showing the renamed node. */
-  protected onTreeNodeRenamed(): void {
-    const uuid = this.selectedUuid();
-    this.reload(this.projectKey());
-    if (uuid) {
-      this.loadDetail(uuid);
-    }
-  }
-
-  protected onFolderDeleted(): void {
-    this.closeDetail();
-    this.reload(this.projectKey());
-  }
-
-  protected onReferenceDeleted(): void {
-    this.closeDetail();
-    this.reload(this.projectKey());
-  }
-
-  /** Drop target for the "All navigation" root button — moves the dragged node to the project's
-   * navigation root (mirrors `PagesListComponent.onRootDragOver`). */
-  protected onRootDragOver(event: DragEvent): void {
-    event.preventDefault();
-    event.dataTransfer && (event.dataTransfer.dropEffect = 'move');
-  }
-
-  protected onRootDrop(event: DragEvent): void {
-    event.preventDefault();
-    const source = event.dataTransfer?.getData('text/plain');
-    if (!source || this.readOnly()) {
-      return;
-    }
-    const node = findNode(this.forest(), source);
-    if (!node) {
-      return;
-    }
-    this.move(node, undefined, 'Could not move — try again in a moment.');
-  }
-
-  /** "All navigation" is the store's root — it can't be renamed, moved, or deleted, but you can
-   * open its settings (the entry page) and create a folder/reference directly in it (mirrors
-   * `PagesListComponent.onRootContextMenu`). */
-  protected onRootContextMenu(event: MouseEvent): void {
-    const items: ContextMenuItem[] = [
-      { label: 'Folder settings…', icon: 'settings', action: () => this.selectRoot() },
-    ];
-    if (!this.readOnly()) {
-      items.push(
-        { label: '', separator: true },
-        {
-          label: 'New subfolder',
-          icon: 'create_new_folder',
-          action: () => {
-            this.closeDetail();
-            this.newFolder();
-          },
-        },
-        {
-          label: 'New reference',
-          icon: 'link',
-          action: () => {
-            this.closeDetail();
-            this.newReference();
-          },
-        },
-      );
-    }
-    this.menu.open(event, items);
-  }
-
-  private reload(key: string): void {
-    if (!key) {
-      return;
-    }
-    this.loading.set(true);
-    this.nav.tree(key).subscribe({
-      next: (tree) => {
-        this.forest.set(sortNavTree(tree));
-        this.loading.set(false);
-      },
-      error: () => {
-        this.toasts.show('Could not load navigation tree — check your connection and try again.', 'error');
-        this.loading.set(false);
-      },
-    });
-  }
-
-  private loadDetail(uuid: string): void {
-    this.detailLoading.set(true);
-    this.api.assetDetail(this.projectKey(), uuid).subscribe({
-      next: (detail) => {
-        this.detailLoading.set(false);
-        if (detail.type === 'FOLDER') {
-          const payload = (detail.payload ?? {}) as unknown as RawFolderPayload;
-          const startNode = payload.startNode;
-          this.folderDetail.set({
-            uuid: detail.uuid,
-            uid: detail.uid,
-            displayName: detail.displayName,
-            revision: detail.revision,
-            folderPath: detail.folderPath,
-            protectedFolder: payload.protected === true,
-            startNode:
-              startNode && startNode.kind && startNode.assetUuid
-                ? { kind: startNode.kind, assetUuid: startNode.assetUuid }
-                : undefined,
-          });
-          this.referenceDetail.set(null);
-        } else if (detail.type === 'PAGE_REFERENCE') {
-          const payload = (detail.payload ?? {}) as unknown as RawReferencePayload;
-          this.referenceDetail.set({
-            uuid: detail.uuid,
-            uid: detail.uid,
-            displayName: detail.displayName,
-            revision: detail.revision,
-            folderPath: detail.folderPath,
-            targetKind: payload.target?.kind,
-            targetAssetUuid: payload.target?.assetUuid,
-            label: payload.label ?? undefined,
-          });
-          this.folderDetail.set(null);
+    const parentId = request.parent?.id ?? null;
+    void (async () => {
+      const snapshot = this.index();
+      const from = snapshot.parentOf.get(entry.uuid) ?? null;
+      const steps: UndoStep[] = [];
+      if (from !== parentId) {
+        const moved = await this.actions.move(key, [entry], parentId, () => from);
+        if (moved.failed) {
+          this.toasts.show(this.transloco.translate('navigation.toast.moveFailed', { name: entry.label }), 'error');
+          this.changed();
+          return;
         }
-      },
-      error: () => {
-        this.detailLoading.set(false);
-        this.toasts.show('Could not load details — try again in a moment.', 'error');
-      },
-    });
+        steps.push(...moved.steps);
+      }
+      const previous = [...(snapshot.childrenOf.get(parentId) ?? [])];
+      const result = await this.actions.reorder(key, snapshot, parentId, orderWith(snapshot, parentId, entry.uuid, request.index), previous);
+      this.changed();
+      if (!result.ok) {
+        this.toasts.show(this.transloco.translate('navigation.toast.reorderFailed', { name: entry.label }), 'error');
+        return;
+      }
+      if (result.undo) {
+        steps.push(result.undo);
+      }
+      request.completed(() => void this.actions.runUndo(this.withRefresh(steps)));
+    })();
   }
-}
 
-function toStoreNode(node: NavTreeView): StoreTreeNode {
-  const isFolder = node.type === 'FOLDER';
-  const path = node.resolvedPagePath;
-  return {
-    uuid: node.uuid,
-    uid: node.uid,
-    displayName: node.displayName,
-    kind: isFolder ? 'FOLDER' : 'LEAF',
-    icon: 'link',
-    protectedFolder: node.protectedFolder === true,
-    revision: node.revision,
-    release: node.release,
-    scheduled: node.scheduled,
-    badge: path
-      ? { text: `→ ${path}` }
-      : isFolder
-        ? undefined
-        : { text: 'unresolved', broken: true },
-    children: (node.children ?? []).map(toStoreNode),
-  };
-}
-
-function findParent(nodes: NavTreeView[], uuid: string, parent: NavTreeView | null = null): NavTreeView | null {
-  for (const node of nodes) {
-    if (node.uuid === uuid) {
-      return parent;
-    }
-    const found = findParent(node.children ?? [], uuid, node);
-    if (found) {
-      return found;
-    }
+  /** After an Undo the area reads the menu again: the first step is the one that runs last. */
+  private withRefresh(steps: readonly UndoStep[]): UndoStep[] {
+    return [async () => this.changed(), ...steps];
   }
-  return null;
-}
-
-function findNode(nodes: NavTreeView[], uuid: string): NavTreeView | null {
-  for (const node of nodes) {
-    if (node.uuid === uuid) {
-      return node;
-    }
-    const found = findNode(node.children ?? [], uuid);
-    if (found) {
-      return found;
-    }
-  }
-  return null;
 }

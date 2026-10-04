@@ -1,51 +1,81 @@
 :host {
-  display: block;
-  height: 100%;
-}
-
-.navigation {
   display: flex;
   height: 100%;
+  min-height: 0;
 }
 
-.navigation__tree {
-  flex-shrink: 0;
-  width: 340px;
-  padding: var(--sf-4) var(--sf-3);
-  border-right: 1px solid var(--sf-line);
-  overflow-y: auto;
+.nav {
+  flex: 1 1 auto;
+  min-width: 0;
+  // Both panes are bordered cards: no hairline between them, and the handle sits centred in the gap.
+  --sf-splitter-handle: transparent;
+  --sf-splitter-gap: var(--sf-space-2);
+  padding: var(--sf-space-2);
 }
 
-.navigation__toolbar {
+.nav__pane {
+  height: 100%;
+  min-height: 0;
+  border: 1px solid var(--sf-border);
+  border-radius: var(--sf-radius-md);
+  background: var(--sf-surface);
+}
+
+.nav__tree {
   display: flex;
-  gap: var(--sf-2);
-  margin-bottom: var(--sf-3);
+  flex-direction: column;
+  overflow: hidden;
 }
 
-.navigation__clear {
+.nav__main {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.nav__head {
   display: flex;
   align-items: center;
-  gap: var(--sf-2);
-  width: 100%;
-  text-align: left;
-  padding: var(--sf-1) var(--sf-2);
-  margin-bottom: var(--sf-1);
-  background: transparent;
-  border: none;
-  border-radius: var(--sf-radius-sm);
-  color: var(--sf-slate);
-  cursor: pointer;
-  font-family: var(--sf-font-ui);
-  font-size: var(--sf-text-sm);
+  justify-content: space-between;
+  gap: var(--sf-space-2);
+  padding: var(--sf-space-2) var(--sf-space-2) var(--sf-space-2) var(--sf-space-3);
+  border-bottom: 1px solid var(--sf-border);
 }
 
-.navigation__clear--active {
-  background: var(--sf-surface);
-  color: var(--sf-ink);
+.nav__title {
+  color: var(--sf-text);
+  font-size: var(--sf-fs-14);
+  line-height: var(--sf-lh-14);
+  font-weight: var(--sf-weight-semibold);
 }
 
-.navigation__detail {
-  flex: 1;
-  min-width: 0;
-  overflow-y: auto;
+.nav__treebody {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.nav__hint {
+  margin: 0;
+  padding: var(--sf-space-2) var(--sf-space-3);
+  border-top: 1px solid var(--sf-border);
+  color: var(--sf-text-subtle);
+  font-size: var(--sf-fs-12);
+  line-height: var(--sf-lh-12);
+}
+
+.nav__empty {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+
+  sf-page-header {
+    padding: var(--sf-space-4) var(--sf-space-6) var(--sf-space-3);
+    border-bottom: 1px solid var(--sf-border);
+    background: var(--sf-surface);
+  }
+
+  sf-empty-state {
+    flex: 1 1 auto;
+    padding: var(--sf-space-8) var(--sf-space-6);
+  }
 }

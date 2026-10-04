@@ -1,129 +1,308 @@
-import { ChangeDetectionStrategy, Component, computed, effect, inject, input, signal, untracked } from '@angular/core';
+import { HttpErrorResponse } from '@angular/common/http';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  Injector,
+  afterNextRender,
+  computed,
+  effect,
+  inject,
+  input,
+  signal,
+  untracked,
+  viewChild,
+} from '@angular/core';
+import { toSignal } from '@angular/core/rxjs-interop';
+import { Router } from '@angular/router';
+import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
+import { type Observable, Subscription, forkJoin, tap } from 'rxjs';
+import { ApiClient } from '../../core/api/api.client';
+import { FAVORITES_NODE, FavoriteTreeService, isFavoriteNode } from '../../core/assets/favorite-tree.service';
+import { FavoritesService } from '../../core/assets/favorites.service';
+import { DeveloperModeService } from '../../core/frame/developer-mode.service';
+import { EditingLocaleStore } from '../../core/project/editing-locale.store';
+import { ProjectPermissionsStore } from '../../core/project/project-permissions.store';
 import { createShortcut } from '../../core/ui/documented-shortcuts';
 import { ShortcutService } from '../../core/ui/shortcut.service';
-import { ActivatedRoute, Router } from '@angular/router';
-import { forkJoin, tap, type Observable } from 'rxjs';
-import { ApiClient } from '../../core/api/api.client';
 import { ToastService } from '../../core/ui/toast.service';
-import { UndoService } from '../../core/ui/undo.service';
-import { findFolderById, findFolderByPath, findParentFolder, moveBackBody } from '../../shared/folder-tree.util';
-import { restoreDeletedAsset } from '../../shared/restore-deleted-asset';
-import { SfButtonComponent } from '../../shared/components/sf-button.component';
+import { UndoService, type UndoStep } from '../../core/ui/undo.service';
+import { SfPageHeaderComponent } from '../../shared/components/layout/sf-page-header.component';
+import { SfMenuComponent } from '../../shared/components/menu/sf-menu.component';
+import type { SfMenuItem } from '../../shared/components/menu/sf-menu-item';
 import { SfCreateAssetDialogComponent, type CreateAssetFormValue } from '../../shared/components/sf-create-asset-dialog.component';
 import { SfEmptyStateComponent } from '../../shared/components/sf-empty-state.component';
-import { SfIconComponent } from '../../shared/components/sf-icon.component';
-import { SfSpinnerComponent } from '../../shared/components/sf-spinner.component';
+import { SfSplitterComponent } from '../../shared/components/splitter/sf-splitter.component';
 import {
-  SfStoreTreeNodeComponent,
-  type FolderRenameFn,
-  type StoreTreeMoveEvent,
-  type StoreTreeNode,
-} from '../../shared/components/sf-store-tree-node.component';
-import { ContextMenuItem, ContextMenuService } from '../../shared/services/context-menu.service';
-import { consumeQueryParam } from '../../shared/deep-link';
-import { GlobalSetDetailComponent, type DeletedGlobalSet } from './global-set-detail.component';
-import { etagFor, GlobalsService, type FolderView, type GlobalSetSummaryView } from './globals.service';
-import { ProjectAccessStore } from '../../core/project/project-access.store';
+  type SfTreeAction,
+  SfTreeComponent,
+  type SfTreeCreateRequest,
+  type SfTreeDeleteRequest,
+  type SfTreeMoveRequest,
+  type SfTreeNameContext,
+  type SfTreeRenameRequest,
+} from '../../shared/components/sf-tree.component';
+import type { SfTreeLoader, SfTreeNode } from '../../shared/components/tree/tree-model';
+import type { ContextMenuItem } from '../../shared/services/context-menu.service';
+import { FavoritesViewComponent } from '../favorites/favorites-view.component';
+import { FolderMoveDialogComponent } from '../pages/folder-move-dialog.component';
 import { ReleaseEventsStore, withObservedRelease } from '../release/release-events.store';
+import { restoreDeletedAsset } from '../../shared/restore-deleted-asset';
+import { GlobalSetDetailComponent, type DeletedGlobalSet } from './global-set-detail.component';
+import { GlobalsItemActions } from './globals-item-actions.service';
+import {
+  EMPTY_INDEX,
+  GLOBAL_SET_ICON,
+  type GlobalEntry,
+  type GlobalsNodeOptions,
+  buildIndex,
+  childEntries,
+  childNodes,
+  foldersOnly,
+  idPath,
+  isEmptyIndex,
+  searchPaths,
+} from './globals-tree.util';
+import { GlobalsService, type FolderView, type GlobalSetSummaryView } from './globals.service';
 
 /** The Content CDL a newly created property set starts with — one field, so the Values tab is never blank. */
 const STARTER_CONTENT = `editor text title { label "Title" required }
 `;
 
+const TREE_WIDTH = 280;
+const TREE_WIDTH_NARROW = 240;
+const WIDE_QUERY = '(min-width: 1280px)';
+
 /**
- * Globals store — the project's named property sets, in the "tree on the left, detail on the
- * right" shape every other store uses.
+ * Globals store (M35.22) — the project's named property sets ("global sets"): the tree on the left, and in the main pane
+ * the open set, the open folder or the Favorites list.
  *
- * <p>The tree is assembled client-side from two calls: the folders (`/folders?scope=GLOBALS`) and
- * the flat set list, bucketed by `folderPath`. That is the Media/Templates pattern, and it means
- * the Globals store needs no tree endpoint of its own — folders already work through the generic
- * folder API. The fixed, protected "All Globals" root is unwrapped for display, exactly as the
- * navigation store unwraps "All Navigation".
+ * <p>The tree (`sf-tree`) holds folders and, as leaves, the sets in them and loads lazily from the folder tree and set
+ * list this screen keeps in memory, so its filter is answered locally. A *Favorites* node is pinned on top while the
+ * project has favorites. The open item is in the URL (`?asset=<uuid>`, `?gtab=` for the tab, `?favorites=1`), so it
+ * survives a reload and is recorded as a recent. Changing it — another set, a folder, leaving the area — goes through
+ * the unsaved-changes guard on the route (`globalsLeaveGuard`).
+ *
+ * <p>Creating, renaming, moving and deleting are for developers outside time travel; each change offers one Undo, and
+ * every delete asks first (`ConfirmService`).
  */
 @Component({
   selector: 'sf-globals',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
-    SfButtonComponent,
+    FavoritesViewComponent,
+    FolderMoveDialogComponent,
+    GlobalSetDetailComponent,
     SfCreateAssetDialogComponent,
     SfEmptyStateComponent,
-    SfIconComponent,
-    SfSpinnerComponent,
-    SfStoreTreeNodeComponent,
-    GlobalSetDetailComponent,
+    SfMenuComponent,
+    SfPageHeaderComponent,
+    SfSplitterComponent,
+    SfTreeComponent,
+    TranslocoPipe,
   ],
   templateUrl: './globals.component.html',
   styleUrl: './globals.component.scss',
 })
 export class GlobalsComponent {
   readonly projectKey = input.required<string>();
-  /** `?asset=<uuid>` selects that property set or folder (search deep link, M23.4.1). */
+  /** `?asset=<uuid>` is the open set or folder (kept in the URL, so recents and deep links find it). */
   readonly asset = input<string | undefined>();
-
-  private readonly router = inject(Router);
-  private readonly route = inject(ActivatedRoute);
+  /** `?favorites=1` shows the Favorites list. */
+  readonly favoritesParam = input<string | undefined>(undefined, { alias: 'favorites' });
+  /** `?gtab=schema` opens the set's Schema tab (developer mode only). */
+  readonly gtab = input<string | undefined>();
 
   private readonly globals = inject(GlobalsService);
-  private readonly releaseEvents = inject(ReleaseEventsStore);
-  private readonly toasts = inject(ToastService);
-  private readonly undo = inject(UndoService);
+  private readonly actions = inject(GlobalsItemActions);
   private readonly api = inject(ApiClient);
-  private readonly menu = inject(ContextMenuService);
+  private readonly undo = inject(UndoService);
+  private readonly toasts = inject(ToastService);
+  private readonly transloco = inject(TranslocoService);
+  private readonly router = inject(Router);
+  private readonly injector = inject(Injector);
+  private readonly releaseEvents = inject(ReleaseEventsStore);
+  private readonly favorites = inject(FavoritesService);
+  private readonly favoriteTree = inject(FavoriteTreeService);
+  private readonly editingLocale = inject(EditingLocaleStore);
+  private readonly developerMode = inject(DeveloperModeService);
 
-  /** Time travel or an archived project (M26). */
-  protected readonly readOnly = inject(ProjectAccessStore).readOnly;
+  /** Creating, renaming, moving and deleting: developers, outside time travel and archived projects. */
+  protected readonly canManage = inject(ProjectPermissionsStore).canEditTemplates;
 
-  protected readonly loading = signal(false);
+  private readonly tree = viewChild<SfTreeComponent<GlobalEntry>>(SfTreeComponent);
+
+  protected readonly treeWidth =
+    typeof matchMedia !== 'function' || matchMedia(WIDE_QUERY).matches ? TREE_WIDTH : TREE_WIDTH_NARROW;
+  /** Sets are not copied, only moved. */
+  protected readonly treeActions: readonly SfTreeAction[] = ['rename', 'delete', 'move', 'create'];
+
+  // ── Data ───────────────────────────────────────────────────────────────────
+
   protected readonly folders = signal<FolderView[]>([]);
-  protected readonly sets = signal<GlobalSetSummaryView[]>([]);
-  protected readonly selectedUuid = signal<string | null>(null);
+  private readonly sets = signal<GlobalSetSummaryView[]>([]);
+  /** The first read of the store returned. */
+  protected readonly loaded = signal(false);
+  protected readonly failed = signal(false);
+  protected readonly index = computed(() => (this.loaded() ? buildIndex(this.folders(), this.sets()) : EMPTY_INDEX));
+  /** The folder tree without sets: where a move can go. */
+  protected readonly folderTree = computed(() => foldersOnly(this.folders()));
 
-  protected readonly newFolderOpen = signal(false);
-  protected readonly creatingFolder = signal(false);
-  protected readonly newSetOpen = signal(false);
-  protected readonly creatingSet = signal(false);
+  private readonly language = toSignal(this.transloco.langChanges$, { initialValue: this.transloco.getActiveLang() });
+  private readonly nodeOptions = computed<GlobalsNodeOptions>(() => {
+    this.language();
+    const t = (key: string) => this.transloco.translate(`globals.tree.status.${key}`);
+    return {
+      dev: this.developerMode.enabled(),
+      locale: this.editingLocale.locale(),
+      labels: {
+        released: t('released'),
+        changed: t('changed'),
+        draft: t('draft'),
+        scheduled: t('scheduled'),
+        unpublished: t('unpublished'),
+        deletion: t('deletion'),
+      },
+    };
+  });
 
-  /** The store's real top level: the children of the fixed "All Globals" root. */
-  private readonly rootFolder = computed<FolderView | null>(() => this.folders()[0] ?? null);
+  // ── What is open ───────────────────────────────────────────────────────────
 
-  protected readonly treeNodes = computed<StoreTreeNode[]>(() => {
-    const root = this.rootFolder();
-    if (!root) {
+  /** The open set or folder; `null` when `?asset=` names nothing in the store (yet). */
+  protected readonly openEntry = computed<GlobalEntry | null>(() => {
+    const uuid = this.asset();
+    return uuid ? (this.index().entries.get(uuid) ?? null) : null;
+  });
+  protected readonly mode = computed<'set' | 'folder' | 'favorites' | 'none'>(() => {
+    const entry = this.openEntry();
+    if (entry) {
+      return entry.kind;
+    }
+    return this.asset() ? 'none' : this.favoritesParam() ? 'favorites' : 'none';
+  });
+  protected readonly setTab = computed<'values' | 'schema'>(() => (this.gtab() === 'schema' ? 'schema' : 'values'));
+
+  protected readonly treeSelection = computed<string[]>(() => {
+    const entry = this.openEntry();
+    if (entry) {
+      return [entry.uuid];
+    }
+    return this.mode() === 'favorites' ? [FAVORITES_NODE] : [];
+  });
+
+  protected readonly emptyStore = computed(() => this.loaded() && !this.failed() && isEmptyIndex(this.index()));
+
+  // ── Tree wiring ────────────────────────────────────────────────────────────
+
+  protected readonly loader = computed<SfTreeLoader<GlobalEntry>>(() => {
+    const index = this.index();
+    const options = this.nodeOptions();
+    const favorites = this.favorites.list();
+    const key = this.projectKey();
+    const label = this.transloco.translate('globals.tree.favorites');
+    return (parent) => {
+      if (parent === null) {
+        const nodes = childNodes(index, null, options);
+        return favorites.length > 0 ? [this.favoriteTree.rootNode<GlobalEntry>(label), ...nodes] : nodes;
+      }
+      if (parent.id === FAVORITES_NODE) {
+        return this.favoriteTree.nodes<GlobalEntry>(favorites);
+      }
+      if (isFavoriteNode(parent.id)) {
+        return this.favoriteTree.children<GlobalEntry>(key, parent);
+      }
+      return childNodes(index, parent.id, options);
+    };
+  });
+
+  protected readonly search = (query: string): readonly (readonly string[])[] => searchPaths(this.index(), query);
+
+  /** The *Favorites* branch is a view: nothing in it is renamed, deleted, moved or created. */
+  protected readonly allowAction = (_action: SfTreeAction, nodes: readonly SfTreeNode<GlobalEntry>[]): boolean =>
+    this.canManage() && !nodes.some((node) => isFavoriteNode(node.id));
+
+  /** Nothing goes into a favorite, only into a real folder. */
+  protected readonly canDrop = (_dragged: readonly SfTreeNode<GlobalEntry>[], target: SfTreeNode<GlobalEntry> | null): boolean =>
+    target === null || !isFavoriteNode(target.id);
+
+  /** A name is free among the siblings of its kind (the server enforces it for UIDs; this answers before the round trip). */
+  protected readonly validateName = (name: string, context: SfTreeNameContext<GlobalEntry>): string | null => {
+    const kind = context.node?.data?.kind ?? 'folder';
+    const taken = childEntries(this.index(), context.parent?.id ?? null).some(
+      (sibling) => sibling.uuid !== context.node?.id && sibling.kind === kind && sibling.name.toLowerCase() === name.toLowerCase(),
+    );
+    return taken ? this.transloco.translate('globals.tree.nameTaken') : null;
+  };
+
+  protected readonly confirmDelete = (nodes: readonly SfTreeNode<GlobalEntry>[]): Promise<boolean> =>
+    this.actions.confirmDelete(
+      nodes.flatMap((node) => (node.data ? [node.data] : [])),
+      this.injector,
+    );
+
+  /**
+   * The host's entries of the one menu, between the tree's own (*New folder*, *Rename*, *Cut*, *Paste*, *Move to…*) and
+   * *Delete*: *New global set* in a folder, and *Add to / Remove from favorites*.
+   */
+  protected readonly menuItems = (nodes: readonly SfTreeNode<GlobalEntry>[]): ContextMenuItem[] => {
+    const node = nodes.length === 1 ? nodes[0] : null;
+    const entry = node?.data;
+    if (!node || !entry || isFavoriteNode(node.id)) {
       return [];
     }
-    const byFolder = bucketByFolderPath(this.sets());
+    const t = (key: string, params?: Record<string, unknown>) => this.transloco.translate(key, params);
+    const items: ContextMenuItem[] = [];
+    if (this.canManage() && entry.kind === 'folder') {
+      items.push({ label: t('globals.tree.newSet'), icon: 'note_add', action: () => this.openNewSet(node.id) });
+    }
+    const on = this.favorites.isFavorite(node.id);
+    items.push({
+      label: t(on ? 'shared.favorite.remove' : 'shared.favorite.add', { name: node.label }),
+      icon: 'star',
+      action: () => this.toggleFavorite(node),
+    });
+    return items;
+  };
+
+  /** The head's *New* menu: where it creates is the open folder (or the folder of the open set). */
+  protected readonly newItems = computed<SfMenuItem[]>(() => {
+    this.language();
     return [
-      ...(root.children ?? []).map((folder) => folderNode(folder, byFolder)),
-      ...leavesOf(root, byFolder),
+      {
+        id: 'set',
+        label: this.transloco.translate('globals.tree.newSet'),
+        icon: 'note_add',
+        action: () => this.openNewSet(this.openFolderUuid()),
+      },
+      {
+        id: 'folder',
+        label: this.transloco.translate('globals.tree.newFolder'),
+        icon: 'create_new_folder',
+        action: () => void this.tree()?.startCreate(this.openFolderUuid(), 'folder'),
+      },
     ];
   });
 
-  protected readonly selectedSet = computed<GlobalSetSummaryView | null>(() => {
-    const uuid = this.selectedUuid();
-    return uuid ? (this.sets().find((s) => s.uuid === uuid) ?? null) : null;
-  });
+  // ── Dialogs ────────────────────────────────────────────────────────────────
 
-  /** New folders and sets land in the selected folder, or in the store root when none is selected. */
-  protected readonly targetFolderUuid = computed<string | undefined>(() => {
-    const uuid = this.selectedUuid();
-    if (!uuid || this.sets().some((s) => s.uuid === uuid)) {
-      return undefined;
-    }
-    return uuid;
-  });
-
-  /** Globals folders rename through the folder endpoint, not the generic asset one. */
-  protected readonly renameFolder: FolderRenameFn = (projectKey, uuid, displayName, revision) =>
-    this.globals.renameFolder(projectKey, uuid, displayName, revision === undefined ? undefined : etagFor(revision));
+  protected readonly newFolderOpen = signal(false);
+  protected readonly newSetOpen = signal(false);
+  protected readonly creating = signal(false);
+  /** The folder the open "New …" dialog creates into (`null` = the store root). */
+  private createTarget: string | null = null;
+  protected readonly moving = signal<readonly GlobalEntry[] | null>(null);
 
   constructor() {
+    // The store again whenever something changed here, or a release action changed the statuses (M27.6.1).
     effect(() => {
       const key = this.projectKey();
-      // Release actions change the statuses of the tree's folders and sets (M27.6.1).
       this.releaseEvents.version();
-      untracked(() => this.reload(key));
+      if (key) {
+        untracked(() => this.reload(key));
+      }
     });
+
+    // An open editor's release bar read a new status: the tree row shows it at once.
     effect(
       () => {
         const observed = this.releaseEvents.observed();
@@ -134,257 +313,310 @@ export class GlobalsComponent {
       },
       { allowSignalWrites: true },
     );
+
+    // Keep the open set or folder visible in the tree (expanding its ancestors).
     effect(() => {
-      const uuid = this.asset();
-      if (!uuid) {
-        return;
+      this.asset();
+      if (this.loaded()) {
+        untracked(() => afterNextRender(() => void this.revealOpen(), { injector: this.injector }));
       }
-      untracked(() => {
-        this.select(uuid);
-        consumeQueryParam(this.router, this.route, 'asset');
-      });
-    });
-  }
-
-  protected select(uuid: string): void {
-    this.selectedUuid.set(uuid);
-  }
-
-  protected closeDetail(): void {
-    this.selectedUuid.set(null);
-  }
-
-  protected newFolder(): void {
-    if (this.readOnly()) {
-      return;
-    }
-    this.newFolderOpen.set(true);
-  }
-
-  protected closeNewFolder(): void {
-    this.newFolderOpen.set(false);
-  }
-
-  protected submitNewFolder(value: CreateAssetFormValue): void {
-    if (this.readOnly()) {
-      return;
-    }
-    this.creatingFolder.set(true);
-    this.globals.createFolder(this.projectKey(), value.displayName, this.targetFolderUuid()).subscribe({
-      next: () => {
-        this.creatingFolder.set(false);
-        this.newFolderOpen.set(false);
-        this.toasts.show('Folder created', 'success');
-        this.reload(this.projectKey());
-      },
-      error: () => {
-        this.creatingFolder.set(false);
-        this.toasts.show('Could not create folder — a folder with that name may already exist here.', 'error');
-      },
     });
   }
 
   /** `n` creates a global set (M35.14). */
   private readonly newSetShortcut = inject(ShortcutService).use([
-    createShortcut({ handler: () => this.newSet(), palette: { label: 'frame.shortcuts.items.createGlobalSet' } }),
+    createShortcut({
+      handler: () => (this.canManage() ? this.openNewSet(this.openFolderUuid()) : false),
+      palette: { label: 'frame.shortcuts.items.createGlobalSet' },
+    }),
   ]);
 
+  // ── Reading ────────────────────────────────────────────────────────────────
 
-  protected newSet(): void {
-    if (this.readOnly()) {
-      return;
-    }
-    this.newSetOpen.set(true);
+  private storeRead: Subscription | null = null;
+
+  /** The folder tree and the set list; a newer read replaces the one in flight. */
+  private reload(key: string): void {
+    this.storeRead?.unsubscribe();
+    this.storeRead = forkJoin({ folders: this.globals.folders(key), sets: this.globals.list(key) }).subscribe({
+      next: ({ folders, sets }) => {
+        this.folders.set(folders ?? []);
+        this.sets.set(sets ?? []);
+        this.failed.set(false);
+        this.loaded.set(true);
+      },
+      error: () => {
+        this.failed.set(true);
+        this.loaded.set(true);
+        this.toasts.show(this.transloco.translate('globals.tree.toast.loadFailed'), 'error');
+      },
+    });
   }
 
-  protected closeNewSet(): void {
-    this.newSetOpen.set(false);
+  /** Something changed: the tree reads the store again. */
+  protected changed(): void {
+    this.reload(this.projectKey());
+  }
+
+  /** The folder an action without a target aims at: the open folder, the folder of the open set, else the root. */
+  private openFolderUuid(): string | null {
+    const entry = this.openEntry();
+    if (!entry) {
+      return null;
+    }
+    return entry.kind === 'folder' ? entry.uuid : (this.index().parentOf.get(entry.uuid) ?? null);
+  }
+
+  private async revealOpen(): Promise<void> {
+    const tree = this.tree();
+    const entry = this.openEntry();
+    if (!tree || !entry) {
+      return;
+    }
+    const path = idPath(this.index(), entry.uuid);
+    for (const ancestor of entry.kind === 'set' ? path.slice(0, -1) : path) {
+      await tree.expand(ancestor);
+    }
+  }
+
+  // ── Opening (the URL is the selection; the route's guard asks about unsaved edits) ──
+
+  protected onOpen(node: SfTreeNode<GlobalEntry>): void {
+    const key = this.projectKey();
+    if (node.id === FAVORITES_NODE) {
+      void this.router.navigate(['/p', key, 'globals'], { queryParams: { favorites: 1 } });
+      return;
+    }
+    if (isFavoriteNode(node.id)) {
+      const route = this.favoriteTree.routeOf(key, node);
+      if (route) {
+        void this.router.navigate([...route.commands], { queryParams: route.queryParams });
+      }
+      return;
+    }
+    this.openEntryByUuid(node.id);
+  }
+
+  protected openEntryByUuid(uuid: string | null): void {
+    void this.router.navigate(['/p', this.projectKey(), 'globals'], { queryParams: uuid ? { asset: uuid } : {} });
+  }
+
+  /** The open set's tab is in the URL too (a replace: it is not a new place to go back to). */
+  protected onTabChange(tab: 'values' | 'schema'): void {
+    const uuid = this.asset();
+    if (uuid) {
+      void this.router.navigate(['/p', this.projectKey(), 'globals'], {
+        queryParams: { asset: uuid, ...(tab === 'schema' ? { gtab: 'schema' } : {}) },
+        replaceUrl: true,
+      });
+    }
+  }
+
+  protected readonly setIcon = GLOBAL_SET_ICON;
+
+  // ── Favorites ──────────────────────────────────────────────────────────────
+
+  private toggleFavorite(node: SfTreeNode<GlobalEntry>): void {
+    const entry = node.data;
+    if (!entry) {
+      return;
+    }
+    const on = this.favorites.toggle({
+      type: entry.kind === 'folder' ? 'FOLDER' : 'GLOBAL_SET',
+      uuid: entry.uuid,
+      displayName: entry.name,
+      folderPath: entry.path,
+    });
+    this.toasts.show(this.transloco.translate(on ? 'shared.favorite.added' : 'shared.favorite.removed', { name: node.label }), 'info');
+  }
+
+  // ── Create ─────────────────────────────────────────────────────────────────
+
+  /** A folder created in place in the tree. */
+  protected onCreate(request: SfTreeCreateRequest<GlobalEntry>): void {
+    if (request.kind !== 'folder' || !this.canManage()) {
+      return;
+    }
+    this.globals.createFolder(this.projectKey(), request.name, request.parent?.id).subscribe({
+      next: (created) => {
+        this.toasts.show(this.transloco.translate('globals.tree.toast.folderCreated', { name: request.name }), 'success');
+        this.changed();
+        if (request.parent) {
+          void this.tree()?.expand(request.parent.id);
+        }
+        if (created.uuid) {
+          this.openEntryByUuid(created.uuid);
+        }
+      },
+      error: () => this.toasts.show(this.transloco.translate('globals.tree.toast.folderCreateFailed'), 'error'),
+    });
+  }
+
+  /** Opens the "New global set" dialog; it creates in `folderUuid` (`null` = the store root). */
+  protected openNewSet(folderUuid: string | null): void {
+    if (this.canManage()) {
+      this.createTarget = folderUuid;
+      this.newSetOpen.set(true);
+    }
+  }
+
+  /** The empty states' *New global set* creates at the store root, or in the open folder. */
+  protected openNewSetHere(): void {
+    this.openNewSet(this.openFolderUuid());
+  }
+
+  protected createFolderAtRoot(): void {
+    void this.tree()?.startCreate(null, 'folder');
   }
 
   protected submitNewSet(value: CreateAssetFormValue): void {
-    if (this.readOnly()) {
+    if (!this.canManage()) {
       return;
     }
-    this.creatingSet.set(true);
+    this.creating.set(true);
     this.globals
       .create(this.projectKey(), {
-        parentFolderUuid: this.targetFolderUuid(),
+        parentFolderUuid: this.createTarget ?? undefined,
         displayName: value.displayName,
         contentCdl: STARTER_CONTENT,
       })
       .subscribe({
         next: (created) => {
-          this.creatingSet.set(false);
+          this.creating.set(false);
           this.newSetOpen.set(false);
-          this.toasts.show('Property set created', 'success');
-          this.reload(this.projectKey());
+          this.toasts.show(this.transloco.translate('globals.tree.toast.setCreated', { name: value.displayName }), 'success');
+          this.changed();
           if (created.uuid) {
-            this.select(created.uuid);
+            this.openEntryByUuid(created.uuid);
           }
         },
-        error: () => {
-          this.creatingSet.set(false);
-          this.toasts.show('Could not create the property set — you may need the developer role.', 'error');
+        error: (err: unknown) => {
+          this.creating.set(false);
+          const detail = err instanceof HttpErrorResponse ? (err.error as { detail?: string } | null)?.detail : undefined;
+          this.toasts.show(detail ?? this.transloco.translate('globals.tree.toast.setCreateFailed'), 'error');
         },
       });
   }
 
-  protected onMove(event: StoreTreeMoveEvent): void {
-    if (this.readOnly()) {
+  // ── Rename ─────────────────────────────────────────────────────────────────
+
+  protected onRename(request: SfTreeRenameRequest<GlobalEntry>): void {
+    const entry = request.node.data;
+    if (!entry || !this.canManage()) {
       return;
     }
     const key = this.projectKey();
-    const back = this.moveBack(event.source);
-    const message = `Moved “${this.nameOf(event.source)}” to ${this.nameOf(event.target)}.`;
-    this.moveItem(key, event.source, event.target).subscribe({
-      next: () => {
-        this.offerMoveUndo(key, event.source, back, message);
-        this.reload(key);
+    const from = entry.name;
+    const rename = (name: string, etag?: number): Observable<{ revision?: number }> =>
+      entry.kind === 'folder'
+        ? this.api.renameFolder(key, entry.uuid, { displayName: name }, etag)
+        : this.api.renameAsset(key, entry.uuid, { displayName: name }, etag);
+    rename(request.name).subscribe({
+      next: (renamed) => {
+        const message = this.transloco.translate('globals.tree.toast.renamed', { from, to: request.name });
+        // Undo renames back; the etag is the revision the rename produced.
+        this.undo.offer(message, () => rename(from, renamed.revision).pipe(tap(() => this.changed())));
+        this.changed();
       },
-      error: () => this.toasts.show('Could not move — that may create a cycle.', 'error'),
+      error: () => this.toasts.show(this.transloco.translate('globals.tree.toast.renameFailed', { name: from }), 'error'),
     });
   }
 
-  /** Sets move through the generic asset move, folders through the folder endpoint. */
-  private moveItem(key: string, uuid: string, target: string | undefined): Observable<unknown> {
-    return this.sets().some((s) => s.uuid === uuid)
-      ? this.globals.moveSet(key, uuid, target)
-      : this.globals.moveFolder(key, uuid, target);
+  // ── Delete ─────────────────────────────────────────────────────────────────
+
+  protected onDelete(request: SfTreeDeleteRequest<GlobalEntry>): void {
+    const entries = request.nodes.flatMap((node) => (node.data ? [node.data] : []));
+    void (async () => {
+      const change = await this.actions.delete(this.projectKey(), entries);
+      if (change.done.length > 0) {
+        this.leaveDeleted(change.done.map((entry) => entry.uuid));
+      }
+      this.changed();
+      if (change.failed) {
+        // What was deleted before the failure stays deleted and stays undoable.
+        this.toasts.show(this.transloco.translate('globals.tree.toast.deleteFailed', { name: entries[change.done.length]?.name ?? '' }), 'error');
+        if (change.done.length > 0) {
+          this.undo.offerGroup(
+            this.transloco.translate('shared.tree.deleted', { count: change.done.length, name: change.done[0].name }),
+            this.withRefresh(change.steps),
+          );
+        }
+        return;
+      }
+      request.completed(() => void this.actions.runUndo(this.withRefresh(change.steps)));
+    })();
   }
 
-  private nameOf(uuid: string): string {
-    const set = this.sets().find((s) => s.uuid === uuid);
-    const folder = set ? null : findFolderById(this.folders(), uuid);
-    return set?.displayName ?? set?.uid ?? folder?.displayName ?? folder?.uid ?? 'item';
-  }
-
-  /** The folder an item lives in now (`undefined`: the store root) — where Undo moves it back. */
-  private moveBack(uuid: string): string | undefined {
-    const set = this.sets().find((s) => s.uuid === uuid);
-    const parent = set ? findFolderByPath(this.folders(), set.folderPath ?? '') : findParentFolder(this.folders(), uuid);
-    return moveBackBody(parent, this.rootFolder()?.uuid).folderUuid;
-  }
-
-  /** One Undo for a move: moves the item back to the folder it came from. */
-  private offerMoveUndo(key: string, uuid: string, back: string | undefined, message: string): void {
-    this.undo.offer(message, () => this.moveItem(key, uuid, back).pipe(tap(() => this.reload(key))));
-  }
-
-  protected onRootDragOver(event: DragEvent): void {
-    event.preventDefault();
-    event.dataTransfer && (event.dataTransfer.dropEffect = 'move');
-  }
-
-  protected onRootDrop(event: DragEvent): void {
-    event.preventDefault();
-    const source = event.dataTransfer?.getData('text/plain');
-    if (!source || this.readOnly()) {
-      return;
+  /** What is open was deleted: the area goes back to the store root. */
+  private leaveDeleted(uuids: readonly string[]): void {
+    const index = this.index();
+    const open = this.asset();
+    if (open && uuids.some((uuid) => uuid === open || idPath(index, open).includes(uuid))) {
+      this.openEntryByUuid(null);
     }
-    const key = this.projectKey();
-    const back = this.moveBack(source);
-    const message = `Moved “${this.nameOf(source)}” to the root.`;
-    this.moveItem(key, source, undefined).subscribe({
-      next: () => {
-        this.offerMoveUndo(key, source, back, message);
-        this.reload(key);
-      },
-      error: () => this.toasts.show('Could not move — try again in a moment.', 'error'),
-    });
   }
 
-  protected onRootContextMenu(event: MouseEvent): void {
-    if (this.readOnly()) {
-      return;
-    }
-    this.closeDetail();
-    const items: ContextMenuItem[] = [
-      { label: 'New subfolder', icon: 'create_new_folder', action: () => this.newFolder() },
-      { label: 'New property set', icon: 'tune', action: () => this.newSet() },
-    ];
-    this.menu.open(event, items);
-  }
-
-  protected onSetChanged(): void {
-    this.reload(this.projectKey());
-  }
-
+  /** The open set's own *Delete…* (it asked already): the area closes it and offers one Undo that restores it. */
   protected onSetDeleted(deleted: DeletedGlobalSet): void {
     const key = this.projectKey();
-    this.closeDetail();
-    this.reload(key);
-    // Undo restores the set from its last live revision.
+    this.openEntryByUuid(null);
+    this.changed();
     this.undo.offer(
-      deleted.online
-        ? `Deleted “${deleted.name}”. It stays online until you release the deletion.`
-        : `Deleted “${deleted.name}”.`,
-      () => restoreDeletedAsset(this.api, key, deleted.uuid).pipe(tap(() => this.reload(key))),
+      this.transloco.translate(deleted.online ? 'globals.detail.toast.deletedOnline' : 'globals.detail.toast.deleted', { name: deleted.name }),
+      () => restoreDeletedAsset(this.api, key, deleted.uuid).pipe(tap(() => this.changed())),
     );
   }
 
-  private reload(key: string): void {
-    if (!key) {
+  // ── Move ───────────────────────────────────────────────────────────────────
+
+  /** Drag and drop and cut + paste in the tree. */
+  protected onMove(request: SfTreeMoveRequest<GlobalEntry>): void {
+    const entries = request.nodes.flatMap((node) => (node.data ? [node.data] : []));
+    void this.transfer(entries, request.target?.id ?? null, (steps) => request.completed(steps ? () => void this.actions.runUndo(steps) : undefined));
+  }
+
+  /** The tree's *Move to…*: a picker for the destination. */
+  protected openMoveDialog(nodes: SfTreeNode<GlobalEntry>[]): void {
+    this.moving.set(nodes.flatMap((node) => (node.data ? [node.data] : [])));
+  }
+
+  protected movingFolders(): string[] {
+    return (this.moving() ?? []).filter((entry) => entry.kind === 'folder').map((entry) => entry.uuid);
+  }
+
+  protected onMoveChosen(target: string | null): void {
+    const entries = this.moving();
+    this.moving.set(null);
+    if (!entries) {
       return;
     }
-    this.loading.set(true);
-    forkJoin({ folders: this.globals.folders(key), sets: this.globals.list(key) }).subscribe({
-      next: ({ folders, sets }) => {
-        this.folders.set(folders ?? []);
-        this.sets.set(sets ?? []);
-        this.loading.set(false);
-      },
-      error: () => {
-        this.toasts.show('Could not load the Globals store — check your connection and try again.', 'error');
-        this.loading.set(false);
-      },
+    const to = target === this.index().rootUuid ? null : target;
+    void this.transfer(entries, to, (steps) => {
+      const message = this.transloco.translate('shared.tree.moved', { count: entries.length, name: entries[0]?.name ?? '' });
+      if (steps) {
+        this.undo.offerGroup(message, steps);
+      } else {
+        this.toasts.show(message, 'success');
+      }
     });
   }
-}
 
-/** `folderPath` → the sets living directly in that folder. */
-function bucketByFolderPath(sets: GlobalSetSummaryView[]): Map<string, GlobalSetSummaryView[]> {
-  const byFolder = new Map<string, GlobalSetSummaryView[]>();
-  for (const set of sets) {
-    const path = set.folderPath ?? '';
-    const bucket = byFolder.get(path);
-    if (bucket) {
-      bucket.push(set);
-    } else {
-      byFolder.set(path, [set]);
+  /** Moves into the folder `target` (`null` = the store root). Undo moves back. Stops at the first failure. */
+  private async transfer(entries: readonly GlobalEntry[], target: string | null, completed: (undo?: UndoStep[]) => void): Promise<void> {
+    const index = this.index();
+    const change = await this.actions.move(this.projectKey(), entries, target, (entry) => index.parentOf.get(entry.uuid) ?? null);
+    this.changed();
+    if (change.failed) {
+      this.toasts.show(this.transloco.translate('globals.tree.toast.moveFailed', { name: entries[change.done.length]?.name ?? '' }), 'error');
+      if (change.done.length === 0) {
+        return;
+      }
     }
+    completed(change.done.length > 0 ? this.withRefresh(change.steps) : undefined);
   }
-  return byFolder;
-}
 
-function leavesOf(folder: FolderView, byFolder: Map<string, GlobalSetSummaryView[]>): StoreTreeNode[] {
-  return (byFolder.get(folder.path ?? '') ?? [])
-    .slice()
-    .sort((a, b) => (a.displayName ?? '').localeCompare(b.displayName ?? ''))
-    .map((set) => ({
-      uuid: set.uuid,
-      uid: set.uid,
-      displayName: set.displayName,
-      kind: 'LEAF' as const,
-      icon: 'tune',
-      revision: set.revision,
-      release: set.release,
-      scheduled: set.scheduled,
-    }));
-}
-
-function folderNode(folder: FolderView, byFolder: Map<string, GlobalSetSummaryView[]>): StoreTreeNode {
-  return {
-    uuid: folder.uuid,
-    uid: folder.uid,
-    displayName: folder.displayName,
-    kind: 'FOLDER',
-    protectedFolder: folder.protectedFolder === true,
-    revision: folder.revision,
-    release: folder.release,
-    scheduled: folder.scheduled,
-    children: [
-      ...(folder.children ?? []).map((child) => folderNode(child, byFolder)),
-      ...leavesOf(folder, byFolder),
-    ],
-  };
+  /** After an Undo the tree reads the store again: the first step is the one that runs last. */
+  private withRefresh(steps: readonly UndoStep[]): UndoStep[] {
+    return [async () => this.changed(), ...steps];
+  }
 }

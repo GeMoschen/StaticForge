@@ -75,6 +75,17 @@ final class FakeNavigationLookup implements NavigationLookup {
         assets.put(folderUuid, new NavigationAsset(folderUuid, AssetType.FOLDER, existing.uid(), existing.displayName(), payload));
     }
 
+    /** Stores the menu order of a folder's children (M35.22), as the navigation controller's reorder does. */
+    void setChildOrder(UUID folderUuid, UUID... order) {
+        NavigationAsset existing = assets.get(folderUuid);
+        ObjectNode payload = existing.payload().deepCopy();
+        var array = payload.putArray("childOrder");
+        for (UUID uuid : order) {
+            array.add(uuid.toString());
+        }
+        assets.put(folderUuid, new NavigationAsset(folderUuid, AssetType.FOLDER, existing.uid(), existing.displayName(), payload));
+    }
+
     /** A page with an explicit UID (every other page's UID is its uuid). */
     UUID addPageWithUid(UUID parent, String uid, String displayName, int navPosition) {
         UUID uuid = addPage(parent, displayName, navPosition);

@@ -30,6 +30,8 @@ import com.acme.staticforge.user.AppUser;
 import com.acme.staticforge.user.UserService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -114,6 +116,7 @@ class NavigationApiIntegrationTest {
                         .header("Authorization", "Bearer " + fx.viewerToken()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].children[0].resolvedPageUuid").value(page.uuid().toString()))
+                .andExpect(jsonPath("$[0].children[0].resolvedPageName").value("Home"))
                 .andExpect(jsonPath("$[0].children[0].children[0].uuid").value(refUuid.toString()));
 
         // rename via PATCH .../references/{uuid}
@@ -249,6 +252,125 @@ class NavigationApiIntegrationTest {
                         .content("{\"displayName\":\"Main Menu\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.displayName").value("Main Menu"));
+    }
+
+    /**
+     * M35.22 sibling reordering: the stored order puts the named children first, the rest follow alphabetically; it
+     * lives in the folder (one revision), is undone by writing the previous list and survives a child leaving.
+     */
+    @Test
+    void reorderStoresTheSiblingOrderInTheFolderAndTheTreeReturnsIt() throws Exception {
+        Fixture fx = newFixture();
+        AssetVersionView navRoot = navRoot(fx);
+        String key = fx.project().getKey();
+        UUID alpha = createReference(fx, navRoot, "Alpha");
+        UUID beta = createReference(fx, navRoot, "Beta");
+        UUID gamma = createReference(fx, navRoot, "Gamma");
+        assertThat(childOrder(fx, navRoot)).containsExactly(alpha, beta, gamma); // alphabetical until an order is stored
+
+        String url = "/api/v1/projects/" + key + "/navigation/folders/" + navRoot.uuid() + "/order";
+        long revision = navRoot.validFromRevision();
+        JsonNode first = objectMapper.readTree(mvc.perform(put(url)
+                        .header("Authorization", "Bearer " + fx.editorToken())
+                        .header("If-Match", "\"rev-" + revision + "\"")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"childUuids\":[\"%s\",\"%s\"]}".formatted(gamma, alpha)))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString());
+        assertThat(first.get("revision").asLong()).isGreaterThan(revision);
+        // Named children first, in the stored order; the one it does not name follows.
+        assertThat(childOrder(fx, navRoot)).containsExactly(gamma, alpha, beta);
+
+        // Undo is the previous list; an empty list clears the stored order.
+        mvc.perform(put(url)
+                        .header("Authorization", "Bearer " + fx.editorToken())
+                        .header("If-Match", "\"rev-" + first.get("revision").asLong() + "\"")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"childUuids\":[]}"))
+                .andExpect(status().isOk());
+        assertThat(childOrder(fx, navRoot)).containsExactly(alpha, beta, gamma);
+    }
+
+    @Test
+    void reorderRejectsStrangersDuplicatesViewersAndAMissingIfMatch() throws Exception {
+        Fixture fx = newFixture();
+        AssetVersionView navRoot = navRoot(fx);
+        AssetVersionView other = navRoot(fx);
+        String key = fx.project().getKey();
+        UUID alpha = createReference(fx, navRoot, "Alpha");
+        UUID elsewhere = createReference(fx, other, "Elsewhere");
+        String url = "/api/v1/projects/" + key + "/navigation/folders/" + navRoot.uuid() + "/order";
+        String ifMatch = "\"rev-" + navRoot.validFromRevision() + "\"";
+
+        // An entry that is a child of another folder (or unknown) is a 422, nothing is stored.
+        mvc.perform(put(url)
+                        .header("Authorization", "Bearer " + fx.editorToken())
+                        .header("If-Match", ifMatch)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"childUuids\":[\"%s\"]}".formatted(elsewhere)))
+                .andExpect(status().isUnprocessableEntity());
+        mvc.perform(put(url)
+                        .header("Authorization", "Bearer " + fx.editorToken())
+                        .header("If-Match", ifMatch)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"childUuids\":[\"%s\"]}".formatted(UUID.randomUUID())))
+                .andExpect(status().isUnprocessableEntity());
+        mvc.perform(put(url)
+                        .header("Authorization", "Bearer " + fx.editorToken())
+                        .header("If-Match", ifMatch)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"childUuids\":[\"%s\",\"%s\"]}".formatted(alpha, alpha)))
+                .andExpect(status().isUnprocessableEntity());
+        // Viewers read, they do not reorder; the If-Match header is required.
+        mvc.perform(put(url)
+                        .header("Authorization", "Bearer " + fx.viewerToken())
+                        .header("If-Match", ifMatch)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"childUuids\":[\"%s\"]}".formatted(alpha)))
+                .andExpect(status().isForbidden());
+        mvc.perform(put(url)
+                        .header("Authorization", "Bearer " + fx.editorToken())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"childUuids\":[\"%s\"]}".formatted(alpha)))
+                .andExpect(status().isPreconditionFailed());
+        // A folder of another store has no menu order.
+        AssetVersionView pagesFolder = folderService.create(null, "Pages " + SEQ.incrementAndGet(), FolderScope.PAGES, fx.ctx());
+        mvc.perform(put("/api/v1/projects/" + key + "/navigation/folders/" + pagesFolder.uuid() + "/order")
+                        .header("Authorization", "Bearer " + fx.editorToken())
+                        .header("If-Match", "\"rev-" + pagesFolder.validFromRevision() + "\"")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"childUuids\":[]}"))
+                .andExpect(status().isUnprocessableEntity());
+    }
+
+    /** The uuids of {@code folder}'s children in the order the navigation tree returns them. */
+    private List<UUID> childOrder(Fixture fx, AssetVersionView folder) throws Exception {
+        JsonNode tree = objectMapper.readTree(mvc.perform(get("/api/v1/projects/" + fx.project().getKey() + "/navigation/tree")
+                        .header("Authorization", "Bearer " + fx.viewerToken()))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString());
+        for (JsonNode node : tree.get(0).get("children")) {
+            if (node.get("uuid").asText().equals(folder.uuid().toString())) {
+                List<UUID> order = new ArrayList<>();
+                node.get("children").forEach(child -> order.add(UUID.fromString(child.get("uuid").asText())));
+                return order;
+            }
+        }
+        throw new AssertionError("folder not in the tree");
+    }
+
+    private UUID createReference(Fixture fx, AssetVersionView folder, String name) throws Exception {
+        AssetVersionView page = createPage(fx, name + " page");
+        String body = """
+                {"displayName":"%s","folderUuid":"%s","targetKind":"PAGE","targetAssetUuid":"%s","label":null}
+                """.formatted(name, folder.uuid(), page.uuid());
+        JsonNode created = objectMapper.readTree(mvc.perform(post("/api/v1/projects/" + fx.project().getKey() + "/navigation/references")
+                        .header("Authorization", "Bearer " + fx.editorToken())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString());
+        return UUID.fromString(created.get("uuid").asText());
     }
 
     private AssetVersionView navRoot(Fixture fx) {

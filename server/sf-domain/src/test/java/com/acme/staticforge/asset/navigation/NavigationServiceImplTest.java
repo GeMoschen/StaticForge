@@ -245,4 +245,61 @@ class NavigationServiceImplTest {
         FakeNavigationLookup lookup = new FakeNavigationLookup();
         assertThat(service.tree(1L, UUID.randomUUID(), -1, lookup, new ArrayList<>())).isNull();
     }
+
+    @Test
+    void treeListsChildrenAlphabeticallyUntilAnOrderIsStored() {
+        FakeNavigationLookup lookup = new FakeNavigationLookup();
+        UUID root = lookup.addFolder(null, "Navigation");
+        UUID zebra = lookup.addPageReferenceToPage(root, "Zebra", lookup.addPage(null, "Z", 0), null);
+        UUID alpha = lookup.addPageReferenceToPage(root, "Alpha", lookup.addPage(null, "A", 0), null);
+        UUID beta = lookup.addFolder(root, "Beta");
+
+        assertThat(childUuids(service.tree(1L, root, -1, lookup, new ArrayList<>()))).containsExactly(alpha, beta, zebra);
+    }
+
+    @Test
+    void treeFollowsTheStoredChildOrderThenTheUnnamedAlphabetically() {
+        FakeNavigationLookup lookup = new FakeNavigationLookup();
+        UUID root = lookup.addFolder(null, "Navigation");
+        UUID zebra = lookup.addPageReferenceToPage(root, "Zebra", lookup.addPage(null, "Z", 0), null);
+        UUID alpha = lookup.addPageReferenceToPage(root, "Alpha", lookup.addPage(null, "A", 0), null);
+        UUID beta = lookup.addFolder(root, "Beta");
+        UUID gamma = lookup.addFolder(root, "Gamma");
+
+        lookup.setChildOrder(root, zebra, beta);
+
+        // Named first in the stored order; Alpha and Gamma follow alphabetically.
+        assertThat(childUuids(service.tree(1L, root, -1, lookup, new ArrayList<>()))).containsExactly(zebra, beta, alpha, gamma);
+    }
+
+    @Test
+    void aStoredOrderIgnoresEntriesThatAreNoLongerChildren() {
+        FakeNavigationLookup lookup = new FakeNavigationLookup();
+        UUID root = lookup.addFolder(null, "Navigation");
+        UUID alpha = lookup.addPageReferenceToPage(root, "Alpha", lookup.addPage(null, "A", 0), null);
+        UUID beta = lookup.addPageReferenceToPage(root, "Beta", lookup.addPage(null, "B", 0), null);
+        UUID moved = lookup.addPageReferenceToPage(lookup.addFolder(null, "Elsewhere"), "Moved", lookup.addPage(null, "M", 0), null);
+
+        lookup.setChildOrder(root, moved, beta, UUID.randomUUID(), alpha);
+
+        assertThat(childUuids(service.tree(1L, root, -1, lookup, new ArrayList<>()))).containsExactly(beta, alpha);
+    }
+
+    @Test
+    void theStoredOrderAppliesAtEveryLevel() {
+        FakeNavigationLookup lookup = new FakeNavigationLookup();
+        UUID root = lookup.addFolder(null, "Navigation");
+        UUID section = lookup.addFolder(root, "Section");
+        UUID alpha = lookup.addPageReferenceToPage(section, "Alpha", lookup.addPage(null, "A", 0), null);
+        UUID beta = lookup.addPageReferenceToPage(section, "Beta", lookup.addPage(null, "B", 0), null);
+        lookup.setChildOrder(section, beta, alpha);
+
+        NavTreeNode tree = service.tree(1L, root, -1, lookup, new ArrayList<>());
+
+        assertThat(childUuids(tree.children().get(0))).containsExactly(beta, alpha);
+    }
+
+    private static List<UUID> childUuids(NavTreeNode node) {
+        return node.children().stream().map(NavTreeNode::assetUuid).toList();
+    }
 }

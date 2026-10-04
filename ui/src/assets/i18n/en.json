@@ -6287,6 +6287,102 @@
       "retry": "Retry"
     }
   },
+  "navigation": {
+    "title": "Navigation",
+    "new": "New",
+    "newLabel": "New menu item or folder",
+    "newItem": "Menu item",
+    "newFolder": "Menu folder",
+    "newMenuItem": "New menu item",
+    "resize": "Resize the navigation tree",
+    "reorderHint": "Drag to reorder, or press Alt+↑/↓.",
+    "favorites": "Favorites",
+    "nameTaken": "A menu item or folder with this name already exists here.",
+    "emptyTitle": "Select a menu item",
+    "emptyText": "Choose a menu item or folder in the tree to see where it leads.",
+    "emptyMenuTitle": "No menu yet",
+    "emptyMenuText": "Add menu items that lead to your pages, and group them in folders.",
+    "openPage": "Open the page",
+    "folderUrl": "Opens {url}",
+    "entryPage": "Entry page",
+    "entryPageHint": "Opens when the folder itself is clicked in the menu.",
+    "noEntryPage": "None",
+    "table": "Menu items in {name}",
+    "tableEmpty": "This folder has no menu items yet",
+    "tableEmptyHint": "Add a menu item with “New menu item”.",
+    "loadFailed": "Could not load the menu.",
+    "columns": {
+      "label": "Label",
+      "target": "Target page",
+      "url": "Public URL"
+    },
+    "bulk": {
+      "move": "Move…",
+      "delete": "Delete"
+    },
+    "menu": {
+      "rename": "Rename",
+      "move": "Move…",
+      "delete": "Delete…"
+    },
+    "status": {
+      "released": "Released",
+      "changed": "Changed",
+      "draft": "Draft",
+      "scheduled": "Scheduled",
+      "unpublished": "Unpublished",
+      "deletion": "Deletion pending"
+    },
+    "delete": {
+      "folderMessage": "A folder is deleted with every menu item inside it.",
+      "inside": "{count, plural, one {Its # entry is deleted with it.} other {The # entries inside are deleted with it.}}",
+      "online": "Published items stay online until you release the deletion."
+    },
+    "toast": {
+      "loadFailed": "Could not load the menu — check your connection and try again.",
+      "folderCreated": "Folder “{name}” created.",
+      "folderCreateFailed": "Could not create the folder — a folder with that name may already exist here.",
+      "itemCreated": "Menu item “{name}” created.",
+      "itemCreateFailed": "Could not create the menu item — try again in a moment.",
+      "renamed": "Renamed “{from}” to “{to}”.",
+      "renameFailed": "Could not rename “{name}” — try again in a moment.",
+      "deleteFailed": "Could not delete “{name}” — try again in a moment.",
+      "moveFailed": "Could not move “{name}” — the target may be inside what you are moving.",
+      "reorderFailed": "Could not reorder “{name}” — the menu may have changed; it was read again.",
+      "entrySet": "“{name}” is now the entry page.",
+      "entryCleared": "The folder has no entry page now.",
+      "entryFailed": "Could not change the entry page — try again in a moment."
+    },
+    "item": {
+      "section": "Menu item",
+      "label": "Label",
+      "labelHint": "Leave empty to use the target page’s name ({name}). Saved for the language you are editing.",
+      "target": "Target page",
+      "noTarget": "No target page yet",
+      "targetGone": "The target page no longer exists — choose another.",
+      "noUrl": "Not published yet",
+      "folderTarget": "Leads to the first page of a folder.",
+      "changed": "Not saved",
+      "open": "Open",
+      "openLabel": "Open {name}",
+      "change": "Change target…",
+      "choose": "Choose target…",
+      "publicUrl": "Public URL",
+      "publicUrlHint": "Where the menu item leads on the website, from the page’s URL.",
+      "targetUuid": "Target UUID",
+      "uid": "UID",
+      "save": "Save",
+      "saved": "Menu item saved.",
+      "saveFailed": "Could not save the menu item — it may have been changed by someone else.",
+      "needsTarget": "Choose a target page first.",
+      "loadFailed": "Could not read the menu item.",
+      "menu": {
+        "save": "Save now",
+        "move": "Move…",
+        "delete": "Delete…"
+      }
+    }
+  },
   "media": {
     "folders": {
       "title": "Folders",
@@ -6729,6 +6825,111 @@
         "undo": "Deleted “{name}”.",
         "deleted": "File deleted.",
         "failed": "Couldn’t delete the file — try again in a moment."
+      }
+    }
+  },
+  "globals": {
+    "tree": {
+      "title": "Globals",
+      "new": "New",
+      "newLabel": "New global set or folder",
+      "newSet": "New global set",
+      "newFolder": "New folder",
+      "resize": "Resize the globals tree",
+      "favorites": "Favorites",
+      "nameTaken": "A folder or global set with this name already exists here.",
+      "status": {
+        "released": "Released",
+        "changed": "Changed",
+        "draft": "Draft",
+        "scheduled": "Scheduled",
+        "unpublished": "Unpublished",
+        "deletion": "Deletion pending"
+      },
+      "toast": {
+        "loadFailed": "Could not load the globals — check your connection and try again.",
+        "folderCreated": "Folder “{name}” created.",
+        "folderCreateFailed": "Could not create the folder — a folder with that name may already exist here.",
+        "setCreated": "Global set “{name}” created.",
+        "setCreateFailed": "Could not create the global set — you may need the developer role.",
+        "renamed": "Renamed “{from}” to “{to}”.",
+        "renameFailed": "Could not rename “{name}” — try again in a moment.",
+        "moveFailed": "Could not move “{name}” — the target may be inside what you are moving.",
+        "deleteFailed": "Could not delete “{name}” — a template or page may still read it."
+      },
+      "delete": {
+        "folderMessage": "A folder is deleted with every global set inside it.",
+        "inUse": "Templates and pages that read a deleted set lose its values.",
+        "online": "Published items stay online until you release the deletion."
+      }
+    },
+    "shell": {
+      "root": "All globals",
+      "folder": {
+        "title": "Select a global set",
+        "description": "Choose a set from the tree to edit its values."
+      },
+      "select": {
+        "title": "Select a global set",
+        "description": "Global sets hold site-wide values — the site name, opening hours, social links — that every template can use."
+      },
+      "empty": {
+        "title": "No global sets yet",
+        "developer": "Create a global set to hold site-wide values such as the site name or social links.",
+        "editor": "Ask a developer to create the global sets that hold the site-wide values.",
+        "createFolder": "Create a folder"
+      }
+    },
+    "detail": {
+      "save": "Save",
+      "thisSet": "the global set",
+      "loading": "Loading the global set…",
+      "noFields": "This global set has no fields yet. A developer declares them.",
+      "noFieldsDeveloper": "This global set declares no fields yet. Add them on the Schema tab.",
+      "needEditor": "You need the editor role to change these values.",
+      "needDeveloper": "You need the developer role to change this schema.",
+      "usageHeading": "Use in templates",
+      "usageHint": "How a template reads each field.",
+      "schemaHint": "Declares the fields this global set exposes. No bodies and no catalog editors — a set has no page.",
+      "schemaLabel": "Schema of {name}",
+      "validate": "Validate",
+      "status": {
+        "revision": "Viewing revision {revision}",
+        "readOnly": "Read-only"
+      },
+      "tabs": {
+        "label": "Global set views",
+        "values": "Values",
+        "schema": "Schema"
+      },
+      "menu": {
+        "discard": "Discard changes",
+        "nothingToDiscard": "There are no unsaved changes",
+        "history": "History",
+        "delete": "Delete…"
+      },
+      "dev": {
+        "uid": "UID",
+        "usage": "Template usage"
+      },
+      "toast": {
+        "savedBoth": "Schema and values saved",
+        "savedSchema": "Schema saved",
+        "savedValues": "Values saved",
+        "cdlErrors": "The schema has errors",
+        "cdlValid": "The schema is valid",
+        "validateFailed": "Could not validate the schema — check your connection and try again.",
+        "deleteInUse": "Could not delete — a template or page still reads this global set. Check where it is used first.",
+        "deleteFailed": "Could not delete — try again in a moment.",
+        "loadFailed": "Could not load the global set — try again in a moment.",
+        "saveFailed": "Could not save — try again in a moment.",
+        "conflict": "Someone else saved this global set — showing the current version.",
+        "schemaErrors": "The schema has compile errors — see the {section} tab.",
+        "invalidValues": "Some values are invalid — see the messages on the fields.",
+        "forbiddenSchema": "Only a developer can change a global set’s schema.",
+        "forbiddenValues": "You do not have permission to change these values.",
+        "deleted": "Deleted “{name}”.",
+        "deletedOnline": "Deleted “{name}”. It stays online until you release the deletion."
       }
     }
   }

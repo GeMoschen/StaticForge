@@ -16,8 +16,6 @@
   "src/app/features/generation/generation.component.html": 22,
   "src/app/features/generation/insight/sf-plan-entries-table.component.ts": 18,
   "src/app/features/generation/insight/sf-rebuild-reason.component.ts": 3,
-  "src/app/features/globals/global-set-detail.component.html": 20,
-  "src/app/features/globals/globals.component.html": 8,
   "src/app/features/navigation/nav-folder-detail.component.html": 13,
   "src/app/features/navigation/nav-reference-detail.component.html": 24,
   "src/app/features/navigation/navigation.component.html": 9,

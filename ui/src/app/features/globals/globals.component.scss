@@ -1,51 +1,80 @@
 :host {
-  display: block;
+  display: flex;
   height: 100%;
+  min-height: 0;
 }
 
 .globals {
-  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  // Both panes are bordered cards: no hairline between them, and the handle sits centred in the gap.
+  --sf-splitter-handle: transparent;
+  --sf-splitter-gap: var(--sf-space-2);
+  padding: var(--sf-space-2);
+}
+
+.globals__pane {
   height: 100%;
+  min-height: 0;
+  border: 1px solid var(--sf-border);
+  border-radius: var(--sf-radius-md);
+  background: var(--sf-surface);
 }
 
 .globals__tree {
-  flex-shrink: 0;
-  width: 340px;
-  padding: var(--sf-4) var(--sf-3);
-  border-right: 1px solid var(--sf-line);
-  overflow-y: auto;
-}
-
-.globals__toolbar {
   display: flex;
-  gap: var(--sf-2);
-  margin-bottom: var(--sf-3);
+  flex-direction: column;
+  overflow: hidden;
 }
 
-.globals__clear {
+.globals__main {
+  display: flex;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.globals__head {
   display: flex;
   align-items: center;
-  gap: var(--sf-2);
-  width: 100%;
-  text-align: left;
-  padding: var(--sf-1) var(--sf-2);
-  margin-bottom: var(--sf-1);
-  background: transparent;
-  border: none;
-  border-radius: var(--sf-radius-sm);
-  color: var(--sf-slate);
-  cursor: pointer;
-  font-family: var(--sf-font-ui);
-  font-size: var(--sf-text-sm);
+  justify-content: space-between;
+  gap: var(--sf-space-2);
+  padding: var(--sf-space-2) var(--sf-space-2) var(--sf-space-2) var(--sf-space-3);
+  border-bottom: 1px solid var(--sf-border);
 }
 
-.globals__clear--active {
-  background: var(--sf-surface);
-  color: var(--sf-ink);
+.globals__title {
+  color: var(--sf-text);
+  font-size: var(--sf-fs-14);
+  line-height: var(--sf-lh-14);
+  font-weight: var(--sf-weight-semibold);
 }
 
-.globals__detail {
-  flex: 1;
+.globals__treebody {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+// A folder, the empty store and "select a set": a plain header above a centred message.
+.globals__plain {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
   min-width: 0;
-  overflow-y: auto;
+}
+
+.globals__plain-head {
+  padding: var(--sf-space-4) var(--sf-space-6) var(--sf-space-3);
+  border-bottom: 1px solid var(--sf-border);
+  background: var(--sf-surface);
+}
+
+.globals__state {
+  flex: 1 1 auto;
+  padding: var(--sf-space-8) var(--sf-space-6);
+}
+
+@media (max-width: 1279px) {
+  .globals__plain-head {
+    padding-inline: var(--sf-space-4);
+  }
 }

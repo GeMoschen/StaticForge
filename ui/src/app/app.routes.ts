@@ -15,7 +15,9 @@ import { AppFrameComponent } from './features/frame/app-frame.component';
 import { PagesListComponent } from './features/pages/pages-list.component';
 import { PageEditorComponent } from './features/pages/page-editor.component';
 import { NavigationComponent } from './features/navigation/navigation.component';
+import { navigationLeaveGuard } from './features/navigation/navigation-leave.guard';
 import { GlobalsComponent } from './features/globals/globals.component';
+import { globalsLeaveGuard } from './features/globals/globals-leave.guard';
 import { ProjectSettingsGeneralComponent } from './features/settings/project-settings-general.component';
 import { ProjectSettingsLocalesComponent } from './features/settings/project-settings-locales.component';
 import { ProjectSettingsMediaComponent } from './features/settings/project-settings-media.component';
@@ -148,11 +150,17 @@ export const routes: Routes = [
           {
             path: 'navigation',
             title: routeTitle('frame.section.navigation'),
+            // Unsaved edits in the open menu item: another entry, the Favorites list or leaving the area asks first (M35.22).
+            canDeactivate: [navigationLeaveGuard],
+            runGuardsAndResolvers: 'always',
             component: NavigationComponent,
           },
           {
             path: 'globals',
             title: routeTitle('frame.section.globals'),
+            // Unsaved edits in the open global set: another set, a folder or leaving the area asks first (M35.22).
+            canDeactivate: [globalsLeaveGuard],
+            runGuardsAndResolvers: 'always',
             component: GlobalsComponent,
           },
           {

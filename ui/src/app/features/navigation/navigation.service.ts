@@ -1,6 +1,7 @@
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpContext } from '@angular/common/http';
 import { inject, Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
+import { SKIP_ERROR_TOAST } from '../../core/api/error.interceptor';
 import type { components } from '../../core/api/generated/schema.d.ts';
 
 type S = components['schemas'];
@@ -13,6 +14,9 @@ export type CreatePageReferenceRequest = S['CreatePageReferenceRequest'];
 export type UpdatePageReferenceRequest = S['UpdatePageReferenceRequest'];
 export type PageReferenceResolveView = S['PageReferenceResolveView'];
 export type FolderView = S['FolderView'];
+export type UrlRegistryEntryView = S['UrlRegistryEntryView'];
+export type PageUrlRegistryEntryView = S['PageUrlRegistryEntryView'];
+export type ReorderNavigationRequest = S['ReorderNavigationRequest'];
 
 /** Raw shape of a navigation folder's `startNode` payload field — a child within the same folder, or absent/null for a pure grouping node. */
 export interface StartNodeInput {
@@ -43,6 +47,18 @@ export class NavigationService {
     return this.http.get<NavTreeView[]>(`${BASE}/projects/${projectKey}/navigation/tree`, {
       withCredentials: true,
       params: depth != null ? { depth } : undefined,
+    });
+  }
+
+  /**
+   * One page of the URL registry's page rows (M35.22): where each page is (or would be) published, for the public URLs
+   * the menu shows. Read quietly — a menu without URLs is still usable, so a failure raises no error toast.
+   */
+  pageUrlRows(projectKey: string, page = 0, size = 500): Observable<PageUrlRegistryEntryView> {
+    return this.http.get<PageUrlRegistryEntryView>(`${BASE}/projects/${projectKey}/url-registry`, {
+      withCredentials: true,
+      params: { targetType: 'PAGE', page, size },
+      context: new HttpContext().set(SKIP_ERROR_TOAST, true),
     });
   }
 
@@ -97,6 +113,25 @@ export class NavigationService {
     }
     return this.http.patch<NavigationFolderView>(
       `${BASE}/projects/${projectKey}/navigation/folders/${uuid}`,
+      body,
+      this.mutationOptions(etag),
+    );
+  }
+
+  /**
+   * Stores the order of a folder's children (M35.22): the menu shows them in `childUuids` order, ahead of any child the
+   * list does not name (those follow alphabetically); `[]` restores the alphabetical order. Answers the folder with the
+   * revision this write produced.
+   */
+  reorderChildren(
+    projectKey: string,
+    folderUuid: string,
+    childUuids: readonly string[],
+    etag?: string,
+  ): Observable<NavigationFolderView> {
+    const body: ReorderNavigationRequest = { childUuids: [...childUuids] };
+    return this.http.put<NavigationFolderView>(
+      `${BASE}/projects/${projectKey}/navigation/folders/${folderUuid}/order`,
       body,
       this.mutationOptions(etag),
     );
