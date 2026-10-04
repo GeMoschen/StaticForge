@@ -1,4 +1,5 @@
 import { inject, Injectable } from '@angular/core';
+import { TranslocoService } from '@jsverse/transloco';
 import { forkJoin } from 'rxjs';
 import { ApiClient } from '../../core/api/api.client';
 import { ProjectContextStore } from '../../core/project/project-context.store';
@@ -24,6 +25,7 @@ export class TemplatesLoader {
   private readonly projectContext = inject(ProjectContextStore);
   private readonly toast = inject(ToastService);
   private readonly api = inject(ApiClient);
+  private readonly transloco = inject(TranslocoService);
 
   /** `ProjectContextStore.pageTemplates`/`sectionTemplates` (used by the "new page" template picker and the page editor's "add section" palette) — AND, as of M13.3, `templateFolderTree` — are only loaded once per project — force a refresh whenever a template or folder is created/renamed/moved/deleted here so those stay in sync without an F5. */
   refreshTemplateStore(): void {
@@ -51,8 +53,8 @@ export class TemplatesLoader {
     }
   }
 
+  /** A dataset was deleted from its editor: the area has moved on (the editor navigated), the lists read again. */
   onDatasetDeleted(): void {
-    this.store.selectedUuid.set(null);
     this.onDatasetChanged();
     this.refreshTemplateStore();
   }
@@ -77,7 +79,7 @@ export class TemplatesLoader {
    * stores don't have and this one shouldn't either. `store.kind()` still exists and is still
    * correct to use for *per-item* operations (create/save/delete/channel calls scoped to
    * whichever one template is selected), just never again for "what to fetch". */
-  reloadList(key: string, select: string | null = null): void {
+  reloadList(key: string): void {
     this.store.loading.set(true);
     forkJoin({
       page: this.service.list('page', key),
@@ -93,21 +95,20 @@ export class TemplatesLoader {
           displayName: d.displayName,
           folderPath: d.folderPath,
           revision: d.revision,
+          channels: d.channels,
+          usedByCount: d.usedByCount,
+          changedAt: d.changedAt,
         }));
         const list = [...(page.content ?? []), ...(section.content ?? []), ...datasetLeaves];
         this.store.templates.set(list);
+        this.store.listFailed.set(false);
+        this.store.loaded.set(true);
         this.store.loading.set(false);
-        if (select) {
-          this.store.selectedUuid.set(select);
-          return;
-        }
-        const current = this.store.selectedUuid();
-        if (!current && list.length > 0) {
-          this.store.selectedUuid.set(list[0].uuid ?? null);
-        }
       },
       error: () => {
-        this.toast.show('Could not load templates — check your connection and try again.', 'error');
+        this.toast.show(this.transloco.translate('templates.toast.loadFailed'), 'error');
+        this.store.listFailed.set(true);
+        this.store.loaded.set(true);
         this.store.loading.set(false);
       },
     });
@@ -175,7 +176,7 @@ export class TemplatesLoader {
         }
         this.editing.requestOctlValidation();
       },
-      error: () => this.toast.show('Could not load template — check your connection and try again.', 'error'),
+      error: () => this.toast.show(this.transloco.translate('templates.toast.loadDetailFailed'), 'error'),
     });
   }
 
@@ -200,7 +201,7 @@ export class TemplatesLoader {
   applyUpdated(updated: TemplateDetail): void {
     this.store.detail.set(updated);
     this.store.templates.update((list) =>
-      list.map((t) => (t.uuid === updated.uuid ? this.summaryFrom(updated) : t)),
+      list.map((t) => (t.uuid === updated.uuid ? { ...t, ...this.summaryFrom(updated) } : t)),
     );
   }
 
@@ -218,6 +219,8 @@ export class TemplatesLoader {
       revision: detail.revision,
       abstract: detail.abstract,
       parentTemplateRef: detail.parentTemplateRef,
+      channels: Object.keys(channelSourcesOf(detail)),
+      changedAt: new Date().toISOString(),
     };
   }
 }

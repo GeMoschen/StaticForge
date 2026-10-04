@@ -1,82 +1,97 @@
-<div class="templates">
-  <h1 class="sf-sr-only">Templates</h1>
-  <sf-templates-tree-pane (newTemplate)="newTemplate()" />
-
-  <section class="templates__detail">
-    <div class="templates__toolbar">
-      @if (store.readOnly()) {
-        <span class="templates__toolbar-readonly">{{ store.readOnlyLabel() }}</span>
-      }
-      <span class="templates__toolbar-spacer"></span>
-      <sf-button variant="primary" [disabled]="store.readOnly()" (click)="newTemplate()">
-        {{ store.activeTemplateKind() === 'DATASET' ? 'New dataset' : 'New template' }}
-      </sf-button>
+<sf-splitter
+  class="templates"
+  collapsible
+  paneId="templates-tree"
+  [defaultSize]="treeWidth"
+  [min]="200"
+  [max]="440"
+  [label]="'templates.tree.resize' | transloco"
+>
+  <section sfSplitterStart class="templates__pane templates__tree" aria-labelledby="templates-tree-title">
+    <div class="templates__head">
+      <span class="templates__title" id="templates-tree-title">{{ 'templates.tree.title' | transloco }}</span>
+      <sf-menu
+        variant="secondary"
+        size="sm"
+        align="end"
+        [text]="'templates.new.button' | transloco"
+        [label]="'templates.new.label' | transloco"
+        [items]="newItems()"
+        [disabled]="!canEdit()"
+      />
     </div>
+    <sf-tree
+      class="templates__treebody"
+      treeId="templates"
+      filterMode="server"
+      hostMenu
+      sort="none"
+      [multiselect]="false"
+      [expandActions]="false"
+      [label]="'templates.tree.title' | transloco"
+      [projectKey]="projectKey()"
+      [loadChildren]="loaderFn()"
+      [selection]="treeSelection()"
+      [actions]="treeActions"
+      [createKinds]="['folder']"
+      [allowAction]="allowAction"
+      [canDrop]="canDrop"
+      [validateName]="validateName"
+      [confirmDelete]="confirmDelete"
+      [menuItems]="menuItems"
+      [search]="search"
+      (open)="onOpen($event)"
+      (create)="onCreate($event)"
+      (renameRequest)="onRenameRequest($event)"
+      (delete)="onDelete($event)"
+      (move)="onMove($event)"
+    />
+  </section>
 
-    @if (store.datasetSelected() && store.selectedUuid(); as datasetUuid) {
-      <div class="detail__scroll">
-        <sf-dataset-schema-editor
+  <div sfSplitterEnd class="templates__pane templates__main">
+    @switch (mode()) {
+      @case ('favorites') {
+        <sf-favorites-view />
+      }
+      @case ('folder') {
+        <sf-templates-folder-view
           [projectKey]="projectKey()"
-          [uuid]="datasetUuid"
-          (changed)="onDatasetChanged()"
-          (deleted)="onDatasetDeleted($event)"
-        />
-      </div>
-    } @else {
-      @if (store.detail(); as d) {
-        <div class="detail__scroll">
-          <sf-template-meta-header />
-          <sf-template-save-outcomes />
-
-          <div class="editors">
-            <sf-template-cdl-panel />
-            <sf-template-channel-panel />
-          </div>
-
-          @if (d.uuid; as templateUuid) {
-            <div class="panel">
-              <sf-asset-impact [projectKey]="projectKey()" [assetUuid]="templateUuid" [refreshKey]="d.revision" />
-            </div>
-          }
-        </div>
-      } @else {
-        <sf-empty-state
-          title="No template selected"
-          description="Select a template on the left, or create a new one."
+          [folderUuid]="folderUuid()"
+          [index]="index()"
+          [tree]="folderTree()"
+          [loading]="!loaded()"
+          [failed]="failed()"
+          (openEntry)="openEntry($event)"
+          (openFolder)="openFolder($event)"
+          (newTemplate)="openNewTemplate(folderUuid(), $event)"
+          (newFolder)="newFolderHere()"
+          (rename)="openRename($event)"
+          (usedBy)="onFolderViewUsedBy($event)"
+          (retry)="retry()"
         />
       }
     }
-  </section>
-</div>
-
-@if (save.confirmDelete()) {
-  <div class="scrim" (click)="save.cancelDelete()"></div>
-  <div class="dialog" role="dialog" aria-modal="true" aria-label="Confirm delete">
-    <div class="dialog__body">
-      <p>Delete this template? Existing pages using it will keep their content but may break on next generation.</p>
-    </div>
-    <footer class="dialog__footer">
-      <sf-button variant="ghost" (click)="save.cancelDelete()">Cancel</sf-button>
-      <sf-button variant="danger" (click)="save.confirmDeleteAction()">Delete</sf-button>
-    </footer>
+    <router-outlet />
   </div>
+</sf-splitter>
+
+@if (renaming(); as entry) {
+  <sf-rename-asset-dialog
+    [open]="true"
+    [projectKey]="projectKey()"
+    [uuid]="entry.uuid"
+    [uid]="entry.uid"
+    [displayName]="entry.name"
+    [submittingName]="renameBusy()"
+    [undoableUid]="true"
+    (renameDisplayName)="renameDisplayName($event)"
+    (uidChanged)="onUidChanged()"
+    (closed)="renaming.set(null)"
+  />
 }
 
-<sf-create-asset-dialog
-  [kind]="createDialogKind()"
-  [open]="newTemplateOpen()"
-  [submitting]="creatingTemplate()"
-  [projectKey]="projectKey()"
-  (create)="submitNewTemplate($event)"
-  (closed)="closeNewTemplate()"
-/>
-
-@if (save.pendingDiscard(); as message) {
-  <div class="templates__discard" role="alertdialog" aria-label="This change discards translations">
-    <p class="templates__discard-text">{{ message }}</p>
-    <div class="templates__discard-actions">
-      <sf-button variant="ghost" (click)="save.cancelDiscard()">Keep the translations</sf-button>
-      <sf-button variant="danger" (click)="save.confirmDiscardAndSave()">Discard and save</sf-button>
-    </div>
-  </div>
+@if (moving(); as entries) {
+  <sf-templates-move-dialog [tree]="folderTree()" [entries]="entries" (chosen)="onMoveChosen($event)" (cancelled)="moving.set(null)" />
 }
+
+<sf-record-side-panel [(tab)]="usedByTab" tabs="usages" [title]="usedByTitle()" [projectKey]="projectKey()" [usages]="usedByRows()" />

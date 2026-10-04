@@ -11,6 +11,12 @@ describe('openedAsset', () => {
     expect(openedAsset(`/p/acme/content/sets/${U}`)).toEqual({ projectKey: 'acme', uuid: U });
   });
 
+  it('reads a template or dataset from its route, and a folder from the query (M35.21)', () => {
+    expect(openedAsset(`/p/acme/templates/${U}`)).toEqual({ projectKey: 'acme', uuid: U });
+    expect(openedAsset(`/p/acme/templates?folder=${U}`)).toEqual({ projectKey: 'acme', uuid: U });
+    expect(openedAsset(`/p/acme/templates?asset=${U}`)).toEqual({ projectKey: 'acme', uuid: U });
+  });
+
   it('reads the asset or folder a store keeps in its query', () => {
     expect(openedAsset(`/p/acme/media?asset=${U}`)).toEqual({ projectKey: 'acme', uuid: U });
     expect(openedAsset(`/p/acme/pages?folder=${U}`)).toEqual({ projectKey: 'acme', uuid: U });

@@ -34,6 +34,7 @@
           <span class="detail__unsaved">The definition and every channel save together.</span>
         }
       }
+      <sf-button variant="ghost" (click)="store.usedByUuid.set(d.uuid ?? null)">{{ 'templates.menu.usedBy' | transloco }}</sf-button>
       <sf-button variant="primary" [disabled]="save.saving() || store.readOnly() || !save.dirty()" (click)="save.saveTemplate()">
         Save template
       </sf-button>

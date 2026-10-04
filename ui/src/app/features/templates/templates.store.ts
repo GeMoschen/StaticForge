@@ -1,5 +1,5 @@
 import { computed, inject, Injectable, signal, type Signal } from '@angular/core';
-import { ActiveEditorService } from '../../core/editor/active-editor.service';
+import { Router } from '@angular/router';
 import type { components } from '../../core/api/generated/schema.d.ts';
 import { ProjectAccessStore } from '../../core/project/project-access.store';
 import { ProjectContextStore } from '../../core/project/project-context.store';
@@ -13,7 +13,6 @@ import {
   type CdlSections,
 } from '../../shared/code-editor/cdl-sections';
 import type { SfTab } from '../../shared/components/sf-tabs.component';
-import { sortByDisplayName } from '../../shared/tree-sort.util';
 import {
   inheritanceBreadcrumb,
   inheritedGroups,
@@ -23,11 +22,10 @@ import {
 } from './inheritance.util';
 import { declaresPagination, paginationPathError, paginationPathsForSave } from './pagination-path.util';
 import type { Diagnostic, TemplateDetail, TemplateKind, TemplateSummary } from './templates.service';
-import type { TemplateAssetKind, TemplateFolderSelectEvent } from './types';
+import type { TemplateAssetKind } from './types';
 import { channelSourcesOf } from './templates.util';
 
 type ChannelView = components['schemas']['ChannelView'];
-type FolderView = components['schemas']['FolderView'];
 
 /**
  * The state of the templates screen, shared by the tree pane, the metadata header, the CDL and channel panels and the
@@ -51,39 +49,24 @@ export class TemplatesStore {
   readonly readOnlyLabel = this.access.readOnlyLabel;
 
   readonly templateFolderTree = this.projectContext.templateFolderTree;
-  /** The store's real top-level folders ("Page Templates"/"Section Templates") — the fixed "All
-   * Templates" wrapper root (`templateFolderTree()`'s sole top-level entry) is unwrapped here so
-   * it's never rendered as its own row, matching Pages/Media's tree visualization. Every other
-   * consumer still walks the raw `templateFolderTree()` (uuid/uid lookups, the
-   * ambiguous-root check, etc.) — this is a display-only unwrap. */
-  readonly topLevelFolders = computed<FolderView[]>(() => this.templateFolderTree()[0]?.children ?? []);
-
-  /** The folder currently selected in the tree — scopes the template list to that folder's
-   * direct contents and is the default target for "New template" (Task M13.3.2). */
-  readonly selectedFolder = signal<string | null>(null);
-  /** The inherited kind of `selectedFolder`, carried alongside it by `TemplateFolderSelectEvent`
-   * rather than re-derived by walking the tree (see `types.ts`). */
-  readonly selectedFolderKind = signal<TemplateAssetKind | null>(null);
   /**
-   * The folder the tree highlights. `selectedFolder` stays put while a template is open (it scopes the list and is the
-   * target of "New template"), but a highlighted folder next to a highlighted template would read as two selections.
+   * "Which of the two template endpoints/kinds is currently relevant" — derived from the open template rather than
+   * toggled (M13.3.1 step 5): its own `assetType` wins (you're looking straight at it), else `PAGE_TEMPLATE`.
    */
-  readonly highlightedFolder = computed(() => (this.selectedUuid() ? null : this.selectedFolder()));
-
-  /**
-   * "Which of the two template endpoints/kinds is currently relevant" — derived from the selection rather than
-   * toggled (M13.3.1 step 5): a selected template's own `assetType` wins (you're looking straight at it), else the
-   * selected folder's inherited kind, else `PAGE_TEMPLATE` as a sane first-load default.
-   */
-  readonly activeTemplateKind = computed<TemplateAssetKind>(
-    () => this.selectedTemplateAssetType() ?? this.selectedFolderKind() ?? 'PAGE_TEMPLATE',
-  );
+  readonly activeTemplateKind = computed<TemplateAssetKind>(() => this.selectedTemplateAssetType() ?? 'PAGE_TEMPLATE');
 
   readonly kind = computed<TemplateKind>(() => (this.activeTemplateKind() === 'SECTION_TEMPLATE' ? 'section' : 'page'));
 
   readonly templates = signal<TemplateSummary[]>([]);
   readonly loading = signal(false);
+  /** The first read of the template list returned (until then the area's tree and tables say nothing). */
+  readonly loaded = signal(false);
+  /** The last read of the template list failed. */
+  readonly listFailed = signal(false);
+  /** The open template or dataset: the shell follows the URL (`/templates/:uuid`) and writes it here. */
   readonly selectedUuid = signal<string | null>(null);
+  /** The template or dataset whose *Used by* drawer is open (the tree, the table and the header ask for it). */
+  readonly usedByUuid = signal<string | null>(null);
 
   readonly selectedTemplateAssetType = computed<TemplateAssetKind | null>(() => {
     const uuid = this.selectedUuid();
@@ -97,26 +80,6 @@ export class TemplatesStore {
 
   /** A dataset is selected: the detail pane is the dataset schema editor, not the template editor. */
   readonly datasetSelected = computed(() => this.selectedTemplateAssetType() === 'DATASET');
-
-  /** Templates grouped by their canonical folder path — threaded down the tree so every
-   * folder node can render its own templates as leaves, sorted after subfolders (mirrors
-   * `PagesListComponent.pagesByFolder`/`FolderNodeComponent.ownPages`). */
-  readonly templatesByFolder = computed<Map<string, TemplateSummary[]>>(() => {
-    const map = new Map<string, TemplateSummary[]>();
-    for (const t of this.templates()) {
-      const path = t.folderPath ?? '/';
-      const list = map.get(path);
-      if (list) {
-        list.push(t);
-      } else {
-        map.set(path, [t]);
-      }
-    }
-    for (const [path, list] of map) {
-      map.set(path, sortByDisplayName(list));
-    }
-    return map;
-  });
 
   readonly detail = signal<TemplateDetail | null>(null);
   readonly displayName = signal('');
@@ -266,36 +229,15 @@ export class TemplatesStore {
     return this.kind() === 'section';
   }
 
-  private readonly editors = inject(ActiveEditorService);
+  private readonly router = inject(Router);
 
   /**
-   * Switching to another item of this screen goes through the same unsaved-changes check as a route change (M35.13):
-   * nothing unsaved, it happens at once; else the person saves or discards first, or stays.
+   * Opens another template of the chain (breadcrumb, "Extended by", a broken descendant). The open item lives in the URL
+   * (`/templates/:uuid`), so the route's unsaved-changes guard asks before the screen changes (M35.13).
    */
-  private whenMayLeave(change: () => void): void {
-    if (!this.editors.hasUnsaved()) {
-      change();
-      return;
-    }
-    void this.editors.canLeave().then((may) => may && change());
-  }
-
-  selectFolder(event: TemplateFolderSelectEvent): void {
-    this.whenMayLeave(() => {
-      this.selectedFolder.set(event.uuid);
-      this.selectedFolderKind.set(event.templateKind);
-      this.selectedUuid.set(null);
-    });
-  }
-
-  select(uuid?: string | null): void {
-    this.whenMayLeave(() => this.selectedUuid.set(uuid ?? null));
-  }
-
-  /** Opens another template of the chain (breadcrumb, "Extended by", a broken descendant). */
   openTemplate(uuid: string | null | undefined): void {
     if (uuid) {
-      this.whenMayLeave(() => this.selectedUuid.set(uuid));
+      void this.router.navigate(['/p', this.projectKey(), 'templates', uuid]);
     }
   }
 

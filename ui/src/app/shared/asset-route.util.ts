@@ -38,7 +38,7 @@ export function assetRoute(projectKey: string, asset: RoutableAsset): AssetRoute
     case 'PAGE_TEMPLATE':
     case 'SECTION_TEMPLATE':
     case 'DATASET':
-      return { commands: [...base, 'templates'], queryParams: { asset: uuid } };
+      return { commands: [...base, 'templates', uuid], queryParams: {} };
     case 'PAGE_REFERENCE':
       return { commands: [...base, 'navigation'], queryParams: { asset: uuid } };
     case 'GLOBAL_SET':

@@ -94,7 +94,7 @@ describe('ProjectSettingsLocalesComponent output path warnings (M35.1)', () => {
     expect(banner.textContent).toContain('SF-GEN-0111');
     const link = banner.querySelector('a') as HTMLAnchorElement;
     expect(link.textContent?.trim()).toBe('Landing page');
-    expect(link.getAttribute('href')).toBe(`/p/proj/templates?asset=${TEMPLATE}`);
+    expect(link.getAttribute('href')).toBe(`/p/proj/templates/${TEMPLATE}`);
     expect(banner.textContent).toContain('channel html');
     expect(banner.textContent).toContain('{folder}{uid}.{ext}');
     expect(banner.textContent).toContain('and 2 more');

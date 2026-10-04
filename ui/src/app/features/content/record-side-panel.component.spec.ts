@@ -69,4 +69,40 @@ describe('RecordSidePanelComponent', () => {
 
     expect(await screen.findByRole('link', { name: 'team' })).toBeTruthy();
   });
+
+  describe('Used by only (a record set, a template or a dataset, M35.21)', () => {
+    const MIXED: UsageDto[] = [
+      { fromUuid: 'p1', fromUid: 'home', fromType: 'PAGE', sourcePath: 'template' },
+      { fromUuid: 'rs1', fromUid: 'team', fromType: 'RECORD_SET' },
+      { fromUuid: 't1', fromUid: 'post', fromType: 'PAGE_TEMPLATE' },
+      { fromUuid: 's1', fromUid: 'hero', fromType: 'SECTION_TEMPLATE' },
+    ];
+
+    async function usedBy(title: string | null = 'Used by — Article') {
+      return render(RecordSidePanelComponent, {
+        componentInputs: { projectKey: 'proj', usages: MIXED, tab: 'usages' as RecordSidePanelTab | null, tabs: 'usages', title },
+        providers: [provideRouter([])],
+      });
+    }
+
+    it('has the Used by tab alone, without Checks, under the given title', async () => {
+      await usedBy();
+
+      expect(screen.getByText('Used by — Article')).toBeInTheDocument();
+      expect(screen.getAllByRole('tab').map((tab) => tab.textContent?.trim())).toEqual(['Used by 4']);
+      expect(screen.queryByRole('tab', { name: /Checks/ })).toBeNull();
+    });
+
+    it('labels every kind of user, record set included, and links the ones that have a screen', async () => {
+      await usedBy();
+
+      for (const label of ['Page', 'Record set', 'Template', 'Section template']) {
+        expect(screen.getByText(label)).toBeInTheDocument();
+      }
+      expect(screen.getByRole('link', { name: 'home' })).toHaveAttribute('href', '/p/proj/pages/p1');
+      expect(screen.getByRole('link', { name: 'team' })).toHaveAttribute('href', '/p/proj/content/sets/rs1');
+      expect(screen.getByRole('link', { name: 'post' })).toHaveAttribute('href', '/p/proj/templates/t1');
+      expect(screen.getByRole('link', { name: 'hero' })).toHaveAttribute('href', '/p/proj/templates/s1');
+    });
+  });
 });

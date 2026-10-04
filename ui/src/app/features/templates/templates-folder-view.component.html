@@ -1,0 +1,95 @@
+<sf-page-header class="view__header" [title]="title()" [secondaryActions]="moreActions()" (secondaryAction)="onMenu($event)">
+  <ng-container sfPageHeaderActions>
+    <sf-menu
+      variant="primary"
+      icon="add"
+      align="end"
+      [text]="'templates.new.button' | transloco"
+      [label]="'templates.new.label' | transloco"
+      [items]="newItems()"
+      [disabled]="!canEdit()"
+    />
+  </ng-container>
+</sf-page-header>
+
+<sf-data-table
+  class="view__table"
+  selectable
+  searchable
+  urlSync=""
+  [columns]="columns()"
+  [rows]="rows()"
+  [rowKey]="rowKey"
+  [rowLabel]="rowLabel"
+  [filters]="filters()"
+  [label]="'templates.folder.table' | transloco: { name: title() }"
+  [searchPlaceholder]="'templates.folder.search' | transloco"
+  [bulkActions]="bulkActions()"
+  [loading]="loading()"
+  [error]="failed() ? ('templates.folder.loadFailed' | transloco) : null"
+  [emptyTitle]="'templates.folder.empty' | transloco"
+  [emptyDescription]="'templates.folder.emptyHint' | transloco"
+  (rowOpen)="open($event)"
+  (retry)="retry.emit()"
+>
+  <ng-template sfDataTableCell="name" [sfDataTableCellRows]="rows()" let-row>
+    <span class="cell-name">
+      <sf-icon class="cell-name__icon" [class.is-folder]="row.kind === 'folder'" [name]="icon(row)" />
+      <span class="cell-name__text">{{ row.name }}</span>
+      @if (dev() && row.kind !== 'folder') {
+        <code class="cell-uid">{{ row.uid }}</code>
+      }
+      @if (row.kind !== 'folder' && row.channels.length === 0) {
+        <sf-badge tone="warning" [label]="'templates.folder.noChannel' | transloco" />
+      }
+      <sf-asset-favorite
+        class="cell-fav"
+        [type]="favoriteType(row)"
+        [uuid]="row.uuid"
+        [name]="row.name"
+        [folderPath]="row.path"
+        (click)="$event.stopPropagation()"
+      />
+    </span>
+  </ng-template>
+  <ng-template sfDataTableCell="kind" [sfDataTableCellRows]="rows()" let-row>
+    <span class="cell-muted">{{ kindLabel(row.kind) }}</span>
+  </ng-template>
+  <ng-template sfDataTableCell="channels" [sfDataTableCellRows]="rows()" let-row>
+    @if (row.kind === 'folder') {
+      <span class="cell-muted">—</span>
+    } @else {
+      <span class="cell-chips">
+        @for (channel of row.channels; track channel) {
+          <sf-badge [label]="channel" />
+        }
+      </span>
+    }
+  </ng-template>
+  <ng-template sfDataTableCell="usedBy" [sfDataTableCellRows]="rows()" let-row>
+    @if (row.kind === 'folder' || row.usedByCount === null) {
+      <span class="cell-muted">—</span>
+    } @else if (row.usedByCount === 0) {
+      <span class="cell-muted">0</span>
+    } @else {
+      <sf-button
+        variant="ghost"
+        size="sm"
+        [aria-label]="'templates.folder.showUsedBy' | transloco: { name: row.name, count: row.usedByCount }"
+        (click)="showUsedBy(row, $event)"
+        >{{ row.usedByCount }}</sf-button
+      >
+    }
+  </ng-template>
+  <ng-template sfDataTableCell="modified" [sfDataTableCellRows]="rows()" let-row>
+    @if (row.kind !== 'folder' && row.changedAt) {
+      <sf-relative-time [value]="row.changedAt" />
+    } @else {
+      <span class="cell-muted">—</span>
+    }
+  </ng-template>
+</sf-data-table>
+
+@if (moving(); as entries) {
+  <sf-templates-move-dialog [tree]="tree()" [entries]="entries" (chosen)="onMoveChosen(entries, $event)" (cancelled)="moving.set(null)" />
+}

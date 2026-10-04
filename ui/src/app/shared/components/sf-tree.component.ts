@@ -266,6 +266,12 @@ export class SfTreeComponent<T = unknown> implements OnInit, OnDestroy {
    * siblings. Positions are emitted as {@link reorder}; moving into a node stays a {@link move}.
    */
   readonly reorderable = input(false, { transform: booleanAttribute });
+  /**
+   * The host owns the whole menu (M35.21, gate decision 157): the ⋮ and context menus list only the host's
+   * {@link menuItems} and *Delete*, and there is no cut / copy / paste. Drag and drop and Del stay. F2 (and
+   * {@link startRename}) then ask the host for a rename through {@link renameRequest} instead of editing in place.
+   */
+  readonly hostMenu = input(false, { transform: booleanAttribute });
 
   /** Enter, double click, or a plain click with {@link openOnClick}. */
   readonly open = output<SfTreeNode<T>>();
@@ -273,6 +279,8 @@ export class SfTreeComponent<T = unknown> implements OnInit, OnDestroy {
   readonly create = output<SfTreeCreateRequest<T>>();
   readonly delete = output<SfTreeDeleteRequest<T>>();
   readonly move = output<SfTreeMoveRequest<T>>();
+  /** With {@link hostMenu}: F2 on a node; the host shows its own rename dialog. */
+  readonly renameRequest = output<SfTreeNode<T>>();
   /** "Move to…": the host asks for a destination with a picker and performs the move. */
   readonly moveTo = output<SfTreeNode<T>[]>();
   /** A sibling reorder ({@link reorderable}): the host applies it, then calls {@link refresh} and `completed`. */
@@ -523,6 +531,10 @@ export class SfTreeComponent<T = unknown> implements OnInit, OnDestroy {
     if (!node || !this.allowed('rename', [node]) || !this.state.row(id)) {
       return;
     }
+    if (this.hostMenu()) {
+      this.renameRequest.emit(node);
+      return;
+    }
     this.edit.set({ mode: 'rename', id, draft: node.label, error: null, busy: false });
     this.focusEditor(id);
   }
@@ -703,12 +715,21 @@ export class SfTreeComponent<T = unknown> implements OnInit, OnDestroy {
     if (mod && !event.altKey) {
       switch (event.key.toLowerCase()) {
         case 'x':
+          if (this.hostMenu()) {
+            return false;
+          }
           this.cut(this.state.targetsOf(row.id));
           return true;
         case 'c':
+          if (this.hostMenu()) {
+            return false;
+          }
           this.copy(this.state.targetsOf(row.id));
           return true;
         case 'v':
+          if (this.hostMenu()) {
+            return false;
+          }
           this.paste(row.node);
           return true;
         case 'a':
@@ -1412,6 +1433,21 @@ export class SfTreeComponent<T = unknown> implements OnInit, OnDestroy {
     }
     const single = nodes.length === 1 ? nodes[0] : null;
     const items: SfMenuItem[] = [];
+    if (this.hostMenu()) {
+      items.push(...fromContextItems(this.menuItems()?.(nodes) ?? [], 'host'));
+      if (this.allowed('delete', nodes)) {
+        items.push({
+          id: 'delete',
+          label: this.t('deleteConfirm', { count: nodes.length }),
+          icon: 'delete',
+          danger: true,
+          shortcut: 'Del',
+          separatorBefore: items.length > 0,
+          action: () => void this.deleteNodes(nodes),
+        });
+      }
+      return items;
+    }
     const section = (start: number) => {
       if (start > 0 && items.length > start) {
         items[start] = { ...items[start], separatorBefore: true };

@@ -814,6 +814,25 @@ describe('SfTreeComponent', () => {
       expect(state?.items.find((i) => i.label === 'Delete')).toMatchObject({ danger: true, separatorBefore: true });
     });
 
+    it('with hostMenu the menu is the host\'s entries and Delete: no cut, copy, paste or move-to, and F2 asks the host to rename', async () => {
+      const preview = vi.fn();
+      const setupResult = await setup({ inputs: { hostMenu: true, menuItems: () => [{ label: 'Preview', action: preview }, { label: 'Rename…', action: vi.fn() }] } });
+      const renameRequest = vi.fn();
+      setupResult.tree.renameRequest.subscribe(renameRequest);
+      focus('Beta');
+      key('F10', { shiftKey: true });
+      const state = TestBed.inject(ContextMenuService).state();
+      expect(state?.items.map((i) => i.label)).toEqual(['Preview', 'Rename…', 'Delete']);
+      expect(state?.items.find((i) => i.label === 'Delete')).toMatchObject({ danger: true, separatorBefore: true });
+
+      // Cut and paste keys do nothing; F2 does not edit in place, it asks the host.
+      key('x', { ctrlKey: true });
+      expect(TestBed.inject(TreeClipboardService).nodes()).toBeNull();
+      key('F2');
+      expect(renameRequest).toHaveBeenCalledWith(expect.objectContaining({ id: 'beta' }));
+      expect(screen.queryByRole('textbox', { name: /name/i })).toBeNull();
+    });
+
     it('opens the context menu with the ContextMenu key, and "Move to…" asks the host', async () => {
       const { moveTo } = await setup();
       focus('Gamma');

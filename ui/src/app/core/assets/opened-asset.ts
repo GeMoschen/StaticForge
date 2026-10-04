@@ -7,8 +7,8 @@ export interface OpenedAsset {
 }
 
 /**
- * The asset a router URL has open (M35.15), or `null` when it shows none: a page (`/p/acme/pages/<uuid>`), a record or
- * record set (`/content/records|sets/<uuid>`), or — in the stores that keep the open item in the query — `?asset=<uuid>`
+ * The asset a router URL has open (M35.15), or `null` when it shows none: a page (`/p/acme/pages/<uuid>`), a template or dataset
+ * (`/templates/<uuid>`), a record or record set (`/content/records|sets/<uuid>`), or — in the stores that keep the open item in the query — `?asset=<uuid>`
  * (media, navigation, globals, templates) and `?folder=<uuid>` (a folder of any store). Pure.
  */
 export function openedAsset(url: string): OpenedAsset | null {
@@ -29,6 +29,8 @@ export function openedAsset(url: string): OpenedAsset | null {
     candidates.push(a);
   } else if (section === 'content' && (a === 'records' || a === 'sets')) {
     candidates.push(b);
+  } else if (section === 'templates') {
+    candidates.push(a);
   }
   if (section === 'pages' || section === 'content' || section === 'media' || section === 'navigation' || section === 'globals' || section === 'templates') {
     candidates.push(query.get('asset'), query.get('folder'));

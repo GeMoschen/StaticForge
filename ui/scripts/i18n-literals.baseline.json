@@ -57,12 +57,8 @@
   "src/app/features/settings/project-settings-targets.component.html": 34,
   "src/app/features/settings/project-settings-url-registry.component.html": 46,
   "src/app/features/settings/redirect-dialog.component.html": 26,
-  "src/app/features/templates/template-folder-node.component.html": 3,
-  "src/app/features/templates/template-nav-node.component.html": 2,
   "src/app/features/templates/templates-cdl-panel.component.html": 9,
   "src/app/features/templates/templates-channel-panel.component.html": 11,
   "src/app/features/templates/templates-meta-header.component.html": 21,
-  "src/app/features/templates/templates-save-outcomes.component.html": 9,
-  "src/app/features/templates/templates-tree-pane.component.html": 2,
-  "src/app/features/templates/templates.component.html": 13
+  "src/app/features/templates/templates-save-outcomes.component.html": 9
 }

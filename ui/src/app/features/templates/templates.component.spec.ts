@@ -1,17 +1,44 @@
 import '@angular/compiler';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
+import { Component, EnvironmentInjector, createComponent } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { By } from '@angular/platform-browser';
-import { provideRouter } from '@angular/router';
+import { Router, provideRouter } from '@angular/router';
+import { RouterTestingHarness } from '@angular/router/testing';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ProjectContextStore } from '../../core/project/project-context.store';
+import { provideProjectPermissions } from '../../core/project/testing/project-permissions.testing';
 import { TimeTravelStore } from '../revisions/time-travel.store';
+import { unsavedChangesGuard } from '../../core/editor/unsaved-changes.guard';
+import { TemplateEditorComponent } from './template-editor.component';
 import { TemplatesComponent } from './templates.component';
 import { TemplatesEditing } from './templates-editing';
-import { TemplateMetaHeaderComponent } from './templates-meta-header.component';
 import { TemplatesSaveCoordinator } from './templates-save.coordinator';
 import { TemplatesStore } from './templates.store';
+
+@Component({ standalone: true, template: '' })
+class RouteStub {}
+
+/** The routes the leave check needs: the guard sits on the template route, as in the app. */
+const TEMPLATE_ROUTES = [{ path: 'p/:projectKey/templates/:uuid', canDeactivate: [unsavedChangesGuard], component: RouteStub }];
+
+/**
+ * The open template is the router outlet's child (`TemplateEditorComponent`, M35.21). The specs that look at its DOM mount
+ * it under the area's injector, as the outlet does, and `detectChanges` checks it along with the area.
+ */
+function attachEditor(fixture: ComponentFixture<TemplatesComponent>): void {
+  const ref = createComponent(TemplateEditorComponent, {
+    environmentInjector: TestBed.inject(EnvironmentInjector),
+    elementInjector: fixture.debugElement.injector,
+  });
+  (fixture.nativeElement as HTMLElement).appendChild(ref.location.nativeElement);
+  const detect = fixture.detectChanges.bind(fixture);
+  fixture.detectChanges = (checkNoChanges?: boolean) => {
+    detect(checkNoChanges);
+    ref.changeDetectorRef.detectChanges();
+  };
+  fixture.componentRef.onDestroy(() => ref.destroy());
+}
 
 /** The screen's state and behaviour live in services provided by the component; specs drive them through its injector. */
 function servicesOf(fixture: ComponentFixture<TemplatesComponent>) {
@@ -43,9 +70,15 @@ describe('TemplatesComponent (time travel read-only)', () => {
   beforeEach(() => {
     TestBed.configureTestingModule({
       imports: [TemplatesComponent],
-      providers: [provideHttpClient(), provideHttpClientTesting(), provideRouter([])],
+      providers: [
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        provideRouter([]),
+        provideProjectPermissions({ role: () => 'DEVELOPER', readOnly: () => TestBed.inject(TimeTravelStore).isTimeTravel() }),
+      ],
     });
     fixture = TestBed.createComponent(TemplatesComponent);
+    attachEditor(fixture);
     component = fixture.componentInstance;
     ({ store, save, editing } = servicesOf(fixture));
     httpMock = TestBed.inject(HttpTestingController);
@@ -103,20 +136,30 @@ describe('TemplatesComponent (time travel read-only)', () => {
     httpMock.expectNone((req) => req.method === 'PUT');
   });
 
-  it('does not create a new template while time travel is active', () => {
+  it('does not create a new template while time travel is active', async () => {
     timeTravel.enter(5);
 
-    component.submitNewTemplate({ displayName: 'New template' });
+    await component.createTemplate({ kind: 'page', name: 'New template', uid: 'new_template' }, null);
 
     httpMock.expectNone((req) => req.method === 'POST');
   });
 
-  it('does not delete a template while time travel is active', () => {
+  it('creates a template again once time travel ends (a developer)', async () => {
+    vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
+    const created = component.createTemplate({ kind: 'page', name: 'New template', uid: 'new_template' }, null);
+
+    httpMock.expectOne((req) => req.method === 'POST' && req.url.endsWith('/page-templates')).flush({ uuid: 'new-1', uid: 'new_template' });
+    await created;
+    drain();
+  });
+
+  it('does not delete a template while time travel is active', async () => {
     timeTravel.enter(5);
+    setDetail({ uuid: 'tpl-1', uid: 'landing', revision: 1 });
     setSelectedUuid('tpl-1');
     drain();
 
-    save.confirmDeleteAction();
+    await save.requestDelete();
 
     httpMock.expectNone((req) => req.method === 'DELETE');
   });
@@ -165,6 +208,7 @@ describe('TemplatesComponent (inheritance, M20.4.1)', () => {
       providers: [provideHttpClient(), provideHttpClientTesting(), provideRouter([])],
     });
     fixture = TestBed.createComponent(TemplatesComponent);
+    attachEditor(fixture);
     ({ store, save, editing } = servicesOf(fixture));
     httpMock = TestBed.inject(HttpTestingController);
     fixture.componentRef.setInput('projectKey', 'proj1');
@@ -185,7 +229,7 @@ describe('TemplatesComponent (inheritance, M20.4.1)', () => {
   }
 
   function selectArticle(): void {
-    store.select('a-3');
+    store.selectedUuid.set('a-3');
     fixture.detectChanges();
     httpMock.match((r) => r.url.endsWith('/page-templates/a-3')).forEach((r) => r.flush(ARTICLE));
     httpMock.match((r) => r.url.endsWith('/usages')).forEach((r) => r.flush([]));
@@ -205,9 +249,10 @@ describe('TemplatesComponent (inheritance, M20.4.1)', () => {
 
   it('sends the abstract flag and shows the page count when the template is in use', () => {
     selectArticle();
-    fixture.debugElement
-      .query(By.directive(TemplateMetaHeaderComponent))
-      .componentInstance.onAbstractChange({ target: { checked: true } } as unknown as Event);
+    // The Abstract checkbox of the header sets this (the editor's DOM is mounted by `attachEditor`).
+    const checkbox = (fixture.nativeElement as HTMLElement).querySelector<HTMLInputElement>('label[title^="A layout"] input')!;
+    checkbox.checked = true;
+    checkbox.dispatchEvent(new Event('change'));
     save.saveTemplate();
     const put = httpMock.expectOne((r) => r.method === 'PUT');
     expect((put.request.body as { abstract?: boolean }).abstract).toBe(true);
@@ -275,9 +320,10 @@ describe('TemplatesComponent (tabs and one save, M34)', () => {
   beforeEach(() => {
     TestBed.configureTestingModule({
       imports: [TemplatesComponent],
-      providers: [provideHttpClient(), provideHttpClientTesting(), provideRouter([])],
+      providers: [provideHttpClient(), provideHttpClientTesting(), provideRouter(TEMPLATE_ROUTES)],
     });
     fixture = TestBed.createComponent(TemplatesComponent);
+    attachEditor(fixture);
     ({ store, save, editing } = servicesOf(fixture));
     httpMock = TestBed.inject(HttpTestingController);
     fixture.componentRef.setInput('projectKey', 'proj1');
@@ -294,7 +340,7 @@ describe('TemplatesComponent (tabs and one save, M34)', () => {
   });
 
   function open(detail: object = LAYOUT): void {
-    store.select('t-1');
+    store.selectedUuid.set('t-1');
     fixture.detectChanges();
     httpMock.match((r) => r.method === 'GET' && /-templates\/t-1$/.test(r.url)).forEach((r) => r.flush(detail));
     httpMock.match((r) => r.url.endsWith('/usages')).forEach((r) => r.flush([]));
@@ -407,27 +453,49 @@ describe('TemplatesComponent (tabs and one save, M34)', () => {
       httpMock.expectOne((r) => r.method === 'PUT').flush({ ...LAYOUT, revision: 5 });
     });
 
-    it('asks before another template opens: Cancel stays on this one with its edits', () => {
+    /** The open template is the URL's (`/templates/:uuid`): switching is a navigation, which the route's guard may stop. */
+    async function openAt(uuid: string): Promise<RouterTestingHarness> {
+      const harness = await RouterTestingHarness.create(`/p/proj1/templates/${uuid}`);
       open();
+      return harness;
+    }
+
+    it('follows the URL: the route\'s uuid is the open template', async () => {
+      await RouterTestingHarness.create('/p/proj1/templates/t-1');
+      fixture.detectChanges();
+      expect(store.selectedUuid()).toBe('t-1');
+      httpMock.match((r) => /-templates\/t-1$/.test(r.url)).forEach((r) => r.flush(LAYOUT));
+      httpMock.match((r) => r.url.endsWith('/usages')).forEach((r) => r.flush([]));
+      fixture.detectChanges();
+      expect(store.detail()?.uid).toBe('layout');
+    });
+
+    it('asks before another template opens: Cancel stays on this one with its edits', async () => {
+      const harness = await openAt('t-1');
       editing.onSectionInput({ section: 'rules', value: 'rule x' });
-      store.select('t-2');
-      return Promise.resolve().then(() => {
-        expect(dialog()).not.toBeNull();
-        press('Cancel');
-      }).then(() => new Promise((resolve) => setTimeout(resolve)))
-        .then(() => {
-          expect(store.selectedUuid()).toBe('t-1');
-          expect(store.sections().rules).toBe('rule x');
-        });
+
+      const switched = harness.navigateByUrl('/p/proj1/templates/t-2');
+      await vi.waitFor(() => expect(dialog()).not.toBeNull());
+      press('Cancel');
+
+      await switched;
+      expect(TestBed.inject(Router).url).toBe('/p/proj1/templates/t-1');
+      fixture.detectChanges();
+      expect(store.selectedUuid()).toBe('t-1');
+      expect(store.sections().rules).toBe('rule x');
     });
 
     it('Discard gives the edits up (the saved template shows again) and opens the other template', async () => {
-      open();
+      const harness = await openAt('t-1');
       editing.onSectionInput({ section: 'rules', value: 'rule x' });
-      store.select('t-2');
-      await Promise.resolve();
+
+      const switched = harness.navigateByUrl('/p/proj1/templates/t-2');
+      await vi.waitFor(() => expect(dialog()).not.toBeNull());
       press('Discard');
-      await new Promise((resolve) => setTimeout(resolve));
+      await switched;
+
+      fixture.detectChanges();
+      expect(TestBed.inject(Router).url).toBe('/p/proj1/templates/t-2');
       expect(store.selectedUuid()).toBe('t-2');
       expect(save.dirty()).toBe(false);
       for (const r of httpMock.match(() => true)) {
@@ -435,14 +503,46 @@ describe('TemplatesComponent (tabs and one save, M34)', () => {
       }
     });
 
-    it('switches at once when nothing is unsaved', () => {
-      open();
-      store.select('t-2');
-      expect(store.selectedUuid()).toBe('t-2');
-      expect(dialog()).toBeNull();
+    it('Save writes the template first, then opens the other one', async () => {
+      const harness = await openAt('t-1');
+      editing.onSectionInput({ section: 'rules', value: 'state title requiredWhen "true"' });
+
+      const switched = harness.navigateByUrl('/p/proj1/templates/t-2');
+      await vi.waitFor(() => expect(dialog()).not.toBeNull());
+      press('Save');
+      const put = await vi.waitFor(() => httpMock.expectOne((r) => r.method === 'PUT'));
+      put.flush({ ...LAYOUT, rulesCdl: 'state title requiredWhen "true"', revision: 5 });
+      await switched;
+
+      fixture.detectChanges();
+      expect(TestBed.inject(Router).url).toBe('/p/proj1/templates/t-2');
       for (const r of httpMock.match(() => true)) {
         r.flush(emptyBodyFor(r.request.url, {}));
       }
+    });
+
+    it('switches at once when nothing is unsaved', async () => {
+      const harness = await openAt('t-1');
+
+      await harness.navigateByUrl('/p/proj1/templates/t-2');
+      fixture.detectChanges();
+
+      expect(dialog()).toBeNull();
+      expect(store.selectedUuid()).toBe('t-2');
+      for (const r of httpMock.match(() => true)) {
+        r.flush(emptyBodyFor(r.request.url, {}));
+      }
+    });
+
+    it('opening a template from the inheritance chain is a navigation too (the guard asks first)', async () => {
+      const harness = await openAt('t-1');
+      editing.onSectionInput({ section: 'rules', value: 'rule x' });
+      store.openTemplate('t-9');
+      await vi.waitFor(() => expect(dialog()).not.toBeNull());
+      press('Cancel');
+      await new Promise((resolve) => setTimeout(resolve));
+      expect(TestBed.inject(Router).url).toBe('/p/proj1/templates/t-1');
+      expect(harness).toBeTruthy();
     });
   });
 
@@ -482,52 +582,9 @@ describe('TemplatesComponent (tabs and one save, M34)', () => {
     open();
     editing.onSectionInput({ section: 'content', value: 'editor text headline { }' });
     fixture.detectChanges();
-    const detail = (fixture.nativeElement as HTMLElement).querySelector('.templates__detail')!;
+    const detail = (fixture.nativeElement as HTMLElement).querySelector('.detail__scroll')!;
     detail.dispatchEvent(new KeyboardEvent('keydown', { key: 's', ctrlKey: true, bubbles: true }));
     httpMock.expectOne((r) => r.method === 'PUT').flush({ ...LAYOUT, revision: 5 });
-  });
-});
-
-describe('TemplatesComponent tree selection', () => {
-  it('highlights one row: the folder, or the open template — not both', () => {
-    TestBed.configureTestingModule({
-      imports: [TemplatesComponent],
-      providers: [provideHttpClient(), provideHttpClientTesting(), provideRouter([])],
-    });
-    const http = TestBed.inject(HttpTestingController);
-    TestBed.inject(ProjectContextStore).templateFolderTree.set([
-      {
-        uuid: 'all',
-        uid: 'templates_root',
-        displayName: 'All Templates',
-        path: '/templates_root/',
-        children: [
-          { uuid: 'pt', uid: 'page_templates', displayName: 'Page Templates', path: '/templates_root/page_templates/', children: [] },
-        ],
-      },
-    ]);
-    const fixture = TestBed.createComponent(TemplatesComponent);
-    fixture.componentRef.setInput('projectKey', 'proj1');
-    const settle = () => {
-      fixture.detectChanges();
-      for (const req of http.match(() => true)) {
-        req.flush(emptyBodyFor(req.request.url));
-      }
-      fixture.detectChanges();
-    };
-    const selectedRows = () =>
-      Array.from(fixture.nativeElement.querySelectorAll('[role="treeitem"][aria-selected="true"]') as NodeListOf<HTMLElement>).map(
-        (row) => row.querySelector('.folder-node__name')?.textContent?.trim(),
-      );
-    settle();
-
-    // Nothing open: the default folder is the selection.
-    expect(selectedRows()).toContain('Page Templates');
-
-    servicesOf(fixture).store.select('tpl-1');
-    settle();
-
-    expect(selectedRows()).not.toContain('Page Templates');
   });
 });
 
@@ -546,6 +603,7 @@ describe('TemplatesComponent output path warnings', () => {
     });
     const http = TestBed.inject(HttpTestingController);
     const fixture = TestBed.createComponent(TemplatesComponent);
+    attachEditor(fixture);
     fixture.componentRef.setInput('projectKey', 'proj1');
     const settle = () => {
       fixture.detectChanges();
@@ -567,7 +625,7 @@ describe('TemplatesComponent output path warnings', () => {
       fixture.detectChanges();
     };
     settle();
-    servicesOf(fixture).store.select('tpl-1');
+    servicesOf(fixture).store.selectedUuid.set('tpl-1');
     settle();
     settle();
     return fixture;

@@ -17,11 +17,14 @@ describe('assetRoute', () => {
     });
   });
 
-  it('selects media, templates, datasets, navigation and globals through ?asset=', () => {
-    expect(assetRoute('acme', { uuid: 'm1', type: 'MEDIA' })).toEqual({ commands: ['/p', 'acme', 'media'], queryParams: { asset: 'm1' } });
+  it('opens a template or dataset on its own route (M35.21)', () => {
     for (const type of ['PAGE_TEMPLATE', 'SECTION_TEMPLATE', 'DATASET']) {
-      expect(assetRoute('acme', { uuid: 't1', type })).toEqual({ commands: ['/p', 'acme', 'templates'], queryParams: { asset: 't1' } });
+      expect(assetRoute('acme', { uuid: 't1', type })).toEqual({ commands: ['/p', 'acme', 'templates', 't1'], queryParams: {} });
     }
+  });
+
+  it('selects media, navigation and globals through ?asset=', () => {
+    expect(assetRoute('acme', { uuid: 'm1', type: 'MEDIA' })).toEqual({ commands: ['/p', 'acme', 'media'], queryParams: { asset: 'm1' } });
     expect(assetRoute('acme', { uuid: 'n1', type: 'PAGE_REFERENCE' })).toEqual({
       commands: ['/p', 'acme', 'navigation'],
       queryParams: { asset: 'n1' },

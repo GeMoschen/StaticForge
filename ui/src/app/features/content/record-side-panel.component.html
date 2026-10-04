@@ -1,7 +1,7 @@
 @if (tab(); as current) {
-  <sf-drawer [title]="'content.record.panel.title' | transloco" [width]="420" (closed)="tab.set(null)">
+  <sf-drawer [title]="title() ?? ('content.record.panel.title' | transloco)" [width]="420" (closed)="tab.set(null)">
     <sf-tabs
-      [tabs]="tabs()"
+      [tabs]="tabList()"
       [selected]="current"
       idPrefix="record-panel"
       [label]="'content.record.panel.tabs' | transloco"
@@ -48,10 +48,8 @@
               @for (usage of usages(); track $index) {
                 <li class="panel__usage">
                   <sf-badge tone="neutral" [label]="typeLabel(usage.fromType)" />
-                  @if (usage.fromType === 'PAGE') {
-                    <a [routerLink]="['/p', projectKey(), 'pages', usage.fromUuid]">{{ usage.fromUid }}</a>
-                  } @else if (usage.fromType === 'RECORD') {
-                    <a [routerLink]="['/p', projectKey(), 'content', 'records', usage.fromUuid]">{{ usage.fromUid }}</a>
+                  @if (linkOf(usage); as link) {
+                    <a [routerLink]="link.commands" [queryParams]="link.queryParams">{{ usage.fromUid }}</a>
                   } @else {
                     <span>{{ usage.fromUid }}</span>
                   }

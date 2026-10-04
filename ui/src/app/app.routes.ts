@@ -38,6 +38,7 @@ import { RecordEditorComponent } from './features/content/record-editor.componen
 import { RecordSetViewComponent } from './features/content/record-set-view.component';
 import { MediaLibraryComponent } from './features/media/media-library.component';
 import { mediaLeaveGuard } from './features/media/media-leave.guard';
+import { TemplateEditorComponent } from './features/templates/template-editor.component';
 import { TemplatesComponent } from './features/templates/templates.component';
 import { SearchPageComponent } from './features/search/search-page.component';
 import { ChangesComponent } from './features/changes/changes.component';
@@ -157,8 +158,15 @@ export const routes: Routes = [
           {
             path: 'templates',
             title: routeTitle('frame.section.templates'),
-            canDeactivate: [unsavedChangesGuard],
             component: TemplatesComponent,
+            children: [
+              {
+                // Another template, a folder or leaving the area asks about unsaved changes first (M35.13).
+                path: ':uuid',
+                canDeactivate: [unsavedChangesGuard],
+                component: TemplateEditorComponent,
+              },
+            ],
           },
           {
             path: 'search',

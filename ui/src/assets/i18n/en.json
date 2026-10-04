@@ -5898,7 +5898,9 @@
           "RECORD": "Record",
           "DATASET": "Dataset",
           "GLOBAL_SET": "Global set",
-          "NAVIGATION": "Navigation"
+          "NAVIGATION": "Navigation",
+          "SECTION_TEMPLATE": "Section template",
+          "RECORD_SET": "Record set"
         }
       },
       "move": {
@@ -5946,6 +5948,149 @@
         "description": "Try again in a moment.",
         "retry": "Try again"
       }
+    }
+  },
+  "templates": {
+    "new": {
+      "button": "New",
+      "label": "New page template, section template, dataset or folder",
+      "page": "Page template",
+      "section": "Section template",
+      "dataset": "Dataset",
+      "folder": "Folder"
+    },
+    "kinds": {
+      "page": "Page template",
+      "section": "Section template",
+      "dataset": "Dataset",
+      "folder": "Folder"
+    },
+    "menu": {
+      "new": "New",
+      "duplicate": "Duplicate",
+      "rename": "Rename…",
+      "move": "Move to…",
+      "usedBy": "Used by"
+    },
+    "tree": {
+      "favorites": "Favorites",
+      "resize": "Resize the templates tree",
+      "nameTaken": "A folder with this name already exists here.",
+      "title": "Templates"
+    },
+    "folder": {
+      "columns": {
+        "name": "Name",
+        "kind": "Kind",
+        "channels": "Channels",
+        "usedBy": "Used by",
+        "modified": "Modified"
+      },
+      "kindFilter": "Kind",
+      "folderNeedsParent": "Open a folder first — templates, datasets and folders live inside Page templates, Section templates or Datasets.",
+      "table": "Contents of {name}",
+      "search": "Search this folder",
+      "loadFailed": "The templates could not be loaded.",
+      "empty": "This folder is empty",
+      "emptyHint": "Create a template, a dataset or a folder here, or move items in from another folder.",
+      "noChannel": "No channel",
+      "showUsedBy": "Show what uses “{name}” ({count})",
+      "menu": {
+        "rename": "Rename…",
+        "move": "Move…",
+        "delete": "Delete…"
+      },
+      "bulk": {
+        "move": "Move…",
+        "delete": "Delete",
+        "moveFailed": "Could not move everything.",
+        "deleteFailed": "Could not delete everything."
+      },
+      "usedByCount": "{count, plural, one {used by # thing} other {used by # things}}"
+    },
+    "move": {
+      "root": "Templates",
+      "otherKind": "Another kind of template",
+      "protected": "The fixed folders Page templates, Section templates and Datasets cannot be moved.",
+      "mixedKinds": "Page templates, section templates and datasets each keep to their own folders — move one kind at a time."
+    },
+    "delete": {
+      "title": "{count, plural, one {Delete “{name}”?} other {Delete # items?}}",
+      "confirm": "{count, plural, one {Delete} other {Delete #}}",
+      "folders": "Folders are deleted with everything inside them.",
+      "inUse": "In use by {pages, plural, one {# page} other {# pages}}{others, plural, =0 {} one { and # other template or record set} other { and # other templates or record sets}}. They keep their content but may break on the next build.",
+      "restore": "Deleted templates can be restored from the history.",
+      "protected": "The fixed folders Page templates, Section templates and Datasets cannot be deleted."
+    },
+    "duplicate": {
+      "name": "{name} copy",
+      "done": "Copied “{name}”.",
+      "failed": "Could not copy “{name}” — try again in a moment."
+    },
+    "usedBy": {
+      "title": "Used by — {name}",
+      "failed": "Could not load what uses “{name}”."
+    },
+    "newDialog": {
+      "title": "New template",
+      "where": "Created in {folder}.",
+      "whereKind": "Created in the folder of its kind: Page templates, Section templates or Datasets.",
+      "kind": {
+        "label": "Kind",
+        "hint": "The kind can’t be changed after it is created."
+      },
+      "kinds": {
+        "page": "Page template",
+        "section": "Section template",
+        "dataset": "Dataset"
+      },
+      "kindHint": {
+        "page": "The layout of a whole page: its fields, rules and channel templates.",
+        "section": "A building block pages put in their bodies.",
+        "dataset": "The fields and record template of a record set."
+      },
+      "name": {
+        "label": "Name",
+        "required": "A name is required."
+      },
+      "uid": {
+        "label": "UID",
+        "hint": "Derived from the name. Links and references use it.",
+        "invalid": "A UID starts with a letter and has only lower case letters, digits and underscores."
+      },
+      "create": {
+        "label": "Create",
+        "chooseKind": "Choose a kind first.",
+        "enterName": "Enter a name first."
+      },
+      "cancel": "Cancel"
+    },
+    "editor": {
+      "loading": "Loading the template…"
+    },
+    "discard": {
+      "title": "This change discards translations",
+      "keep": "Keep the translations",
+      "confirm": "Discard and save"
+    },
+    "toast": {
+      "loadFailed": "Could not load templates — check your connection and try again.",
+      "loadDetailFailed": "Could not load the template — check your connection and try again.",
+      "created": "Created “{name}”.",
+      "uidNotApplied": "The UID “{uid}” could not be applied; the template keeps the one derived from its name. Change it in Rename….",
+      "createFailed": {
+        "page": "Could not create the template — try again in a moment.",
+        "section": "Could not create the template — try again in a moment.",
+        "dataset": "Could not create the dataset — you may need the developer role."
+      },
+      "folderCreated": "Folder “{name}” created.",
+      "folderCreateFailed": "Could not create the folder — a folder with that name may already exist here.",
+      "renamed": "Renamed “{from}” to “{to}”.",
+      "renameFailed": "Could not rename “{name}” — try again in a moment.",
+      "renameConflict": "“{name}” was changed by someone else — reload and try again.",
+      "moveFailed": "Could not move “{name}” — the target may be inside what you are moving.",
+      "deleteFailed": "Could not delete “{name}” — it may still be in use by a page.",
+      "deleted": "Deleted “{name}”."
     }
   },
   "media": {

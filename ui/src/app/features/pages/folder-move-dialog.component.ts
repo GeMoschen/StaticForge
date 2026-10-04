@@ -62,6 +62,11 @@ export class FolderMoveDialogComponent {
   readonly count = input(1);
   /** What the first node, the project root, is called; the Pages area's own name when omitted. */
   readonly rootLabel = input<string | null>(null);
+  /** `false`: the root is listed but cannot be chosen (Templates: nothing lives directly in the top level, M35.21). */
+  readonly rootSelectable = input(true);
+  /** Further folders that cannot be chosen (Templates: the folders of another kind), with the hint shown beside them. */
+  readonly unavailable = input<readonly string[]>([]);
+  readonly unavailableHint = input<string | null>(null);
 
   readonly chosen = output<string | null>();
   readonly cancelled = output<void>();
@@ -96,13 +101,17 @@ export class FolderMoveDialogComponent {
     const wrapper = this.tree()[0] ?? null;
     const rootLabel: string = this.rootLabel() ?? this.transloco.translate('pages.folder.root') ?? '';
     const blocked = this.blocked();
+    const unavailable = new Set(this.unavailable());
+    const rootSelectable = this.rootSelectable();
+    const hint = this.unavailableHint();
     const toNode = (folder: FolderView): SfTreeNode<FolderView> => {
       const disabled = !!folder.uuid && blocked.has(folder.uuid);
+      const other = !disabled && !!folder.uuid && unavailable.has(folder.uuid);
       return {
         id: folder.uuid ?? '',
         label: folder.displayName ?? folder.uid ?? '',
         icon: 'folder',
-        secondary: disabled ? this.transloco.translate('pages.bulk.moveDialog.blocked') : null,
+        secondary: disabled ? this.transloco.translate('pages.bulk.moveDialog.blocked') : other ? hint : null,
         hasChildren: (folder.children?.length ?? 0) > 0,
         draggable: false,
         droppable: false,
@@ -112,7 +121,15 @@ export class FolderMoveDialogComponent {
     return (parent) => {
       if (parent === null) {
         // The project root comes first, the top-level folders beside it.
-        const root: SfTreeNode<FolderView> = { id: ROOT_NODE, label: rootLabel, icon: 'home', hasChildren: false, draggable: false, droppable: false };
+        const root: SfTreeNode<FolderView> = {
+          id: ROOT_NODE,
+          label: rootLabel,
+          icon: 'home',
+          secondary: rootSelectable ? null : hint,
+          hasChildren: false,
+          draggable: false,
+          droppable: false,
+        };
         return [root, ...(wrapper?.children ?? []).map(toNode)];
       }
       return (parent.data?.children ?? []).map(toNode);
@@ -120,7 +137,7 @@ export class FolderMoveDialogComponent {
   });
 
   protected onOpen(node: SfTreeNode<FolderView>): void {
-    if (this.blocked().has(node.id)) {
+    if (this.blocked().has(node.id) || this.unavailable().includes(node.id) || (node.id === ROOT_NODE && !this.rootSelectable())) {
       return;
     }
     this.selected.set(node.id);

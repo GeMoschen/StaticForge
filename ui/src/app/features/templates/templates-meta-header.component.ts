@@ -3,6 +3,7 @@ import { SfAssetFavoriteComponent } from '../../shared/components/sf-asset-favor
 import { saveStateOf } from '../../core/editor/editor-state';
 import { SfSaveStatusComponent } from '../../shared/components/layout/sf-save-status.component';
 import { RouterLink } from '@angular/router';
+import { TranslocoPipe } from '@jsverse/transloco';
 import { SfButtonComponent } from '../../shared/components/sf-button.component';
 import { SfFieldComponent } from '../../shared/components/sf-field.component';
 import { SfUidRenameComponent } from '../../shared/components/sf-uid-rename.component';
@@ -19,7 +20,7 @@ import { TemplatesStore } from './templates.store';
   selector: 'sf-template-meta-header',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [SfAssetFavoriteComponent, SfButtonComponent, SfFieldComponent, SfSaveStatusComponent, SfUidRenameComponent, RouterLink],
+  imports: [SfAssetFavoriteComponent, SfButtonComponent, SfFieldComponent, SfSaveStatusComponent, SfUidRenameComponent, RouterLink, TranslocoPipe],
   templateUrl: './templates-meta-header.component.html',
   styleUrls: [
     './templates-panel.scss',

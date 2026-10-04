@@ -1,7 +1,7 @@
-import { HttpErrorResponse } from '@angular/common/http';
 import { computed, inject, Injectable, signal } from '@angular/core';
+import { Router } from '@angular/router';
+import { TranslocoService } from '@jsverse/transloco';
 import type { EditorError, EditorStateService } from '../../core/editor/editor-state';
-import { tap } from 'rxjs';
 import { ToastService } from '../../core/ui/toast.service';
 import { UndoService } from '../../core/ui/undo.service';
 import type { SaveResult } from '../../shared/components/dialog/unsaved-changes.service';
@@ -20,7 +20,9 @@ import {
   templateInUseOf,
 } from './inheritance.util';
 import { paginationPathsForSave, readPaginationPaths } from './pagination-path.util';
+import { TemplatesItemActions } from './templates-item-actions.service';
 import { TemplatesLoader } from './templates-loader';
+import { EMPTY_TEMPLATES_INDEX, entryOfSummary } from './templates-tree.util';
 import { etagFor, TemplatesService, type Diagnostic, type TemplateDetail } from './templates.service';
 import { TemplatesStore } from './templates.store';
 import { pathMapOf, sameRecord } from './templates.util';
@@ -37,9 +39,11 @@ export class TemplatesSaveCoordinator {
   private readonly service = inject(TemplatesService);
   private readonly toast = inject(ToastService);
   private readonly undo = inject(UndoService);
+  private readonly actions = inject(TemplatesItemActions);
+  private readonly router = inject(Router);
+  private readonly transloco = inject(TranslocoService);
 
   readonly saving = signal(false);
-  readonly confirmDelete = signal(false);
   /** The clock time of the last save ("12:04"). */
   readonly lastSaved = signal<string | null>(null);
   /** Why the last save was refused; kept while the edits that were refused are still there. */
@@ -274,49 +278,38 @@ export class TemplatesSaveCoordinator {
     );
   }
 
-  requestDelete(): void {
-    if (this.store.readOnly()) {
-      return;
-    }
-    this.confirmDelete.set(true);
-  }
-
-  cancelDelete(): void {
-    this.confirmDelete.set(false);
-  }
-
-  confirmDeleteAction(): void {
+  /**
+   * Deletes the open template (the header's *Delete*): the confirmation names what uses it (gate decision 156), then one
+   * Undo restores it from its last live version, and the area goes back to the folder it was in.
+   */
+  async requestDelete(): Promise<void> {
     const store = this.store;
     const key = store.projectKey();
     const uuid = store.selectedUuid();
-    if (!key || !uuid || store.readOnly()) {
+    const detail = store.detail();
+    if (!key || !uuid || !detail || store.readOnly()) {
       return;
     }
-    const kind = store.kind();
-    const detail = store.detail();
-    const name = detail?.displayName ?? detail?.uid ?? 'the template';
-    this.service.delete(kind, key, uuid).subscribe({
-      next: () => {
-        // Undo brings the template back as its last live version was.
-        this.undo.offer(`Deleted “${name}”.`, () =>
-          this.service.restore(kind, key, uuid).pipe(
-            tap(() => {
-              this.loader.reloadList(key);
-              this.loader.refreshTemplateStore();
-            }),
-          ),
-        );
-        this.confirmDelete.set(false);
-        store.selectedUuid.set(null);
-        store.detail.set(null);
+    const row = store.templates().find((t) => t.uuid === uuid);
+    const entry = entryOfSummary({ ...(row ?? {}), uuid, uid: detail.uid, assetType: detail.assetType, displayName: detail.displayName, folderPath: detail.folderPath });
+    if (!(await this.actions.confirmDelete(key, [entry], EMPTY_TEMPLATES_INDEX))) {
+      return;
+    }
+    const change = await this.actions.delete(key, [entry]);
+    if (change.failed || change.done.length === 0) {
+      this.toast.show(this.transloco.translate('templates.toast.deleteFailed', { name: entry.name }), 'error');
+      return;
+    }
+    // Undo brings the template back as its last live version was.
+    this.undo.offerGroup(this.transloco.translate('templates.toast.deleted', { name: entry.name }), [
+      async () => {
         this.loader.reloadList(key);
         this.loader.refreshTemplateStore();
       },
-      error: (err) => {
-        const detail = err instanceof HttpErrorResponse ? (err.error as { detail?: string } | null)?.detail : undefined;
-        this.toast.show(detail ?? 'Could not delete template — it may still be in use by a page.', 'error');
-        this.confirmDelete.set(false);
-      },
-    });
+      ...change.steps,
+    ]);
+    void this.router.navigate(['/p', key, 'templates'], { queryParams: detail.folderUuid ? { folder: detail.folderUuid } : {} });
+    this.loader.reloadList(key);
+    this.loader.refreshTemplateStore();
   }
 }
