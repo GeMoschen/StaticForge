@@ -68,10 +68,14 @@ public class DatasetController {
     @GetMapping
     @PreAuthorize("@projectAuth.has(#projectKey, " + ProjectRoleExpr.VIEWER + ")")
     public List<DatasetSummaryView> list(@PathVariable String projectKey) {
-        return datasetService.list(projectId(projectKey)).stream()
+        long projectId = projectId(projectKey);
+        List<DatasetView> datasets = datasetService.list(projectId);
+        var usages = assetService.usageCounts(projectId, datasets.stream().map(DatasetView::uuid).toList());
+        return datasets.stream()
                 .map(v -> new DatasetSummaryView(
                         v.uuid(), v.uid(), v.displayName(), v.folderUuid(), v.folderPath(), v.titleEditor(),
-                        v.description(), v.recordCount(), v.revision()))
+                        v.description(), v.recordCount(), v.revision(), channelKeys(v.channelTemplates()),
+                        usages.getOrDefault(v.uuid(), 0), v.changedAt()))
                 .toList();
     }
 
@@ -181,6 +185,15 @@ public class DatasetController {
                 v.recordCount(),
                 v.revision(),
                 v.deleted());
+    }
+
+    private static List<String> channelKeys(com.fasterxml.jackson.databind.JsonNode channelTemplates) {
+        List<String> keys = new java.util.ArrayList<>();
+        if (channelTemplates != null) {
+            channelTemplates.fieldNames().forEachRemaining(keys::add);
+        }
+        java.util.Collections.sort(keys);
+        return keys;
     }
 
     private static String comment(String supplied, String fallback) {

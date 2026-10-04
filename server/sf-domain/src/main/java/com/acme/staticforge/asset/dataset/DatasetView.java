@@ -36,6 +36,7 @@ public record DatasetView(
         JsonNode channelTemplates,
         long recordCount,
         long revision,
+        java.time.Instant changedAt,
         boolean deleted,
         List<BrokenRecordSet> brokenRecordSets,
         Map<String, List<Diagnostic>> recordTemplateDiagnostics) {
@@ -51,13 +52,13 @@ public record DatasetView(
     public DatasetView withBrokenRecordSets(List<BrokenRecordSet> sets) {
         return new DatasetView(
                 uuid, uid, displayName, folderUuid, folderPath, cdl, compiledDefinition, titleEditor,
-                description, channelTemplates, recordCount, revision, deleted, sets, recordTemplateDiagnostics);
+                description, channelTemplates, recordCount, revision, changedAt, deleted, sets, recordTemplateDiagnostics);
     }
 
     /** This view with the save's record template compile warnings, by channel. */
     public DatasetView withRecordTemplateDiagnostics(Map<String, List<Diagnostic>> diagnostics) {
         return new DatasetView(
                 uuid, uid, displayName, folderUuid, folderPath, cdl, compiledDefinition, titleEditor,
-                description, channelTemplates, recordCount, revision, deleted, brokenRecordSets, diagnostics);
+                description, channelTemplates, recordCount, revision, changedAt, deleted, brokenRecordSets, diagnostics);
     }
 }

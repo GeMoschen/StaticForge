@@ -354,19 +354,30 @@ public class TemplateServiceImpl implements TemplateService {
     public Page<TemplateListItem> list(long projectId, AssetType kind, Pageable pageable, RevisionContext ctx) {
         ensureFoldersAndMigrate(projectId, ctx);
         Page<AssetSummary> page = assetService.search(new AssetQuery(projectId, kind, null, null), pageable);
-        Map<UUID, JsonNode> payloads = new HashMap<>();
-        if (kind == AssetType.PAGE_TEMPLATE && !page.isEmpty()) {
+        Map<UUID, AssetVersion> versions = new HashMap<>();
+        if (!page.isEmpty()) {
             for (AssetVersion version : assetVersionRepository.findCurrentByProjectAndType(projectId, kind)) {
                 assetRepository.findById(version.getAssetId())
-                        .ifPresent(asset -> payloads.put(asset.getUuid(), version.getPayload()));
+                        .ifPresent(asset -> versions.put(asset.getUuid(), version));
             }
         }
+        Map<UUID, Integer> usages =
+                assetService.usageCounts(projectId, page.getContent().stream().map(AssetSummary::uuid).toList());
         return page.map(summary -> {
-            JsonNode payload = payloads.get(summary.uuid());
+            AssetVersion version = versions.get(summary.uuid());
+            JsonNode payload = version == null ? null : version.getPayload();
+            java.util.List<String> channels = new java.util.ArrayList<>();
+            if (payload != null) {
+                payload.path("channelTemplates").fieldNames().forEachRemaining(channels::add);
+                java.util.Collections.sort(channels);
+            }
             return new TemplateListItem(
                     summary,
-                    payload != null && payload.path("abstract").asBoolean(false),
-                    TemplateHierarchy.TemplateVersion.parentTemplateRef(payload));
+                    kind == AssetType.PAGE_TEMPLATE && payload != null && payload.path("abstract").asBoolean(false),
+                    kind == AssetType.PAGE_TEMPLATE ? TemplateHierarchy.TemplateVersion.parentTemplateRef(payload) : null,
+                    channels,
+                    usages.getOrDefault(summary.uuid(), 0),
+                    version == null ? null : version.getChangedAt());
         });
     }
 

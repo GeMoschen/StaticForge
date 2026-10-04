@@ -114,7 +114,7 @@ abstract class AbstractTemplateController {
         AssetSummary s = item.summary();
         return new TemplateSummary(
                 s.uuid(), s.uid(), s.type().name(), s.displayName(), s.folderPath(), s.validFromRevision(),
-                item.abstractTemplate(), item.parentTemplateRef());
+                item.abstractTemplate(), item.parentTemplateRef(), item.channels(), item.usedByCount(), item.changedAt());
     }
 
     protected static ChannelTemplateDto toChannel(String channelKey, TemplateView view) {

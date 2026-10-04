@@ -486,6 +486,7 @@ public class DatasetServiceImpl implements DatasetService {
                         : objectMapper.createObjectNode(),
                 recordCount,
                 view.validFromRevision(),
+                view.changedAt(),
                 view.deleted(),
                 List.of(),
                 Map.of());

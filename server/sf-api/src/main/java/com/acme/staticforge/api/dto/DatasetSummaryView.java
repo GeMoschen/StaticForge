@@ -1,5 +1,7 @@
 package com.acme.staticforge.api.dto;
 
+import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 /** One dataset in a list response (M19.2.1): identity, title editor and live record count. */
@@ -12,4 +14,7 @@ public record DatasetSummaryView(
         String titleEditor,
         String description,
         long recordCount,
-        long revision) {}
+        long revision,
+        List<String> channels,
+        int usedByCount,
+        Instant changedAt) {}

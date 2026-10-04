@@ -4360,6 +4360,11 @@ export interface components {
             /** Format: uuid */
             parentTemplateRef?: string;
             abstract?: boolean;
+            channels?: string[];
+            /** Format: int32 */
+            usedByCount?: number;
+            /** Format: date-time */
+            changedAt?: string;
         };
         SearchFacets: {
             types?: {
@@ -4689,6 +4694,11 @@ export interface components {
             recordCount?: number;
             /** Format: int64 */
             revision?: number;
+            channels?: string[];
+            /** Format: int32 */
+            usedByCount?: number;
+            /** Format: date-time */
+            changedAt?: string;
         };
         CompactionEstimateView: {
             /** Format: int32 */
