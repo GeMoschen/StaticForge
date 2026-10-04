@@ -148,3 +148,12 @@
     padding-right: var(--sf-space-4);
   }
 }
+
+.settings__removed {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sf-space-2);
+  margin: var(--sf-space-2) 0 0;
+  color: var(--sf-text-muted);
+}

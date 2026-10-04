@@ -1,5 +1,9 @@
 <div class="tpl__head">
-  <sf-page-header [title]="name()" [secondaryActions]="def() ? moreActions() : []" (secondaryAction)="secondary()">
+  <sf-page-header
+    [title]="name()"
+    [secondaryActions]="def() ? moreActions() : []"
+    (secondaryAction)="secondary($event)"
+  >
     @if (inheritance().length) {
       <sf-sample-breadcrumb
         sfPageHeaderBreadcrumb
@@ -14,11 +18,28 @@
     @if (def()) {
       <ng-container sfPageHeaderActions>
         <span class="tpl__save" role="status">
-          <sf-icon [name]="dirty() ? 'edit' : 'cloud_done'" />
-          {{ (dirty() ? 'styleguide.sample.template.unsaved' : 'styleguide.sample.editor.saved') | transloco }}
+          @if (readOnly()) {
+            <sf-icon name="lock" />
+            {{
+              (review.archived()
+                ? "styleguide.sample.template.readOnlyArchived"
+                : "styleguide.sample.template.readOnlyRevision"
+              ) | transloco: { revision: state.travel() }
+            }}
+          } @else {
+            <sf-icon [name]="dirty() ? 'edit' : 'cloud_done'" />
+            {{
+              (dirty()
+                ? "styleguide.sample.template.unsaved"
+                : "styleguide.sample.editor.saved"
+              ) | transloco
+            }}
+          }
         </span>
         <span class="tpl__palette">
-          <span class="tpl__palette-label" id="sample-tpl-palette">{{ 'styleguide.sample.template.palette' | transloco }}</span>
+          <span class="tpl__palette-label" id="sample-tpl-palette">{{
+            "styleguide.sample.template.palette" | transloco
+          }}</span>
           <sf-segmented
             size="sm"
             aria-labelledby="sample-tpl-palette"
@@ -30,19 +51,49 @@
         <sf-button
           icon="save"
           aria-keyshortcuts="Control+S"
-          [disabled]="!dirty()"
+          [disabled]="!dirty() || readOnly()"
           [tooltip]="'styleguide.sample.template.saveShortcut' | transloco"
           (click)="save()"
-          >{{ 'styleguide.sample.template.save' | transloco }}</sf-button
+          >{{ "styleguide.sample.template.save" | transloco }}</sf-button
         >
       </ng-container>
     }
   </sf-page-header>
 
+  @if (failure()) {
+    <sf-banner
+      tone="danger"
+      live="assertive"
+      [title]="'styleguide.sample.template.saveFailed.title' | transloco"
+    >
+      {{ "styleguide.sample.template.saveFailed.message" | transloco }}
+    </sf-banner>
+  }
+
   @if (def(); as def) {
+    @if (descendants().length > 0) {
+      <sf-banner tone="info">
+        {{
+          "styleguide.sample.template.descendants"
+            | transloco: { count: descendants().length }
+        }}
+        <sf-button
+          sfBannerActions
+          variant="ghost"
+          size="sm"
+          (click)="state.templateUsedBy.set(def.id)"
+          >{{ "styleguide.sample.content.usedBy" | transloco }}</sf-button
+        >
+      </sf-banner>
+    }
     <div class="tpl__meta">
-      <span class="tpl__meta-label">{{ 'styleguide.sample.editor.uid' | transloco }}</span>
-      <sf-copyable [value]="def.uid" [label]="'styleguide.sample.editor.uid' | transloco" />
+      <span class="tpl__meta-label">{{
+        "styleguide.sample.editor.uid" | transloco
+      }}</span>
+      <sf-copyable
+        [value]="def.uid"
+        [label]="'styleguide.sample.editor.uid' | transloco"
+      />
     </div>
 
     @if (settings(); as s) {
@@ -57,32 +108,156 @@
               [aria-expanded]="settingsOpen()"
               [aria-controls]="settingsId"
               (click)="settingsOpen.set(!settingsOpen())"
-              >{{ 'styleguide.sample.template.settings' | transloco }}</sf-button
+              >{{
+                "styleguide.sample.template.settings" | transloco
+              }}</sf-button
             >
           </h2>
           @if (!settingsOpen() && s.outputPath) {
             <code class="settings__summary">{{ s.outputPath }}</code>
           }
         </div>
-        <div class="settings__body" [id]="settingsId" [hidden]="!settingsOpen()">
-          @if (def.kind === 'page') {
+        <div
+          class="settings__body"
+          [id]="settingsId"
+          [hidden]="!settingsOpen()"
+        >
+          <sf-field
+            [label]="'styleguide.sample.template.displayName' | transloco"
+          >
+            <sf-input
+              [value]="extras().displayName"
+              [disabled]="readOnly()"
+              (valueChange)="setExtras({ displayName: $event })"
+            />
+          </sf-field>
+          <sf-field
+            [label]="'styleguide.sample.template.category' | transloco"
+            [hint]="'styleguide.sample.template.categoryHint' | transloco"
+          >
+            <sf-input
+              [value]="extras().category"
+              [disabled]="readOnly()"
+              (valueChange)="setExtras({ category: $event })"
+            />
+          </sf-field>
+          @if (def.kind === "page") {
+            <sf-field
+              [label]="'styleguide.sample.template.abstract' | transloco"
+              [hint]="'styleguide.sample.template.abstractHint' | transloco"
+              [error]="
+                abstractBlocked()
+                  ? ('styleguide.sample.template.abstractBlocked'
+                    | transloco
+                      : { count: pageUsers().length, pages: pageNames() })
+                  : null
+              "
+            >
+              <sf-switch
+                [value]="extras().abstract"
+                [disabled]="readOnly()"
+                (valueChange)="setExtras({ abstract: $event })"
+                >{{
+                  "styleguide.sample.template.abstractSwitch" | transloco
+                }}</sf-switch
+              >
+            </sf-field>
+          } @else {
+            <sf-field
+              [label]="'styleguide.sample.template.deprecated' | transloco"
+              [hint]="'styleguide.sample.template.deprecatedHint' | transloco"
+            >
+              <sf-switch
+                [value]="extras().deprecated"
+                [disabled]="readOnly()"
+                (valueChange)="setExtras({ deprecated: $event })"
+                >{{
+                  "styleguide.sample.template.deprecatedSwitch" | transloco
+                }}</sf-switch
+              >
+            </sf-field>
+          }
+          @if (def.kind === "page") {
             <sf-field
               [label]="'styleguide.sample.template.outputPath' | transloco"
               [hint]="'styleguide.sample.template.outputPathHint' | transloco"
-              [error]="s.outputPath.includes('{locale}') ? null : ('styleguide.sample.template.outputPathLocale' | transloco)"
+              [error]="
+                s.outputPath.includes('{locale}')
+                  ? null
+                  : ('styleguide.sample.template.outputPathLocale' | transloco)
+              "
             >
-              <sf-input monospace [value]="s.outputPath" (valueChange)="setSetting({ outputPath: $event })" />
+              <sf-input
+                monospace
+                [value]="s.outputPath"
+                [disabled]="readOnly()"
+                (valueChange)="setSetting({ outputPath: $event })"
+              />
             </sf-field>
-            <sf-field [label]="'styleguide.sample.template.paginationPath' | transloco" [hint]="'styleguide.sample.template.paginationHint' | transloco">
-              <sf-input monospace [value]="s.paginationPath ?? ''" (valueChange)="setSetting({ paginationPath: $event })" />
+            <sf-field
+              [label]="'styleguide.sample.template.paginationPath' | transloco"
+              [hint]="'styleguide.sample.template.paginationHint' | transloco"
+            >
+              <sf-input
+                monospace
+                [value]="s.paginationPath ?? ''"
+                [disabled]="readOnly()"
+                (valueChange)="setSetting({ paginationPath: $event })"
+              />
             </sf-field>
           }
-          <sf-field class="settings__channels" [label]="'styleguide.sample.template.channelsOn' | transloco">
+          <sf-field
+            class="settings__channels"
+            [label]="'styleguide.sample.template.channelsOn' | transloco"
+          >
             <span class="settings__switches">
               @for (channel of channels(); track channel.id) {
-                <sf-switch [value]="!!s.channels[channel.id]" (valueChange)="setChannel(channel.id, $event)">{{ channel.id }}</sf-switch>
+                <sf-switch
+                  [value]="!!s.channels[channel.id]"
+                  [disabled]="readOnly()"
+                  (valueChange)="setChannel(channel.id, $event)"
+                  >{{ channel.id }}</sf-switch
+                >
+                <sf-button
+                  variant="ghost"
+                  size="sm"
+                  icon="close"
+                  [disabled]="readOnly()"
+                  [aria-label]="
+                    'styleguide.sample.template.removeChannel'
+                      | transloco: { channel: channel.id }
+                  "
+                  (click)="removeChannel(channel.id)"
+                />
               }
+              <sf-menu
+                variant="secondary"
+                size="sm"
+                icon="add"
+                [text]="'styleguide.sample.template.addChannel' | transloco"
+                [label]="
+                  'styleguide.sample.template.addChannelLabel' | transloco
+                "
+                [items]="addChannelItems()"
+                [disabled]="readOnly()"
+              />
             </span>
+            @if (removed().length > 0) {
+              <p class="settings__removed" role="status">
+                {{ "styleguide.sample.template.removedOnSave" | transloco }}
+                @for (id of removed(); track id) {
+                  <code>{{ id }}</code>
+                  <sf-button
+                    variant="ghost"
+                    size="sm"
+                    (click)="restoreChannel(id)"
+                    >{{
+                      "styleguide.sample.template.undo" | transloco
+                    }}</sf-button
+                  >
+                }
+              </p>
+            }
           </sf-field>
         </div>
       </section>
@@ -90,98 +265,163 @@
   }
 </div>
 
-@if (def(); as def) {
-  <div class="tpl__body">
-    @if (wide()) {
-      <sf-splitter class="tpl__split" [defaultSize]="560" [min]="320" [minOther]="320" [label]="'styleguide.sample.template.resize' | transloco">
-        <section sfSplitterStart class="tpl__pane" [attr.aria-label]="'styleguide.sample.template.cdl' | transloco">
-          <ng-container *ngTemplateOutlet="cdl" />
-        </section>
-        <section sfSplitterEnd class="tpl__pane" [attr.aria-label]="'styleguide.sample.template.channels' | transloco">
-          <ng-container *ngTemplateOutlet="channelsPane" />
-        </section>
-      </sf-splitter>
-    } @else {
-      <sf-tabs
-        class="tpl__stack-tabs"
-        [idPrefix]="stackTabsId"
-        [tabs]="stackTabs()"
-        [selected]="stack()"
-        [label]="'styleguide.sample.template.sides' | transloco"
-        (selectTab)="selectStack($event)"
-      />
-      <div
-        class="tpl__pane"
-        role="tabpanel"
-        [id]="panelId(stackTabsId, stack())"
-        [attr.aria-labelledby]="tabId(stackTabsId, stack())"
-      >
-        @if (stack() === 'cdl') {
-          <ng-container *ngTemplateOutlet="cdl" />
-        } @else {
-          <ng-container *ngTemplateOutlet="channelsPane" />
-        }
-      </div>
-    }
+@if (loading()) {
+  <div class="tpl__placeholder">
+    <sf-skeleton
+      shape="row"
+      [rows]="6"
+      [label]="'styleguide.sample.template.loading' | transloco"
+    />
   </div>
-
-  <ng-template #cdl>
-    <sf-tabs
-      [idPrefix]="cdlTabsId"
-      [tabs]="cdlTabs()"
-      [selected]="section()"
-      [label]="'styleguide.sample.template.cdlTabs' | transloco"
-      (selectTab)="selectSection($event)"
-    />
-    @for (key of ['cdl:' + section()]; track key) {
-      <div class="tpl__panel" role="tabpanel" [id]="panelId(cdlTabsId, section())" [attr.aria-labelledby]="tabId(cdlTabsId, section())">
-        <sf-code-panel
-          class="tpl__code"
-          languageLabel="CDL"
-          language="cdl"
-          [fileName]="def.uid + '.' + section() + '.cdl'"
-          [label]="'styleguide.sample.template.cdlLabel' | transloco: { name: name(), section: ('styleguide.sample.template.sections.' + section() | transloco) }"
-          [value]="sources()[key] ?? ''"
-          [diagnostics]="diagnostics()[key] ?? []"
-          [formattable]="true"
-          (valueChange)="edit(key, $event)"
+} @else if (failed()) {
+  <div class="tpl__placeholder">
+    <sf-empty-state
+      icon="error"
+      [title]="'styleguide.sample.template.loadFailed.title' | transloco"
+      [description]="
+        'styleguide.sample.template.loadFailed.description' | transloco
+      "
+    >
+      <sf-button
+        variant="secondary"
+        icon="refresh"
+        (click)="review.template.set('normal')"
+        >{{ "styleguide.sample.template.retry" | transloco }}</sf-button
+      >
+    </sf-empty-state>
+  </div>
+} @else {
+  @if (def(); as def) {
+    <div class="tpl__body">
+      @if (wide()) {
+        <sf-splitter
+          class="tpl__split"
+          [defaultSize]="560"
+          [min]="320"
+          [minOther]="320"
+          [label]="'styleguide.sample.template.resize' | transloco"
+        >
+          <section
+            sfSplitterStart
+            class="tpl__pane"
+            [attr.aria-label]="'styleguide.sample.template.cdl' | transloco"
+          >
+            <ng-container *ngTemplateOutlet="cdl" />
+          </section>
+          <section
+            sfSplitterEnd
+            class="tpl__pane"
+            [attr.aria-label]="
+              'styleguide.sample.template.channels' | transloco
+            "
+          >
+            <ng-container *ngTemplateOutlet="channelsPane" />
+          </section>
+        </sf-splitter>
+      } @else {
+        <sf-tabs
+          class="tpl__stack-tabs"
+          [idPrefix]="stackTabsId"
+          [tabs]="stackTabs()"
+          [selected]="stack()"
+          [label]="'styleguide.sample.template.sides' | transloco"
+          (selectTab)="selectStack($event)"
         />
-      </div>
-    }
-  </ng-template>
+        <div
+          class="tpl__pane"
+          role="tabpanel"
+          [id]="panelId(stackTabsId, stack())"
+          [attr.aria-labelledby]="tabId(stackTabsId, stack())"
+        >
+          @if (stack() === "cdl") {
+            <ng-container *ngTemplateOutlet="cdl" />
+          } @else {
+            <ng-container *ngTemplateOutlet="channelsPane" />
+          }
+        </div>
+      }
+    </div>
 
-  <ng-template #channelsPane>
-    <sf-tabs
-      [idPrefix]="channelTabsId"
-      [tabs]="channelTabs()"
-      [selected]="channel()?.id ?? null"
-      [label]="'styleguide.sample.template.channelTabs' | transloco"
-      (selectTab)="selectChannel($event)"
-    />
-    @if (channel(); as channel) {
-      @for (key of ['channel:' + channel.id]; track key) {
-        <div class="tpl__panel" role="tabpanel" [id]="panelId(channelTabsId, channel.id)" [attr.aria-labelledby]="tabId(channelTabsId, channel.id)">
+    <ng-template #cdl>
+      <sf-tabs
+        [idPrefix]="cdlTabsId"
+        [tabs]="cdlTabs()"
+        [selected]="section()"
+        [label]="'styleguide.sample.template.cdlTabs' | transloco"
+        (selectTab)="selectSection($event)"
+      />
+      @for (key of ["cdl:" + section()]; track key) {
+        <div
+          class="tpl__panel"
+          role="tabpanel"
+          [id]="panelId(cdlTabsId, section())"
+          [attr.aria-labelledby]="tabId(cdlTabsId, section())"
+        >
           <sf-code-panel
             class="tpl__code"
-            language="octl"
-            [languageLabel]="octlLabel(channel.format)"
-            [format]="channel.format"
-            [fileName]="def.uid + '.' + channel.id + '.octl'"
-            [label]="'styleguide.sample.template.channelLabel' | transloco: { name: name(), channel: channel.id }"
+            languageLabel="CDL"
+            language="cdl"
+            [fileName]="def.uid + '.' + section() + '.cdl'"
+            [label]="
+              'styleguide.sample.template.cdlLabel'
+                | transloco
+                  : {
+                      name: name(),
+                      section:
+                        ('styleguide.sample.template.sections.' + section()
+                        | transloco),
+                    }
+            "
             [value]="sources()[key] ?? ''"
             [diagnostics]="diagnostics()[key] ?? []"
+            [formattable]="true"
             (valueChange)="edit(key, $event)"
           />
         </div>
       }
-    }
-  </ng-template>
-} @else {
-  <div class="tpl__placeholder">
-    <sf-empty-state
-      icon="construction"
-      [title]="'styleguide.sample.template.placeholderTitle' | transloco"
-      [description]="'styleguide.sample.template.placeholder' | transloco"
-    />
-  </div>
+    </ng-template>
+
+    <ng-template #channelsPane>
+      <sf-tabs
+        [idPrefix]="channelTabsId"
+        [tabs]="channelTabs()"
+        [selected]="channel()?.id ?? null"
+        [label]="'styleguide.sample.template.channelTabs' | transloco"
+        (selectTab)="selectChannel($event)"
+      />
+      @if (channel(); as channel) {
+        @for (key of ["channel:" + channel.id]; track key) {
+          <div
+            class="tpl__panel"
+            role="tabpanel"
+            [id]="panelId(channelTabsId, channel.id)"
+            [attr.aria-labelledby]="tabId(channelTabsId, channel.id)"
+          >
+            <sf-code-panel
+              class="tpl__code"
+              language="octl"
+              [languageLabel]="octlLabel(channel.format)"
+              [format]="channel.format"
+              [fileName]="def.uid + '.' + channel.id + '.octl'"
+              [label]="
+                'styleguide.sample.template.channelLabel'
+                  | transloco: { name: name(), channel: channel.id }
+              "
+              [value]="sources()[key] ?? ''"
+              [diagnostics]="diagnostics()[key] ?? []"
+              (valueChange)="edit(key, $event)"
+            />
+          </div>
+        }
+      }
+    </ng-template>
+  } @else {
+    <div class="tpl__placeholder">
+      <sf-empty-state
+        icon="construction"
+        [title]="'styleguide.sample.template.placeholderTitle' | transloco"
+        [description]="'styleguide.sample.template.placeholder' | transloco"
+      />
+    </div>
+  }
 }

@@ -3,6 +3,7 @@ import { ChangeDetectionStrategy, Component, DestroyRef, computed, effect, injec
 import { TranslocoPipe } from '@jsverse/transloco';
 import { ShortcutService } from '../../../core/ui/shortcut.service';
 import { ToastService } from '../../../core/ui/toast.service';
+import { ConfirmService } from '../../../shared/components/dialog/confirm.service';
 import type { CodeDiagnostic } from '../../../shared/code-editor/code-editor.types';
 import { SfCodePanelComponent } from '../../../shared/code-editor/sf-code-panel.component';
 import { SfBadgeComponent } from '../../../shared/components/display/sf-badge.component';
@@ -11,7 +12,9 @@ import { SfInputComponent } from '../../../shared/components/forms/sf-input.comp
 import { SfSegmentedComponent, SfSegmentedOption } from '../../../shared/components/forms/sf-segmented.component';
 import { SfSwitchComponent } from '../../../shared/components/forms/sf-switch.component';
 import { SfPageHeaderComponent } from '../../../shared/components/layout/sf-page-header.component';
-import { SfMenuItem } from '../../../shared/components/menu/sf-menu.component';
+import { SfBannerComponent } from '../../../shared/components/layout/sf-banner.component';
+import { SfSkeletonComponent } from '../../../shared/components/layout/sf-skeleton.component';
+import { SfMenuComponent, SfMenuItem } from '../../../shared/components/menu/sf-menu.component';
 import { SfButtonComponent } from '../../../shared/components/sf-button.component';
 import { SfEmptyStateComponent } from '../../../shared/components/sf-empty-state.component';
 import { SfFieldComponent } from '../../../shared/components/sf-field.component';
@@ -19,8 +22,9 @@ import { SfIconComponent } from '../../../shared/components/sf-icon.component';
 import { SfTab, SfTabsComponent, panelIdOf, tabIdOf } from '../../../shared/components/sf-tabs.component';
 import { SfSplitterComponent } from '../../../shared/components/splitter/sf-splitter.component';
 import { sfUniqueId } from '../../../shared/components/forms/sf-field-context';
+import { SamplePagesReview } from './pages/sample-pages-review';
 import { SampleBreadcrumbComponent } from './sample-breadcrumb.component';
-import { templateEntry } from './sample-content-data';
+import { TEMPLATE_USAGES, templateEntry } from './sample-content-data';
 import { SampleCodePalette, SampleCrumb, SampleState } from './sample-state';
 import { TEMPLATE_ICONS } from './sample-templates-tree.component';
 import {
@@ -61,6 +65,19 @@ function sameSettings(a: SampleTemplateSettings | null, b: SampleTemplateSetting
   return JSON.stringify(a) === JSON.stringify(b);
 }
 
+/** The definition fields beside the code that the app edits too: display name, category and the abstract / deprecated flag. */
+interface SampleTemplateExtras {
+  readonly displayName: string;
+  readonly category: string;
+  /** Page templates: a layout other templates extend; pages can't use it. */
+  readonly abstract: boolean;
+  /** Section templates: still works, but is no longer offered in the section palette. */
+  readonly deprecated: boolean;
+}
+
+/** Channels a template can still get (the project's channels it has no template for yet). */
+const ADDABLE_CHANNELS: readonly string[] = ['json', 'atom'];
+
 /**
  * The template view (M35.21 mocked, decisions 15–18): page header (name, kind, inheritance chain as breadcrumb, save
  * status, Save — enabled when dirty, also `Ctrl+S` — and ⋮), the highlighting palette switch, a collapsible Settings
@@ -75,6 +92,7 @@ function sameSettings(a: SampleTemplateSettings | null, b: SampleTemplateSetting
     NgTemplateOutlet,
     SampleBreadcrumbComponent,
     SfBadgeComponent,
+    SfBannerComponent,
     SfButtonComponent,
     SfCodePanelComponent,
     SfCopyableComponent,
@@ -82,8 +100,10 @@ function sameSettings(a: SampleTemplateSettings | null, b: SampleTemplateSetting
     SfFieldComponent,
     SfIconComponent,
     SfInputComponent,
+    SfMenuComponent,
     SfPageHeaderComponent,
     SfSegmentedComponent,
+    SfSkeletonComponent,
     SfSplitterComponent,
     SfSwitchComponent,
     SfTabsComponent,
@@ -95,7 +115,9 @@ function sameSettings(a: SampleTemplateSettings | null, b: SampleTemplateSetting
 })
 export class SampleTemplateViewComponent {
   protected readonly state = inject(SampleState);
+  protected readonly review = inject(SamplePagesReview);
   private readonly toasts = inject(ToastService);
+  private readonly confirms = inject(ConfirmService);
   /** Ctrl/Cmd+S saves the open template (the registry keeps the browser's own "save page" away). */
   private readonly saveShortcut = inject(ShortcutService).use([
     {
@@ -105,7 +127,7 @@ export class SampleTemplateViewComponent {
       group: 'general',
       description: 'frame.shortcuts.items.save',
       allowInInput: true,
-      handler: () => (this.def() ? this.save() : false),
+      handler: () => (this.def() ? (void this.save(), true) : false),
     },
   ]);
 
@@ -126,9 +148,37 @@ export class SampleTemplateViewComponent {
   private readonly savedSettings = signal<SampleTemplateSettings | null>(this.def()?.settings ?? null);
   protected readonly settings = signal<SampleTemplateSettings | null>(this.def()?.settings ?? null);
   protected readonly dirty = computed(
-    () => JSON.stringify(this.sources()) !== JSON.stringify(this.saved()) || !sameSettings(this.settings(), this.savedSettings()),
+    () =>
+      JSON.stringify(this.sources()) !== JSON.stringify(this.saved()) ||
+      !sameSettings(this.settings(), this.savedSettings()) ||
+      JSON.stringify(this.extras()) !== JSON.stringify(this.savedExtras()) ||
+      this.removed().join() !== this.savedRemoved().join(),
   );
   protected readonly settingsOpen = signal(false);
+  private readonly savedExtras = signal<SampleTemplateExtras>(this.extrasOf());
+  protected readonly extras = signal<SampleTemplateExtras>(this.extrasOf());
+  /** Channels taken off until the next save ("Removed when you save: rss — Undo"). */
+  private readonly savedRemoved = signal<readonly string[]>([]);
+  protected readonly removed = signal<readonly string[]>([]);
+  /** The last save was refused (`tstate=saveerror`): the message stays until the next save. */
+  protected readonly failure = signal(this.review.template() === 'saveerror');
+  private discardAnswered = false;
+
+  /** Read-only: an archived project or a past revision. Nothing can be edited or saved. */
+  protected readonly readOnly = computed(() => this.review.readOnly());
+  protected readonly loading = computed(() => this.review.template() === 'loading');
+  protected readonly failed = computed(() => this.review.template() === 'error');
+  /** What uses this template: the pages that pick it, and the templates that extend it. */
+  protected readonly usages = computed(() => TEMPLATE_USAGES[this.def()?.id ?? ''] ?? []);
+  protected readonly pageUsers = computed(() => this.usages().filter((usage) => usage.type === 'page'));
+  protected readonly descendants = computed(() => this.usages().filter((usage) => usage.type === 'template' && usage.path === 'extends'));
+  /** The page names for the "in use" message (the first three, then "…"). */
+  protected readonly pageNames = computed(() => {
+    const names = this.pageUsers().map((usage) => usage.name);
+    return names.slice(0, 3).join(', ') + (names.length > 3 ? ', …' : '');
+  });
+  /** Abstract can't be switched on while pages use the template (the app says so and names the pages). */
+  protected readonly abstractBlocked = computed(() => this.extras().abstract && this.pageUsers().length > 0);
 
   // ── Layout ─────────────────────────────────────────────────────────────────
   protected readonly wide = signal(typeof matchMedia !== 'function' || matchMedia(WIDE_QUERY).matches);
@@ -137,7 +187,7 @@ export class SampleTemplateViewComponent {
   protected readonly sections = computed<SampleCdlSection[]>(() =>
     CDL_SECTIONS.filter((section) => `cdl:${section}` in this.sources()),
   );
-  protected readonly channels = computed(() => this.def()?.channels ?? []);
+  protected readonly channels = computed(() => (this.def()?.channels ?? []).filter((channel) => !this.removed().includes(channel.id)));
   protected readonly section = computed<SampleCdlSection>(() => {
     const selected = this.state.templateSection();
     return this.sections().includes(selected) ? selected : 'content';
@@ -198,13 +248,26 @@ export class SampleTemplateViewComponent {
     { value: 'refined', label: this.state.t('template.paletteRefined') },
   ]);
 
-  protected readonly moreActions = computed<SfMenuItem[]>(() => [
-    { id: 'duplicate', label: this.state.t('editor.duplicate'), icon: 'content_copy' },
-    { id: 'rename', label: this.state.t('editor.rename'), icon: 'edit', shortcut: 'F2' },
-    { id: 'move', label: this.state.t('editor.move'), icon: 'drive_file_move' },
-    { id: 'usedBy', label: this.state.t('content.usedBy'), icon: 'link' },
-    { id: 'delete', label: this.state.t('editor.delete'), icon: 'delete', danger: true, separatorBefore: true },
-  ]);
+  protected readonly moreActions = computed<SfMenuItem[]>(() => {
+    const locked = this.readOnly();
+    return [
+      { id: 'duplicate', label: this.state.t('editor.duplicate'), icon: 'content_copy', disabled: locked },
+      { id: 'rename', label: this.state.t('templateActions.renameDialog'), icon: 'edit', shortcut: 'F2', disabled: locked },
+      { id: 'move', label: this.state.t('editor.move'), icon: 'drive_file_move', disabled: locked },
+      { id: 'usedBy', label: this.state.t('content.usedBy'), icon: 'link' },
+      { id: 'delete', label: this.state.t('editor.delete'), icon: 'delete', danger: true, separatorBefore: true, disabled: locked },
+    ];
+  });
+
+  /** *Add channel*: the channels the project has that this template has no source for yet. */
+  protected readonly addChannelItems = computed<SfMenuItem[]>(() =>
+    ADDABLE_CHANNELS.map((id) => ({
+      id,
+      label: id,
+      icon: 'add',
+      action: () => this.state.notice('template.channelAdded', { channel: id, name: this.name() }),
+    })),
+  );
 
   constructor() {
     // Another template opened: its own sources and settings, nothing unsaved.
@@ -217,6 +280,10 @@ export class SampleTemplateViewComponent {
           this.sources.set(sources);
           this.savedSettings.set(def?.settings ?? null);
           this.settings.set(def?.settings ?? null);
+          this.savedExtras.set(this.extrasOf());
+          this.extras.set(this.extrasOf());
+          this.savedRemoved.set([]);
+          this.removed.set([]);
         });
       },
       { allowSignalWrites: true },
@@ -272,15 +339,75 @@ export class SampleTemplateViewComponent {
     }
   }
 
-  /** Save (and `Ctrl+S`): the working copy becomes the saved state — in memory only. */
-  protected save(): void {
+  /**
+   * Save (and `Ctrl+S`): the working copy becomes the saved state — in memory only. In the `tstate=discard` review state the
+   * first save asks, because the change would drop translations: *Keep the translations* or *Discard and save*.
+   */
+  protected async save(): Promise<void> {
+    if (!this.dirty() || this.readOnly()) {
+      return;
+    }
+    if (this.review.template() === 'discard' && !this.discardAnswered) {
+      const confirmed = await this.confirms.confirm({
+        title: this.state.t('template.discard.title'),
+        message: this.state.t('template.discard.message'),
+        confirmLabel: this.state.t('template.discard.confirm'),
+        cancelLabel: this.state.t('template.discard.keep'),
+        tone: 'danger',
+      });
+      if (!confirmed) {
+        return;
+      }
+      this.discardAnswered = true;
+    }
     this.saved.set(this.sources());
     this.savedSettings.set(this.settings());
+    this.savedExtras.set(this.extras());
+    this.savedRemoved.set(this.removed());
+    this.failure.set(false);
     this.toasts.show(this.state.t('template.savedToast', { name: this.name() }), 'success');
   }
 
-  protected secondary(): void {
-    this.state.notice();
+  /** The ⋮ menu: the same dialogs as the tree and the folder table. */
+  protected secondary(item: SfMenuItem): void {
+    const entry = this.entry();
+    if (!entry) {
+      return;
+    }
+    switch (item.id) {
+      case 'duplicate':
+        this.state.duplicateTemplate(entry);
+        break;
+      case 'rename':
+        void this.state.renameTemplate(entry);
+        break;
+      case 'move':
+        void this.state.moveTemplates([entry]);
+        break;
+      case 'usedBy':
+        this.state.templateUsedBy.set(entry.id);
+        break;
+      default:
+        void this.state.deleteTemplates([entry]);
+    }
+  }
+
+  protected setExtras(patch: Partial<SampleTemplateExtras>): void {
+    this.extras.update((current) => ({ ...current, ...patch }));
+  }
+
+  protected removeChannel(id: string): void {
+    this.removed.update((all) => [...all, id]);
+  }
+
+  protected restoreChannel(id: string): void {
+    this.removed.update((all) => all.filter((channel) => channel !== id));
+  }
+
+  /** Display name, category and flags of the open template as saved. */
+  private extrasOf(): SampleTemplateExtras {
+    const entry = templateEntry(this.state.templateId());
+    return { displayName: entry?.name ?? '', category: entry?.kind === 'section' ? 'Cards' : 'Layouts', abstract: false, deprecated: false };
   }
 
   private tab(id: string, label: string, key: string): SfTab {

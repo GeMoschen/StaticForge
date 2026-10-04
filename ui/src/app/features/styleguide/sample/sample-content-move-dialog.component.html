@@ -1,5 +1,5 @@
 <sf-dialog size="md" [title]="data.title">
-  <p class="move__lead">{{ t(data.mode === 'folder' ? 'leadFolder' : 'leadRecords') }}</p>
+  <p class="move__lead">{{ t(data.mode === 'folder' ? (data.area === 'templates' ? 'leadTemplates' : 'leadFolder') : 'leadRecords') }}</p>
   @if (data.mode === 'folder') {
     <div class="move__tree">
       <sf-tree

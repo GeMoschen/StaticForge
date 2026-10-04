@@ -114,7 +114,11 @@
               <sf-sample-dataset-view />
             }
             @case ('template') {
-              <sf-sample-template-view />
+              @if (state.templateIsFolder()) {
+                <sf-sample-template-folder />
+              } @else {
+                <sf-sample-template-view />
+              }
             }
             @default {
               @if (state.emptyProject() && state.area() === 'pages') {
@@ -130,6 +134,16 @@
     }
   }
 </main>
+
+@if (state.templateUsedBy(); as usedById) {
+  <sf-sample-content-panel
+    [title]="state.t('templateActions.usedByTitle', { name: templateUsedByName() })"
+    tabs="usages"
+    [usages]="templateUsedByList()"
+    [tab]="'usages'"
+    (tabChange)="state.templateUsedBy.set(null)"
+  />
+}
 
 @if (state.history(); as context) {
   <sf-sample-history-drawer [context]="context" (closed)="state.history.set(null)" (openFull)="openFullHistory($event)" />

@@ -1,6 +1,6 @@
 @let ds = dataset();
 <div class="ds__head">
-  <sf-page-header [title]="ds.name" [secondaryActions]="moreActions()" (secondaryAction)="state.notice()">
+  <sf-page-header [title]="ds.name" [secondaryActions]="moreActions()" (secondaryAction)="secondary($event)">
     <sf-sample-breadcrumb
       sfPageHeaderBreadcrumb
       [crumbs]="state.breadcrumb()"

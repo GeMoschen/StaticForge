@@ -27,7 +27,7 @@ import {
 } from '../../../shared/components/sf-tree.component';
 import { SfSplitterComponent } from '../../../shared/components/splitter/sf-splitter.component';
 import { SfTreeLoader, SfTreeNode } from '../../../shared/components/tree/tree-model';
-import { FIXED_EXTRAS_SET } from './sample-content-data';
+import { FIXED_EXTRAS_SET, TEMPLATE_USAGES, templateEntry } from './sample-content-data';
 import { SampleContentFolderComponent } from './sample-content-folder.component';
 import { SampleContentTreeComponent } from './sample-content-tree.component';
 import { SampleDatasetViewComponent } from './sample-dataset-view.component';
@@ -59,7 +59,9 @@ import {
   SampleView,
 } from './sample-state';
 import { CDL_SECTIONS, SampleTemplateChannel, SampleTemplateKey, templateDefById } from './sample-template-data';
+import { SampleTemplateFolderComponent } from './sample-template-folder.component';
 import { SampleTemplateViewComponent } from './sample-template-view.component';
+import { SampleContentPanelComponent } from './sample-content-panel.component';
 import { SampleTemplatesTreeComponent } from './sample-templates-tree.component';
 import { TEASERS_ROW } from './sample-page-editor.component';
 import { SampleTopbarComponent } from './sample-topbar.component';
@@ -96,7 +98,7 @@ function oneOf<T extends string>(value: string | null, allowed: readonly T[]): T
 }
 
 /** The query parameters the screen owns; every other parameter belongs to an area and is kept as it is. */
-const OWN_PARAMS = ['area', 'view', 'template', 'tab', 'channel', 'focus', 'dev', 'rail', 'theme', 'density', 'palette', 'hdrawer', 'travel', 'cmdk', 'sheet', 'sheetq', 'psettings', 'issues', 'empty', 'preview', 'secpalette', 'newset', 'fstate', 'access', 'pdialog', 'conflict', 'istatus', 'etemplates'];
+const OWN_PARAMS = ['area', 'view', 'template', 'tab', 'channel', 'focus', 'dev', 'rail', 'theme', 'density', 'palette', 'hdrawer', 'travel', 'cmdk', 'sheet', 'sheetq', 'psettings', 'issues', 'empty', 'preview', 'secpalette', 'newset', 'fstate', 'access', 'pdialog', 'conflict', 'istatus', 'etemplates', 'tstate', 'tdialog'];
 
 /**
  * The M35.9 sample screen: a clickable prototype of the new frame (dark top bar, rail) around the working areas —
@@ -144,7 +146,9 @@ const OWN_PARAMS = ['area', 'view', 'template', 'tab', 'channel', 'focus', 'dev'
     SampleRecordEditorComponent,
     SampleRecordSetComponent,
     SampleSchedulesAreaComponent,
+    SampleTemplateFolderComponent,
     SampleTemplateViewComponent,
+    SampleContentPanelComponent,
     SampleTemplatesTreeComponent,
     SampleTimeTravelBannerComponent,
     SampleTopbarComponent,
@@ -169,6 +173,10 @@ export class SampleScreenComponent {
   private readonly injector = inject(Injector);
   /** The Pages tree (absent while another area is open). */
   private readonly tree = viewChild<SfTreeComponent<SampleEntry>>(SfTreeComponent);
+
+  /** The *Used by* drawer of a template or dataset (gate round 13): its name and the things that use it. */
+  protected readonly templateUsedByName = computed(() => templateEntry(this.state.templateUsedBy())?.name ?? '');
+  protected readonly templateUsedByList = computed(() => TEMPLATE_USAGES[this.state.templateUsedBy() ?? ''] ?? []);
 
   protected readonly treeWidth =
     typeof matchMedia !== 'function' || matchMedia(WIDE_QUERY).matches ? TREE_WIDTH : TREE_WIDTH_NARROW;
@@ -221,6 +229,25 @@ export class SampleScreenComponent {
     return (SELF_CONTAINED_AREAS as readonly string[]).includes(area) ? (area as SampleSelfContainedArea) : null;
   });
 
+  /** The scripted dialogs of the Templates area, on the open folder (`new`, `newpage`, `move`, `delete`) or template. */
+  private openTemplateDialog(name: string): void {
+    const open = templateEntry(this.state.templateId());
+    const folder = this.state.templateFolderOf();
+    if (name === 'new') {
+      void this.state.newTemplate(this.state.templateIsFolder() ? this.state.templateId() : folder);
+    } else if (name === 'newpage') {
+      void this.state.newTemplate(this.state.templateIsFolder() ? this.state.templateId() : folder, 'page');
+    } else if (name === 'usedby' && open) {
+      this.state.templateUsedBy.set(open.id);
+    } else if (open && name === 'rename') {
+      void this.state.renameTemplate(open);
+    } else if (open && name === 'move') {
+      void this.state.moveTemplates([open]);
+    } else if (open && name === 'delete') {
+      void this.state.deleteTemplates([open]);
+    }
+  }
+
   constructor() {
     const theme = inject(ThemeService);
     const density = inject(DensityService);
@@ -230,6 +257,11 @@ export class SampleScreenComponent {
     // `newset=1`: the New record set dialog, open on arrival (a review state; it is not written back).
     if (inject(ActivatedRoute).snapshot.queryParamMap.get('newset') === '1' && this.state.area() === 'content') {
       afterNextRender(() => void this.state.newRecordSet(this.state.contentFolderId()), { injector: this.injector });
+    }
+    // `tdialog=new|newpage|rename|move|delete|usedby` (Templates): that dialog or drawer, open on arrival (a review state).
+    const tdialog = inject(ActivatedRoute).snapshot.queryParamMap.get('tdialog');
+    if (tdialog && this.state.area() === 'templates') {
+      afterNextRender(() => this.openTemplateDialog(tdialog), { injector: this.injector });
     }
 
     // The sample has no app shell, so it registers the two keys the frame owns in the app (M35.14).

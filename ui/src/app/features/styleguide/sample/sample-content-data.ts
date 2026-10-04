@@ -589,6 +589,74 @@ export function templatePath(id: string | null): SampleTemplateEntry[] {
   return path;
 }
 
+// ── Template metadata (the folder table, gate round 13) ──────────────────────
+
+/** What the Templates folder table shows per template or dataset: channels, how many things use it, last change. */
+export interface SampleTemplateMeta {
+  readonly channels: readonly string[];
+  readonly usedBy: number;
+  readonly modifiedMinutes: number;
+  readonly modifiedBy: SamplePerson;
+}
+
+/** What uses a template or dataset (the *Used by* drawer); one missing here is used by nothing. */
+export const TEMPLATE_USAGES: Readonly<Record<string, readonly SampleUsage[]>> = {
+  't-page-base_page': [
+    { type: 'template', name: 'Landing page', path: 'extends' },
+    { type: 'template', name: 'Content page', path: 'extends' },
+  ],
+  't-page-content_page': [
+    { type: 'template', name: 'Article', path: 'extends' },
+    { type: 'template', name: 'Article list', path: 'extends' },
+    { type: 'page', name: 'About us', path: 'template' },
+  ],
+  't-page-article': [
+    { type: 'page', name: 'Spring harvest arrives', path: 'template' },
+    { type: 'page', name: 'Roasting day recap', path: 'template' },
+    { type: 'page', name: 'New brew guide', path: 'template' },
+  ],
+  't-section-product_teaser': [
+    { type: 'page', name: 'Single origins', path: 'sections[1]' },
+    { type: 'page', name: 'Shop', path: 'sections[0]' },
+    { type: 'template', name: 'Product list', path: 'bodies.main' },
+  ],
+  't-section-hero': [
+    { type: 'page', name: 'Home', path: 'sections[0]' },
+    { type: 'page', name: 'Spring harvest arrives', path: 'sections[0]' },
+  ],
+  'ds-products': [
+    { type: 'recordset', name: 'Single origins', path: 'Products / Single origins' },
+    { type: 'recordset', name: 'Blends', path: 'Products / Blends' },
+    { type: 'template', name: 'Product teaser', path: 'content.items' },
+  ],
+};
+
+const TEMPLATE_PEOPLE: readonly SamplePerson[] = [PEOPLE.anna, PEOPLE.jonas, PEOPLE.mira, PEOPLE.lukas];
+
+/**
+ * The folder table's data for an entry. Sections render in html only; page templates and datasets in html and rss. A
+ * folder has none of it (its row shows "—"). Derived from the id, so the table is the same on every visit.
+ */
+export function templateMeta(entry: SampleTemplateEntry): SampleTemplateMeta {
+  const seed = [...entry.id].reduce((sum, ch) => sum + ch.charCodeAt(0), 0);
+  return {
+    channels: entry.kind === 'folder' ? [] : entry.kind === 'section' ? ['html'] : ['html', 'rss'],
+    usedBy: TEMPLATE_USAGES[entry.id]?.length ?? 0,
+    modifiedMinutes: 90 + (seed % 17) * 410,
+    modifiedBy: TEMPLATE_PEOPLE[seed % TEMPLATE_PEOPLE.length],
+  };
+}
+
+/** Every template, dataset and folder under a folder (not the folder itself), depth first. */
+export function templatesInside(id: string | null): SampleTemplateEntry[] {
+  return templateChildren(id).flatMap((entry) => [entry, ...templatesInside(entry.id)]);
+}
+
+/** How many other things use the template, dataset or (for a folder) anything inside it. */
+export function templateUsageCount(entry: SampleTemplateEntry): number {
+  return entry.kind === 'folder' ? templatesInside(entry.id).reduce((sum, e) => sum + templateMeta(e).usedBy, 0) : templateMeta(entry).usedBy;
+}
+
 /** The expression `filter=custom` stores in a set: it has an `||`, which the filter builder cannot write. */
 export const CUSTOM_EXPRESSION = "roast == 'dark' || stock > 50";
 
@@ -613,7 +681,7 @@ export function recordsInside(entry: SampleContentEntry, recordsOf: (setId: stri
 
 /** Something that reads a record set or record (the *Used by* lists). */
 export interface SampleUsage {
-  readonly type: 'page' | 'template' | 'record';
+  readonly type: 'page' | 'template' | 'record' | 'recordset';
   readonly name: string;
   /** Where in it the reference sits. */
   readonly path: string;

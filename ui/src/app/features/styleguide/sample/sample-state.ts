@@ -2,6 +2,7 @@ import { Injectable, Injector, computed, inject, signal } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { HashMap, TranslocoService } from '@jsverse/transloco';
 import { ToastService } from '../../../core/ui/toast.service';
+import { ConfirmService } from '../../../shared/components/dialog/confirm.service';
 import { DialogService } from '../../../shared/components/dialog/dialog.service';
 import {
   FIXED_CONTENT_FILTER,
@@ -12,6 +13,8 @@ import {
   FIXED_RECORD_SET,
   SampleContentEntry,
   SampleRecord,
+  SampleTemplateEntry,
+  TEMPLATE_USAGES,
   contentEntry,
   contentParentOf,
   contentPath,
@@ -19,6 +22,8 @@ import {
   recordSets,
   templateEntry,
   templatePath,
+  templateUsageCount,
+  templatesInside,
 } from './sample-content-data';
 import {
   CONTENT_ROOT,
@@ -31,6 +36,12 @@ import {
   SampleContentRenameResult,
 } from './sample-content-rename-dialog.component';
 import { FAVORITE_SEED, SampleFavorite, favoriteKey, pageFavorite } from './sample-favorites';
+import {
+  SampleNewTemplateData,
+  SampleNewTemplateDialogComponent,
+  SampleNewTemplateKind,
+  SampleNewTemplateResult,
+} from './sample-new-template-dialog.component';
 import {
   SampleNewRecordSetData,
   SampleNewRecordSetDialogComponent,
@@ -212,6 +223,7 @@ export class SampleState {
   private readonly transloco = inject(TranslocoService);
   private readonly toasts = inject(ToastService);
   private readonly dialogs = inject(DialogService);
+  private readonly confirms = inject(ConfirmService);
   private readonly injector = inject(Injector);
   /** Re-evaluates the translated labels once the language file is in. */
   private readonly translation = toSignal(this.transloco.selectTranslation(), { initialValue: null });
@@ -265,6 +277,8 @@ export class SampleState {
   readonly templateSection = signal<SampleCdlSection>('content');
   readonly templateChannel = signal<SampleTemplateChannel>('html');
   readonly palette = signal<SampleCodePalette>('current');
+  /** The template, dataset or folder whose *Used by* drawer is open (gate round 13); `null` = closed. */
+  readonly templateUsedBy = signal<string | null>(null);
 
   // ── Media, Navigation, Globals (their own components) ──────────────────────
   /** The breadcrumb below the area's name, set by the area's component ("Media › Products"). */
@@ -534,6 +548,18 @@ export class SampleState {
     this.view.set('record');
   }
 
+  /** The Templates main pane shows a folder's table (or the root's), not a template. */
+  readonly templateIsFolder = computed(() => {
+    const entry = templateEntry(this.templateId());
+    return entry === null || entry.kind === 'folder';
+  });
+
+  /** The folder a *New* goes into: the open folder, else the folder of the open template; `null` = the root. */
+  templateFolderOf(): string | null {
+    const open = templateEntry(this.templateId());
+    return open?.kind === 'folder' ? open.id : (templatePath(this.templateId()).at(-2)?.id ?? null);
+  }
+
   /** A template, dataset or templates folder (`null` = the root). */
   openTemplate(id: string | null): void {
     this.favoritesOpen.set(false);
@@ -732,6 +758,99 @@ export class SampleState {
       },
     );
     return target;
+  }
+
+
+  // ── Templates: the dialogs and changes of the tree, the folder table and the template header (gate round 13) ─────
+  /**
+   * The New template dialog. `kind` is what a *New ▸ kind* menu entry picked, or `null` from the header's button, which
+   * asks. Creating only says what would happen: nothing is saved in the prototype.
+   */
+  async newTemplate(folderId: string | null, kind: SampleNewTemplateKind | null = null): Promise<void> {
+    const folder = templateEntry(folderId)?.name ?? this.t('rail.templates');
+    const result = await this.dialogs.open<SampleNewTemplateResult, SampleNewTemplateData>(
+      SampleNewTemplateDialogComponent,
+      { folder, kind },
+      { injector: this.injector },
+    ).result;
+    if (result) {
+      this.notice('templateNew.created', { name: result.name, kind: this.t(`templates.kind.${result.kind}`).toLowerCase(), folder });
+    }
+  }
+
+  /** The Rename dialog of a template, dataset or folder (the UID section is always there: Templates is developer-only). */
+  async renameTemplate(entry: SampleTemplateEntry): Promise<void> {
+    const result = await this.dialogs.open<SampleContentRenameResult, SampleContentRenameData>(
+      SampleContentRenameDialogComponent,
+      { name: entry.name, uid: entry.uid, developer: true },
+      { injector: this.injector },
+    ).result;
+    if (result?.name) {
+      this.notice('contentRename.renamed', { name: result.name });
+    } else if (result?.uid) {
+      this.toasts.undo(this.t('contentRename.uidChanged', { uid: result.uid }), () => this.notice('contentRename.uidRestored'));
+    }
+  }
+
+  /** The folder Move dialog for templates, datasets and folders; the move is only announced, with an Undo that says so. */
+  async moveTemplates(entries: readonly SampleTemplateEntry[]): Promise<boolean> {
+    const first = entries[0];
+    const parent = templatePath(first.id).at(-2)?.id ?? CONTENT_ROOT;
+    const target = await this.dialogs.open<string, SampleContentMoveData>(
+      SampleContentMoveDialogComponent,
+      {
+        mode: 'folder',
+        area: 'templates',
+        title: this.t('contentMove.titleFolder', { count: entries.length, name: first.name }),
+        current: parent,
+        blocked: entries.filter((entry) => entry.kind === 'folder').flatMap((entry) => [entry.id, ...templatesInside(entry.id).map((e) => e.id)]),
+      },
+      { injector: this.injector },
+    ).result;
+    if (!target) {
+      return false;
+    }
+    const name = target === CONTENT_ROOT ? this.t('rail.templates') : (templateEntry(target)?.name ?? '');
+    this.toasts.undo(this.t('contentMove.moved', { count: entries.length, name: first.name, target: name }), () =>
+      this.notice('contentMove.movedBack'),
+    );
+    return true;
+  }
+
+  /** *Duplicate* makes a copy next to the original (“Article copy”) and opens nothing; Undo removes it again. */
+  duplicateTemplate(entry: SampleTemplateEntry): void {
+    this.toasts.undo(this.t('templateActions.duplicated', { name: entry.name }), () => this.notice('templateActions.duplicateUndone'));
+  }
+
+  /**
+   * The delete confirmation. What uses the templates is named — "3 pages use it" — because existing pages keep their
+   * content but may break on the next build; a folder goes with everything inside it. Confirmed: a toast with Undo (the
+   * tree shows its own, so it passes `announce = false`).
+   */
+  async deleteTemplates(entries: readonly SampleTemplateEntry[], announce = true): Promise<boolean> {
+    const first = entries[0];
+    const usages = entries.flatMap((entry) => (entry.kind === 'folder' ? templatesInside(entry.id) : [entry]).flatMap((e) => TEMPLATE_USAGES[e.id] ?? []));
+    const pages = usages.filter((usage) => usage.type === 'page').length;
+    const others = usages.length - pages;
+    const lines: string[] = [];
+    if (entries.some((entry) => entry.kind === 'folder')) {
+      lines.push(this.t('templateActions.deleteFolders'));
+    }
+    if (usages.length > 0) {
+      lines.push(this.t('templateActions.deleteInUse', { pages, others }));
+    }
+    lines.push(this.t('templateActions.deleteRestore'));
+    const confirmed = await this.confirms.confirm({
+      title: this.t('templateActions.deleteTitle', { count: entries.length, name: first.name }),
+      message: lines.join(' '),
+      confirmLabel: this.t('templateActions.deleteConfirm', { count: entries.length }),
+      tone: 'danger',
+      details: entries.map((entry) => `${entry.name}${templateUsageCount(entry) > 0 ? ` — ${this.t('templateActions.usedByCount', { count: templateUsageCount(entry) })}` : ''}`),
+    });
+    if (confirmed && announce) {
+      this.toasts.undo(this.t('templateActions.deleted', { count: entries.length, name: first.name }), () => this.notice('folder.restored'));
+    }
+    return confirmed;
   }
 
   /** Every action that would change something says so instead: nothing is saved in the prototype. */

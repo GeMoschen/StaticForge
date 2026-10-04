@@ -634,6 +634,58 @@ Media — the app differs from the sample; the user rules (nothing changed in th
 152. **Tab bar of a text file:** at the drawer's default width (420 px below 1280, else 520) Processing, Rendered and Used by fall into "More". A wider default or another tab order for text
     media — a design question.
 
+## Review round 13 (2026-10-04): templates — what M35.21 needs beyond the signed-off sample (**awaiting sign-off**)
+
+Added to the sample for M35.21 (`/styleguide/sample?area=templates&…`). **Not signed off yet** — the app's Templates screens stay as they are until the user rules.
+Screenshots: `round13-shots/` (1440 px, headless Chrome; 20 states). Decisions continue after 152.
+
+Review links (they combine with the usual `dev`, `theme`, `density`; read once, not written back):
+
+| Param | What it shows |
+|---|---|
+| `area=templates` (click *Page templates* in the tree) | the folder table; at the root it lists the three folders |
+| `area=templates&fstate=loading` / `error` / `empty` | the folder table: skeleton / error with Retry / empty folder |
+| `area=templates&tdialog=new` / `newpage` | the New template dialog with nothing chosen / opened from *New ▸ Page template* |
+| `area=templates&view=template&template=article&tdialog=usedby` / `rename` / `move` / `delete` | the Used by drawer / Rename / Move / Delete confirmation for the open template |
+| `…&view=template&template=article&tstate=loading` / `error` / `saveerror` / `discard` | skeleton / load error with Retry / refused-save banner / Save asks before discarding translations |
+| `…&view=template&template=article&access=archived` (or `travel=88`) | read-only template |
+
+153. **Folder view of Templates** (header *New ▸ kind* menu, ⋮ with Rename… / Move… / Delete; the top level has no ⋮): `sf-data-table` with **Name** (icon of the kind, UID in developer
+    mode), **Kind**, **Channels** (a chip per channel), **Used by** (the count, a button that opens the Used by drawer; folders "—"), **Modified** (avatar + relative time; folders "—").
+    *Kind* filter chip group ("Kind: Page template"), multi-select with bulk **Move…** and **Delete**, loading / error / empty states like the other folder tables.
+154. **Used by for templates and datasets:** the existing right-hand drawer ("Used by — Article", non-modal) listing the pages, templates (those that extend it) and — for a dataset —
+    record sets that use it, each with a type badge and where; "Not used yet" when empty. From the template header's ⋮, the tree's menu and the table's count.
+155. **New template dialog:** the **kind is chosen explicitly** — Page template / Section template / Dataset as a radio group with a line each — and never inferred from the tree selection.
+    From a *New ▸ kind* entry the kind is what the person picked; from the header's *New* button nothing is chosen and **Create** says "Choose a kind first." Fields: **Name**, **UID**
+    (derived from the name until edited), and for page and section templates an optional **Based on** (a template of the same kind). A note: "The kind can’t be changed after it is
+    created." Where it is created is stated ("Created in Page templates."). A folder is made inline in the tree.
+156. **Delete (template, dataset, folder; one or many):** a confirmation that **names what uses them** ("In use by 3 pages. They keep their content but may break on the next build."),
+    says a folder goes with everything inside, lists the items with "used by N things", then a toast with **Undo**. From the header ⋮, the tree (menu, `Del`, inline) and the table.
+157. **Tree menu and Move:** a template's menu is *Duplicate*, *Rename…*, *Move to…*, *Used by*, *Add to favorites*, *Delete*; a folder's is *New ▸ (Page template, Section template,
+    Dataset, Folder)*, *Rename…*, *Move to…*, *Add to favorites*, *Delete*. **Rename…** is the Content rename dialog (name; developer-mode UID with **Change UID** on its own and
+    Undo). **Move to…** is the folder picker of the Content move dialog with the top level "Templates", the current location and a moved folder's inside not choosable, then a
+    toast with Undo. **Duplicate** makes a copy next to the original with an Undo toast. (No cut / copy / paste in this tree.)
+158. **Definition fields in Settings:** **Display name**, **Category**, and for page templates **Abstract** (a layout other templates extend), for section templates **Deprecated**
+    (no longer offered in the section palette). Switching *Abstract* on while pages use the template is refused inline, naming the pages ("3 pages use this template, so it can’t be
+    abstract. Move them to another template first: …").
+159. **Channels in Settings:** next to each channel's switch a ✕ **removes** it ("Removed when you save: rss — Undo"); **Add channel** is a menu of the project's channels the template
+    has no source for. The channel tabs follow.
+160. **Descendants:** a template that others extend shows an info banner "2 templates extend this one. They are checked again when you save." with *Used by*.
+161. **Save outcomes:** *refused save* (`tstate=saveerror`) — a danger banner "Not saved: the template has 1 compile error…"; *discarding translations* (`tstate=discard`) — Save first asks
+    "This change discards translations" with **Keep the translations** / **Discard and save**.
+162. **States of the template view:** loading (skeleton), load error with Retry, and read-only (archived project: "Archived project — read-only"; a past revision: "Revision N — read-only")
+    — nothing can be edited, saved, renamed, moved or deleted.
+163. **The `{locale}` warning (app differs from the sample):** the sample warns on the output path of **every** page template that lacks `{locale}` (a client check). The app shows the
+    **server's** warning (SF-GEN-0112, per channel), which applies only in a multi-language project (M35.1 item 10). Keep the server rule as the truth (the sample text already says "this
+    project has two languages") — user to confirm.
+164. **Data the folder table needs that the API lacks (backend work or fewer columns):** the template summary has **no channels, used-by count or modified** field, and there is no batch usage
+    count (M35.20 added `changedAt` for record sets the same way). Decide: add `channels`, `usedByCount`, `changedAt` to the summaries, or drop *Used by* / *Modified* from the table.
+165. **Selection in the URL:** the app keeps the open template in the store and consumes `?asset=` / `?folder=`; M35.21 moves it to `/templates/:uuid` (folders `?folder=`), so a switch
+    goes through the unsaved guard and the open item is recorded as a recent. No sample change.
+166. **Code highlighting palette (decision 18, still open):** *Current* (default) or *Refined*; the template header's switch stays in the sample until the user picks one. Decide before the IDE is built.
+167. **Dataset editing:** the sample's dataset view is read-only (overview, schema, rules, record templates); the app's dataset editor is a full editor and keeps its behaviour. Its ⋮ now has the
+    same Rename… / Duplicate / Used by / Delete as the other items.
+
 ## Notes / hazards
 
 - Sign-off: **signed off by the user on 2026-10-01** — gallery https://claude.ai/artifact/33yY26sd6H17UTP9sPPJid

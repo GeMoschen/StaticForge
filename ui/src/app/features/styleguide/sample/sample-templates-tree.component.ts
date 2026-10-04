@@ -9,6 +9,9 @@ import { favoriteChildren, favoriteNodes, favoritesNode, isFavoriteNode } from '
 import type { ContextMenuItem } from '../../../shared/services/context-menu.service';
 import { SampleState } from './sample-state';
 
+/** The kinds a template dialog creates, in the order the *New* menus list them. */
+const NEW_KINDS = ['page', 'section', 'dataset'] as const;
+
 export const TEMPLATE_ICONS: Readonly<Record<SampleTemplateKind, string>> = {
   folder: 'folder',
   page: 'web',
@@ -49,10 +52,12 @@ export const TEMPLATE_ICONS: Readonly<Record<SampleTemplateKind, string>> = {
         [expandActions]="false"
         [menuItems]="menuItems"
         [allowAction]="allowAction"
+        [confirmDelete]="confirmDelete"
         (open)="onOpen($event)"
         (rename)="state.notice()"
         (create)="state.notice()"
         (delete)="onDelete($event)"
+        (moveTo)="onMoveTo($event)"
       />
     </section>
   `,
@@ -60,26 +65,59 @@ export const TEMPLATE_ICONS: Readonly<Record<SampleTemplateKind, string>> = {
 export class SampleTemplatesTreeComponent {
   protected readonly state = inject(SampleState);
   private readonly tree = viewChild.required<SfTreeComponent<SampleTemplateEntry>>(SfTreeComponent);
-  protected readonly actions: readonly SfTreeAction[] = ['rename', 'delete'];
+  protected readonly actions: readonly SfTreeAction[] = ['rename', 'delete', 'move'];
   /** The *Favorites* branch is a view: nothing in it is renamed, deleted or created. */
   protected readonly allowAction = (_action: SfTreeAction, nodes: readonly SfTreeNode<SampleTemplateEntry>[]): boolean =>
     !nodes.some((node) => isFavoriteNode(node.id));
 
-  /** The context menu's *Add to favorites* / *Remove from favorites* for a template, dataset or folder (M35.15). */
+  /**
+   * The context menu between the tree's own entries and *Delete* (gate round 13): *New ▸* with the kind named in every entry
+   * (in a folder), *Duplicate* (a template or dataset), *Rename…*, *Used by* (not a folder) and *Add to / Remove from
+   * favorites* (M35.15). *Move to…* and *Delete* are the tree's own.
+   */
   protected readonly menuItems = (nodes: readonly SfTreeNode<SampleTemplateEntry>[]): ContextMenuItem[] => {
     const node = nodes.length === 1 ? nodes[0] : null;
     if (!node || isFavoriteNode(node.id) || !node.data) {
       return [];
     }
-    const favorite = templateFavorite(node.data);
-    return [
-      {
-        label: this.state.t(this.state.isFavoriteKey(favorite.key) ? 'favorites.remove' : 'favorites.add'),
-        icon: 'star',
-        action: () => this.state.toggleFavoriteOf(favorite),
-      },
-    ];
+    const entry = node.data;
+    const favorite = templateFavorite(entry);
+    const items: ContextMenuItem[] = [];
+    if (entry.kind === 'folder') {
+      items.push({
+        label: this.state.t('templateActions.new'),
+        icon: 'add',
+        children: NEW_KINDS.map((kind) => ({
+          label: this.state.t(`templates.new.${kind}`),
+          icon: TEMPLATE_ICONS[kind],
+          action: () => void this.state.newTemplate(entry.id, kind),
+        })),
+      });
+    } else {
+      items.push({ label: this.state.t('editor.duplicate'), icon: 'content_copy', action: () => this.state.duplicateTemplate(entry) });
+    }
+    items.push({ label: this.state.t('templateActions.renameDialog'), icon: 'edit', shortcut: 'F2', action: () => void this.state.renameTemplate(entry) });
+    if (entry.kind !== 'folder') {
+      items.push({ label: this.state.t('content.usedBy'), icon: 'link', action: () => this.state.templateUsedBy.set(entry.id) });
+    }
+    items.push({
+      label: this.state.t(this.state.isFavoriteKey(favorite.key) ? 'favorites.remove' : 'favorites.add'),
+      icon: 'star',
+      action: () => this.state.toggleFavoriteOf(favorite),
+    });
+    return items;
   };
+
+  /** The delete question names what uses the templates (and, for a folder, what is inside) before anything goes. */
+  protected readonly confirmDelete = (nodes: readonly SfTreeNode<SampleTemplateEntry>[]): Promise<boolean> =>
+    this.state.deleteTemplates(
+      nodes.flatMap((node) => (node.data ? [node.data] : [])),
+      false,
+    );
+
+  protected onMoveTo(nodes: SfTreeNode<SampleTemplateEntry>[]): void {
+    void this.state.moveTemplates(nodes.flatMap((node) => (node.data ? [node.data] : [])));
+  }
 
   protected onOpen(node: SfTreeNode<SampleTemplateEntry>): void {
     if (isFavoriteNode(node.id)) {
@@ -124,16 +162,18 @@ export class SampleTemplatesTreeComponent {
   });
 
   protected readonly newItems = computed<SfMenuItem[]>(() => {
-    const item = (id: string, icon: string): SfMenuItem => ({
+    const item = (id: string, icon: string, action: () => void): SfMenuItem => ({
       id,
       icon,
       label: this.state.t(`templates.new.${id}`),
-      action: () => this.state.notice(),
+      action,
     });
-    return [item('page', TEMPLATE_ICONS.page), item('section', TEMPLATE_ICONS.section), item('dataset', TEMPLATE_ICONS.dataset), {
-      ...item('folder', TEMPLATE_ICONS.folder),
-      separatorBefore: true,
-    }];
+    // The kind is named in the entry and is never taken from what is selected: the folder is where it goes, nothing more.
+    const where = this.state.templateFolderOf();
+    return [
+      ...NEW_KINDS.map((kind) => item(kind, TEMPLATE_ICONS[kind], () => void this.state.newTemplate(where, kind))),
+      { ...item('folder', TEMPLATE_ICONS.folder, () => this.state.notice('folder.newFolderNotice')), separatorBefore: true },
+    ];
   });
 
   constructor() {
@@ -151,6 +191,7 @@ export class SampleTemplatesTreeComponent {
   }
 
   protected onDelete(request: SfTreeDeleteRequest<SampleTemplateEntry>): void {
+    // The question was asked by `confirmDelete`; the tree's own Undo notice says what Undo does in the prototype.
     request.completed(() => this.state.notice('folder.restored'));
   }
 

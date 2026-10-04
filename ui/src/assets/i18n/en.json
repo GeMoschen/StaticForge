@@ -3115,7 +3115,42 @@
         "cdlLabel": "{section} CDL of {name}",
         "channelLabel": "{channel} template of {name}",
         "placeholderTitle": "Template editor",
-        "placeholder": "Editing this kind of template is part of M35.21."
+        "placeholder": "Editing this kind of template is part of M35.21.",
+        "displayName": "Display name",
+        "category": "Category",
+        "categoryHint": "Groups the template in pickers.",
+        "abstract": "Abstract",
+        "abstractSwitch": "Abstract template",
+        "abstractHint": "A layout other page templates extend. Pages can’t use an abstract template.",
+        "abstractBlocked": "{count, plural, one {1 page uses} other {# pages use}} this template, so it can’t be abstract. Move {count, plural, one {it} other {them}} to another template first: {pages}.",
+        "deprecated": "Deprecated",
+        "deprecatedSwitch": "Deprecated template",
+        "deprecatedHint": "Still works in existing pages, but is no longer offered in the section palette.",
+        "addChannel": "Add channel",
+        "addChannelLabel": "Add a channel template",
+        "channelAdded": "Would add a {channel} template to “{name}” (prototype — nothing was saved).",
+        "removeChannel": "Remove the {channel} channel",
+        "removedOnSave": "Removed when you save:",
+        "retry": "Retry",
+        "undo": "Undo",
+        "loading": "Loading the template",
+        "loadFailed": {
+          "title": "The template could not be loaded",
+          "description": "Try again. Your other templates are not affected."
+        },
+        "readOnlyArchived": "Archived project — read-only",
+        "readOnlyRevision": "Revision {revision} — read-only",
+        "descendants": "{count, plural, one {# template extends} other {# templates extend}} this one. They are checked again when you save.",
+        "saveFailed": {
+          "title": "Not saved",
+          "message": "The template has 1 compile error, so nothing was written. Fix the marked line in the CDL and save again."
+        },
+        "discard": {
+          "title": "This change discards translations",
+          "message": "Taking “localizable” off the title drops 12 translations of it. They cannot be restored afterwards.",
+          "confirm": "Discard and save",
+          "keep": "Keep the translations"
+        }
       },
       "auth": {
         "login": {
@@ -4181,7 +4216,8 @@
         "type": {
           "page": "Page",
           "template": "Template",
-          "record": "Record"
+          "record": "Record",
+          "recordset": "Record set"
         },
         "issues": {
           "nameRequired": "The name is required.",
@@ -4206,7 +4242,9 @@
         "titleRecords": "{count, plural, one {Move “{name}” to…} other {Move # records to…}}",
         "moved": "{count, plural, one {Moved “{name}” to {target}} other {Moved # items to {target}}} (prototype — nothing was moved).",
         "movedBack": "Moved back (prototype — nothing was moved).",
-        "movedRecords": "{count, plural, one {Moved “{name}” to {target}.} other {Moved # records to {target}.}}"
+        "movedRecords": "{count, plural, one {Moved “{name}” to {target}.} other {Moved # records to {target}.}}",
+        "leadTemplates": "Templates, datasets and folders can move to another folder.",
+        "topLevelTemplates": "Templates"
       },
       "contentRename": {
         "title": "Rename “{name}”",
@@ -4221,6 +4259,70 @@
         "renamed": "Renamed to “{name}” (prototype — nothing was saved).",
         "uidChanged": "UID changed to {uid} (prototype — nothing was saved).",
         "uidRestored": "UID restored (prototype — nothing was changed)."
+      },
+      "templateFolder": {
+        "columns": {
+          "name": "Name",
+          "kind": "Kind",
+          "channels": "Channels",
+          "usedBy": "Used by",
+          "modified": "Modified"
+        },
+        "kindFilter": "Kind",
+        "emptyHint": "Create a template, a dataset or a folder here, or move items in from another folder.",
+        "noChannel": "No channel",
+        "showUsedBy": "Show what uses “{name}” ({count})"
+      },
+      "templateNew": {
+        "title": "New template",
+        "where": "Created in {folder}.",
+        "kind": {
+          "label": "Kind",
+          "hint": "The kind can’t be changed after it is created.",
+          "page": "Page template",
+          "section": "Section template",
+          "dataset": "Dataset"
+        },
+        "kindHint": {
+          "page": "The layout of a whole page: its fields, rules and channel templates.",
+          "section": "A building block pages put in their bodies.",
+          "dataset": "The fields and record template of a record set."
+        },
+        "name": {
+          "label": "Name",
+          "required": "A name is required."
+        },
+        "uid": {
+          "label": "UID",
+          "hint": "Derived from the name. Links and references use it.",
+          "invalid": "A UID starts with a letter and has only lower case letters, digits and underscores."
+        },
+        "parent": {
+          "label": "Based on",
+          "hint": "Optional: the template whose fields and channels this one starts from.",
+          "none": "Nothing — start empty"
+        },
+        "create": {
+          "label": "Create",
+          "chooseKind": "Choose a kind first.",
+          "enterName": "Enter a name first."
+        },
+        "cancel": "Cancel",
+        "created": "Would create the {kind} “{name}” in {folder} (prototype — nothing was saved)."
+      },
+      "templateActions": {
+        "new": "New",
+        "renameDialog": "Rename…",
+        "duplicated": "Copied “{name}” (prototype — nothing was copied).",
+        "duplicateUndone": "Copy removed (prototype — nothing was changed).",
+        "usedByTitle": "Used by — {name}",
+        "usedByCount": "{count, plural, one {used by # thing} other {used by # things}}",
+        "deleteTitle": "{count, plural, one {Delete “{name}”?} other {Delete # items?}}",
+        "deleteConfirm": "{count, plural, one {Delete} other {Delete #}}",
+        "deleteFolders": "Folders are deleted with everything inside them.",
+        "deleteInUse": "In use by {pages, plural, one {# page} other {# pages}}{others, plural, =0 {} one { and # other template or record set} other { and # other templates or record sets}}. They keep their content but may break on the next build.",
+        "deleteRestore": "Deleted templates can be restored from the history.",
+        "deleted": "{count, plural, one {Deleted “{name}”} other {Deleted # items}} (prototype — nothing was deleted)."
       }
     },
     "forms": {

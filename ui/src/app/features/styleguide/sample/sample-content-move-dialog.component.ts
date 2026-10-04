@@ -6,7 +6,7 @@ import { SfButtonComponent } from '../../../shared/components/sf-button.componen
 import { SfTreeComponent } from '../../../shared/components/sf-tree.component';
 import { SfTreeLoader, SfTreeNode } from '../../../shared/components/tree/tree-model';
 import { injectSampleText } from './changes/sample-area.util';
-import { SampleContentEntry, contentChildren } from './sample-content-data';
+import { SampleContentEntry, SampleTemplateEntry, contentChildren, templateChildren } from './sample-content-data';
 
 /** The id of the top level in the folder picker. */
 export const CONTENT_ROOT = '__root__';
@@ -29,6 +29,8 @@ export interface SampleContentMoveData {
   readonly blocked?: readonly string[];
   /** `records`: the other record sets of the same dataset. */
   readonly sets?: readonly SampleMoveSet[];
+  /** `templates` (gate round 13): the folders are the Templates tree's, and the top level is named "Templates". */
+  readonly area?: 'content' | 'templates';
 }
 
 /**
@@ -59,8 +61,10 @@ export class SampleContentMoveDialogComponent {
     const blocked = new Set(this.data.blocked ?? []);
     const reason = (id: string): string | null =>
       id === this.data.current ? this.t('current') : blocked.has(id) ? this.t('blocked') : null;
-    const folders = (parent: string | null) => contentChildren(parent).filter((entry) => entry.kind === 'folder');
-    const toNode = (entry: SampleContentEntry): SfTreeNode<SampleContentEntry> => ({
+    const templates = this.data.area === 'templates';
+    const folders = (parent: string | null): readonly (SampleContentEntry | SampleTemplateEntry)[] =>
+      (templates ? templateChildren(parent) : contentChildren(parent)).filter((entry) => entry.kind === 'folder');
+    const toNode = (entry: SampleContentEntry | SampleTemplateEntry): SfTreeNode<SampleContentEntry> => ({
       id: entry.id,
       label: entry.name,
       icon: 'folder',
@@ -68,12 +72,12 @@ export class SampleContentMoveDialogComponent {
       hasChildren: folders(entry.id).length > 0,
       draggable: false,
       droppable: false,
-      data: entry,
+      data: entry as SampleContentEntry,
     });
     return (parent) =>
       parent === null
         ? [
-            { id: CONTENT_ROOT, label: this.t('topLevel'), icon: 'home', secondary: reason(CONTENT_ROOT), draggable: false, droppable: false },
+            { id: CONTENT_ROOT, label: this.t(templates ? 'topLevelTemplates' : 'topLevel'), icon: 'home', secondary: reason(CONTENT_ROOT), draggable: false, droppable: false },
             ...folders(null).map(toNode),
           ]
         : folders(parent.id).map(toNode);

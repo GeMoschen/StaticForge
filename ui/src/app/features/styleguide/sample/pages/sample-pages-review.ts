@@ -8,6 +8,13 @@ import { SampleState } from '../sample-state';
 export type FolderReviewState = 'normal' | 'loading' | 'error' | 'empty';
 export const FOLDER_REVIEW_STATES: readonly FolderReviewState[] = ['normal', 'loading', 'error', 'empty'];
 
+/**
+ * The template view's review states (`tstate`, gate round 13): `loading` (skeleton), `error` (could not be read, Retry),
+ * `discard` (Save asks first because the change drops translations), `saveerror` (the last save was refused with compile errors).
+ */
+export type TemplateReviewState = 'normal' | 'loading' | 'error' | 'discard' | 'saveerror';
+export const TEMPLATE_REVIEW_STATES: readonly TemplateReviewState[] = ['normal', 'loading', 'error', 'discard', 'saveerror'];
+
 /** The Issues drawer's check status (`istatus=checking|unavailable`); `published` adds the note that the preview shows the published page. */
 export type IssuesReviewStatus = 'checked' | 'checking' | 'unavailable';
 
@@ -31,6 +38,8 @@ export class SamplePagesReview {
 
   /** The folder table's state. */
   readonly folder = signal<FolderReviewState>(oneOf(this.params.get('fstate'), FOLDER_REVIEW_STATES) ?? 'normal');
+  /** The template view's state (`tstate`). */
+  readonly template = signal<TemplateReviewState>(oneOf(this.params.get('tstate'), TEMPLATE_REVIEW_STATES) ?? 'normal');
   /** An archived project: the whole area is read-only (`access=archived`). Time travel is read-only too. */
   readonly archived = signal(this.params.get('access') === 'archived');
   /** Time travel or an archived project. */

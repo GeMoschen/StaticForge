@@ -87,3 +87,12 @@
   font-family: var(--sf-font-mono);
   font-size: var(--sf-fs-12);
 }
+
+// The UID beside a template's name in the Templates folder table (developer mode).
+.cell-uid {
+  overflow: hidden;
+  color: var(--sf-text-subtle);
+  font-family: var(--sf-font-mono);
+  font-size: var(--sf-fs-12);
+  text-overflow: ellipsis;
+}

@@ -1,0 +1,89 @@
+<sf-page-header class="view__header" [title]="title()" [secondaryActions]="moreActions()" (secondaryAction)="secondary($event)">
+  <sf-sample-breadcrumb
+    sfPageHeaderBreadcrumb
+    [crumbs]="state.breadcrumb()"
+    [label]="'styleguide.sample.breadcrumb' | transloco"
+    (navigate)="state.navigate($event)"
+  />
+  <ng-container sfPageHeaderActions>
+    <sf-menu
+      variant="primary"
+      icon="add"
+      [text]="'styleguide.sample.tree.new' | transloco"
+      [label]="'styleguide.sample.templates.newLabel' | transloco"
+      [items]="newItems()"
+    />
+  </ng-container>
+</sf-page-header>
+
+<sf-data-table
+  class="view__table"
+  selectable
+  searchable
+  [columns]="columns()"
+  [rows]="rows()"
+  [rowKey]="rowKey"
+  [rowLabel]="rowLabel"
+  [filters]="filters()"
+  [label]="'styleguide.sample.folder.table' | transloco: { name: title() }"
+  [searchPlaceholder]="'styleguide.sample.folder.search' | transloco"
+  [bulkActions]="bulkActions()"
+  [loading]="loading()"
+  [error]="failed() ? ('styleguide.sample.folder.loadFailed' | transloco) : null"
+  [emptyTitle]="'styleguide.sample.folder.empty' | transloco"
+  [emptyDescription]="'styleguide.sample.templateFolder.emptyHint' | transloco"
+  (rowOpen)="open($event)"
+  (retry)="review.folder.set('normal')"
+>
+  <ng-template sfDataTableCell="name" [sfDataTableCellRows]="rows()" let-row>
+    <span class="cell-name">
+      <sf-icon class="cell-name__icon" [class.is-folder]="row.kind === 'folder'" [name]="icons[row.kind]" />
+      <span class="cell-name__text">{{ row.name }}</span>
+      @if (state.devMode() && row.kind !== 'folder') {
+        <code class="cell-uid">{{ row.uid }}</code>
+      }
+      @if (meta(row).channels.length === 0 && row.kind !== 'folder') {
+        <sf-badge tone="warning" [label]="'styleguide.sample.templateFolder.noChannel' | transloco" />
+      }
+    </span>
+  </ng-template>
+  <ng-template sfDataTableCell="kind" [sfDataTableCellRows]="rows()" let-row>
+    <span class="cell-muted">{{ kindLabel(row.kind) }}</span>
+  </ng-template>
+  <ng-template sfDataTableCell="channels" [sfDataTableCellRows]="rows()" let-row>
+    @if (row.kind === 'folder') {
+      <span class="cell-muted">—</span>
+    } @else {
+      <span class="cell-status">
+        @for (channel of meta(row).channels; track channel) {
+          <sf-badge [label]="channel" />
+        }
+      </span>
+    }
+  </ng-template>
+  <ng-template sfDataTableCell="usedBy" [sfDataTableCellRows]="rows()" let-row>
+    @if (row.kind === 'folder') {
+      <span class="cell-muted">—</span>
+    } @else if (usage(row) === 0) {
+      <span class="cell-muted">0</span>
+    } @else {
+      <sf-button
+        variant="ghost"
+        size="sm"
+        [aria-label]="'styleguide.sample.templateFolder.showUsedBy' | transloco: { name: row.name, count: usage(row) }"
+        (click)="showUsedBy(row, $event)"
+        >{{ usage(row) }}</sf-button
+      >
+    }
+  </ng-template>
+  <ng-template sfDataTableCell="modified" [sfDataTableCellRows]="rows()" let-row>
+    @if (row.kind === 'folder') {
+      <span class="cell-muted">—</span>
+    } @else {
+      <span class="cell-modified">
+        <sf-avatar size="sm" [name]="meta(row).modifiedBy.name" [sfTooltip]="meta(row).modifiedBy.name" [sfTooltipDescribes]="false" />
+        <sf-relative-time [value]="minutesAgo(meta(row).modifiedMinutes)" />
+      </span>
+    }
+  </ng-template>
+</sf-data-table>

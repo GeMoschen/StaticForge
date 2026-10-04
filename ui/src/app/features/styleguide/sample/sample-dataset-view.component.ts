@@ -14,7 +14,7 @@ import { SfButtonComponent } from '../../../shared/components/sf-button.componen
 import { SfIconComponent } from '../../../shared/components/sf-icon.component';
 import { SfTab, SfTabsComponent, panelIdOf, tabIdOf } from '../../../shared/components/sf-tabs.component';
 import { SampleBreadcrumbComponent } from './sample-breadcrumb.component';
-import { SampleContentEntry, SampleDataset, SampleDatasetField, cdlOf, contentPath, datasetById, recordSets } from './sample-content-data';
+import { SampleContentEntry, SampleDataset, SampleDatasetField, cdlOf, contentPath, datasetById, recordSets, templateEntry } from './sample-content-data';
 import { SAMPLE_DATASET_TABS, SampleDatasetTab, SampleState } from './sample-state';
 
 const TABS_ID = 'sample-dataset';
@@ -141,6 +141,27 @@ export class SampleDatasetViewComponent {
     { id: 'usedBy', label: this.state.t('content.usedBy'), icon: 'link' },
     { id: 'delete', label: this.state.t('editor.delete'), icon: 'delete', danger: true, separatorBefore: true },
   ]);
+
+  /** The ⋮ menu: the same Rename, Duplicate, Used by and Delete as the tree and the folder table (gate round 13). */
+  protected secondary(item: SfMenuItem): void {
+    const entry = templateEntry(this.state.templateId());
+    if (!entry) {
+      return;
+    }
+    switch (item.id) {
+      case 'rename':
+        void this.state.renameTemplate(entry);
+        break;
+      case 'duplicate':
+        this.state.duplicateTemplate(entry);
+        break;
+      case 'usedBy':
+        this.state.templateUsedBy.set(entry.id);
+        break;
+      default:
+        void this.state.deleteTemplates([entry]);
+    }
+  }
 
   protected selectTab(id: string): void {
     this.state.datasetTab.set(id as SampleDatasetTab);

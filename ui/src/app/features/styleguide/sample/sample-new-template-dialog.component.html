@@ -1,0 +1,23 @@
+<sf-dialog size="md" [title]="t('title')">
+  <p class="new-template__where">{{ t('where', { folder: data.folder }) }}</p>
+  <form (submit)="$event.preventDefault(); create()">
+    <sf-field [label]="t('kind.label')" required [hint]="t('kind.hint')">
+      <sf-radio-group [aria-label]="t('kind.label')" [options]="kinds()" [value]="kind()" (valueChange)="chooseKind($event)" />
+    </sf-field>
+    <sf-field [label]="t('name.label')" required [error]="nameError()">
+      <sf-input autocomplete="off" [value]="name()" (valueChange)="setName($event)" />
+    </sf-field>
+    <sf-field [label]="t('uid.label')" required [hint]="t('uid.hint')" [error]="uidError()">
+      <sf-input monospace autocomplete="off" [value]="uid()" (valueChange)="setUid($event)" />
+    </sf-field>
+    @if (kind() === 'page' || kind() === 'section') {
+      <sf-field [label]="t('parent.label')" [hint]="t('parent.hint')">
+        <sf-select [options]="parentOptions()" [value]="parent()" (valueChange)="parent.set($event ?? '__none__')" />
+      </sf-field>
+    }
+  </form>
+  <ng-container sfDialogFooter>
+    <sf-button variant="ghost" (click)="cancel()">{{ t('cancel') }}</sf-button>
+    <sf-button [disabled]="!valid()" [disabledReason]="blockedReason()" (click)="create()">{{ t('create.label') }}</sf-button>
+  </ng-container>
+</sf-dialog>
