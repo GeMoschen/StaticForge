@@ -110,3 +110,32 @@ Phase B (IDE header, Settings section, splitter / tabs below 1280 px, diagnostic
   7. The fixed folders (Page templates, Section templates, Datasets) are listed in that order (the tree uses `sort="none"`: folders first, then templates, each by name) and cannot be renamed, moved or deleted; page templates, section templates and datasets cannot be moved into each other's folders (drag and drop, *Move to…*, the table's *Move…*).
 - **Specs:** `templates.component.spec` (editor behaviour under the area, URL as the selection, the guard on a switch: Cancel / Discard / Save), `templates-undo.spec`, new `templates-area.component.spec` (URL selection, tree menu, New dialog flow, rename, Used by, delete),
   `templates-folder-view.component.spec`, `new-template-dialog.component.spec`, `templates-item-actions.service.spec`, `templates-tree.util.spec`, plus additions to `sf-tree`, `record-side-panel`, `asset-route.util` and `opened-asset` specs.
+
+## Notes (M35.21 C)
+
+Phase C (the dataset editor redone on the sample's tabs, gate decision 167) is built. The old `dataset-schema-editor` and `dataset-record-templates` components are removed (nothing referenced them any more);
+`DatasetTemplatesStore` and `record-template.util` stay in `features/content` and are reused unchanged (one small addition: `selectTab(channel, reopened)`).
+
+- **Built (`features/templates/`):** `dataset-editor.component` (selector `sf-dataset-editor`, inputs `projectKey` / `uuid`, outputs `changed` / `deleted` as before), `dataset-overview.component`
+  (the Overview tab), `dataset-fields.util` (fields table rows from the compiled definition + rule counts). `sf-code-panel` got public `goTo(line, column)`, `insert(snippet, caret)` and `focus()`.
+  `template-editor.component` only had its import and tag swapped (`sf-dataset-editor`); `templates-undo.spec` imports `DeletedDataset` from the new file.
+- **Page:** `sf-page-header` (name, *Dataset* badge, `sf-save-status`, *Save dataset* enabled only when dirty, ⋮ with *Rename…* / *Duplicate* / *Used by* / *Delete*), a UID line (copyable) and `sf-tabs`:
+  *Overview* (fields table, description + title field + loop snippet, *Used by* list + record count linking to Content), *Schema* and *Rules* (CDL `sf-code-panel`s: editable, Format, Validate, diagnostics list with jump,
+  live validation 400 ms, server diagnostics by `field` on the failing tab), one tab per channel (OCTL `sf-code-panel`, field / record click-to-insert chips, live check, disabled / empty notes, caret on the first error after a rejected save).
+  Tab strip shows error counts, unsaved dots and *disabled*; the panels are kept alive while hidden (undo history, caret).
+- **Behaviour kept:** one save request (schema + description + title editor + every record template, ETag), brokenRecordSets list, 409 reload, delete only without records (+ Undo through `ContentService.restoreDataset` in `template-editor`), time travel / non-developer read-only.
+- **Deviations:**
+  1. **Display name** is no longer a form field; *Rename…* opens the Content rename dialog (name, UID with Change UID, Undo) and applies at once, not with the schema Save; the editor keeps unsaved edits and only patches name / revision.
+     The inline `sf-uid-rename` is gone (Change UID lives in that dialog).
+  2. **Unsaved guard:** the old dataset editor registered nothing with `ActiveEditorService` (the area's coordinator registered the template state, which is never dirty for a dataset, so a dataset had no guard). The new editor registers its own state
+     (dirty, saving, last saved, refused-save error, Save, Discard = reload), so Ctrl+S, the leave guard and tab close now work for datasets; its own Ctrl+S keydown handler is dropped (the global shortcut covers it).
+  3. **Delete** uses `TemplatesItemActions.confirmDelete` (names what uses it, Undo wording) instead of the old inline confirm; it stays disabled in the menu (with a reason) while the dataset has records.
+  4. **Fields table** shows the *saved* schema (the server-compiled definition), not the CDL as typed; the rules count is the number of `rule … on <field>`, `state <field>` and `fill <field>` entries in the saved Rules source (a text scan; built-in modifiers are not counted).
+  5. **Add / remove channel:** as in the old editor there is no add / remove control: every enabled channel of the project has a tab (plus disabled ones holding a template); an emptied template is dropped on save.
+  6. The page header has no breadcrumb (the frame's breadcrumb already ends with the dataset); the sample's header breadcrumb is not repeated.
+  7. Re-opening a channel tab after Schema / Rules re-checks its template (the old UI could not leave the template for the schema without switching channel).
+- **Specs:** `dataset-editor.component.spec` (the old spec ported: tabs, dirty tracking, one-request save, rejected save + caret, schema errors on the failing tab, broken record sets, helpers, live checks, editor / time-travel read-only, delete + decline; new: overview table, Used by, description / title field, ActiveEditorService, ⋮ menu: Used by / Duplicate / disabled states), `dataset-fields.util.spec`.
+- **Open for the other agent:** `template-ide` replaces `template-editor` for page / section templates; whichever hosts the router outlet child must keep the `store.datasetSelected()` branch rendering `<sf-dataset-editor [projectKey] [uuid] (changed) (deleted)>` with `onDatasetChanged` / `onDatasetDeleted` (Undo + navigation) as `template-editor` has them.
+
+- **Based on (decided 2026-10-04):** copies the chosen item's contents (CDL, channel templates, record templates, settings) into the new template or dataset; no parent field and no generated extends line.
+  Implemented in `TemplatesItemActions.create(basedOn)` sharing the copy code with *Duplicate*; the dialog lists the existing items of the chosen kind.

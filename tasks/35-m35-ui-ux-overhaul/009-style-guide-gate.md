@@ -657,7 +657,7 @@ Review links (they combine with the usual `dev`, `theme`, `density`; read once, 
     record sets that use it, each with a type badge and where; "Not used yet" when empty. From the template header's ⋮, the tree's menu and the table's count.
 155. **New template dialog:** the **kind is chosen explicitly** — Page template / Section template / Dataset as a radio group with a line each — and never inferred from the tree selection.
     From a *New ▸ kind* entry the kind is what the person picked; from the header's *New* button nothing is chosen and **Create** says "Choose a kind first." Fields: **Name**, **UID**
-    (derived from the name until edited), and for page and section templates an optional **Based on** (a template of the same kind). A note: "The kind can’t be changed after it is
+    (derived from the name until edited), and for page and section templates an optional **Based on** (an existing item of the same kind; **decided 2026-10-04: it copies that item's contents** — fields, rules, channel templates — into the new one, no backend field, the two stay independent). A note: "The kind can’t be changed after it is
     created." Where it is created is stated ("Created in Page templates."). A folder is made inline in the tree.
 156. **Delete (template, dataset, folder; one or many):** a confirmation that **names what uses them** ("In use by 3 pages. They keep their content but may break on the next build."),
     says a folder goes with everything inside, lists the items with "used by N things", then a toast with **Undo**. From the header ⋮, the tree (menu, `Del`, inline) and the table.
