@@ -115,6 +115,7 @@ every screen. Screen migration starts only after the style guide (M35.9) is sign
 - [ ] M35.21 templates IDE (built; Chrome check and Java compile pending)
   - Sample extended (gate round 13, decisions 153-167, screenshots in `35-m35-ui-ux-overhaul/round13-shots/`); signed off 2026-10-04; building the app.
 - [ ] M35.22 navigation and globals
+  - Built (navigation + sibling-order backend, globals); 336 test files / 3,680 tests, build + lint + backend tests green. **Open:** nine sample deviations await approval (see `35-m35-ui-ux-overhaul/022-navigation-globals.md`); no Chrome check; e2e m8 journeys need the new UI (M35.31).
 - [ ] M35.23 changes, schedules, release dialogs
 - [ ] M35.24 publishing, quality, redirects, URL registry
 - [ ] M35.25 settings sub-pages, members, import/export

@@ -1,6 +1,6 @@
 ---
 id: M35.22
-status: todo
+status: review
 depends: [M35.11, M35.12, M35.13, M35.14, M35.15, M35.17]
 epic: m35-ui-ux-overhaul
 feature: screens
@@ -66,3 +66,30 @@ for their review and sign-off; record the decisions in `009-style-guide-gate.md`
   not store-bound: the node lists them from every store.
 - Put the open item in the URL (`?asset=` / `?folder=`, or the route's UUID) so it is recorded as a recent.
 
+
+## Notes (M35.22 — built 2026-10-04)
+
+Built: Navigation (`sf-splitter` + `sf-tree` in menu order, folder view table, menu item detail with picker card,
+Favorites node, URL selection `?asset=`, leave guard) and Globals (tree with filter, `sf-page-header` + save status,
+M35.17 form, developer-only Schema tab and usage chips, leave guard). Vitest 336 files / 3,680 tests, `ng build` and
+lint green; backend sibling-order tests green.
+
+**Backend (sibling order):** a navigation folder's payload holds `childOrder` (child uuids); the tree returns children
+named there first, then the rest alphabetically. `PUT /api/v1/projects/{key}/navigation/folders/{uuid}/order`
+(`{childUuids}`, editor role, `If-Match`, 422 for non-children/duplicates); one reorder = one revision, so Undo writes the
+previous list back. `NavTreeView` gains `resolvedPageName`.
+
+**Deviations from the sample — need approval (sample-first rule):**
+1. Navigation: no "Visible in menu" column/switch (no such backend field).
+2. "Change target…" uses the shared `sf-asset-picker-dialog` (pages only), not the sample's own picker dialog.
+3. Menu item detail saves explicitly (Save/Ctrl+S, target change is a draft); sample applies at once; no "Duplicate".
+4. Tree rename (F2) on an item writes its label for the editing language.
+5. A reference to a Pages folder shows "Leads to the first page of a folder".
+6. Globals: Schema tab keeps `sf-cdl-sections-editor` (Content + Rules) instead of one code panel.
+7. Globals: usage chips are one header chip plus a "Use in templates" list (the M35.17 form has no per-field slot).
+8. Globals: a folder shows a name header and "select a global set" state (sample has no folder pane).
+9. Globals: create/rename/move/delete need `canEditTemplates` (developer, not time travel); the old screen only checked read-only.
+
+**Open:** the navigation-level entry page (wrapper's `startNode`) has no entry point any more; item breadcrumb has no
+folder trail; deleting the open dirty global set from the tree can still show the leave dialog; `e2e/m8-journeys.spec.ts`
+uses the old controls (M35.31); no browser check yet.

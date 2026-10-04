@@ -5,7 +5,7 @@ import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { TranslocoPipe } from '@jsverse/transloco';
 import { fireEvent, render, screen, waitFor } from '@testing-library/angular';
-import { of, throwError } from 'rxjs';
+import { Observable, of } from 'rxjs';
 import { describe, expect, it, vi } from 'vitest';
 // Through the barrel: the forms module is an import cycle that only evaluates when entered there.
 import { SfContentFormComponent } from '../forms';
@@ -52,6 +52,14 @@ const SET = {
   content: { title: 'Acme Outdoor', hours: [] },
   revision: 4,
 } as unknown as GlobalSetDetailView;
+
+/** A failing request that fails on a later tick, like a real HTTP error (a synchronous failure trips zone.js's unhandled-rejection check before `await` attaches). */
+function failing(error: HttpErrorResponse) {
+  return new Observable<never>((subscriber) => {
+    const id = setTimeout(() => subscriber.error(error));
+    return () => clearTimeout(id);
+  });
+}
 
 function globalsStub(overrides: Record<string, unknown> = {}) {
   return {
@@ -311,7 +319,7 @@ describe('GlobalSetDetailComponent', () => {
   /** A 409 means someone else wrote a newer version: reload rather than retry over their edit. */
   it('reloads the set after a 409 instead of retrying the save', async () => {
     const globals = globalsStub({
-      updateContent: vi.fn().mockReturnValue(throwError(() => new HttpErrorResponse({ status: 409, error: {} }))),
+      updateContent: vi.fn().mockReturnValue(failing(new HttpErrorResponse({ status: 409, error: {} }))),
     });
     await setup(globals, { role: 'EDITOR' });
 
@@ -325,9 +333,8 @@ describe('GlobalSetDetailComponent', () => {
   it('shows field-level messages and a Not saved status when a save is rejected with 422 issues', async () => {
     const globals = globalsStub({
       updateContent: vi.fn().mockReturnValue(
-        throwError(
-          () =>
-            new HttpErrorResponse({
+        failing(
+          new HttpErrorResponse({
               status: 422,
               error: { issues: [{ path: 'title', code: 'type', message: 'Content must be an object.', severity: 'ERROR' }] },
             }),
@@ -347,9 +354,8 @@ describe('GlobalSetDetailComponent', () => {
   it('shows CDL diagnostics on the failing tab when a schema save is rejected', async () => {
     const globals = globalsStub({
       updateSchema: vi.fn().mockReturnValue(
-        throwError(
-          () =>
-            new HttpErrorResponse({
+        failing(
+          new HttpErrorResponse({
               status: 422,
               error: {
                 diagnostics: [
