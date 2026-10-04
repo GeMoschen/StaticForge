@@ -112,7 +112,7 @@ every screen. Screen migration starts only after the style guide (M35.9) is sign
     release flow and the new pages tree/account menu (M35.31), text-media tabs sit in "More" at the default drawer width.
 - [ ] M35.20 content: record sets and records
   - Built (shell/tree/folder view, record set view + grid + filter builder, record editor); 318 test files / 3,331 tests, build + lint green. **Open:** the New record set dialog awaits sign-off in the sample (gate round 10); no Chrome check yet; journey m25 needs the new UI (M35.31).
-- [ ] M35.21 templates IDE
+- [ ] M35.21 templates IDE (built; Chrome check and Java compile pending)
   - Sample extended (gate round 13, decisions 153-167, screenshots in `35-m35-ui-ux-overhaul/round13-shots/`); signed off 2026-10-04; building the app.
 - [ ] M35.22 navigation and globals
 - [ ] M35.23 changes, schedules, release dialogs
