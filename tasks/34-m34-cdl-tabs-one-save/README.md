@@ -14,7 +14,10 @@ too; and one Save writes everything as one revision.
 
 1. **Separate stored fields.** The payload and the API carry `contentCdl`, `bodiesCdl` and `rulesCdl` instead of
    `contentDefinition`; each holds the text *inside* its section's braces (the server adds keyword and braces).
-2. **No migration.** There is no real data yet; `contentDefinition` is removed, not kept or converted.
+2. **No migration of stored data.** There is no real data yet; `contentDefinition` is removed, not kept or converted.
+   **Amended 2026-10-04:** an *import* of an archive written before M34 now splits the old `contentDefinition` text into the three
+   sections (`LegacyCdlMigration`, silently, for current and release payloads of templates, datasets and global sets). M34 did
+   not raise the archive protocol, so an old payload is recognised by its fields (`contentDefinition` and no `contentCdl` / `bodiesCdl` / `rulesCdl`).
 3. **Scope.** Page templates: Content | Bodies | Rules. Section templates: Content | Rules. Datasets and global sets:
    Content | Rules too.
 4. **Layout.** Two panels side by side — CDL tabs left, OCTL tabs (one per channel) right — stacking on narrow panes.

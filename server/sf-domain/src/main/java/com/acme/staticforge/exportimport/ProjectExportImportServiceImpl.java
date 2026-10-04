@@ -2132,6 +2132,8 @@ public class ProjectExportImportServiceImpl implements ProjectExportImportServic
         if (manifest == null) {
             throw new SfException(ProblemFactory.badRequest("Export archive is missing a manifest document."));
         }
+        // An archive written before M34 keeps a template's, dataset's or global set's CDL as one text (LegacyCdlMigration).
+        assets.replaceAll(LegacyCdlMigration::migrate);
         assets.sort(Comparator.comparing(ExportedAsset::uuid));
         schedules.sort(Comparator.comparing(ExportedSchedule::uuid));
         // Redirects arrived with protocol 10 (M30.4.1); an older archive has none by definition.
