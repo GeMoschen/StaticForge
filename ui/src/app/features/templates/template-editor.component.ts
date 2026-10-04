@@ -1,49 +1,34 @@
 import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
 import { Router } from '@angular/router';
-import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
+import { TranslocoService } from '@jsverse/transloco';
 import { tap } from 'rxjs';
 import { UndoService } from '../../core/ui/undo.service';
-import { SfButtonComponent } from '../../shared/components/sf-button.component';
-import { SfSpinnerComponent } from '../../shared/components/sf-spinner.component';
 import { findFolderByPath } from '../../shared/folder-tree.util';
 import { ContentService } from '../content/content.service';
-import { DatasetSchemaEditorComponent, type DeletedDataset } from '../content/dataset-schema-editor.component';
-import { SfAssetImpactComponent } from '../generation/insight/sf-asset-impact.component';
-import { TemplateCdlPanelComponent } from './templates-cdl-panel.component';
-import { TemplateChannelPanelComponent } from './templates-channel-panel.component';
+import { TemplateIdeComponent } from './template-ide.component';
+import { DatasetEditorComponent, type DeletedDataset } from './dataset-editor.component';
 import { TemplatesLoader } from './templates-loader';
-import { TemplateMetaHeaderComponent } from './templates-meta-header.component';
-import { TemplateSaveOutcomesComponent } from './templates-save-outcomes.component';
-import { TemplatesSaveCoordinator } from './templates-save.coordinator';
 import { TemplatesStore } from './templates.store';
 
 /**
- * The open template or dataset (the child route `/templates/:uuid` of the Templates area, M35.21): the metadata header,
- * the save outcomes, the CDL panel and the channel panel for a page or section template, or the dataset editor. All of
+ * The open template or dataset (the child route `/templates/:uuid` of the Templates area, M35.21): the template IDE
+ * (`TemplateIdeComponent`: header, banners, Settings, CDL and channels) for a page or section template, or the dataset editor. All of
  * its state lives in the area's `TemplatesStore` (provided by `TemplatesComponent`, which follows the URL and loads the
- * template); this component only lays the parts out. Phase B of M35.21 restyles it into the IDE header and splitter.
+ * template); this component only picks which of the two to show.
  */
 @Component({
   selector: 'sf-template-editor',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
-    SfButtonComponent,
-    SfSpinnerComponent,
-    SfAssetImpactComponent,
-    DatasetSchemaEditorComponent,
-    TemplateMetaHeaderComponent,
-    TemplateSaveOutcomesComponent,
-    TemplateCdlPanelComponent,
-    TemplateChannelPanelComponent,
-    TranslocoPipe,
+    DatasetEditorComponent,
+    TemplateIdeComponent,
   ],
   templateUrl: './template-editor.component.html',
-  styleUrls: ['./template-editor.component.scss', './templates-panel.scss', './templates-editors.scss'],
+  styleUrl: './template-editor.component.scss',
 })
 export class TemplateEditorComponent {
   protected readonly store = inject(TemplatesStore);
-  protected readonly save = inject(TemplatesSaveCoordinator);
   private readonly loader = inject(TemplatesLoader);
   private readonly content = inject(ContentService);
   private readonly undo = inject(UndoService);

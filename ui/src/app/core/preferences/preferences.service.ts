@@ -8,6 +8,8 @@ import {
   removeLegacyKeys,
 } from './preferences-migration';
 import {
+  CodePalettePreference,
+  DEFAULT_CODE_PALETTE,
   DEFAULT_DENSITY,
   DEFAULT_MEDIA_VIEW,
   DEFAULT_PREVIEW_VIEW,
@@ -87,6 +89,7 @@ export class PreferencesService {
   // Typed instance-wide accessors.
   readonly theme = computed<ThemePreference>(() => this.document().theme ?? DEFAULT_THEME);
   readonly density = computed<DensityPreference>(() => this.document().density ?? DEFAULT_DENSITY);
+  readonly codePalette = computed<CodePalettePreference>(() => this.document().codePalette ?? DEFAULT_CODE_PALETTE);
   /** The stored developer-mode choice; `undefined` until the user makes one (the frame then defaults it on for developers). */
   readonly developerMode = computed<boolean | undefined>(() => this.document().developerMode);
   readonly railCollapsed = computed(() => this.document().railCollapsed ?? false);
@@ -102,6 +105,9 @@ export class PreferencesService {
   }
   setDensity(value: DensityPreference): void {
     this.set(['density'], value);
+  }
+  setCodePalette(value: CodePalettePreference): void {
+    this.set(['codePalette'], value);
   }
   setDeveloperMode(value: boolean): void {
     this.set(['developerMode'], value);

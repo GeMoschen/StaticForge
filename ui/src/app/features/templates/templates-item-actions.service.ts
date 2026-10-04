@@ -33,6 +33,8 @@ export interface NewTemplateRequest {
   readonly uid: string;
   /** The folder it is created in (never the top level). */
   readonly parentFolderUuid?: string;
+  /** *Based on*: the template or dataset whose contents (fields, rules, channel templates) the new one starts with (a copy; the two stay independent). */
+  readonly basedOn?: TemplateEntry;
 }
 
 export interface CreatedTemplate {
@@ -229,21 +231,22 @@ export class TemplatesItemActions {
   /** Creates a page template, section template or dataset; a UID the person edited is applied after creating (the create calls derive their own). */
   async create(projectKey: string, request: NewTemplateRequest): Promise<CreatedTemplate> {
     let created: { uuid?: string; uid?: string };
+    const source = request.basedOn;
     if (request.kind === 'dataset') {
+      const copy = source ? await this.datasetCopy(projectKey, source) : null;
       created = await firstValueFrom(
         this.content.createDataset(projectKey, {
+          ...(copy ?? { contentCdl: NEW_DATASET_CONTENT, titleEditor: 'name' }),
           displayName: request.name,
-          contentCdl: NEW_DATASET_CONTENT,
-          titleEditor: 'name',
           parentFolderUuid: request.parentFolderUuid,
         }),
       );
     } else {
+      const copy = source ? await this.templateCopy(projectKey, source) : null;
       created = await firstValueFrom(
         this.templates.create(request.kind, projectKey, {
+          ...(copy ?? { ...cdlFields(EMPTY_SECTIONS), channelSources: {} }),
           displayName: request.name,
-          ...cdlFields(EMPTY_SECTIONS),
-          channelSources: {},
           parentFolderUuid: request.parentFolderUuid,
         }),
       );
@@ -271,35 +274,13 @@ export class TemplatesItemActions {
       const displayName = this.t('duplicate.name', { name: entry.name });
       let copyUuid: string | undefined;
       if (entry.kind === 'dataset') {
-        const original = await firstValueFrom(this.content.getDataset(projectKey, entry.uuid));
         const copy = await firstValueFrom(
-          this.content.createDataset(projectKey, {
-            displayName,
-            contentCdl: original.contentCdl,
-            rulesCdl: original.rulesCdl,
-            titleEditor: original.titleEditor,
-            description: original.description,
-            channelTemplates: recordTemplatesOf(original.channelTemplates),
-            parentFolderUuid,
-          }),
+          this.content.createDataset(projectKey, { ...(await this.datasetCopy(projectKey, entry)), displayName, parentFolderUuid }),
         );
         copyUuid = copy.uuid;
       } else {
-        const original = await firstValueFrom(this.templates.get(kindOf(entry), projectKey, entry.uuid));
         const copy = await firstValueFrom(
-          this.templates.create(kindOf(entry), projectKey, {
-            displayName,
-            contentCdl: original.contentCdl,
-            bodiesCdl: original.bodiesCdl,
-            rulesCdl: original.rulesCdl,
-            channelSources: channelSourcesOf(original.channelTemplates),
-            category: original.category,
-            deprecated: original.deprecated,
-            outputPath: stringMap(original.outputPath),
-            paginationPath: stringMap(original.paginationPath),
-            abstract: original.abstract,
-            parentFolderUuid,
-          }),
+          this.templates.create(kindOf(entry), projectKey, { ...(await this.templateCopy(projectKey, entry)), displayName, parentFolderUuid }),
         );
         copyUuid = copy.uuid;
       }
@@ -315,6 +296,33 @@ export class TemplatesItemActions {
       this.toasts.show(this.t('duplicate.failed', { name: entry.name }), 'error');
       return null;
     }
+  }
+  /** A dataset's contents as a create request carries them (without name and folder). */
+  private async datasetCopy(projectKey: string, entry: TemplateEntry) {
+    const original = await firstValueFrom(this.content.getDataset(projectKey, entry.uuid));
+    return {
+      contentCdl: original.contentCdl,
+      rulesCdl: original.rulesCdl,
+      titleEditor: original.titleEditor,
+      description: original.description,
+      channelTemplates: recordTemplatesOf(original.channelTemplates),
+    };
+  }
+
+  /** A page or section template's contents as a create request carries them (without name and folder). */
+  private async templateCopy(projectKey: string, entry: TemplateEntry) {
+    const original = await firstValueFrom(this.templates.get(kindOf(entry), projectKey, entry.uuid));
+    return {
+      contentCdl: original.contentCdl,
+      bodiesCdl: original.bodiesCdl,
+      rulesCdl: original.rulesCdl,
+      channelSources: channelSourcesOf(original.channelTemplates),
+      category: original.category,
+      deprecated: original.deprecated,
+      outputPath: stringMap(original.outputPath),
+      paginationPath: stringMap(original.paginationPath),
+      abstract: original.abstract,
+    };
   }
 }
 

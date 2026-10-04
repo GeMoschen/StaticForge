@@ -1,0 +1,152 @@
+@if (store.detail()) {
+  <section class="settings" [attr.aria-labelledby]="settingsId + '-title'">
+    <div class="settings__bar">
+      <h2 class="settings__title" [id]="settingsId + '-title'">
+        <sf-button
+          variant="ghost"
+          size="sm"
+          icon="tune"
+          data-sf-settings-toggle
+          [iconTrailing]="open() ? 'expand_less' : 'expand_more'"
+          [aria-expanded]="open()"
+          [aria-controls]="settingsId"
+          (click)="toggle()"
+          >{{ 'templates.settings.title' | transloco }}</sf-button
+        >
+      </h2>
+      @if (!open() && summary()) {
+        <code class="settings__summary" data-sf-settings-summary>{{ summary() }}</code>
+      }
+    </div>
+
+    <div class="settings__body" [id]="settingsId" [hidden]="!open()">
+      <sf-field [label]="'templates.settings.displayName' | transloco">
+        <sf-input [value]="store.displayName()" [disabled]="store.readOnly()" (valueChange)="setDisplayName($event)" />
+      </sf-field>
+      <sf-field [label]="'templates.settings.category' | transloco" [hint]="'templates.settings.categoryHint' | transloco">
+        <sf-input [value]="store.category()" [disabled]="store.readOnly()" (valueChange)="setCategory($event)" />
+      </sf-field>
+
+      @if (store.isSection()) {
+        <sf-field [label]="'templates.settings.deprecated' | transloco" [hint]="'templates.settings.deprecatedHint' | transloco">
+          <sf-switch [value]="store.deprecated()" [disabled]="store.readOnly()" (valueChange)="setDeprecated($event)">{{
+            'templates.settings.deprecatedSwitch' | transloco
+          }}</sf-switch>
+        </sf-field>
+      } @else {
+        <sf-field [label]="'templates.settings.abstract' | transloco" [hint]="'templates.settings.abstractHint' | transloco">
+          <sf-switch [value]="store.abstractTemplate()" [disabled]="store.readOnly()" (valueChange)="setAbstract($event)">{{
+            'templates.settings.abstractSwitch' | transloco
+          }}</sf-switch>
+          @if (inUse(); as used) {
+            <span sfFieldError data-sf-abstract-refused>
+              {{ 'templates.settings.abstractBlocked' | transloco: { count: used.pageCount } }}
+              @for (uid of used.pageUids; track uid; let i = $index; let last = $last) {
+                @if (used.pageUuids[i]; as pageUuid) {
+                  <a [routerLink]="['/p', store.projectKey(), 'pages', pageUuid]">{{ uid }}</a>
+                } @else {
+                  <span>{{ uid }}</span>
+                }@if (!last) {<span>, </span>}
+              }
+              @if (used.pageCount > used.pageUids.length) {<span>…</span>}
+            </span>
+          }
+        </sf-field>
+      }
+
+      <div class="settings__channels">
+        <span class="settings__group-title" [id]="settingsId + '-channels'">{{ 'templates.settings.channels' | transloco }}</span>
+        <span class="settings__chips" role="group" [attr.aria-labelledby]="settingsId + '-channels'">
+          @for (key of store.channelKeys(); track key) {
+            <span class="settings__chip" data-sf-channel-chip>
+              <code>{{ key }}</code>
+              <sf-button
+                variant="ghost"
+                size="sm"
+                icon="close"
+                data-sf-channel-remove
+                [disabled]="store.readOnly()"
+                [aria-label]="'templates.settings.removeChannel' | transloco: { channel: key }"
+                (click)="removeChannel(key)"
+              />
+            </span>
+          } @empty {
+            <span class="settings__muted">{{ 'templates.settings.noChannels' | transloco }}</span>
+          }
+          @if (store.availableChannels().length > 0) {
+            <sf-menu
+              variant="secondary"
+              size="sm"
+              icon="add"
+              [text]="'templates.settings.addChannel' | transloco"
+              [label]="'templates.settings.addChannelLabel' | transloco"
+              [items]="addChannelItems()"
+              [disabled]="store.readOnly()"
+            />
+          }
+        </span>
+        @if (store.removedChannels().length > 0) {
+          <p class="settings__removed" role="status">
+            {{ 'templates.settings.removedOnSave' | transloco }}
+            @for (channel of store.removedChannels(); track channel) {
+              <code>{{ channel }}</code>
+              <sf-button variant="ghost" size="sm" [disabled]="store.readOnly()" (click)="restoreChannel(channel)">{{
+                'templates.settings.undo' | transloco
+              }}</sf-button>
+            }
+          </p>
+        }
+      </div>
+
+      @if (!store.isSection() && store.channelKeys().length > 0) {
+        <div class="settings__group">
+          <span class="settings__group-title">{{ 'templates.settings.outputPaths' | transloco }}</span>
+          <p class="settings__muted">{{ 'templates.settings.outputPathHint' | transloco }}</p>
+          <div class="settings__paths">
+            @for (key of store.channelKeys(); track key) {
+              <sf-field
+                [label]="'templates.settings.outputPath' | transloco: { channel: key }"
+                [findings]="outputPathFindings(key)"
+                [attr.data-sf-output-path-warning]="outputPathFindings(key).length > 0 ? key : null"
+              >
+                <sf-input
+                  monospace
+                  [spellcheck]="false"
+                  [value]="outputPathOf(key)"
+                  [disabled]="store.readOnly()"
+                  (valueChange)="setOutputPath(key, $event)"
+                />
+              </sf-field>
+            }
+          </div>
+        </div>
+      }
+
+      @if (store.showPaginationPaths()) {
+        <div class="settings__group">
+          <span class="settings__group-title">{{ 'templates.settings.paginationPaths' | transloco }}</span>
+          <p class="settings__muted">{{ 'templates.settings.paginationHint' | transloco: placeholders }}</p>
+          <div class="settings__paths">
+            @for (key of store.channelKeys(); track key) {
+              <sf-field
+                [label]="'templates.settings.paginationPath' | transloco: { channel: key }"
+                [error]="store.paginationPathErrors()[key] ? ('templates.settings.paginationNeedsNumber' | transloco: placeholders) : null"
+              >
+                <sf-input
+                  monospace
+                  [spellcheck]="false"
+                  [placeholder]="defaultPaginationPath"
+                  [value]="paginationPathOf(key)"
+                  [disabled]="store.readOnly()"
+                  (valueChange)="setPaginationPath(key, $event)"
+                />
+              </sf-field>
+            } @empty {
+              <p class="settings__muted">{{ 'templates.settings.paginationNoChannel' | transloco }}</p>
+            }
+          </div>
+        </div>
+      }
+    </div>
+  </section>
+}

@@ -27,32 +27,3 @@
   flex-direction: column;
   gap: var(--sf-4);
 }
-
-/* "Taking `localizable` off would discard translations" — nothing was written yet (M24.2.2). */
-.templates__discard {
-  position: fixed;
-  right: var(--sf-4);
-  bottom: var(--sf-4);
-  z-index: var(--sf-z-popover);
-  display: flex;
-  flex-direction: column;
-  gap: var(--sf-2);
-  max-width: min(32rem, calc(100vw - 2rem));
-  padding: var(--sf-3);
-  border: 1px solid var(--sf-line);
-  border-radius: var(--sf-radius);
-  background: var(--sf-surface);
-  box-shadow: var(--sf-shadow-lg);
-}
-
-.templates__discard-text {
-  margin: 0;
-  font-size: var(--sf-text-sm);
-  color: var(--sf-ink);
-}
-
-.templates__discard-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: var(--sf-2);
-}

@@ -132,6 +132,21 @@ export class SfCodePanelComponent {
     this.editor().openSearch();
   }
 
+  /** Moves the caret to a position (1-based) and focuses the editor. */
+  goTo(line: number, column = 1): void {
+    this.editor().goTo(line, column);
+  }
+
+  /** Inserts a snippet at the caret (replacing the selection), with the caret `caret` characters into it. */
+  insert(snippet: string, caret: number = snippet.length): void {
+    this.editor().insert(snippet, caret);
+  }
+
+  /** Moves the focus into the editor. */
+  focus(): void {
+    this.editor().focus();
+  }
+
   /** Moves the caret to a diagnostic and focuses the editor. */
   jump(problem: CodePanelProblem): void {
     if (problem.line) {

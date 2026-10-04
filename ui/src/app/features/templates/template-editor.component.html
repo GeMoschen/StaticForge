@@ -1,4 +1,4 @@
-@if (store.readOnly()) {
+@if (store.readOnly() && store.datasetSelected()) {
   <div class="templates__toolbar">
     <span class="templates__toolbar-readonly">{{ store.readOnlyLabel() }}</span>
   </div>
@@ -6,7 +6,7 @@
 
 @if (store.datasetSelected() && store.selectedUuid(); as datasetUuid) {
   <div class="detail__scroll">
-    <sf-dataset-schema-editor
+    <sf-dataset-editor
       [projectKey]="store.projectKey()"
       [uuid]="datasetUuid"
       (changed)="onDatasetChanged()"
@@ -14,33 +14,5 @@
     />
   </div>
 } @else {
-  @if (store.detail(); as d) {
-    <div class="detail__scroll">
-      <sf-template-meta-header />
-      <sf-template-save-outcomes />
-
-      <div class="editors">
-        <sf-template-cdl-panel />
-        <sf-template-channel-panel />
-      </div>
-
-      @if (d.uuid; as templateUuid) {
-        <div class="panel">
-          <sf-asset-impact [projectKey]="store.projectKey()" [assetUuid]="templateUuid" [refreshKey]="d.revision" />
-        </div>
-      }
-    </div>
-  } @else {
-    <sf-spinner [label]="'templates.editor.loading' | transloco" />
-  }
-}
-
-@if (save.pendingDiscard(); as message) {
-  <div class="templates__discard" role="alertdialog" [attr.aria-label]="'templates.discard.title' | transloco">
-    <p class="templates__discard-text">{{ message }}</p>
-    <div class="templates__discard-actions">
-      <sf-button variant="ghost" (click)="save.cancelDiscard()">{{ 'templates.discard.keep' | transloco }}</sf-button>
-      <sf-button variant="danger" (click)="save.confirmDiscardAndSave()">{{ 'templates.discard.confirm' | transloco }}</sf-button>
-    </div>
-  </div>
+  <sf-template-ide />
 }

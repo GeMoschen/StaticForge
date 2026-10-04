@@ -5,6 +5,8 @@
 
 export type ThemePreference = 'light' | 'dark' | 'system';
 export type DensityPreference = 'compact' | 'comfortable';
+/** The code highlighting palette (M35.9 decision 18, M35.21 decision 166): `current` is the M35.5 palette, `refined` the alternative. */
+export type CodePalettePreference = 'current' | 'refined';
 export type PreviewViewPreference = 'draft' | 'published';
 /** How the media library lists a folder's files. */
 export type MediaViewPreference = 'grid' | 'list';
@@ -54,6 +56,7 @@ export interface PreferencesDocument {
   schemaVersion: number;
   theme?: ThemePreference;
   density?: DensityPreference;
+  codePalette?: CodePalettePreference;
   developerMode?: boolean;
   railCollapsed?: boolean;
   /** Project keys the user starred in the project switcher. */
@@ -73,6 +76,7 @@ export interface PreferencesDocument {
 
 export const DEFAULT_THEME: ThemePreference = 'system';
 export const DEFAULT_DENSITY: DensityPreference = 'compact';
+export const DEFAULT_CODE_PALETTE: CodePalettePreference = 'current';
 export const DEFAULT_PREVIEW_VIEW: PreviewViewPreference = 'draft';
 export const DEFAULT_MEDIA_VIEW: MediaViewPreference = 'grid';
 export const RECENTS_CAP = 20;

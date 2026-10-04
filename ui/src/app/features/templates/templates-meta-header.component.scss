@@ -1,82 +1,85 @@
-// The host adds no box of its own: the head and the panel stay direct children of `.detail__scroll`.
 :host {
-  display: contents;
+  display: block;
 }
 
-.detail__head {
+.tpl-head {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--sf-2);
-}
-
-.detail__head h3 {
-  margin: 0;
-  font-family: var(--sf-font-display);
-  font-size: var(--sf-text-lg);
-  color: var(--sf-ink);
-}
-
-.detail__unsaved {
-  font-size: var(--sf-text-xs);
-  color: var(--sf-slate);
-}
-
-.panel input[type='text'],
-.panel textarea {
-  width: 100%;
-  padding: var(--sf-2) var(--sf-3);
-  border: 1px solid var(--sf-line);
-  border-radius: var(--sf-radius-md);
+  flex-direction: column;
+  gap: var(--sf-space-2);
+  padding: var(--sf-space-4) var(--sf-space-6) var(--sf-space-3);
+  border-bottom: 1px solid var(--sf-border);
   background: var(--sf-surface);
-  color: var(--sf-ink);
-  font-family: var(--sf-font-ui);
-  font-size: var(--sf-text-sm);
 }
 
-.panel textarea {
-  min-height: 9rem;
-  font-family: var(--sf-font-mono, monospace);
-  line-height: 1.5;
-  resize: vertical;
-}
-
-.inline {
-  display: flex;
-  align-items: center;
-  gap: var(--sf-3);
+.tpl-head__title-extras {
+  display: inline-flex;
   flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sf-space-1);
 }
 
-.inline label {
+.tpl-head__status {
   display: inline-flex;
   align-items: center;
-  gap: var(--sf-2);
-  font-size: var(--sf-text-sm);
-  color: var(--sf-slate);
+  align-self: center;
+  gap: var(--sf-space-1);
+  margin-inline-end: var(--sf-space-2);
+  color: var(--sf-text-muted);
+  font-size: var(--sf-fs-12);
+  line-height: var(--sf-lh-12);
+  white-space: nowrap;
 }
 
-.inline input[type='checkbox'] {
-  width: 1rem;
-  height: 1rem;
-  accent-color: var(--sf-signal);
-}
-
-.inline sf-field {
-  flex: 1;
-  min-width: 12rem;
-}
-
-.diagnostic {
+.tpl-head__meta {
   display: flex;
-  gap: var(--sf-2);
-  padding: var(--sf-1) var(--sf-2);
-  margin-bottom: var(--sf-1);
-  border-radius: var(--sf-radius-sm);
-  font-size: var(--sf-text-xs);
+  align-items: center;
+  gap: var(--sf-space-2);
+  font-size: var(--sf-fs-12);
+  line-height: var(--sf-lh-12);
 }
 
-.diagnostic--error {
-  background: color-mix(in srgb, var(--sf-rust) 12%, transparent);
-  color: var(--sf-rust);
+.tpl-head__meta-label {
+  color: var(--sf-text-subtle);
+}
+
+// The inheritance chain: ancestors link to their template, the current one ends it.
+.tpl-head__chain {
+  display: block;
+  min-width: 0;
+}
+
+.tpl-head__chain-list {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tpl-head__chain-item {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.tpl-head__chain-sep {
+  flex-shrink: 0;
+  color: var(--sf-text-subtle);
+  font-size: var(--sf-fs-16);
+}
+
+.tpl-head__chain-current {
+  padding: 0 var(--sf-space-2);
+  color: var(--sf-text);
+  font-family: var(--sf-font-mono);
+  font-size: var(--sf-fs-13);
+  line-height: var(--sf-lh-13);
+  font-weight: var(--sf-weight-medium);
+}
+
+@media (max-width: 1279px) {
+  .tpl-head {
+    padding-inline: var(--sf-space-4);
+  }
 }

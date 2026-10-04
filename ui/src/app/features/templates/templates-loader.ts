@@ -12,7 +12,7 @@ import { readPaginationPaths } from './pagination-path.util';
 import { TemplatesEditing } from './templates-editing';
 import { TemplatesService, type TemplateDetail, type TemplateSummary } from './templates.service';
 import { TemplatesStore } from './templates.store';
-import { channelSourcesOf } from './templates.util';
+import { channelSourcesOf, pathMapOf } from './templates.util';
 
 /** Loads the screen's data into `TemplatesStore`: the template list, the channels and the selected template. */
 @Injectable()
@@ -145,6 +145,7 @@ export class TemplatesLoader {
     store.deprecated.set(detail.deprecated ?? false);
     store.abstractTemplate.set(detail.abstract ?? false);
     store.paginationPaths.set(readPaginationPaths(detail.paginationPath));
+    store.outputPaths.set(pathMapOf(detail.outputPath));
     store.sections.set(sectionsOf(detail));
     store.channelSources.set(channelSourcesOf(detail));
     store.cdlDiagnostics.set([]);
@@ -153,9 +154,11 @@ export class TemplatesLoader {
 
   reloadDetail(key: string, uuid: string, resetOutcomes = true, keepEditsWhile?: () => boolean): void {
     const store = this.store;
+    store.detailFailed.set(false);
     this.service.get(store.kind(), key, uuid).subscribe({
       next: (detail) => {
         const edited = !!keepEditsWhile && store.detail()?.uuid === detail.uuid && keepEditsWhile();
+        store.detailFailed.set(false);
         store.detail.set(detail);
         if (!edited) {
           this.applyToEditors(detail);
@@ -176,7 +179,14 @@ export class TemplatesLoader {
         }
         this.editing.requestOctlValidation();
       },
-      error: () => this.toast.show(this.transloco.translate('templates.toast.loadDetailFailed'), 'error'),
+      error: () => {
+        // A refresh after a save keeps the template on screen; only a first read has nothing to show.
+        if (store.detail()?.uuid !== uuid) {
+          store.detail.set(null);
+          store.detailFailed.set(true);
+        }
+        this.toast.show(this.transloco.translate('templates.toast.loadDetailFailed'), 'error');
+      },
     });
   }
 

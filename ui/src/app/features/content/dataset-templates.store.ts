@@ -180,12 +180,15 @@ export class DatasetTemplatesStore {
     return this.recordTemplateDiagnostics()[channel] ?? [];
   }
 
-  /** Opens a channel's record template tab. */
-  selectTab(channel: string): void {
+  /**
+   * Opens a channel's record template tab. `reopened`: the tab was left for another kind of tab (Schema, Rules) and is
+   * shown again, which re-checks it too.
+   */
+  selectTab(channel: string, reopened = false): void {
     const previous = this.activeChannel();
     this.selectedChannel.set(channel);
     // Opening a template re-checks it: the schema may have changed since it was last checked.
-    if (channel !== previous && (this.recordTemplates()[channel] ?? '').trim() !== '') {
+    if ((channel !== previous || reopened) && (this.recordTemplates()[channel] ?? '').trim() !== '') {
       this.checkRecordTemplate(channel, this.recordTemplates()[channel]);
     }
   }

@@ -1,28 +1,32 @@
 import '@angular/compiler';
 import { HttpErrorResponse } from '@angular/common/http';
-import { ApplicationRef } from '@angular/core';
+import { ApplicationRef, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
-import { fireEvent, render, screen, waitFor } from '@testing-library/angular';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/angular';
 import { of, throwError } from 'rxjs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ApiClient } from '../../core/api/api.client';
 import { AuthStore } from '../../core/auth/auth.store';
-import { ChannelsService } from '../channels/channels.service';
-import { ConfirmService } from '../../shared/components/dialog/confirm.service';
-import { TimeTravelStore } from '../revisions/time-travel.store';
-import { TemplatesService } from '../templates/templates.service';
-import { ContentService, etagFor, type DatasetDetailView } from './content.service';
-import { DatasetSchemaEditorComponent } from './dataset-schema-editor.component';
+import { ActiveEditorService } from '../../core/editor/active-editor.service';
+import { ProjectContextStore } from '../../core/project/project-context.store';
 import { provideProjectPermissions } from '../../core/project/testing/project-permissions.testing';
 import { codeOf, codeView, typeCode } from '../../shared/code-editor/code-editor.testing';
-import { ProjectContextStore } from '../../core/project/project-context.store';
+import { ChannelsService } from '../channels/channels.service';
+import { ContentService, etagFor, type DatasetDetailView } from '../content/content.service';
+import { TimeTravelStore } from '../revisions/time-travel.store';
+import { DatasetEditorComponent } from './dataset-editor.component';
+import { TemplatesItemActions } from './templates-item-actions.service';
+import { TemplatesStoreRefresh } from './templates-store-refresh.service';
+import { TemplatesStore } from './templates.store';
+import { TemplatesService } from './templates.service';
 
 /** The dataset's Content section (M34): the editors, without `content { … }`. */
 const CDL = `editor text name { label "Name" required }
 editor text role { label "Role" }
 `;
 
+const RULES = 'state name { requiredWhen "true" }';
 const HTML_TEMPLATE = '<li>\n  $CMS_VALUE(name)$\n</li>';
 
 // `compiledDefinition` / `channelTemplates` are `JsonNode` on the server (`Record<string, never>` in the types).
@@ -32,10 +36,10 @@ const DATASET = {
   displayName: 'Team',
   description: '',
   contentCdl: CDL,
-  rulesCdl: '',
+  rulesCdl: RULES,
   compiledDefinition: {
     editors: [
-      { name: 'name', type: 'TEXT', label: 'Name' },
+      { name: 'name', type: 'TEXT', label: 'Name', required: true, localizable: true },
       { name: 'role', type: 'TEXT', label: 'Role' },
     ],
     bodies: [],
@@ -43,12 +47,19 @@ const DATASET = {
   channelTemplates: { html: { source: HTML_TEMPLATE, compiledHash: 'h1' }, rss: { source: '<item/>', compiledHash: 'h2' } },
   recordCount: 3,
   revision: 7,
+  folderUuid: 'folder-datasets',
+  folderPath: '/datasets',
 } as unknown as DatasetDetailView;
 
 const CHANNELS = [
   { key: 'html', name: 'HTML', enabled: true, position: 0 },
   { key: 'md', name: 'Markdown', enabled: true, position: 1, settings: { highlightAs: 'PLAIN' } },
   { key: 'rss', name: 'RSS', enabled: false, position: 2 },
+];
+
+const USAGES = [
+  { fromUuid: 'set-leads', fromUid: 'leads', fromType: 'RECORD_SET', kind: 'DATASET', sourcePath: 'dataset' },
+  { fromUuid: 'tpl-article', fromUid: 'article', fromType: 'PAGE_TEMPLATE', kind: 'LOOP', sourcePath: 'channels.html' },
 ];
 
 function contentStub() {
@@ -64,14 +75,26 @@ function templatesStub() {
   return { validateOctl: vi.fn().mockReturnValue(of({ diagnostics: [] })) };
 }
 
+function actionsStub(confirm: ReturnType<typeof vi.fn>) {
+  return {
+    usages: vi.fn().mockReturnValue(of(USAGES)),
+    confirmDelete: confirm,
+    duplicate: vi.fn().mockResolvedValue('ds-copy'),
+    rename: vi.fn().mockReturnValue(of({ revision: 8 })),
+  };
+}
+
 async function setup(options: { role?: string; revision?: number; confirm?: ReturnType<typeof vi.fn> } = {}) {
   const content = contentStub();
   const templates = templatesStub();
+  const actions = actionsStub(options.confirm ?? vi.fn().mockResolvedValue(true));
+  const area = { usedByUuid: signal<string | null>(null) };
+  const refresh = { notify: vi.fn() };
   const timeTravel = new TimeTravelStore();
   if (options.revision != null) {
     timeTravel.enter(options.revision);
   }
-  const view = await render(DatasetSchemaEditorComponent, {
+  const view = await render(DatasetEditorComponent, {
     componentInputs: { projectKey: 'proj', uuid: 'ds-team' },
     providers: [
       provideRouter([]),
@@ -79,7 +102,9 @@ async function setup(options: { role?: string; revision?: number; confirm?: Retu
       { provide: TemplatesService, useValue: templates },
       { provide: ChannelsService, useValue: { list: vi.fn().mockReturnValue(of(CHANNELS)) } },
       { provide: ApiClient, useValue: {} },
-      { provide: ConfirmService, useValue: { confirm: options.confirm ?? vi.fn().mockResolvedValue(true) } },
+      { provide: TemplatesItemActions, useValue: actions },
+      { provide: TemplatesStore, useValue: area },
+      { provide: TemplatesStoreRefresh, useValue: refresh },
       { provide: ProjectContextStore, useValue: { project: () => ({ key: 'acme', codeHighlighting: {} }) } },
       { provide: AuthStore, useValue: { roleFor: () => options.role ?? 'DEVELOPER', isArchived: () => false } },
       { provide: TimeTravelStore, useValue: timeTravel },
@@ -88,8 +113,8 @@ async function setup(options: { role?: string; revision?: number; confirm?: Retu
   });
   // Part of the application's view tree, as in the app: after-render hooks then run after this view rendered.
   TestBed.inject(ApplicationRef).attachView(view.fixture.componentRef.hostView);
-  await screen.findByRole('tab', { name: /^Content/ });
-  return { ...view, content, templates };
+  await screen.findByRole('tab', { name: /^Schema/ });
+  return { ...view, content, templates, actions, area, refresh };
 }
 
 function tabNames(): string[] {
@@ -102,7 +127,7 @@ function saveButton(): HTMLButtonElement {
 
 async function openTab(name: RegExp): Promise<void> {
   fireEvent.click(screen.getByRole('tab', { name }));
-  await screen.findByRole('tabpanel', { name: /Record template/ });
+  await waitFor(() => expect(screen.getByRole('tab', { name }).getAttribute('aria-selected')).toBe('true'));
 }
 
 function cdlEditor(section = 'Content'): HTMLElement {
@@ -113,22 +138,69 @@ function editor(channel: string): HTMLElement {
   return screen.getByRole('textbox', { name: `Record template for channel ${channel}` });
 }
 
-describe('DatasetSchemaEditorComponent — record templates (M25.5.2)', () => {
+async function choose(item: string): Promise<void> {
+  fireEvent.click(screen.getByRole('button', { name: 'More actions' }));
+  fireEvent.click(await screen.findByRole('menuitem', { name: item }));
+}
+
+describe('DatasetEditorComponent — overview (M35.21 C)', () => {
   afterEach(() => vi.restoreAllMocks());
 
-  it('shows Content and Rules tabs beside one record template tab per enabled channel, plus a disabled one holding a template', async () => {
+  it('has a header with the name and the Dataset badge, and the Overview tab first', async () => {
     await setup();
-    expect(tabNames()).toEqual(['Content', 'Rules', 'html', 'md', 'rss disabled']);
-    expect(screen.getByRole('tab', { name: /^Content/ }).getAttribute('aria-selected')).toBe('true');
-    // The first channel is open next to the schema: both panels show at once (M34).
-    expect(screen.getByRole('tab', { name: /^html/ }).getAttribute('aria-selected')).toBe('true');
+    expect(screen.getByRole('heading', { level: 1, name: 'Team' })).toBeTruthy();
+    expect(screen.getByText('Dataset')).toBeTruthy();
+    expect(screen.getByRole('tab', { name: /^Overview/ }).getAttribute('aria-selected')).toBe('true');
+  });
+
+  it('lists the fields of the schema with type, required, localized and rule count', async () => {
+    await setup();
+    const table = await screen.findByRole('grid', { name: 'Fields of Team' });
+    const rows = within(table).getAllByRole('row');
+    const text = rows.map((row) => (row.textContent ?? '').replace(/\s+/g, ' '));
+    expect(text.some((row) => row.includes('Name') && row.includes('name') && row.includes('text'))).toBe(true);
+    expect(text.some((row) => row.includes('Role'))).toBe(true);
+  });
+
+  it('lists what uses the dataset, each linking to its screen', async () => {
+    const { actions } = await setup();
+    expect(actions.usages).toHaveBeenCalledWith('proj', 'ds-team');
+    const leads = (await screen.findByRole('link', { name: 'leads' })) as HTMLAnchorElement;
+    expect(leads.getAttribute('href')).toContain('/p/proj/content');
+    expect(leads.getAttribute('href')).toContain('set-leads');
+    expect((screen.getByRole('link', { name: 'article' }) as HTMLAnchorElement).getAttribute('href')).toContain('tpl-article');
+    expect(screen.getByText('3 records')).toBeTruthy();
+  });
+
+  it('offers the title field and description, and saves their change', async () => {
+    const { content } = await setup();
+    const description = screen.getByRole('textbox', { name: /Description/ });
+    fireEvent.input(description, { target: { value: 'The team' } });
+    fireEvent.change(screen.getByRole('combobox', { name: /Title field/ }), { target: { value: 'role' } });
+    await waitFor(() => expect(saveButton().disabled).toBe(false));
+    content.updateDataset.mockReturnValue(of({ ...DATASET, revision: 8, description: 'The team', titleEditor: 'role' }));
+    fireEvent.click(saveButton());
+    const [, , body] = content.updateDataset.mock.calls[0];
+    expect(body).toMatchObject({ description: 'The team', titleEditor: 'role', displayName: 'Team' });
+  });
+});
+
+describe('DatasetEditorComponent — schema, rules and record templates (M25.5.2)', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it('shows Overview, Schema and Rules beside one record template tab per enabled channel, plus a disabled one holding a template', async () => {
+    await setup();
+    expect(tabNames()).toEqual(['Overview', 'Schema', 'Rules', 'html', 'md', 'rss disabled']);
+
+    await openTab(/^Schema/);
     expect(codeOf(cdlEditor())).toBe(CDL);
+    await openTab(/^Rules/);
+    expect(codeOf(cdlEditor('Rules'))).toBe(RULES);
 
     await openTab(/^html/);
     expect(codeOf(editor('html'))).toBe(HTML_TEMPLATE);
     // Highlighted as the channel's format (M33 follow-up): detected from the key, or the channel's own choice.
-    const formatIn = (channel: string) =>
-      screen.getByRole('tabpanel', { name: `Record template (${channel})` }).querySelector('[data-format]')?.getAttribute('data-format');
+    const formatIn = (channel: string) => editor(channel).closest('[role="tabpanel"]')?.querySelector('[data-format]')?.getAttribute('data-format');
     expect(formatIn('html')).toBe('HTML');
     await openTab(/^md/);
     expect(formatIn('md')).toBe('PLAIN');
@@ -159,9 +231,10 @@ describe('DatasetSchemaEditorComponent — record templates (M25.5.2)', () => {
     await waitFor(() => expect(saveButton().disabled).toBe(true));
 
     typeCode(editor('md'), '- $CMS_VALUE(name)$');
+    await openTab(/^Schema/);
     typeCode(cdlEditor(), CDL.replace('role', 'title'));
-    await waitFor(() => expect(screen.getByRole('tab', { name: /^Content/ }).textContent).toContain('(unsaved)'));
-    fireEvent.click(screen.getByRole('tab', { name: /^Rules/ }));
+    await waitFor(() => expect(screen.getByRole('tab', { name: /^Schema/ }).textContent).toContain('(unsaved)'));
+    await openTab(/^Rules/);
     typeCode(cdlEditor('Rules'), 'state title requiredWhen "true"');
     await waitFor(() => expect(screen.getByRole('tab', { name: /^Rules/ }).textContent).toContain('(unsaved)'));
 
@@ -190,6 +263,19 @@ describe('DatasetSchemaEditorComponent — record templates (M25.5.2)', () => {
     expect(tabNames().some((name) => name.includes('(unsaved)'))).toBe(false);
   });
 
+  it('registers as the active editor: unsaved edits are known to the frame and Ctrl+S saves', async () => {
+    const { content } = await setup();
+    const editors = TestBed.inject(ActiveEditorService);
+    expect(editors.hasUnsaved()).toBe(false);
+    await openTab(/^Schema/);
+    typeCode(cdlEditor(), CDL + 'editor text extra { label "Extra" }\n');
+    await waitFor(() => expect(editors.hasUnsaved()).toBe(true));
+    content.updateDataset.mockReturnValue(of({ ...DATASET, revision: 8, contentCdl: CDL + 'editor text extra { label "Extra" }\n' }));
+    await editors.saveActive();
+    expect(content.updateDataset).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(editors.hasUnsaved()).toBe(false));
+  });
+
   it('keeps the edited template after a rejected save and shows the diagnostic at its line', async () => {
     const { content } = await setup();
     await openTab(/^html/);
@@ -207,19 +293,20 @@ describe('DatasetSchemaEditorComponent — record templates (M25.5.2)', () => {
     );
 
     // Save with another channel open: the failing channel's tab opens.
-    fireEvent.click(screen.getByRole('tab', { name: /^md/ }));
+    await openTab(/^md/);
+    await waitFor(() => expect(saveButton().disabled).toBe(false));
     fireEvent.click(saveButton());
 
     const area = await screen.findByRole('textbox', { name: 'Record template for channel html' });
     expect(codeOf(area)).toBe(broken);
     expect(screen.getByText(/SF-TPL-0103/)).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Go to line 2, column 14' })).toBeTruthy();
     expect(screen.getByRole('tab', { name: /^html/ }).textContent).toMatch(/1\s*error/);
     // The caret moves once the tab switch has rendered (an after-render hook of the application tick).
     await waitFor(() => expect(codeView(area).state.selection.main.head).toBe(broken.indexOf('nme')));
     expect(document.activeElement).toBe(area);
-    // Still unsaved: the rejected edit can be fixed and saved again.
+    // Still unsaved: the rejected edit can be fixed and saved again, and the header says it was refused.
     expect(saveButton().disabled).toBe(false);
+    expect(screen.getByText(/Not saved/)).toBeTruthy();
   });
 
   it('shows schema errors of a rejected save on the failing CDL tab, not in a template tab', async () => {
@@ -293,6 +380,25 @@ describe('DatasetSchemaEditorComponent — record templates (M25.5.2)', () => {
     }
   });
 
+  it('checks the schema live while typing and lists its diagnostics on the tab', async () => {
+    vi.useFakeTimers();
+    try {
+      const { content, fixture } = await setup();
+      fireEvent.click(screen.getByRole('tab', { name: /^Schema/ }));
+      fixture.detectChanges();
+      content.validateCdl.mockReturnValue(
+        of({ diagnostics: [{ severity: 'ERROR', code: 'SF-CDL-0007', message: 'Bad editor', line: 1, column: 1, field: 'content' }] }),
+      );
+      typeCode(cdlEditor(), 'editor nope');
+      vi.advanceTimersByTime(450);
+      fixture.detectChanges();
+      expect(content.validateCdl).toHaveBeenCalledWith('proj', { content: 'editor nope', bodies: '', rules: RULES });
+      expect(screen.getByText(/SF-CDL-0007/)).toBeTruthy();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('checks the open template live, per channel', async () => {
     vi.useFakeTimers();
     try {
@@ -310,7 +416,7 @@ describe('DatasetSchemaEditorComponent — record templates (M25.5.2)', () => {
         channelKey: 'md',
         datasetUuid: 'ds-team',
         contentCdl: CDL,
-        rulesCdl: '',
+        rulesCdl: RULES,
       });
       expect(screen.getByText(/SF-TPL-0001/)).toBeTruthy();
     } finally {
@@ -336,7 +442,7 @@ describe('DatasetSchemaEditorComponent — record templates (M25.5.2)', () => {
 
       // Declare the field, then come back to the template: it is checked against the new CDL.
       const withSquad = `editor text squad { label "Squad" }\n${CDL}`;
-      fireEvent.click(screen.getByRole('tab', { name: /^md/ }));
+      fireEvent.click(screen.getByRole('tab', { name: /^Schema/ }));
       fixture.detectChanges();
       typeCode(cdlEditor(), withSquad);
       templates.validateOctl.mockReturnValue(of({ diagnostics: [] }));
@@ -349,7 +455,7 @@ describe('DatasetSchemaEditorComponent — record templates (M25.5.2)', () => {
         channelKey: 'html',
         datasetUuid: 'ds-team',
         contentCdl: withSquad,
-        rulesCdl: '',
+        rulesCdl: RULES,
       });
       expect(screen.queryByText(/Unknown editor: squad/)).toBeNull();
     } finally {
@@ -382,8 +488,8 @@ describe('DatasetSchemaEditorComponent — record templates (M25.5.2)', () => {
   });
 });
 
-describe('DatasetSchemaEditorComponent — delete (M35.13)', () => {
-  it('confirms with a danger dialog, deletes, and hands the deleted dataset to the screen (which offers Undo)', async () => {
+describe('DatasetEditorComponent — the ⋮ menu (M35.13, M35.21)', () => {
+  it('confirms with the templates delete question, deletes, and hands the deleted dataset to the screen (which offers Undo)', async () => {
     const confirm = vi.fn().mockResolvedValue(true);
     const { content, fixture } = await setup({ confirm });
     content.deleteDataset.mockReturnValue(of(undefined));
@@ -392,15 +498,14 @@ describe('DatasetSchemaEditorComponent — delete (M35.13)', () => {
     fixture.componentRef.setInput('uuid', 'ds-other');
     fixture.componentRef.setInput('uuid', 'ds-team');
     fixture.detectChanges();
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Delete' })).toBeEnabled());
     const deleted: unknown[] = [];
     fixture.componentInstance.deleted.subscribe((d: unknown) => deleted.push(d));
+    await waitFor(() => expect(screen.getByRole('heading', { level: 1, name: 'Team' })).toBeTruthy());
 
-    fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+    await choose('Delete');
 
     await waitFor(() => expect(content.deleteDataset).toHaveBeenCalledWith('proj', 'ds-team'));
-    expect(confirm.mock.calls[0][0].tone).toBe('danger');
-    expect(confirm.mock.calls[0][0].irreversible).toBeUndefined();
+    expect(confirm.mock.calls[0][1][0]).toMatchObject({ kind: 'dataset', uuid: 'ds-team', name: 'Team' });
     expect(deleted).toEqual([{ uuid: 'ds-team', name: 'Team' }]);
   });
 
@@ -410,11 +515,45 @@ describe('DatasetSchemaEditorComponent — delete (M35.13)', () => {
     fixture.componentRef.setInput('uuid', 'ds-other');
     fixture.componentRef.setInput('uuid', 'ds-team');
     fixture.detectChanges();
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Delete' })).toBeEnabled());
+    await waitFor(() => expect(screen.getByRole('heading', { level: 1, name: 'Team' })).toBeTruthy());
 
-    fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+    await choose('Delete');
 
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Delete' })).toBeTruthy());
+    await waitFor(() => expect(screen.getByRole('heading', { level: 1, name: 'Team' })).toBeTruthy());
     expect(content.deleteDataset).not.toHaveBeenCalled();
+  });
+
+  it('cannot delete while records exist', async () => {
+    const { content, actions } = await setup();
+    fireEvent.click(screen.getByRole('button', { name: 'More actions' }));
+    const item = await screen.findByRole('menuitem', { name: /Delete/ });
+    expect(item.getAttribute('aria-disabled')).toBe('true');
+    fireEvent.click(item);
+    expect(actions.confirmDelete).not.toHaveBeenCalled();
+    expect(content.deleteDataset).not.toHaveBeenCalled();
+  });
+
+  it('opens Used by in the area, and duplicates next to the original', async () => {
+    const { area, actions, refresh } = await setup();
+    await choose('Used by');
+    expect(area.usedByUuid()).toBe('ds-team');
+
+    await choose('Duplicate');
+    await waitFor(() => expect(actions.duplicate).toHaveBeenCalled());
+    const [key, entry, folder, changed] = actions.duplicate.mock.calls[0];
+    expect(key).toBe('proj');
+    expect(entry).toMatchObject({ uuid: 'ds-team', kind: 'dataset' });
+    expect(folder).toBe('folder-datasets');
+    changed();
+    expect(refresh.notify).toHaveBeenCalled();
+  });
+
+  it('disables Rename, Duplicate and Delete for an editor but keeps Used by', async () => {
+    await setup({ role: 'EDITOR' });
+    fireEvent.click(screen.getByRole('button', { name: 'More actions' }));
+    for (const name of [/Rename/, /Duplicate/, /Delete/]) {
+      expect((await screen.findByRole('menuitem', { name })).getAttribute('aria-disabled')).toBe('true');
+    }
+    expect(screen.getByRole('menuitem', { name: /Used by/ }).getAttribute('aria-disabled')).not.toBe('true');
   });
 });

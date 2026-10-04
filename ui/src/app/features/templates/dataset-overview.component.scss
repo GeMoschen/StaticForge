@@ -1,0 +1,121 @@
+:host {
+  display: block;
+}
+
+// The fields table and the definition beside "Used by" (below it on narrow screens), as in the sample.
+.overview {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 18rem;
+  gap: var(--sf-space-4);
+}
+
+.overview__main {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sf-space-4);
+  min-width: 0;
+}
+
+.overview__fields {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sf-space-2);
+}
+
+.overview__title {
+  margin: 0;
+  color: var(--sf-text);
+  font-size: var(--sf-fs-14);
+  line-height: var(--sf-lh-14);
+  font-weight: var(--sf-weight-semibold);
+}
+
+.overview__table {
+  min-height: 12rem;
+}
+
+.overview__used {
+  align-self: start;
+}
+
+.overview__description {
+  min-height: 4rem;
+  resize: vertical;
+}
+
+.overview__snippet {
+  margin: 0;
+  padding: var(--sf-space-1) var(--sf-space-2);
+  border: 1px dashed var(--sf-border);
+  border-radius: var(--sf-radius-sm);
+  color: var(--sf-text-muted);
+  font-size: var(--sf-fs-12);
+  overflow-x: auto;
+}
+
+.cell-field {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--sf-space-2);
+  min-width: 0;
+}
+
+.cell-field__label {
+  color: var(--sf-text);
+  font-weight: var(--sf-weight-medium);
+}
+
+.cell-field__id {
+  color: var(--sf-text-muted);
+  font-family: var(--sf-font-mono);
+  font-size: var(--sf-fs-12);
+}
+
+.cell-yes {
+  color: var(--sf-success);
+  font-size: var(--sf-fs-16);
+}
+
+.cell-no {
+  color: var(--sf-text-subtle);
+}
+
+.used {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sf-space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.used__item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--sf-space-1) var(--sf-space-2);
+}
+
+.used__path {
+  color: var(--sf-text-muted);
+  font-family: var(--sf-font-mono);
+  font-size: var(--sf-fs-12);
+}
+
+.used__records,
+.used__none {
+  margin: 0 0 var(--sf-space-2);
+  color: var(--sf-text-muted);
+  font-size: var(--sf-fs-13);
+  line-height: var(--sf-lh-13);
+}
+
+.used__none {
+  margin-bottom: 0;
+}
+
+@media (max-width: 1279px) {
+  .overview {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

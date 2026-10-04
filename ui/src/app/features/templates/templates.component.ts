@@ -448,6 +448,30 @@ export class TemplatesComponent {
       },
       { allowSignalWrites: true },
     );
+
+    // Duplicate, Rename… and Move to… asked from the open template's header (⋮): the area owns the dialogs and the copy.
+    effect(
+      () => {
+        const request = this.store.itemRequest();
+        if (request) {
+          untracked(() => {
+            this.store.itemRequest.set(null);
+            const entry = this.index().entries.get(request.uuid);
+            if (!entry) {
+              return;
+            }
+            if (request.action === 'duplicate') {
+              void this.duplicate(entry);
+            } else if (request.action === 'rename') {
+              this.openRename(entry);
+            } else {
+              this.openMove([entry]);
+            }
+          });
+        }
+      },
+      { allowSignalWrites: true },
+    );
   }
 
   /** `n` creates a template (M35.14): the New template dialog asks for the kind. */
@@ -567,7 +591,10 @@ export class TemplatesComponent {
     }
     const names = Object.fromEntries(NEW_KINDS.map((k) => [k, this.createTarget(k, folderUuid)?.name ?? ''])) as Record<NewTemplateKind, string>;
     const started = folderUuid ? this.index().entries.get(folderUuid) : undefined;
-    const data: NewTemplateData = { folders: names, started: started?.name ?? null, kind };
+    const candidates = [...this.index().entries.values()]
+      .filter((entry): entry is TemplateEntry & { kind: NewTemplateKind } => entry.kind === 'page' || entry.kind === 'section' || entry.kind === 'dataset')
+      .map((entry) => ({ uuid: entry.uuid, name: entry.name, kind: entry.kind }));
+    const data: NewTemplateData = { folders: names, started: started?.name ?? null, kind, candidates };
     const result = await this.dialogs.open<NewTemplateResult, NewTemplateData>(NewTemplateDialogComponent, data, { injector: this.injector }).result;
     if (result) {
       await this.createTemplate(result, folderUuid);
@@ -582,7 +609,8 @@ export class TemplatesComponent {
     }
     const target = this.createTarget(result.kind, folderUuid);
     try {
-      const created = await this.actions.create(key, { ...result, parentFolderUuid: target?.uuid });
+      const basedOn = result.basedOn ? this.index().entries.get(result.basedOn) : undefined;
+      const created = await this.actions.create(key, { kind: result.kind, name: result.name, uid: result.uid, parentFolderUuid: target?.uuid, basedOn });
       this.toasts.show(this.transloco.translate('templates.toast.created', { name: result.name }), 'success');
       if (!created.uidApplied) {
         this.toasts.show(this.transloco.translate('templates.toast.uidNotApplied', { uid: result.uid }), 'warning');

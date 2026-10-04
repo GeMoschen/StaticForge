@@ -1,0 +1,65 @@
+@if (!store.selectedUuid()) {
+  <div class="ide__placeholder">
+    <sf-empty-state icon="web" [title]="'templates.ide.noneTitle' | transloco" [description]="'templates.ide.noneDescription' | transloco" />
+  </div>
+} @else if (store.detail()) {
+  <div class="ide" data-sf-template-ide>
+    <sf-template-meta-header />
+    <sf-template-save-outcomes />
+    <sf-template-settings />
+
+    <div class="ide__body">
+      @if (wide()) {
+        <sf-splitter class="ide__split" [defaultSize]="560" [min]="320" [minOther]="320" [label]="'templates.ide.resize' | transloco">
+          <section sfSplitterStart class="ide__pane" [attr.aria-label]="'templates.ide.cdlPane' | transloco">
+            <sf-template-cdl-panel />
+          </section>
+          <section sfSplitterEnd class="ide__pane" [attr.aria-label]="'templates.ide.channelsPane' | transloco">
+            <sf-template-channel-panel />
+          </section>
+        </sf-splitter>
+      } @else {
+        <sf-tabs
+          class="ide__stack-tabs"
+          [idPrefix]="stackTabsId"
+          [tabs]="stackTabs()"
+          [selected]="stack()"
+          [label]="'templates.ide.sides' | transloco"
+          (selectTab)="selectStack($event)"
+        />
+        <div
+          class="ide__pane"
+          role="tabpanel"
+          [id]="panelId(stack())"
+          [attr.aria-labelledby]="tabId(stack())"
+        >
+          @if (stack() === 'cdl') {
+            <sf-template-cdl-panel />
+          } @else {
+            <sf-template-channel-panel />
+          }
+        </div>
+      }
+    </div>
+
+    @if (store.detail()?.uuid; as templateUuid) {
+      <div class="ide__impact">
+        <sf-asset-impact [projectKey]="store.projectKey()" [assetUuid]="templateUuid" [refreshKey]="store.detail()?.revision" />
+      </div>
+    }
+  </div>
+} @else if (store.detailFailed()) {
+  <div class="ide__placeholder">
+    <sf-empty-state
+      icon="error"
+      [title]="'templates.ide.loadFailedTitle' | transloco"
+      [description]="'templates.ide.loadFailedDescription' | transloco"
+    >
+      <sf-button variant="secondary" icon="refresh" (click)="retry()">{{ 'templates.ide.retry' | transloco }}</sf-button>
+    </sf-empty-state>
+  </div>
+} @else {
+  <div class="ide__placeholder">
+    <sf-skeleton shape="row" [rows]="6" [label]="'templates.editor.loading' | transloco" />
+  </div>
+}

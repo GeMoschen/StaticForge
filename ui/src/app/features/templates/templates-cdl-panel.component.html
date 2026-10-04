@@ -1,24 +1,24 @@
-<section class="panel editors__panel" aria-labelledby="cdl-heading">
-  <h4 id="cdl-heading" class="editors__heading">Content definition (CDL)</h4>
-  <sf-cdl-sections-editor
-    label="Content definition (CDL)"
-    [value]="store.sections()"
-    [saved]="store.savedSections()"
-    [sections]="store.cdlTabs()"
-    [selected]="store.cdlTab()"
-    [diagnostics]="store.cdlDiagnostics()"
-    [readOnly]="store.readOnly()"
-    [names]="store.editorNames()"
-    [hints]="cdlHints"
-    (selectedChange)="store.cdlTab.set($event)"
-    (sectionChange)="editing.onSectionInput($event)"
+<sf-tabs
+  [idPrefix]="idPrefix"
+  [tabs]="tabs()"
+  [selected]="store.cdlTab()"
+  [label]="'templates.cdl.tabs' | transloco"
+  (selectTab)="selectSection($event)"
+/>
+@for (section of store.cdlTabs(); track section) {
+  <div
+    class="cdl__panel"
+    role="tabpanel"
+    [id]="panelId(section)"
+    [attr.aria-labelledby]="tabId(section)"
+    [hidden]="section !== store.cdlTab()"
   >
-    @if (store.inheritedEditorGroups().length > 0) {
-      <section sfCdlContent class="inheritance__inherited" aria-label="Inherited editors">
-        <h5>Inherited editors (read-only — edit them on the template that declares them)</h5>
+    @if (section === 'content' && store.inheritedEditorGroups().length > 0) {
+      <section class="inheritance__inherited" [attr.aria-label]="'templates.cdl.inheritedEditorsLabel' | transloco">
+        <h3>{{ 'templates.cdl.inheritedEditors' | transloco }}</h3>
         @for (group of store.inheritedEditorGroups(); track group.uid) {
           <div class="inheritance__group">
-            <span class="inheritance__from">from
+            <span class="inheritance__from">{{ 'templates.cdl.from' | transloco }}
               @if (group.uuid) {
                 <button type="button" class="inheritance__crumb" (click)="store.openTemplate(group.uuid)">{{ group.uid }}</button>
               } @else {
@@ -30,12 +30,12 @@
         }
       </section>
     }
-    @if (store.inheritedBodyGroups().length > 0) {
-      <section sfCdlBodies class="inheritance__inherited" aria-label="Inherited bodies">
-        <h5>Inherited bodies (read-only — edit them on the template that declares them)</h5>
+    @if (section === 'bodies' && store.inheritedBodyGroups().length > 0) {
+      <section class="inheritance__inherited" [attr.aria-label]="'templates.cdl.inheritedBodiesLabel' | transloco">
+        <h3>{{ 'templates.cdl.inheritedBodies' | transloco }}</h3>
         @for (group of store.inheritedBodyGroups(); track group.uid) {
           <div class="inheritance__group">
-            <span class="inheritance__from">from
+            <span class="inheritance__from">{{ 'templates.cdl.from' | transloco }}
               @if (group.uuid) {
                 <button type="button" class="inheritance__crumb" (click)="store.openTemplate(group.uuid)">{{ group.uid }}</button>
               } @else {
@@ -47,8 +47,24 @@
         }
       </section>
     }
-  </sf-cdl-sections-editor>
-  <div class="actions">
-    <sf-button variant="secondary" (click)="editing.validateCdl()">Validate</sf-button>
+    <p class="cdl__hint">{{ 'templates.cdl.hint.' + section | transloco }}</p>
+    <sf-code-panel
+      class="cdl__code"
+      language="cdl"
+      languageLabel="CDL"
+      [attr.data-section]="section"
+      [fileName]="(store.detail()?.uid ?? 'template') + '.' + section + '.cdl'"
+      [label]="labelOf(section)"
+      [value]="store.sections()[section]"
+      [diagnostics]="diagnosticsOf(section)"
+      [readOnly]="store.readOnly()"
+      [names]="store.editorNames()"
+      [formattable]="true"
+      (valueChange)="editing.onSectionInput({ section, value: $event })"
+    >
+      <sf-button sfCodePanelTools variant="ghost" size="sm" icon="task_alt" (click)="editing.validateCdl()">{{
+        'templates.cdl.validate' | transloco
+      }}</sf-button>
+    </sf-code-panel>
   </div>
-</section>
+}

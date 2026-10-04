@@ -4,6 +4,7 @@ import { SfDialogRef, injectDialogData } from '../../shared/components/dialog/di
 import { SfDialogComponent, SfDialogFooterDirective } from '../../shared/components/dialog/sf-dialog.component';
 import { SfInputComponent } from '../../shared/components/forms/sf-input.component';
 import { SfRadioGroupComponent, type SfRadioOption } from '../../shared/components/forms/sf-radio-group.component';
+import { SfSelectComponent, type SfSelectOption } from '../../shared/components/forms/sf-select.component';
 import { SfButtonComponent } from '../../shared/components/sf-button.component';
 import { SfFieldComponent } from '../../shared/components/sf-field.component';
 
@@ -17,13 +18,25 @@ export interface NewTemplateData {
   readonly started: string | null;
   /** The kind, when the person already picked it in a *New* menu; `null` from the header button, which asks. */
   readonly kind: NewTemplateKind | null;
+  /** The existing templates and datasets *Based on* can copy, by kind. */
+  readonly candidates: readonly NewTemplateCandidate[];
+}
+
+export interface NewTemplateCandidate {
+  readonly uuid: string;
+  readonly name: string;
+  readonly kind: NewTemplateKind;
 }
 
 export interface NewTemplateResult {
   readonly kind: NewTemplateKind;
   readonly name: string;
   readonly uid: string;
+  /** The uuid of the template or dataset whose contents the new one copies; `null` starts empty. */
+  readonly basedOn: string | null;
 }
+
+const NOTHING = '__none__';
 
 /** A UID derived from a name: lower case, digits and underscores, starting with a letter. */
 export function uidOf(name: string): string {
@@ -42,7 +55,7 @@ const UID_PATTERN = /^[a-z][a-z0-9_]*$/;
 @Component({
   selector: 'sf-new-template-dialog',
   standalone: true,
-  imports: [SfButtonComponent, SfDialogComponent, SfDialogFooterDirective, SfFieldComponent, SfInputComponent, SfRadioGroupComponent],
+  imports: [SfButtonComponent, SfDialogComponent, SfDialogFooterDirective, SfFieldComponent, SfInputComponent, SfRadioGroupComponent, SfSelectComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './new-template-dialog.component.html',
   styleUrl: './new-template-dialog.component.scss',
@@ -58,6 +71,12 @@ export class NewTemplateDialogComponent {
   protected readonly name = signal('');
   private readonly uidEdited = signal<string | null>(null);
   private readonly nameTouched = signal(false);
+  protected readonly basedOn = signal<string>(NOTHING);
+  /** *Based on*: the existing items of the chosen kind, or none to start empty. */
+  protected readonly basedOnOptions = computed<SfSelectOption<string>[]>(() => [
+    { value: NOTHING, label: this.t('basedOn.none') },
+    ...this.data.candidates.filter((c) => c.kind === this.kind()).map((c) => ({ value: c.uuid, label: c.name })),
+  ]);
 
   protected readonly kinds = computed<SfRadioOption<NewTemplateKind>[]>(() =>
     (['page', 'section', 'dataset'] as const).map((value) => ({
@@ -86,6 +105,7 @@ export class NewTemplateDialogComponent {
 
   protected chooseKind(kind: NewTemplateKind | null): void {
     this.kind.set(kind);
+    this.basedOn.set(NOTHING);
   }
 
   protected setName(value: string): void {
@@ -100,7 +120,7 @@ export class NewTemplateDialogComponent {
   protected create(): void {
     const kind = this.kind();
     if (this.valid() && kind !== null) {
-      this.ref.close({ kind, name: this.trimmed(), uid: this.uid() });
+      this.ref.close({ kind, name: this.trimmed(), uid: this.uid(), basedOn: this.basedOn() === NOTHING ? null : this.basedOn() });
     }
   }
 

@@ -1,35 +1,68 @@
-@if (store.descendantProblems().length > 0) {
-  <div class="inheritance__notice inheritance__notice--error" role="alert">
-    <p>Not saved: this change would break {{ store.descendantProblems().length === 1 ? 'a template that extends' : 'templates that extend' }} this one.</p>
-    @for (problem of store.descendantProblems(); track $index) {
-      <div class="inheritance__descendant">
-        <button type="button" class="inheritance__crumb" (click)="store.openTemplate(problem.uuid)">{{ problem.uid }}</button>
-        <span class="detail__meta inheritance__where">{{ problem.channel ? 'channel ' + problem.channel : 'content definition' }}</span>
-        @for (diag of problem.diagnostics; track $index) {
-          <div class="diagnostic" [class.diagnostic--error]="diag.severity === 'ERROR'" [class.diagnostic--warning]="diag.severity !== 'ERROR'">
-            {{ diag.severity }} {{ diag.code }} @if (diag.line) { ({{ diag.line }}:{{ diag.column }}) } — {{ diag.message }}
-          </div>
-        }
-      </div>
+@if (any()) {
+<div class="outcomes">
+@if (refused(); as error) {
+  <sf-banner tone="danger" live="assertive" data-sf-save-refused [title]="'templates.banner.refused.title' | transloco">
+    @if (error.count) {
+      {{ 'templates.banner.refused.errors' | transloco: { count: error.count } }}
+    } @else {
+      {{ 'templates.banner.refused.reason' | transloco: { reason: error.message } }}
     }
-  </div>
+  </sf-banner>
 }
+
+@if (store.descendantProblems().length > 0) {
+  <sf-banner tone="danger" live="assertive" data-sf-descendant-problems [title]="'templates.banner.broken.title' | transloco">
+    {{ 'templates.banner.broken.message' | transloco: { count: store.descendantProblems().length } }}
+    <ul class="outcomes__list">
+      @for (problem of store.descendantProblems(); track $index) {
+        <li class="outcomes__item">
+          <sf-button variant="ghost" size="sm" (click)="store.openTemplate(problem.uuid)">{{ problem.uid }}</sf-button>
+          <span class="outcomes__where">{{
+            problem.channel
+              ? ('templates.banner.channel' | transloco: { channel: problem.channel })
+              : ('templates.banner.definition' | transloco)
+          }}</span>
+          @for (diag of problem.diagnostics; track $index) {
+            <div class="outcomes__diagnostic" [class.outcomes__diagnostic--error]="diag.severity === 'ERROR'">
+              {{ diag.severity }} {{ diag.code }} @if (diag.line) {({{ diag.line }}:{{ diag.column }})} — {{ diag.message }}
+            </div>
+          }
+        </li>
+      }
+    </ul>
+  </sf-banner>
+}
+
 @if (store.descendantWarnings().length > 0) {
-  <div class="inheritance__notice" role="status">
-    <div class="inheritance__notice-head">
-      <p>Saved. Templates that extend this one have warnings:</p>
-      <sf-button variant="ghost" (click)="store.dismissDescendantWarnings()">Dismiss</sf-button>
-    </div>
-    @for (warning of store.descendantWarnings(); track $index) {
-      <div class="inheritance__descendant">
-        <button type="button" class="inheritance__crumb" (click)="store.openTemplate(warning.uuid)">{{ warning.uid }}</button>
-        <span class="detail__meta inheritance__where">{{ warning.channel ? 'channel ' + warning.channel : 'content definition' }}</span>
-        @for (diag of warning.diagnostics; track $index) {
-          <div class="diagnostic" [class.diagnostic--error]="diag.severity === 'ERROR'" [class.diagnostic--warning]="diag.severity !== 'ERROR'">
-            {{ diag.severity }} {{ diag.code }} @if (diag.line) { ({{ diag.line }}:{{ diag.column }}) } — {{ diag.message }}
-          </div>
-        }
-      </div>
-    }
-  </div>
+  <sf-banner tone="warning" live="polite" dismissible data-sf-descendant-warnings [title]="'templates.banner.warned.title' | transloco" (dismissed)="store.dismissDescendantWarnings()">
+    {{ 'templates.banner.warned.message' | transloco }}
+    <ul class="outcomes__list">
+      @for (warning of store.descendantWarnings(); track $index) {
+        <li class="outcomes__item">
+          <sf-button variant="ghost" size="sm" (click)="store.openTemplate(warning.uuid)">{{ warning.uid }}</sf-button>
+          <span class="outcomes__where">{{
+            warning.channel
+              ? ('templates.banner.channel' | transloco: { channel: warning.channel })
+              : ('templates.banner.definition' | transloco)
+          }}</span>
+          @for (diag of warning.diagnostics; track $index) {
+            <div class="outcomes__diagnostic" [class.outcomes__diagnostic--error]="diag.severity === 'ERROR'">
+              {{ diag.severity }} {{ diag.code }} @if (diag.line) {({{ diag.line }}:{{ diag.column }})} — {{ diag.message }}
+            </div>
+          }
+        </li>
+      }
+    </ul>
+  </sf-banner>
+}
+
+@if (store.childTemplates().length > 0) {
+  <sf-banner tone="info" data-sf-descendants-info>
+    {{ 'templates.banner.descendants' | transloco: { count: store.childTemplates().length } }}
+    <sf-button sfBannerActions variant="ghost" size="sm" (click)="store.usedByUuid.set(store.detail()?.uuid ?? null)">{{
+      'templates.menu.usedBy' | transloco
+    }}</sf-button>
+  </sf-banner>
+}
+</div>
 }

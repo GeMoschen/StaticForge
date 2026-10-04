@@ -1,0 +1,85 @@
+<div class="overview">
+  <div class="overview__main">
+    <section class="overview__fields" aria-labelledby="dataset-fields-title">
+      <h2 class="overview__title" id="dataset-fields-title">{{ 'templates.dataset.fields.title' | transloco }}</h2>
+      <sf-data-table
+        class="overview__table"
+        [rowsOpenable]="false"
+        [columns]="columns()"
+        [rows]="fields()"
+        [rowKey]="fieldKey"
+        [rowLabel]="fieldLabel"
+        [columnChooser]="false"
+        [label]="'templates.dataset.fields.table' | transloco: { name: name() }"
+      >
+        <ng-template sfDataTableCell="name" [sfDataTableCellRows]="fields()" let-field>
+          <span class="cell-field">
+            <span class="cell-field__label">{{ field.label }}</span>
+            <code class="cell-field__id">{{ field.name }}</code>
+          </span>
+        </ng-template>
+        <ng-template sfDataTableCell="required" [sfDataTableCellRows]="fields()" let-field>
+          <ng-container *ngTemplateOutlet="yesNo; context: { $implicit: field.required }" />
+        </ng-template>
+        <ng-template sfDataTableCell="localized" [sfDataTableCellRows]="fields()" let-field>
+          <ng-container *ngTemplateOutlet="yesNo; context: { $implicit: field.localized }" />
+        </ng-template>
+      </sf-data-table>
+    </section>
+
+    <sf-section class="overview__definition" [heading]="'templates.dataset.definition.title' | transloco">
+      <sf-field [label]="'templates.dataset.definition.description' | transloco" [hint]="'templates.dataset.definition.descriptionHint' | transloco">
+        <textarea class="overview__description" [value]="description()" [disabled]="readOnly()" (input)="onDescription($event)"></textarea>
+      </sf-field>
+      <sf-field [label]="'templates.dataset.definition.titleField' | transloco" [hint]="'templates.dataset.definition.titleFieldHint' | transloco">
+        <select [value]="titleEditor()" [disabled]="readOnly()" (change)="onTitleEditor($event)">
+          <option value="">{{ 'templates.dataset.definition.noTitleField' | transloco }}</option>
+          @for (editor of textEditors(); track editor.name) {
+            <option [value]="editor.name" [selected]="editor.name === titleEditor()">{{ editor.label ?? editor.name }}</option>
+          }
+        </select>
+      </sf-field>
+      <p class="overview__snippet">
+        <span class="sf-sr-only">{{ 'templates.dataset.definition.snippet' | transloco }} </span><code>{{ loopSnippet() }}</code>
+      </p>
+    </sf-section>
+  </div>
+
+  <sf-section class="overview__used" [heading]="'templates.dataset.usedBy.title' | transloco">
+    <p class="used__records">
+      {{ (recordCount() === 1 ? 'templates.dataset.records.one' : 'templates.dataset.records.many') | transloco: { count: recordCount() } }}
+      <a [routerLink]="['/p', projectKey(), 'content']" [queryParams]="{ dataset: datasetUuid() }">{{ 'templates.dataset.records.open' | transloco }}</a>
+    </p>
+    @if (usagesFailed()) {
+      <p class="used__none" role="status">{{ 'templates.dataset.usedBy.failed' | transloco }}</p>
+    } @else if (usages() === null) {
+      <p class="used__none" role="status">{{ 'templates.dataset.usedBy.loading' | transloco }}</p>
+    } @else if (rows().length) {
+      <ul class="used" [attr.aria-label]="'templates.dataset.usedBy.title' | transloco">
+        @for (row of rows(); track $index) {
+          <li class="used__item">
+            <sf-badge tone="neutral" [label]="row.type" />
+            @if (row.link; as link) {
+              <a [routerLink]="link.commands" [queryParams]="link.queryParams">{{ row.usage.fromUid }}</a>
+            } @else {
+              <span>{{ row.usage.fromUid }}</span>
+            }
+            @if (row.usage.sourcePath) {
+              <code class="used__path">{{ row.usage.sourcePath }}</code>
+            }
+          </li>
+        }
+      </ul>
+    } @else {
+      <p class="used__none">{{ 'templates.dataset.usedBy.none' | transloco }}</p>
+    }
+  </sf-section>
+</div>
+
+<ng-template #yesNo let-on>
+  @if (on) {
+    <sf-icon class="cell-yes" name="check" /><span class="sf-sr-only">{{ 'templates.dataset.yes' | transloco }}</span>
+  } @else {
+    <span class="cell-no" aria-hidden="true">–</span><span class="sf-sr-only">{{ 'templates.dataset.no' | transloco }}</span>
+  }
+</ng-template>

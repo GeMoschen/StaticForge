@@ -197,6 +197,31 @@ describe('TemplatesItemActions', () => {
       expect(content.createDataset).toHaveBeenCalledWith('proj', { displayName: 'Team', contentCdl: NEW_DATASET_CONTENT, titleEditor: 'name', parentFolderUuid: 'ds' });
     });
 
+    it('copies the contents of the item it is based on', async () => {
+      const { actions, templates, content } = setup();
+
+      await actions.create('proj', { kind: 'page', name: 'News', uid: 'derived', parentFolderUuid: 'pt', basedOn: entry('article') });
+      expect(templates.get).toHaveBeenCalledWith('page', 'proj', 'article');
+      expect(templates.create).toHaveBeenCalledWith(
+        'page',
+        'proj',
+        expect.objectContaining({
+          displayName: 'News',
+          parentFolderUuid: 'pt',
+          contentCdl: 'editor text title { }',
+          bodiesCdl: 'body main { }',
+          channelSources: { html: '<p/>' },
+          category: 'Blog',
+        }),
+      );
+
+      await actions.create('proj', { kind: 'dataset', name: 'Staff', uid: 'derived', parentFolderUuid: 'ds', basedOn: entry('products') });
+      expect(content.createDataset).toHaveBeenCalledWith(
+        'proj',
+        expect.objectContaining({ displayName: 'Staff', contentCdl: 'editor text name { }', channelTemplates: { html: '<li/>' } }),
+      );
+    });
+
     it('applies a UID the person edited after creating, and says when it could not', async () => {
       const { actions, api } = setup();
       expect(await actions.create('proj', { kind: 'page', name: 'Hero', uid: 'chosen' })).toEqual({ uuid: 'new-1', uid: 'chosen', uidApplied: true });

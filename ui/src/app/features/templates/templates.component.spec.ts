@@ -139,14 +139,14 @@ describe('TemplatesComponent (time travel read-only)', () => {
   it('does not create a new template while time travel is active', async () => {
     timeTravel.enter(5);
 
-    await component.createTemplate({ kind: 'page', name: 'New template', uid: 'new_template' }, null);
+    await component.createTemplate({ kind: 'page', name: 'New template', uid: 'new_template', basedOn: null }, null);
 
     httpMock.expectNone((req) => req.method === 'POST');
   });
 
   it('creates a template again once time travel ends (a developer)', async () => {
     vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
-    const created = component.createTemplate({ kind: 'page', name: 'New template', uid: 'new_template' }, null);
+    const created = component.createTemplate({ kind: 'page', name: 'New template', uid: 'new_template', basedOn: null }, null);
 
     httpMock.expectOne((req) => req.method === 'POST' && req.url.endsWith('/page-templates')).flush({ uuid: 'new-1', uid: 'new_template' });
     await created;
@@ -249,10 +249,11 @@ describe('TemplatesComponent (inheritance, M20.4.1)', () => {
 
   it('sends the abstract flag and shows the page count when the template is in use', () => {
     selectArticle();
-    // The Abstract checkbox of the header sets this (the editor's DOM is mounted by `attachEditor`).
-    const checkbox = (fixture.nativeElement as HTMLElement).querySelector<HTMLInputElement>('label[title^="A layout"] input')!;
-    checkbox.checked = true;
-    checkbox.dispatchEvent(new Event('change'));
+    // The Abstract switch of the Settings section sets this (the editor's DOM is mounted by `attachEditor`).
+    const abstract = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll<HTMLElement>('button[role="switch"]')).find((b) =>
+      b.textContent?.includes('Abstract template'),
+    )!;
+    abstract.click();
     save.saveTemplate();
     const put = httpMock.expectOne((r) => r.method === 'PUT');
     expect((put.request.body as { abstract?: boolean }).abstract).toBe(true);
@@ -261,6 +262,11 @@ describe('TemplatesComponent (inheritance, M20.4.1)', () => {
       { status: 422, statusText: 'Unprocessable Entity' },
     );
     expect(store.templateInUse()?.pageCount).toBe(2);
+    // The refusal sits under the switch and names the pages.
+    fixture.detectChanges();
+    const refused = (fixture.nativeElement as HTMLElement).querySelector('[data-sf-abstract-refused]')!;
+    expect(refused.textContent).toContain('2 pages use this template');
+    expect(Array.from(refused.querySelectorAll('a')).map((a) => a.textContent)).toEqual(['one', 'two']);
   });
 
   it('renders live OCTL diagnostics from the context-aware validate endpoint', async () => {
@@ -582,7 +588,7 @@ describe('TemplatesComponent (tabs and one save, M34)', () => {
     open();
     editing.onSectionInput({ section: 'content', value: 'editor text headline { }' });
     fixture.detectChanges();
-    const detail = (fixture.nativeElement as HTMLElement).querySelector('.detail__scroll')!;
+    const detail = (fixture.nativeElement as HTMLElement).querySelector('[data-sf-template-ide]')!;
     detail.dispatchEvent(new KeyboardEvent('keydown', { key: 's', ctrlKey: true, bubbles: true }));
     httpMock.expectOne((r) => r.method === 'PUT').flush({ ...LAYOUT, revision: 5 });
   });
@@ -640,8 +646,9 @@ describe('TemplatesComponent output path warnings', () => {
     const warnings = shown(fixture);
     expect(warnings).toHaveLength(1);
     expect(warnings[0].textContent).toContain('{locale}/index.html');
-    // It sits in the html channel's panel, not the rss one.
-    expect(warnings[0].closest('[role="tabpanel"]')?.getAttribute('aria-label')).toBe('Channel html');
+    // It sits at the output path of the html channel, not the rss one.
+    expect(warnings[0].getAttribute('data-sf-output-path-warning')).toBe('html');
+    expect(warnings[0].textContent).toContain('Output path — html');
   });
 
   it('shows nothing for a template without warnings', () => {

@@ -159,12 +159,12 @@ export class TemplatesEditing {
     this.selectChannel(channelKey);
   }
 
-  /** Removes the selected channel; the next Save deletes it (M34), until then it can be restored. */
-  removeChannel(): void {
-    const channel = this.store.selectedChannel();
-    if (!channel || this.store.readOnly()) {
+  /** Removes a channel (default: the selected one); the next Save deletes it (M34), until then it can be restored. */
+  removeChannel(channel = this.store.selectedChannel()): void {
+    if (!channel || this.store.readOnly() || !(channel in this.store.channelSources())) {
       return;
     }
+    const wasSelected = channel === this.store.selectedChannel();
     this.store.channelSources.update((sources) => {
       const { [channel]: _removed, ...rest } = sources;
       return rest;
@@ -173,10 +173,12 @@ export class TemplatesEditing {
       const { [channel]: _dropped, ...rest } = all;
       return rest;
     });
-    const next = this.store.channelKeys()[0] ?? '';
-    this.store.selectedChannel.set(next);
-    if (next) {
-      this.requestOctlValidation();
+    if (wasSelected) {
+      const next = this.store.channelKeys()[0] ?? '';
+      this.store.selectedChannel.set(next);
+      if (next) {
+        this.requestOctlValidation();
+      }
     }
   }
 

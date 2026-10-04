@@ -12,6 +12,7 @@ import { SessionService } from '../../core/auth/session.service';
 import { DeveloperModeService } from '../../core/frame/developer-mode.service';
 import { FrameContextStore } from '../../core/frame/frame-context.store';
 import { parseFrameLocation } from '../../core/frame/frame-location';
+import { CodePaletteService } from '../../core/ui/code-palette.service';
 import { DensityService } from '../../core/ui/density.service';
 import { ThemeService } from '../../core/ui/theme.service';
 import { ToastService } from '../../core/ui/toast.service';
@@ -113,15 +114,17 @@ describe('AccountPreferencesComponent', () => {
   async function setup(developerAvailable: boolean) {
     const theme = { preference: signal('system'), set: vi.fn() };
     const density = { density: signal('compact'), set: vi.fn() };
+    const codePalette = { palette: signal('current'), set: vi.fn() };
     const developer = { available: signal(developerAvailable), enabled: signal(true), set: vi.fn() };
     await render(AccountPreferencesComponent, {
       providers: base([
         { provide: ThemeService, useValue: theme },
         { provide: DensityService, useValue: density },
+        { provide: CodePaletteService, useValue: codePalette },
         { provide: DeveloperModeService, useValue: developer },
       ]),
     });
-    return { theme, density, developer };
+    return { theme, density, codePalette, developer };
   }
 
   it('applies theme and density the moment they change, with no Save button', async () => {
@@ -131,6 +134,13 @@ describe('AccountPreferencesComponent', () => {
     expect(theme.set).toHaveBeenCalledWith('dark');
     await fireEvent.click(screen.getByRole('radio', { name: 'Comfortable' }));
     expect(density.set).toHaveBeenCalledWith('comfortable');
+  });
+
+  it('offers the code palette next to theme and density: Current is selected, Refined applies at once', async () => {
+    const { codePalette } = await setup(true);
+    expect(screen.getByRole('radio', { name: 'Current' }).getAttribute('aria-checked')).toBe('true');
+    await fireEvent.click(screen.getByRole('radio', { name: 'Refined' }));
+    expect(codePalette.set).toHaveBeenCalledWith('refined');
   });
 
   it('offers developer mode only to people with developer rights, and shows the language read-only', async () => {

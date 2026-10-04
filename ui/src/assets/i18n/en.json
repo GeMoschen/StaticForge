@@ -4614,6 +4614,10 @@
       "densityHint": "Compact fits more on the screen; comfortable gives it room.",
       "compact": "Compact",
       "comfortable": "Comfortable",
+      "codePalette": "Code colours",
+      "codePaletteHint": "How code is highlighted in the Templates editors. Current is the default; Refined uses softer colours.",
+      "paletteCurrent": "Current",
+      "paletteRefined": "Refined",
       "developer": "Developer mode",
       "developerSwitch": "Show developer details",
       "developerHint": "Shows identifiers, paths and the Templates area. Only people with developer rights can turn it on.",
@@ -6027,6 +6031,96 @@
       "done": "Copied “{name}”.",
       "failed": "Could not copy “{name}” — try again in a moment."
     },
+    "dataset": {
+      "kind": "Dataset",
+      "tabsLabel": "Dataset sections",
+      "tabs": {
+        "overview": "Overview",
+        "schema": "Schema",
+        "rules": "Rules"
+      },
+      "channelDisabled": "disabled",
+      "save": "Save dataset",
+      "uid": "UID",
+      "revision": "rev {revision}",
+      "unsavedHint": "Unsaved changes — schema and record templates save together.",
+      "readOnlyHint": "Only a developer can change a dataset schema or its record templates.",
+      "validate": "Validate",
+      "cdlLabel": "Record fields (CDL) — {section}",
+      "hints": {
+        "content": "Editors only — records have no bodies. Rename a field with renamedFrom and every record follows in one revision.",
+        "rules": "Checks, required/read-only states and fills on the record fields: rule, state and fill entries."
+      },
+      "menu": {
+        "rename": "Rename…",
+        "duplicate": "Duplicate",
+        "usedBy": "Used by",
+        "delete": "Delete",
+        "deleteHasRecords": "Delete its {count} records first to delete the dataset."
+      },
+      "yes": "Yes",
+      "no": "No",
+      "columns": {
+        "name": "Name",
+        "type": "Type",
+        "required": "Required",
+        "localized": "Localized",
+        "rules": "Rules"
+      },
+      "fields": {
+        "title": "Fields",
+        "table": "Fields of {name}"
+      },
+      "definition": {
+        "title": "Definition",
+        "description": "Description",
+        "descriptionHint": "Shown to editors in the Content store.",
+        "titleField": "Title field",
+        "titleFieldHint": "A text field whose value becomes each record's display name. Takes effect after saving the schema.",
+        "noTitleField": "None — editors name records themselves",
+        "snippet": "Template snippet:"
+      },
+      "records": {
+        "one": "{count} record",
+        "many": "{count} records",
+        "open": "Open record sets"
+      },
+      "usedBy": {
+        "title": "Used by",
+        "none": "Nothing uses this dataset yet.",
+        "loading": "Reading what uses this dataset…",
+        "failed": "Could not read what uses this dataset."
+      },
+      "channel": {
+        "label": "Record template for channel {channel}",
+        "hint": "How one record renders in the {channel} channel wherever a record set of this dataset is rendered. Fields are top-level names; _index, _first, _last and _count describe the record's place among the records the set renders.",
+        "disabled": "The {channel} channel is disabled — this template is kept but not rendered.",
+        "emptyTitle": "No record template for {channel}",
+        "emptyText": "$CMS_VALUE(recordset:…)$ — and a reference editor pointing at a record set of this dataset — renders nothing in this channel. $CMS_FOR loops over a set are not affected: they bring their own markup."
+      },
+      "helpers": {
+        "group": "Insert into the record template",
+        "fields": "Fields",
+        "record": "Record",
+        "noFields": "The schema declares no fields yet."
+      },
+      "broken": {
+        "intro": "Saved. These record sets' queries no longer match the schema — they render nothing until their query is fixed:",
+        "dismiss": "Dismiss"
+      },
+      "toast": {
+        "saved": "Dataset saved",
+        "savedBrokenOne": "Dataset saved — {count} record set needs a query fix.",
+        "savedBrokenMany": "Dataset saved — {count} record sets need a query fix.",
+        "saveFailed": "Could not save the dataset — try again in a moment.",
+        "templateErrors": "The {channel} record template has errors — nothing was saved.",
+        "schemaErrors": "The schema has errors — see the {tab} tab.",
+        "conflict": "Someone else saved this dataset — reloading the current version.",
+        "loadFailed": "Could not load the dataset — try again in a moment.",
+        "deleteHasRecords": "The dataset still has {count} records — delete them first.",
+        "deleteFailed": "Could not delete the dataset — a template may still loop it."
+      }
+    },
     "usedBy": {
       "title": "Used by — {name}",
       "failed": "Could not load what uses “{name}”."
@@ -6063,7 +6157,12 @@
         "chooseKind": "Choose a kind first.",
         "enterName": "Enter a name first."
       },
-      "cancel": "Cancel"
+      "cancel": "Cancel",
+      "basedOn": {
+        "label": "Based on",
+        "hint": "Optional: starts with a copy of the chosen item’s contents — fields, rules and channel templates. The two stay independent.",
+        "none": "Nothing — start empty"
+      }
     },
     "editor": {
       "loading": "Loading the template…"
@@ -6091,6 +6190,101 @@
       "moveFailed": "Could not move “{name}” — the target may be inside what you are moving.",
       "deleteFailed": "Could not delete “{name}” — it may still be in use by a page.",
       "deleted": "Deleted “{name}”."
+    },
+    "header": {
+      "untitled": "Template",
+      "inheritance": "Inheritance chain",
+      "abstract": "Abstract",
+      "deprecated": "Deprecated",
+      "save": "Save",
+      "saveShortcut": "Save (Ctrl+S)",
+      "uid": "UID",
+      "delete": "Delete…"
+    },
+    "readOnly": {
+      "archived": "Archived project — read-only",
+      "revision": "Revision {revision} — read-only"
+    },
+    "settings": {
+      "title": "Settings",
+      "displayName": "Display name",
+      "category": "Category",
+      "categoryHint": "Groups the template in pickers.",
+      "deprecated": "Deprecated",
+      "deprecatedSwitch": "Deprecated template",
+      "deprecatedHint": "Still works in existing pages, but is no longer offered in the section palette.",
+      "abstract": "Abstract",
+      "abstractSwitch": "Abstract template",
+      "abstractHint": "A layout other page templates extend. Pages can’t use an abstract template.",
+      "abstractBlocked": "{count, plural, one {# page uses} other {# pages use}} this template, so it can’t be abstract. Move {count, plural, one {it} other {them}} to another template first:",
+      "channels": "Channels",
+      "removeChannel": "Remove the {channel} channel",
+      "noChannels": "No channels yet.",
+      "addChannel": "Add channel",
+      "addChannelLabel": "Add a channel template",
+      "removedOnSave": "Removed when you save:",
+      "undo": "Undo",
+      "outputPaths": "Output paths",
+      "outputPathHint": "Where the pages of this template are written, per channel. Leave a path blank for the default. The placeholders are filled per page and language.",
+      "outputPath": "Output path — {channel}",
+      "outputPathLocale": "Add {placeholder} to the path: this project has {count} languages, and pages of different languages would overwrite each other.",
+      "paginationPaths": "Pagination paths",
+      "paginationHint": "Where pages 2, 3, … of a paginated page are written, per channel. Leave blank to write them next to the first page ({example} → {exampleNext}). Placeholders: {pageNumber} (required), {pagePath} (the first page’s path without extension), {folder}, {uid}, {ext}.",
+      "paginationPath": "Pagination path — {channel}",
+      "paginationNeedsNumber": "Must contain {pageNumber}, or every page would be written to the same file.",
+      "paginationNoChannel": "Add a channel to set its pagination path."
+    },
+    "banner": {
+      "refused": {
+        "title": "Not saved",
+        "errors": "The template has {count, plural, one {# compile error} other {# compile errors}}, so nothing was written. Fix {count, plural, one {it} other {them}} on the tabs below and save again.",
+        "reason": "Nothing was written: {reason}. Check the template and save again."
+      },
+      "broken": {
+        "title": "Not saved",
+        "message": "This change would break {count, plural, one {a template that extends} other {# templates that extend}} this one. Nothing was written."
+      },
+      "warned": {
+        "title": "Saved",
+        "message": "Templates that extend this one have warnings:"
+      },
+      "channel": "channel {channel}",
+      "definition": "content definition",
+      "descendants": "{count, plural, one {# template extends} other {# templates extend}} this one. They are checked again when you save."
+    },
+    "cdl": {
+      "tabs": "CDL sections",
+      "editorLabel": "{section} CDL of {name}",
+      "from": "from",
+      "inheritedEditors": "Inherited editors (read-only — edit them on the template that declares them)",
+      "inheritedEditorsLabel": "Inherited editors",
+      "inheritedBodies": "Inherited bodies (read-only — edit them on the template that declares them)",
+      "inheritedBodiesLabel": "Inherited bodies",
+      "hint": {
+        "content": "The editors this template exposes: editor and group declarations.",
+        "bodies": "The bodies pages of this template fill with sections: body declarations.",
+        "rules": "Checks, required/read-only states and fills on the editors: rule, state and fill entries."
+      },
+      "validate": "Validate"
+    },
+    "channels": {
+      "tabs": "Channel templates",
+      "editorLabel": "{channel} template of {name}",
+      "hint": "How this template renders in the {channel} channel.",
+      "none": "No channels configured. Add one to write this template’s output."
+    },
+    "ide": {
+      "cdl": "CDL",
+      "channels": "Channels",
+      "sides": "Editors",
+      "resize": "Resize the CDL and channel editors",
+      "cdlPane": "Content definition (CDL)",
+      "channelsPane": "Channel templates (OCTL)",
+      "noneTitle": "No template selected",
+      "noneDescription": "Choose a template in the tree, or create one with New.",
+      "loadFailedTitle": "The template could not be loaded",
+      "loadFailedDescription": "Try again. Your other templates are not affected.",
+      "retry": "Retry"
     }
   },
   "media": {

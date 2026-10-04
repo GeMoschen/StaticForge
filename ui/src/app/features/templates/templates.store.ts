@@ -20,10 +20,11 @@ import {
   type TemplateInUse,
   type TemplateRef,
 } from './inheritance.util';
+import { outputPathsForSave } from './output-path.util';
 import { declaresPagination, paginationPathError, paginationPathsForSave } from './pagination-path.util';
 import type { Diagnostic, TemplateDetail, TemplateKind, TemplateSummary } from './templates.service';
 import type { TemplateAssetKind } from './types';
-import { channelSourcesOf } from './templates.util';
+import { channelSourcesOf, pathMapOf } from './templates.util';
 
 type ChannelView = components['schemas']['ChannelView'];
 
@@ -82,6 +83,13 @@ export class TemplatesStore {
   readonly datasetSelected = computed(() => this.selectedTemplateAssetType() === 'DATASET');
 
   readonly detail = signal<TemplateDetail | null>(null);
+  /** Reading the open template failed (the editor then offers Retry instead of a skeleton). */
+  readonly detailFailed = signal(false);
+  /**
+   * What the header's ⋮ asks of the area, which owns the dialogs (Rename…, Move to…) and the copy: the area reads it, does
+   * it and clears it (like `usedByUuid`).
+   */
+  readonly itemRequest = signal<{ action: 'duplicate' | 'rename' | 'move'; uuid: string } | null>(null);
   readonly displayName = signal('');
   readonly category = signal('');
   readonly deprecated = signal(false);
@@ -116,6 +124,10 @@ export class TemplatesStore {
   readonly abstractTemplate = signal(false);
   /** A page template's per-channel path patterns of pages 2..N of a paginated page, as edited (M21). */
   readonly paginationPaths = signal<Record<string, string>>({});
+  /** A page template's per-channel output paths as edited (blank: the default path). */
+  readonly outputPaths = signal<Record<string, string>>({});
+  /** The saved output paths, blank ones left out (what `outputPaths` is compared with). */
+  readonly savedOutputPaths = computed<Record<string, string>>(() => outputPathsForSave(pathMapOf(this.detail()?.outputPath)));
   /** Whether the pagination paths apply: the template declares or inherits a pagination editor, or has patterns. */
   readonly showPaginationPaths = computed(
     () =>

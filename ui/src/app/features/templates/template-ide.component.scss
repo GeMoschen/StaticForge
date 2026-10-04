@@ -1,0 +1,63 @@
+:host {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.ide {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  overflow: auto;
+}
+
+// The code takes what the header, banners and settings leave, and never less than a usable editor.
+.ide__body {
+  display: flex;
+  flex: 1 0 auto;
+  flex-direction: column;
+  min-height: 30rem;
+  background: var(--sf-bg);
+}
+
+.ide__split {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.ide__stack-tabs {
+  padding: 0 var(--sf-space-4);
+  background: var(--sf-surface);
+}
+
+.ide__pane {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  padding: var(--sf-space-2) var(--sf-space-3) var(--sf-space-3);
+}
+
+.ide__impact {
+  flex: 0 0 auto;
+  padding: var(--sf-space-2) var(--sf-space-6) var(--sf-space-4);
+  border-top: 1px solid var(--sf-border);
+}
+
+.ide__placeholder {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  justify-content: center;
+  padding: var(--sf-space-8);
+}
+
+@media (max-width: 1279px) {
+  .ide__impact {
+    padding-inline: var(--sf-space-4);
+  }
+}

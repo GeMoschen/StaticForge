@@ -20,7 +20,7 @@ async function open(data: Partial<NewTemplateData> = {}) {
   const close = vi.spyOn(ref, 'close');
   await render(NewTemplateDialogComponent, {
     providers: [
-      { provide: SF_DIALOG_DATA, useValue: { folders: FOLDERS, started: 'Blog', kind: null, ...data } },
+      { provide: SF_DIALOG_DATA, useValue: { folders: FOLDERS, started: 'Blog', kind: null, candidates: CANDIDATES, ...data } },
       { provide: SfDialogRef, useValue: ref },
     ],
   });
@@ -34,6 +34,11 @@ async function open(data: Partial<NewTemplateData> = {}) {
     kind: (label: string) => within(dialog).getByRole('radio', { name: label }),
   };
 }
+
+const CANDIDATES = [
+  { uuid: 'article', name: 'Article', kind: 'page' as const },
+  { uuid: 'teaser', name: 'Teaser', kind: 'section' as const },
+];
 
 describe('NewTemplateDialogComponent', () => {
   it('opened from the header button chooses nothing: three kinds, none checked, Create says to choose a kind first', async () => {
@@ -103,10 +108,27 @@ describe('NewTemplateDialogComponent', () => {
     fireEvent.input(name, { target: { value: 'Team members' } });
 
     fireEvent.click(create);
-    expect(close).toHaveBeenLastCalledWith({ kind: 'dataset', name: 'Team members', uid: 'team_members' });
+    expect(close).toHaveBeenLastCalledWith({ kind: 'dataset', name: 'Team members', uid: 'team_members', basedOn: null });
 
     fireEvent.submit(name.closest('form')!);
     expect(close).toHaveBeenCalledTimes(2);
+  });
+
+  it('offers only the items of the chosen kind as Based on, and closes with the chosen one', async () => {
+    const { dialog, close, create, name, kind } = await open({ kind: null });
+    expect(within(dialog).queryByText('Based on')).not.toBeInTheDocument();
+    fireEvent.click(kind('Page template'));
+    expect(within(dialog).getByText('Based on')).toBeInTheDocument();
+    expect(within(dialog).getByText('Nothing — start empty')).toBeInTheDocument();
+
+    const select = within(dialog).getByRole('combobox', { name: /Based on/ }) as HTMLSelectElement;
+    expect(within(select).getByRole('option', { name: 'Article' })).toBeInTheDocument();
+    expect(within(select).queryByRole('option', { name: 'Teaser' })).not.toBeInTheDocument();
+    fireEvent.change(select, { target: { value: '1' } });
+    fireEvent.input(name, { target: { value: 'News' } });
+    fireEvent.click(create);
+
+    expect(close).toHaveBeenLastCalledWith({ kind: 'page', name: 'News', uid: 'news', basedOn: 'article' });
   });
 
   it('does nothing on Enter while something is missing, and closes without a result on Cancel', async () => {

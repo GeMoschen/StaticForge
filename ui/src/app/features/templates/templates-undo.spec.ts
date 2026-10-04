@@ -9,7 +9,7 @@ import { ProjectContextStore } from '../../core/project/project-context.store';
 import { provideProjectPermissions } from '../../core/project/testing/project-permissions.testing';
 import { ToastService } from '../../core/ui/toast.service';
 import { ConfirmService } from '../../shared/components/dialog/confirm.service';
-import type { DeletedDataset } from '../content/dataset-schema-editor.component';
+import type { DeletedDataset } from './dataset-editor.component';
 import { TemplateEditorComponent } from './template-editor.component';
 import { TemplatesSaveCoordinator } from './templates-save.coordinator';
 import { TemplatesComponent } from './templates.component';

@@ -19,13 +19,14 @@ import {
   sortDiagnostics,
   templateInUseOf,
 } from './inheritance.util';
+import { outputPathsForSave } from './output-path.util';
 import { paginationPathsForSave, readPaginationPaths } from './pagination-path.util';
 import { TemplatesItemActions } from './templates-item-actions.service';
 import { TemplatesLoader } from './templates-loader';
 import { EMPTY_TEMPLATES_INDEX, entryOfSummary } from './templates-tree.util';
 import { etagFor, TemplatesService, type Diagnostic, type TemplateDetail } from './templates.service';
 import { TemplatesStore } from './templates.store';
-import { pathMapOf, sameRecord } from './templates.util';
+import { sameRecord } from './templates.util';
 
 /**
  * What differs from the saved template and what happens to it: the dirty state, the one Save (M34) with its rejections
@@ -68,6 +69,7 @@ export class TemplatesSaveCoordinator {
       (store.isSection()
         ? store.deprecated() === (detail.deprecated ?? false)
         : store.abstractTemplate() === (detail.abstract ?? false) &&
+          sameRecord(outputPathsForSave(store.outputPaths()), store.savedOutputPaths()) &&
           sameRecord(paginationPathsForSave(store.paginationPaths()), readPaginationPaths(detail.paginationPath)));
     const saved = store.savedSections();
     return !sameChannels || !sameMeta || saved === null || !sectionsEqual(store.sections(), saved);
@@ -157,7 +159,7 @@ export class TemplatesSaveCoordinator {
           ...(store.isSection()
             ? {}
             : {
-                outputPath: pathMapOf(detail.outputPath),
+                outputPath: outputPathsForSave(store.outputPaths()),
                 // Edited under "Pagination paths"; blank channels use the default sibling-file path (M21).
                 paginationPath: paginationPathsForSave(store.paginationPaths()),
                 abstract: store.abstractTemplate(),

@@ -1,0 +1,103 @@
+:host {
+  display: block;
+}
+
+.settings {
+  padding: var(--sf-space-2) var(--sf-space-6);
+  border-bottom: 1px solid var(--sf-border);
+  background: var(--sf-surface);
+}
+
+.settings__bar {
+  display: flex;
+  align-items: center;
+  gap: var(--sf-space-3);
+  min-width: 0;
+}
+
+.settings__title {
+  margin: 0 0 0 calc(-1 * var(--sf-space-2));
+  font: inherit;
+}
+
+.settings__summary {
+  overflow: hidden;
+  color: var(--sf-text-muted);
+  font-family: var(--sf-font-mono);
+  font-size: var(--sf-fs-12);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.settings__body {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+  gap: var(--sf-gap) var(--sf-space-4);
+  padding: var(--sf-space-2) 0 var(--sf-space-2);
+
+  &[hidden] {
+    display: none;
+  }
+}
+
+.settings__channels,
+.settings__group {
+  display: flex;
+  flex-direction: column;
+  grid-column: 1 / -1;
+  gap: var(--sf-space-2);
+  min-width: 0;
+}
+
+.settings__group-title {
+  color: var(--sf-text);
+  font-size: var(--sf-fs-13);
+  line-height: var(--sf-lh-13);
+  font-weight: var(--sf-weight-medium);
+}
+
+.settings__paths {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+  gap: var(--sf-gap) var(--sf-space-4);
+}
+
+.settings__chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sf-space-2);
+  min-height: var(--sf-control-height);
+}
+
+.settings__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sf-space-1);
+  padding-inline-start: var(--sf-space-2);
+  border: 1px solid var(--sf-border);
+  border-radius: var(--sf-radius-md);
+  font-size: var(--sf-fs-12);
+}
+
+.settings__muted {
+  margin: 0;
+  color: var(--sf-text-muted);
+  font-size: var(--sf-fs-12);
+  line-height: var(--sf-lh-12);
+}
+
+.settings__removed {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sf-space-2);
+  margin: 0;
+  color: var(--sf-text-muted);
+}
+
+@media (max-width: 1279px) {
+  .settings {
+    padding-inline: var(--sf-space-4);
+  }
+}

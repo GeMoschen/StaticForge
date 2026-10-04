@@ -1,0 +1,178 @@
+@if (detail(); as d) {
+  <div class="ds__head">
+    <sf-page-header [title]="d.displayName || d.uid || ''" [secondaryActions]="moreActions()" (secondaryAction)="secondary($event)">
+      <span sfPageHeaderStatus>
+        <sf-badge icon="dataset" [label]="'templates.dataset.kind' | transloco" />
+      </span>
+      <span sfPageHeaderActions class="ds__actions">
+        <sf-save-status [state]="saveState()" [savedAt]="lastSaved()" [errorCount]="saveError()?.count ?? 0" />
+        <sf-button variant="primary" [disabled]="saving() || !canEdit() || !dirty()" (click)="save()">
+          {{ 'templates.dataset.save' | transloco }}
+        </sf-button>
+      </span>
+    </sf-page-header>
+    <div class="ds__meta">
+      <span class="ds__meta-label">{{ 'templates.dataset.uid' | transloco }}</span>
+      <sf-copyable [value]="d.uid ?? ''" [label]="'templates.dataset.uid' | transloco" />
+      <span class="ds__meta-label">{{ 'templates.dataset.revision' | transloco: { revision: d.revision ?? '' } }}</span>
+      @if (canEdit() && dirty()) {
+        <span class="ds__meta-label" role="status">{{ 'templates.dataset.unsavedHint' | transloco }}</span>
+      }
+    </div>
+    @if (!canEdit()) {
+      <p class="ds__note" role="status">{{ 'templates.dataset.readOnlyHint' | transloco }}</p>
+    }
+    <sf-tabs
+      [idPrefix]="tabsId"
+      [tabs]="tabs()"
+      [selected]="tab()"
+      [label]="'templates.dataset.tabsLabel' | transloco"
+      (selectTab)="selectTab($event)"
+    />
+  </div>
+
+  @if (brokenRecordSets().length > 0) {
+    <div class="ds__broken" role="status">
+      <div class="ds__broken-head">
+        <p>{{ 'templates.dataset.broken.intro' | transloco }}</p>
+        <sf-button variant="ghost" (click)="dismissBrokenRecordSets()">{{ 'templates.dataset.broken.dismiss' | transloco }}</sf-button>
+      </div>
+      <ul>
+        @for (set of brokenRecordSets(); track set.uuid) {
+          <li>
+            <a [routerLink]="['/p', projectKey(), 'content', 'sets', set.uuid]">{{ set.displayName || set.uid }}</a>
+            <span class="ds__broken-uid">{{ set.uid }}</span>
+            @for (diag of set.diagnostics ?? []; track $index) {
+              <span class="ds__broken-diag">{{ diag.field ? diag.field + ': ' : '' }}{{ diag.message }}</span>
+            }
+          </li>
+        }
+      </ul>
+    </div>
+  }
+
+  <div class="ds__body">
+    <div class="ds__panel ds__panel--scroll" role="tabpanel" [id]="panelId('overview')" [attr.aria-labelledby]="tabId('overview')" [hidden]="tab() !== 'overview'">
+      <sf-dataset-overview
+        [projectKey]="projectKey()"
+        [datasetUuid]="d.uuid ?? ''"
+        [name]="d.displayName || d.uid || ''"
+        [fields]="fields()"
+        [recordCount]="d.recordCount ?? 0"
+        [usages]="usages()"
+        [usagesFailed]="usagesFailed()"
+        [description]="description()"
+        [titleEditor]="titleEditor()"
+        [textEditors]="textEditors()"
+        [loopSnippet]="loopSnippet()"
+        [readOnly]="!canEdit()"
+        (descriptionChange)="onDescription($event)"
+        (titleEditorChange)="onTitleEditor($event)"
+      />
+    </div>
+
+    <!-- One panel per CDL section and per channel, kept while another shows: undo history and caret never cross tabs. -->
+    @for (section of cdlSections; track section) {
+      <div
+        class="ds__panel"
+        role="tabpanel"
+        [id]="panelId(cdlFiles[section].tab)"
+        [attr.aria-labelledby]="tabId(cdlFiles[section].tab)"
+        [hidden]="tab() !== cdlFiles[section].tab"
+      >
+        <p class="ds__hint">{{ 'templates.dataset.hints.' + section | transloco }}</p>
+        <sf-code-panel
+          #cdlPanel
+          class="ds__code"
+          language="cdl"
+          languageLabel="CDL"
+          [fileName]="(d.uid ?? 'dataset') + '.' + cdlFiles[section].file + '.cdl'"
+          [label]="'templates.dataset.cdlLabel' | transloco: { section: sectionLabel(section) }"
+          [value]="sections()[section]"
+          [diagnostics]="diagnosticsOf(section)"
+          [names]="[]"
+          [readOnly]="!canEdit()"
+          [formattable]="true"
+          (valueChange)="onSectionInput(section, $event)"
+        >
+          <sf-button sfCodePanelTools variant="ghost" size="sm" icon="task_alt" [disabled]="validating()" (click)="validate()">
+            {{ 'templates.dataset.validate' | transloco }}
+          </sf-button>
+        </sf-code-panel>
+      </div>
+    }
+
+    @for (channel of store.channelTabs(); track channel.key) {
+      <div
+        class="ds__panel"
+        role="tabpanel"
+        [id]="panelId(channelTab(channel.key))"
+        [attr.aria-labelledby]="tabId(channelTab(channel.key))"
+        [hidden]="tab() !== channelTab(channel.key)"
+      >
+        <p class="ds__hint">{{ 'templates.dataset.channel.hint' | transloco: { channel: channel.name } }}</p>
+        @if (!channel.enabled) {
+          <p class="ds__notice" role="status">{{ 'templates.dataset.channel.disabled' | transloco: { channel: channel.key } }}</p>
+        }
+        @if (!store.sourceOf(channel.key).trim()) {
+          <div class="ds__notice" role="note">
+            <strong>{{ 'templates.dataset.channel.emptyTitle' | transloco: { channel: channel.key } }}</strong>
+            <p>{{ 'templates.dataset.channel.emptyText' | transloco }}</p>
+          </div>
+        }
+        @if (canEdit() || store.sourceOf(channel.key).trim()) {
+          <sf-code-panel
+            #channelPanel
+            class="ds__code"
+            language="octl"
+            [languageLabel]="'OCTL · ' + store.formats()[channel.key].format"
+            [fileName]="(d.uid ?? 'dataset') + '.' + channel.key + '.octl'"
+            [label]="'templates.dataset.channel.label' | transloco: { channel: channel.key }"
+            [value]="store.sourceOf(channel.key)"
+            [diagnostics]="store.diagnosticsOf(channel.key)"
+            [readOnly]="!canEdit()"
+            [names]="fieldNames()"
+            [format]="store.formats()[channel.key].format"
+            [svg]="store.formats()[channel.key].svg"
+            (valueChange)="store.onRecordTemplateInput($event, channel.key)"
+          />
+        }
+        @if (canEdit()) {
+          <div class="ds__helpers" role="group" [attr.aria-label]="'templates.dataset.helpers.group' | transloco">
+            <span class="ds__helpers-label">{{ 'templates.dataset.helpers.fields' | transloco }}</span>
+            @for (helper of store.fieldHelpers(); track helper.name) {
+              <button type="button" class="ds__chip" [title]="helper.snippet + ' — ' + helper.description" (click)="insertHelper(helper)">
+                {{ helper.name }}
+              </button>
+            } @empty {
+              <span class="ds__hint">{{ 'templates.dataset.helpers.noFields' | transloco }}</span>
+            }
+            <span class="ds__helpers-label">{{ 'templates.dataset.helpers.record' | transloco }}</span>
+            @for (helper of metaHelpers; track helper.name) {
+              <button type="button" class="ds__chip" [title]="helper.snippet + ' — ' + helper.description" (click)="insertHelper(helper)">
+                {{ helper.name }}
+              </button>
+            }
+          </div>
+        }
+      </div>
+    }
+  </div>
+}
+
+@if (renaming()) {
+  @if (detail(); as d) {
+    <sf-rename-asset-dialog
+      [open]="true"
+      [projectKey]="projectKey()"
+      [uuid]="d.uuid ?? ''"
+      [uid]="d.uid ?? ''"
+      [displayName]="d.displayName ?? ''"
+      [submittingName]="renameBusy()"
+      [undoableUid]="true"
+      (renameDisplayName)="renameDisplayName($event)"
+      (uidChanged)="onUidChanged()"
+      (closed)="renaming.set(false)"
+    />
+  }
+}
