@@ -42,8 +42,9 @@ tasks.named<Jar>("bootJar") {
     archiveBaseName.set("staticforge-server")
 }
 
-// Runs the application with the `demo` profile: in-memory H2 with the demo Liquibase context
-// and the demo JWT secret (see application-demo.yml). Mirrors `bootRun`, only the profile differs.
+// Runs the application with the `demo` profile: file-based H2 (build/db/staticforge-demo, override with SF_DB_FILE)
+// with the demo Liquibase context and the demo JWT secret (see application-demo.yml). Mirrors `bootRun`, only the
+// profile differs.
 tasks.register<BootRun>("bootRunDemo") {
     group = "application"
     description = "Runs the Spring Boot application with the 'demo' profile."

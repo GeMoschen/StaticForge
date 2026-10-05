@@ -351,6 +351,41 @@ class DatasetApiTest {
     }
 
     @Test
+    void duplicatingARecordCopiesItsValuesIntoTheSameSetUnderAFreeCopyName() throws Exception {
+        Fixture fx = newFixture();
+        DatasetView team = team(fx);
+        UUID recordSet = set(fx, team.uuid());
+        JsonNode ada = json(postRecord(fx, fx.editorToken(), team.uuid().toString(), recordSet, "{\"name\":\"Ada\",\"level\":7}"));
+        String url = project(fx) + "/records/" + ada.get("uuid").asText() + "/duplicate";
+
+        mvc.perform(post(url).header(HttpHeaders.AUTHORIZATION, bearer(fx.viewerToken())))
+                .andExpect(status().isForbidden());
+
+        JsonNode first = json(mvc.perform(post(url).header(HttpHeaders.AUTHORIZATION, bearer(fx.editorToken())))
+                .andExpect(status().isCreated())
+                .andExpect(header().exists(HttpHeaders.ETAG)));
+        assertThat(first.get("uuid").asText()).isNotEqualTo(ada.get("uuid").asText());
+        assertThat(first.get("uid").asText()).isNotEqualTo(ada.get("uid").asText());
+        assertThat(first.get("displayName").asText()).isEqualTo("Ada copy");
+        assertThat(first.get("content").get("name").asText()).isEqualTo("Ada copy");
+        assertThat(first.get("content").get("level").asInt()).isEqualTo(7);
+        assertThat(first.get("recordSet").get("uuid").asText()).isEqualTo(recordSet.toString());
+        first.path("release").forEach(locale -> assertThat(locale.get("status").asText()).isEqualTo("NEW"));
+
+        JsonNode second = json(mvc.perform(post(url).header(HttpHeaders.AUTHORIZATION, bearer(fx.editorToken())))
+                .andExpect(status().isCreated()));
+        assertThat(second.get("displayName").asText()).isEqualTo("Ada copy 2");
+
+        // The original is untouched.
+        mvc.perform(get(project(fx) + "/records/" + ada.get("uuid").asText()).header(HttpHeaders.AUTHORIZATION, bearer(fx.viewerToken())))
+                .andExpect(jsonPath("$.displayName").value("Ada"))
+                .andExpect(jsonPath("$.revision").value(ada.get("revision").asLong()));
+        mvc.perform(post(project(fx) + "/records/" + UUID.randomUUID() + "/duplicate")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(fx.editorToken())))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
     void recordListingPagesSortsAndFiltersOnTheServer() throws Exception {
         Fixture fx = newFixture();
         DatasetView team = team(fx);

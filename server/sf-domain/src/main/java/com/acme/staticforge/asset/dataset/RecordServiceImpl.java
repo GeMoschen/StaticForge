@@ -106,6 +106,56 @@ public class RecordServiceImpl implements RecordService {
 
     @Override
     @Transactional
+    public RecordWriteResult duplicate(UUID uuid, UUID targetSetUuid, RevisionContext ctx) {
+        AssetVersion current = requireOpenRecord(ctx.projectId(), uuid);
+        Dataset dataset = requireLiveDataset(ctx.projectId(), RecordValues.datasetRef(current.getPayload()));
+        Asset targetSet = targetSetUuid == null
+                ? assetRepository.findById(current.getFolderId())
+                        .orElseThrow(() -> new SfException(ProblemFactory.notFound("Record set not found.")))
+                : assetRepository.findByProjectIdAndUuid(ctx.projectId(), targetSetUuid)
+                        .map(asset -> {
+                            if (asset.getAssetType() != AssetType.RECORD_SET) {
+                                throw new SfException(ProblemFactory.unprocessableEntity(
+                                        "A record can only be copied into a record set."));
+                            }
+                            return asset;
+                        })
+                        .orElseThrow(() -> new SfException(ProblemFactory.notFound("Record set not found.")));
+        UUID setUuid = targetSet.getUuid();
+        JsonNode source = current.getPayload().get(CONTENT_PATH);
+        ObjectNode content = source != null && source.isObject() ? source.deepCopy() : objectMapper.createObjectNode();
+
+        // The uid is derived from the new uuid; the display name follows the title value, so the copy's title is
+        // "<title> copy" (numbered while another record of the set has it). Without a title the uuid names it.
+        Optional<String> title = titleOf(dataset, content);
+        if (title.isPresent()) {
+            content.put(dataset.titleEditor(), freeCopyTitle(ctx.projectId(), dataset, targetSet.getId(), title.get()));
+        }
+        return create(new CreateRecordCommand(ctx.projectId(), setUuid, content), ctx);
+    }
+
+    private String freeCopyTitle(long projectId, Dataset dataset, Long recordSetId, String title) {
+        java.util.Set<String> taken = new java.util.HashSet<>();
+        for (AssetVersion v : assetVersionRepository.searchCurrentRecordsOfDataset(
+                projectId, dataset.assetId(), likeContains(title), null)) {
+            if (recordSetId.equals(v.getFolderId())) {
+                taken.add(v.getDisplayName().toLowerCase(java.util.Locale.ROOT));
+            }
+        }
+        for (int n = 1; ; n++) {
+            String suffix = n == 1 ? " copy" : " copy " + n;
+            String base = title.length() + suffix.length() > MAX_DISPLAY_NAME
+                    ? title.substring(0, MAX_DISPLAY_NAME - suffix.length())
+                    : title;
+            String candidate = base + suffix;
+            if (!taken.contains(candidate.toLowerCase(java.util.Locale.ROOT))) {
+                return candidate;
+            }
+        }
+    }
+
+    @Override
+    @Transactional
     public RecordWriteResult update(UUID uuid, JsonNode content, long expectedRevision, RevisionContext ctx) {
         AssetVersion current = requireOpenRecord(ctx.projectId(), uuid);
         UUID datasetUuid = RecordValues.datasetRef(current.getPayload());

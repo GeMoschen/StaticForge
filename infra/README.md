@@ -108,7 +108,7 @@ The backend has four Spring profiles (spec §26.6):
 |---------|----------|---------|--------------------|
 | `dev`   | H2 file (`SF_DB_FILE`) | HS256 (dev-only) | default |
 | `test`  | H2 in-memory | HS256 (dev-only) | default |
-| `demo`  | H2 in-memory | HS256 (dev-only) | `demo` (seeds sample data) |
+| `demo`  | H2 file (`build/db/staticforge-demo`) | HS256 (dev-only) | `demo` (seeds sample data) |
 | `prod`  | PostgreSQL    | **RS256** (keystore) | `prod` |
 
 Select a profile with `SPRING_PROFILES_ACTIVE` or `--spring.profiles.active=`.

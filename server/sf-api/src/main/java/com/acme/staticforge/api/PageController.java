@@ -15,6 +15,7 @@ import com.acme.staticforge.asset.page.PageQuery;
 import com.acme.staticforge.asset.page.PageService;
 import com.acme.staticforge.asset.page.TemplateRefView;
 import com.acme.staticforge.asset.rules.SaveFindings;
+import com.acme.staticforge.asset.transfer.AssetTransferService;
 import com.acme.staticforge.project.ProjectService;
 import com.acme.staticforge.revision.RevisionContext;
 import com.acme.staticforge.security.SecuritySupport;
@@ -48,6 +49,7 @@ public class PageController {
     private final ReleaseBlocks releaseBlocks;
     private final CompactedReads compactedReads;
     private final RevisionViews revisionViews;
+    private final AssetTransferService assetTransferService;
 
     public PageController(
             ProjectService projectService,
@@ -55,7 +57,9 @@ public class PageController {
             SecuritySupport securitySupport,
             ReleaseBlocks releaseBlocks,
             CompactedReads compactedReads,
-            RevisionViews revisionViews) {
+            RevisionViews revisionViews,
+            AssetTransferService assetTransferService) {
+        this.assetTransferService = assetTransferService;
         this.projectService = projectService;
         this.pageService = pageService;
         this.securitySupport = securitySupport;
@@ -198,10 +202,21 @@ public class PageController {
         return ResponseEntity.ok().header(HttpHeaders.ETAG, RevisionHeaders.etag(view.validFromRevision())).body(toPage(projectId(projectKey), view, saved.findings()));
     }
 
+    /**
+     * Copies a page into its own folder as a new unreleased draft.
+     *
+     * @deprecated a thin delegate of {@link AssetTransferService#duplicate}; use
+     *     {@code POST /assets/{uuid}/duplicate}, which also takes a target folder
+     */
+    @Deprecated
     @PostMapping("/{uuid}/duplicate")
     @PreAuthorize("@projectAuth.has(#projectKey, " + ProjectRoleExpr.EDITOR + ")")
     public ResponseEntity<PageView> duplicate(@PathVariable String projectKey, @PathVariable UUID uuid) {
-        AssetVersionView view = pageService.duplicate(uuid, ctx(projectKey, "duplicate page"));
+        if (pageService.find(projectId(projectKey), uuid).type() != com.acme.staticforge.asset.AssetType.PAGE) {
+            throw new com.acme.staticforge.common.SfException(
+                    com.acme.staticforge.common.ProblemFactory.notFound("Page not found."));
+        }
+        AssetVersionView view = assetTransferService.duplicate(uuid, null, ctx(projectKey, "duplicate page"));
         return ResponseEntity.ok().header(HttpHeaders.ETAG, RevisionHeaders.etag(view.validFromRevision())).body(toPage(projectId(projectKey), view));
     }
 

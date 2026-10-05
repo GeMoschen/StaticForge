@@ -3,7 +3,9 @@ package com.acme.staticforge.api;
 import com.acme.staticforge.api.dto.AffectedTemplate;
 import com.acme.staticforge.api.dto.AssetDetailView;
 import com.acme.staticforge.api.dto.AssetHistoryEntry;
+import com.acme.staticforge.api.dto.AssetCopyView;
 import com.acme.staticforge.api.dto.AssetSummaryView;
+import com.acme.staticforge.api.dto.DuplicateAssetRequest;
 import com.acme.staticforge.api.dto.MoveRequest;
 import com.acme.staticforge.api.dto.RenameAssetRequest;
 import com.acme.staticforge.api.dto.RestoreRequest;
@@ -23,6 +25,7 @@ import com.acme.staticforge.asset.UsageView;
 import com.acme.staticforge.common.ProblemFactory;
 import com.acme.staticforge.common.SfException;
 import com.acme.staticforge.asset.folder.FolderService;
+import com.acme.staticforge.asset.transfer.AssetTransferService;
 import com.acme.staticforge.project.ProjectService;
 import com.acme.staticforge.revision.AssetDiff;
 import com.acme.staticforge.revision.DiffService;
@@ -58,6 +61,7 @@ public class AssetController {
     private final ProjectService projectService;
     private final AssetService assetService;
     private final FolderService folderService;
+    private final AssetTransferService assetTransferService;
     private final SecuritySupport securitySupport;
     private final ReleaseBlocks releaseBlocks;
     private final CompactedReads compactedReads;
@@ -66,7 +70,9 @@ public class AssetController {
 
     public AssetController(ProjectService projectService, AssetService assetService,
             FolderService folderService, SecuritySupport securitySupport, ReleaseBlocks releaseBlocks,
-            CompactedReads compactedReads, RevisionViews revisionViews, DiffService diffService) {
+            CompactedReads compactedReads, RevisionViews revisionViews, DiffService diffService,
+            AssetTransferService assetTransferService) {
+        this.assetTransferService = assetTransferService;
         this.revisionViews = revisionViews;
         this.diffService = diffService;
         this.compactedReads = compactedReads;
@@ -209,12 +215,36 @@ public class AssetController {
     @PreAuthorize("@projectAuth.has(#projectKey, " + ProjectRoleExpr.EDITOR + ")")
     public ResponseEntity<?> move(
             @PathVariable String projectKey, @PathVariable UUID uuid, @RequestBody MoveRequest body) {
-        AssetVersionView current = assetService.requireCurrent(projectId(projectKey), uuid);
-        RevisionContext revisionContext = ctx(projectKey, "move");
-        if (current.type() == AssetType.FOLDER) {
-            return ResponseEntity.ok(toMoveResult(folderService.move(uuid, body.folderUuid(), revisionContext)));
+        AssetTransferService.MoveOutcome moved =
+                assetTransferService.move(uuid, body.folderUuid(), ctx(projectKey, "move"));
+        if (moved.folder() != null) {
+            return ResponseEntity.ok(toMoveResult(moved.folder()));
         }
-        return ResponseEntity.ok(toDetail(projectKey, assetService.move(uuid, body.folderUuid(), revisionContext)));
+        return ResponseEntity.ok(toDetail(projectKey, moved.asset()));
+    }
+
+    /**
+     * Copies an asset (page, record, record set, navigation item, media file or global set; not a folder) as a
+     * new unreleased draft named "&lt;name&gt; copy" ("copy 2", ...), unique within the target. The optional body
+     * {@code {"folderUuid"}} names the target folder (a record set for a record); absent or {@code null} copies
+     * into the asset's own folder. One transaction: a refusal writes nothing. {@code 201} with the copy and its
+     * {@code ETag}; {@code 404} for an unknown or deleted asset or target, {@code 422} for a folder, an
+     * unsupported type or a target the containment rules refuse.
+     */
+    @PostMapping("/{uuid}/duplicate")
+    @PreAuthorize("@projectAuth.has(#projectKey, " + ProjectRoleExpr.EDITOR + ")")
+    public ResponseEntity<AssetCopyView> duplicate(
+            @PathVariable String projectKey,
+            @PathVariable UUID uuid,
+            @RequestBody(required = false) DuplicateAssetRequest body) {
+        AssetVersionView copy = assetTransferService.duplicate(
+                uuid, body == null ? null : body.folderUuid(), ctx(projectKey, "duplicate"));
+        UUID folderUuid = assetTransferService.parentUuid(copy);
+        return ResponseEntity.status(201)
+                .header(HttpHeaders.ETAG, RevisionHeaders.etag(copy.validFromRevision()))
+                .body(new AssetCopyView(
+                        copy.uuid(), copy.uid(), copy.type().name(), copy.displayName(), folderUuid, copy.folderPath(),
+                        copy.validFromRevision()));
     }
 
     @DeleteMapping("/{uuid}")

@@ -255,22 +255,6 @@ public class PageServiceImpl implements PageService {
     }
 
     @Override
-    @Transactional
-    public AssetVersionView duplicate(UUID uuid, RevisionContext ctx) {
-        Asset page = requirePage(uuid, ctx.projectId());
-        AssetVersion current = requireOpen(page.getId());
-        JsonNode payload = current.getPayload().deepCopy();
-
-        return assetService.create(
-                new CreateAssetCommand(
-                        ctx.projectId(), AssetType.PAGE, current.getDisplayName(), current.getFolderId() == null
-                                ? null
-                                : folderUuid(current.getFolderId()),
-                        payload, templateUuidOf(payload)),
-                ctx);
-    }
-
-    @Override
     @Transactional(readOnly = true)
     public AssetVersionView find(long projectId, UUID uuid) {
         return assetService.requireCurrent(projectId, uuid);

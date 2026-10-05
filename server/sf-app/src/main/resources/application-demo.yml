@@ -2,8 +2,10 @@ spring:
   config:
     activate:
       on-profile: demo
+  # File-based H2 so the demo data survives restarts (its own file, apart from the `dev` database). SF_DB_FILE is the H2
+  # database path without the `.mv.db` suffix; a relative path must start with `./` and resolves against the working directory.
   datasource:
-    url: jdbc:h2:mem:sf;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1
+    url: jdbc:h2:file:${SF_DB_FILE:./build/db/staticforge-demo};MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE
     driver-class-name: org.h2.Driver
     username: sa
     password: ""

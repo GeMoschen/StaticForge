@@ -35,6 +35,24 @@ public interface RecordService {
     RecordWriteResult create(CreateRecordCommand cmd, RevisionContext ctx);
 
     /**
+     * Copies a live record into the same record set as a new, unreleased record: every field value of every
+     * locale, a new uuid (and so uid). When the dataset has a title editor with a value, the copy's title (and
+     * display name) is "&lt;title&gt; copy", numbered ("copy 2", ...) while a record of the set already has it.
+     *
+     * @throws com.acme.staticforge.common.SfException {@code 404} for an unknown or deleted record
+     */
+    default RecordWriteResult duplicate(UUID uuid, RevisionContext ctx) {
+        return duplicate(uuid, null, ctx);
+    }
+
+    /**
+     * As {@link #duplicate(UUID, RevisionContext)}, into the record set {@code targetSetUuid} ({@code null}: the
+     * record's own set). The target must be a live set of the same dataset ({@code 422} otherwise); the copy's
+     * title is made unique within it.
+     */
+    RecordWriteResult duplicate(UUID uuid, UUID targetSetUuid, RevisionContext ctx);
+
+    /**
      * Replaces a record's content. With a title editor value set the display name follows it; otherwise it
      * stays as it is. The uid never changes.
      */

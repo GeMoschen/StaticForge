@@ -52,7 +52,6 @@ public interface PageService {
             long expectedTargetRevision,
             RevisionContext ctx);
 
-    AssetVersionView duplicate(UUID uuid, RevisionContext ctx);
 
     AssetVersionView find(long projectId, UUID uuid);
 

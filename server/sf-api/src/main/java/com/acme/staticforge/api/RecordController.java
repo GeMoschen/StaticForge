@@ -166,6 +166,23 @@ public class RecordController {
                 .body(toDetail(projectKey, result.record(), result.issues()));
     }
 
+    /**
+     * Copies a record into its own record set as a new unreleased draft (all values of all locales; a
+     * "&lt;title&gt; copy" title when the dataset has a title editor). {@code 201} with the copy.
+     *
+     * @deprecated shares {@link RecordService#duplicate} with {@code POST /assets/{uuid}/duplicate}, which also
+     *     takes a target record set; this endpoint answers with the record's own detail view
+     */
+    @Deprecated
+    @PostMapping("/records/{uuid}/duplicate")
+    @PreAuthorize("@projectAuth.has(#projectKey, " + ProjectRoleExpr.EDITOR + ")")
+    public ResponseEntity<RecordDetailView> duplicateRecord(@PathVariable String projectKey, @PathVariable UUID uuid) {
+        RecordWriteResult result = recordService.duplicate(uuid, ctx(projectKey, "duplicate record"));
+        return ResponseEntity.status(201)
+                .header(HttpHeaders.ETAG, RevisionHeaders.etag(result.record().revision()))
+                .body(toDetail(projectKey, result.record(), result.issues()));
+    }
+
     /** The paging envelope of a record listing; shared with {@link RecordSetController}'s set grid. */
     static RecordPageView toPageView(RecordPage result, ReleaseBlocks releaseBlocks, long projectId) {
         List<UUID> uuids = result.rows().stream().map(r -> r.uuid()).toList();
