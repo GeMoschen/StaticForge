@@ -15,6 +15,7 @@ import { SfIconComponent } from '../../../shared/components/sf-icon.component';
 import { MediaFolderActions } from './media-folder-actions';
 import { MediaItemActions } from './media-item-actions';
 import { MediaMover } from './media-mover';
+import { MediaSelectionActions } from './media-selection.actions';
 import { MediaLibraryGridComponent } from './media-library-grid.component';
 import { MediaLibraryListComponent } from './media-library-list.component';
 import { MediaLibraryToolbarComponent } from './media-library-toolbar.component';
@@ -59,6 +60,7 @@ export class MediaLibraryMainComponent {
   protected readonly folders = inject(MediaFolderActions);
   protected readonly items = inject(MediaItemActions);
   protected readonly mover = inject(MediaMover);
+  protected readonly selection = inject(MediaSelectionActions);
   protected readonly uploads = inject(MediaUploadStore);
   private readonly transloco = inject(TranslocoService);
   private readonly favorites = inject(FavoritesService);

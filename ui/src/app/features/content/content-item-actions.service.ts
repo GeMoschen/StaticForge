@@ -92,6 +92,28 @@ export class ContentItemActions {
     return { done, steps, failed: false };
   }
 
+  /**
+   * Copies record sets into the folder `target` (`null` = the store root), one `duplicateAsset` call each (a set's dataset
+   * and query, not its records); Undo deletes the copies. Folders are not copied and are skipped.
+   */
+  async copy(projectKey: string, entries: readonly ContentEntry[], target: string | null): Promise<ContentChange> {
+    const done: ContentEntry[] = [];
+    const steps: UndoStep[] = [];
+    try {
+      for (const entry of entries.filter((candidate) => candidate.kind === 'set')) {
+        const copied = await firstValueFrom(this.api.duplicateAsset(projectKey, entry.uuid, target));
+        done.push(entry);
+        const uuid = copied.uuid;
+        if (uuid) {
+          steps.push(() => this.api.deleteAsset(projectKey, uuid));
+        }
+      }
+    } catch {
+      return { done, steps, failed: true };
+    }
+    return { done, steps, failed: false };
+  }
+
   /** Runs the steps of an Undo last to first and says how it went (the tree's own Undo toast calls this). */
   async runUndo(steps: readonly UndoStep[]): Promise<void> {
     try {

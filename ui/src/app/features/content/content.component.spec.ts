@@ -136,6 +136,8 @@ async function setup(options: SetupOptions = {}) {
     restoreFolder: vi.fn().mockReturnValue(of({})),
     assetHistory: vi.fn().mockReturnValue(of([{ revision: 9, deleted: true }, { revision: 6, deleted: false }])),
     restoreAsset: vi.fn().mockReturnValue(of({})),
+    duplicateAsset: vi.fn().mockImplementation((_key: string, uuid: string) => of({ uuid: `${uuid}-copy` })),
+    deleteAsset: vi.fn().mockReturnValue(of(undefined)),
     ...options.api,
   };
   const projectContext = { updateContentFolderTree: vi.fn() };
@@ -593,6 +595,27 @@ describe('ContentComponent (record sets)', () => {
       await waitFor(() => expect(completed).toHaveBeenCalled());
       completed.mock.calls[0][0]();
       await waitFor(() => expect(content.moveAsset).toHaveBeenLastCalledWith('proj', 'set-leads', 'team'));
+    });
+
+    it('copies a set on paste with one duplicate per set, and Undo deletes the copies', async () => {
+      const { api, instance } = await setup();
+      const completed = vi.fn();
+
+      instance.onMove({ nodes: [node({ uuid: 'set-leads', name: 'Leads' })], target: { id: 'root-x' }, copy: true, via: 'paste', completed });
+
+      await waitFor(() => expect(api.duplicateAsset).toHaveBeenCalledWith('proj', 'set-leads', 'root-x'));
+      await waitFor(() => expect(completed).toHaveBeenCalled());
+      completed.mock.calls[0][0]();
+      await waitFor(() => expect(api.deleteAsset).toHaveBeenCalledWith('proj', 'set-leads-copy'));
+    });
+
+    it('allows copying record sets only, never a folder', async () => {
+      const { instance } = await setup();
+      const allow = (instance as unknown as { allowAction: (a: string, n: unknown[]) => boolean }).allowAction;
+
+      expect(allow('copy', [node({ uuid: 'set-leads', name: 'Leads' })])).toBe(true);
+      expect(allow('copy', [node({ uuid: 'team', name: 'Team', kind: 'folder' })])).toBe(false);
+      expect(allow('move', [node({ uuid: 'team', name: 'Team', kind: 'folder' })])).toBe(true);
     });
 
     it('moves a folder through the folder move, to the store root with no folder, and back', async () => {

@@ -17,6 +17,7 @@ import { ConfirmService } from '../../shared/components/dialog/confirm.service';
 import { FavoritesViewComponent } from '../favorites/favorites-view.component';
 import { TimeTravelStore } from '../revisions/time-travel.store';
 import { FolderViewComponent } from './folder-view.component';
+import { ReleaseDialogComponent } from '../release/release-dialog.component';
 import { PagesListComponent } from './pages-list.component';
 import type { PageNodeData } from './pages-tree.util';
 
@@ -26,6 +27,15 @@ class FolderViewStub {
   readonly folderUuid = input<string | null>(null);
   readonly openPage = output<string>();
   readonly openFolder = output<string | null>();
+}
+
+@Component({ selector: 'sf-release-dialog', standalone: true, template: '' })
+class ReleaseDialogStub {
+  readonly projectKey = input.required<string>();
+  readonly mode = input<string>();
+  readonly choices = input<unknown[]>([]);
+  readonly done = output<void>();
+  readonly closed = output<void>();
 }
 
 @Component({ selector: 'sf-favorites-view', standalone: true, template: '<p data-testid="favorites-view"></p>' })
@@ -61,6 +71,7 @@ interface SetupOptions {
   templates?: unknown[];
   dev?: boolean;
   developer?: boolean;
+  release?: boolean;
   favorites?: unknown[];
   inputs?: Record<string, unknown>;
   confirm?: boolean;
@@ -81,7 +92,7 @@ async function setup(options: SetupOptions = {}) {
     restoreFolder: vi.fn().mockReturnValue(of({})),
     assetHistory: vi.fn().mockReturnValue(of([{ revision: 7, deleted: false }])),
     restoreAsset: vi.fn().mockReturnValue(of({})),
-    duplicatePage: vi.fn().mockReturnValue(of({ uuid: 'page-copy' })),
+    duplicateAsset: vi.fn().mockReturnValue(of({ uuid: 'page-copy' })),
     ...options.api,
   };
   const store = {
@@ -109,7 +120,7 @@ async function setup(options: SetupOptions = {}) {
         },
       },
       { provide: DeveloperModeService, useValue: { enabled: signal(options.dev ?? false) } },
-      { provide: ProjectPermissionsStore, useValue: { canEditTemplates: () => options.developer ?? false, canRedirectOldUrls: () => false } },
+      { provide: ProjectPermissionsStore, useValue: { canEditTemplates: () => options.developer ?? false, canRedirectOldUrls: () => false, canRelease: () => options.release ?? true } },
       { provide: EditingLocaleStore, useValue: { locale: signal(null) } },
       {
         provide: FavoritesService,
@@ -118,8 +129,8 @@ async function setup(options: SetupOptions = {}) {
     ],
     configureTestBed: (tb) => {
       tb.overrideComponent(PagesListComponent, {
-        remove: { imports: [FolderViewComponent, FavoritesViewComponent] },
-        add: { imports: [FolderViewStub, FavoritesViewStub] },
+        remove: { imports: [FolderViewComponent, FavoritesViewComponent, ReleaseDialogComponent] },
+        add: { imports: [FolderViewStub, FavoritesViewStub, ReleaseDialogStub] },
       });
       if (options.archived) {
         tb.inject(ProjectAccessStore).enterProject('proj', true);
@@ -131,6 +142,7 @@ async function setup(options: SetupOptions = {}) {
     onRename(request: unknown): void;
     onDelete(request: unknown): void;
     menuItems(nodes: unknown[]): { label: string; action: () => void }[];
+    releasing(): { assetUuid: string; label: string; checked: boolean }[] | null;
   };
   const toasts = TestBed.inject(ToastService);
   const router = TestBed.inject(Router);
@@ -431,14 +443,13 @@ describe('PagesListComponent', () => {
       await waitFor(() => expect(api.moveAsset).toHaveBeenLastCalledWith('proj', 'folder-sub', { folderUuid: 'folder-a' }));
     });
 
-    it('a pasted copy is a duplicate moved into the target, and Undo deletes the copy', async () => {
+    it('a pasted copy is duplicated straight into the target, and Undo deletes the copy', async () => {
       const { api, instance } = await setup();
       const completed = vi.fn();
 
       instance.onMove({ nodes: [node({ uuid: 'page-x', name: 'Xylophone' })], target: { id: 'folder-b' }, copy: true, via: 'paste', completed });
 
-      await waitFor(() => expect(api.duplicatePage).toHaveBeenCalledWith('proj', 'page-x'));
-      await waitFor(() => expect(api.moveAsset).toHaveBeenCalledWith('proj', 'page-copy', { folderUuid: 'folder-b' }));
+      await waitFor(() => expect(api.duplicateAsset).toHaveBeenCalledWith('proj', 'page-x', 'folder-b'));
       await waitFor(() => expect(completed).toHaveBeenCalled());
       completed.mock.calls[0][0]();
       await waitFor(() => expect(api.deleteAsset).toHaveBeenCalledWith('proj', 'page-copy'));
@@ -460,10 +471,60 @@ describe('PagesListComponent', () => {
 
       items.find((item) => item.label === 'Duplicate')!.action();
 
-      await waitFor(() => expect(api.duplicatePage).toHaveBeenCalledWith('proj', 'page-x'));
+      await waitFor(() => expect(api.duplicateAsset).toHaveBeenCalledWith('proj', 'page-x'));
       await waitFor(() => expect(lastToast(toasts).message).toBe('Duplicated “Xylophone”.'));
       lastToast(toasts).action!.run();
       await waitFor(() => expect(api.deleteAsset).toHaveBeenCalledWith('proj', 'page-copy'));
+    });
+  });
+
+  describe('release in the menu', () => {
+    const inFolder = (folder?: string) => (folder === 'folder-a' ? [IN_A] : folder === 'folder-sub' ? [SUB_PAGE] : []);
+    const SUB_PAGE = { uuid: 'page-s', uid: 's', type: 'PAGE', displayName: 'Subpage', folderPath: '/pages_root/alpha/sub/', revision: 1, release: { '': { status: 'CHANGED' } } };
+    const listPages = () => vi.fn().mockImplementation((_key: string, opts: { folder?: string } = {}) => of(opts.folder ? inFolder(opts.folder) : [IN_A, IN_ROOT, SUB_PAGE]));
+
+    it('offers Release… on a page and opens the release dialog with its changed language ticked', async () => {
+      const { instance } = await setup();
+
+      instance.menuItems([node({ uuid: 'page-x', name: 'Xylophone', release: { '': { status: 'CHANGED' } } as never })])
+        .find((item) => item.label === 'Release…')!.action();
+
+      await waitFor(() => expect(instance.releasing()?.map((choice) => choice.assetUuid)).toEqual(['page-x']));
+      expect(instance.releasing()![0].checked).toBe(true);
+    });
+
+    it('releases a folder with its pages and sub-folders, recursively', async () => {
+      const tree = structuredClone(TREE) as never as typeof TREE;
+      (tree[0].children[0] as { release?: unknown }).release = { '': { status: 'CHANGED' } };
+      (tree[0].children[0].children[0] as { release?: unknown }).release = { '': { status: 'CHANGED' } };
+      const { api, instance } = await setup({ tree, api: { listPages: listPages() } });
+
+      instance.menuItems([node({ uuid: 'folder-a', name: 'Alpha', kind: 'folder' })]).find((item) => item.label === 'Release…')!.action();
+
+      await waitFor(() => expect(instance.releasing()).not.toBeNull());
+      expect(instance.releasing()!.map((choice) => choice.assetUuid).sort()).toEqual(['folder-a', 'folder-sub', 'page-s', 'page-x']);
+      expect(api.listPages).toHaveBeenCalledWith('proj', { folder: 'folder-sub' });
+    });
+
+    it('says nothing is waiting when nothing in the folder can be released', async () => {
+      const { instance, toasts } = await setup({ api: { listPages: vi.fn().mockReturnValue(of([IN_ROOT])) } });
+
+      instance.menuItems([node({ uuid: 'folder-b', name: 'Beta', kind: 'folder' })]).find((item) => item.label === 'Release…')!.action();
+
+      await waitFor(() => expect(lastToast(toasts).message).toBe('Nothing here is waiting to be released.'));
+      expect(instance.releasing()).toBeNull();
+    });
+
+    it('offers Release… for a selection', async () => {
+      const { instance } = await setup();
+
+      expect(instance.menuItems([node({ uuid: 'page-x', name: 'X' }), node({ uuid: 'page-r', name: 'R' })]).map((item) => item.label)).toEqual(['Release…']);
+    });
+
+    it('offers no Release… without the right to release', async () => {
+      const { instance } = await setup({ release: false });
+
+      expect(instance.menuItems([node({ uuid: 'page-x', name: 'X' })]).map((item) => item.label)).not.toContain('Release…');
     });
   });
 

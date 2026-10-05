@@ -35,6 +35,7 @@ import { sfUniqueId } from './forms/sf-field-context';
 import { SfSearchInputComponent } from './forms/sf-search-input.component';
 import { SfSkeletonComponent } from './layout/sf-skeleton.component';
 import { SfMenuComponent, SfMenuItem } from './menu/sf-menu.component';
+import { toContextItems } from './menu/sf-menu-item';
 import { SfButtonComponent } from './sf-button.component';
 import { SfEmptyStateComponent } from './sf-empty-state.component';
 import { SfIconComponent } from './sf-icon.component';
@@ -1585,22 +1586,4 @@ function fromContextItems(entries: readonly ContextMenuItem[], idPrefix: string)
     separatorBefore = false;
   });
   return items;
-}
-
-/** Menu items as context-menu entries: `separatorBefore` becomes a separator entry. */
-function toContextItems(items: readonly SfMenuItem[]): ContextMenuItem[] {
-  return items.flatMap((item) => {
-    const entry: ContextMenuItem = {
-      label: item.label,
-      icon: item.icon,
-      danger: item.danger,
-      disabled: item.disabled,
-      disabledReason: item.disabledReason,
-      shortcut: item.shortcut,
-      group: item.group,
-      children: item.children ? toContextItems(item.children) : undefined,
-      action: item.action,
-    };
-    return item.separatorBefore ? [{ label: '', separator: true }, entry] : [entry];
-  });
 }

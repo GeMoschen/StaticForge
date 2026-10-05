@@ -22,6 +22,7 @@ import { SfAssetUrlsComponent } from '../settings/asset-urls.component';
 import { FolderSettingsDrawerComponent } from './folder-settings-drawer.component';
 import { FolderViewComponent } from './folder-view.component';
 import { folderRows, pageUrl } from './folder-view.util';
+import { TreeClipboardService } from '../../shared/services/tree-clipboard.service';
 import { PagesTreeRefresh } from './pages-tree-refresh.service';
 
 /** The folder view (M35.18): the table, the folder's actions, the bulk actions and their Undo. */
@@ -51,10 +52,11 @@ function apiStub(overrides: Record<string, unknown> = {}) {
     deleteFolder: vi.fn().mockReturnValue(of(undefined)),
     restoreFolder: vi.fn().mockReturnValue(of({})),
     renameFolder: vi.fn().mockReturnValue(of({ revision: 5 })),
+    renameAsset: vi.fn().mockReturnValue(of({ revision: 6 })),
     moveAsset: vi.fn().mockReturnValue(of({})),
     moveFolder: vi.fn().mockReturnValue(of({})),
     deleteAsset: vi.fn().mockReturnValue(of(undefined)),
-    duplicatePage: vi.fn().mockImplementation((_k: string, uuid: string) => of({ uuid: `${uuid}-copy` })),
+    duplicateAsset: vi.fn().mockImplementation((_k: string, uuid: string) => of({ uuid: `${uuid}-copy` })),
     assetHistory: vi.fn().mockReturnValue(of([{ revision: 7, deleted: false }])),
     restoreAsset: vi.fn().mockReturnValue(of({})),
     ...overrides,
@@ -85,7 +87,7 @@ describe('folder view', () => {
           provide: ProjectContextStore,
           useValue: { pageFolderTree: signal(TREE), pageTemplates: signal([]), loadFor: vi.fn().mockReturnValue(of(undefined)) },
         },
-        { provide: ProjectPermissionsStore, useValue: { canRelease: signal(true) } },
+        { provide: ProjectPermissionsStore, useValue: { canRelease: signal(true), canRedirectOldUrls: signal(false) } },
         { provide: ProjectAccessStore, useValue: { readOnly: signal(false) } },
         { provide: DeveloperModeService, useValue: { enabled: signal(false) } },
         { provide: TimeTravelStore, useValue: { activeRevision: signal(null) } },
@@ -124,6 +126,116 @@ describe('folder view', () => {
     expect(openPage).toHaveBeenCalledWith('page-1');
     fireEvent.click(screen.getByText('Sub'));
     expect(openFolder).toHaveBeenCalledWith('folder-sub');
+  });
+
+  describe('row context menu', () => {
+    interface Probe {
+      rows(): { key: string; kind: string; uuid: string; name: string }[];
+      rowMenu(rows: unknown[]): { label: string; disabled?: boolean; separator?: boolean; action?: () => void }[];
+      renameTo(row: unknown, name: string): void;
+      renaming(): unknown;
+      dialog(): { kind: string; choices?: { assetUuid: string; checked: boolean }[] } | null;
+    }
+    const labels = (items: { label: string; separator?: boolean }[]) => items.filter((item) => !item.separator).map((item) => item.label);
+
+    async function menuOf(api: ReturnType<typeof apiStub>) {
+      const { view, toasts } = await open(api);
+      await screen.findByText('Page 1');
+      TestBed.inject(TreeClipboardService).clear();
+      const probe = view.fixture.componentInstance as unknown as Probe;
+      const row = (key: string) => probe.rows().find((r) => r.key === key)!;
+      return { probe, row, toasts };
+    }
+
+    it('a folder row has the tree menu for a folder, and no Open or Duplicate', async () => {
+      const { probe, row } = await menuOf(apiStub());
+
+      expect(labels(probe.rowMenu([row('folder:folder-sub')]))).toEqual([
+        'New folder', 'Rename…', 'Cut', 'Paste', 'Move to…', 'Add “Sub” to favorites', 'Release…', 'Delete',
+      ]);
+    });
+
+    it('a page row has Duplicate and Copy but no New folder', async () => {
+      const { probe, row } = await menuOf(apiStub());
+
+      expect(labels(probe.rowMenu([row('page:page-1')]))).toEqual([
+        'Rename…', 'Cut', 'Copy', 'Paste', 'Move to…', 'Add “Page 1” to favorites', 'Duplicate', 'Release…', 'Delete',
+      ]);
+    });
+
+    it('renames through the rename dialog and offers Undo', async () => {
+      const api = apiStub();
+      const { probe, row, toasts } = await menuOf(api);
+
+      probe.rowMenu([row('page:page-1')]).find((item) => item.label === 'Rename…')!.action!();
+      expect(probe.renaming()).toEqual(expect.objectContaining({ uuid: 'page-1' }));
+      probe.renameTo(row('page:page-1'), 'Renamed');
+
+      await waitFor(() => expect(api.renameAsset).toHaveBeenCalledWith('proj', 'page-1', { displayName: 'Renamed' }, undefined));
+      await waitFor(() => expect(probe.renaming()).toBeNull());
+      lastToast(toasts).action!.run();
+      await waitFor(() => expect(api.renameAsset).toHaveBeenLastCalledWith('proj', 'page-1', { displayName: 'Page 1' }, 6));
+    });
+
+    it('cut then paste onto a folder row moves into it; Paste is disabled with an empty clipboard', async () => {
+      const api = apiStub();
+      const { probe, row } = await menuOf(api);
+      const paste = () => probe.rowMenu([row('folder:folder-sub')]).find((item) => item.label === 'Paste')!;
+      expect(paste().disabled).toBe(true);
+
+      probe.rowMenu([row('page:page-1')]).find((item) => item.label === 'Cut')!.action!();
+      expect(paste().disabled).toBe(false);
+      paste().action!();
+
+      await waitFor(() => expect(api.moveAsset).toHaveBeenCalledWith('proj', 'page-1', { folderUuid: 'folder-sub' }));
+      expect(TestBed.inject(TreeClipboardService).nodes()).toBeNull();
+    });
+
+    it('copy then paste onto a folder row duplicates the page into it', async () => {
+      const api = apiStub();
+      const { probe, row } = await menuOf(api);
+
+      probe.rowMenu([row('page:page-1')]).find((item) => item.label === 'Copy')!.action!();
+      probe.rowMenu([row('folder:folder-sub')]).find((item) => item.label === 'Paste')!.action!();
+
+      await waitFor(() => expect(api.duplicateAsset).toHaveBeenCalledWith('proj', 'page-1', 'folder-sub'));
+    });
+
+    it('does not offer pasting a folder into itself', async () => {
+      const { probe, row } = await menuOf(apiStub());
+
+      probe.rowMenu([row('folder:folder-sub')]).find((item) => item.label === 'Cut')!.action!();
+
+      expect(probe.rowMenu([row('folder:folder-sub')]).find((item) => item.label === 'Paste')!.disabled).toBe(true);
+    });
+
+    it('Release… on a folder row collects what is inside it, ticked; nothing to release says so', async () => {
+      const changed = page(1, { release: { '': { status: 'CHANGED' } } });
+      const api = apiStub({ listPages: vi.fn().mockReturnValue(of([changed])) });
+      const { probe, row } = await menuOf(api);
+
+      probe.rowMenu([row('folder:folder-sub')]).find((item) => item.label === 'Release…')!.action!();
+
+      await waitFor(() => expect(probe.dialog()?.kind).toBe('release'));
+      expect(api.listPages).toHaveBeenCalledWith('proj', { folder: 'folder-sub' });
+      expect(probe.dialog()!.choices!.map((choice) => [choice.assetUuid, choice.checked])).toEqual([['page-1', true]]);
+    });
+
+    it('says nothing is waiting when a folder has nothing to release', async () => {
+      const { probe, row, toasts } = await menuOf(apiStub());
+
+      probe.rowMenu([row('folder:folder-sub')]).find((item) => item.label === 'Release…')!.action!();
+
+      await waitFor(() => expect(lastToast(toasts).message).toBe('Nothing here is waiting to be released.'));
+      expect(probe.dialog()).toBeNull();
+    });
+
+    it('a selection gets the bulk entries; Duplicate only when it holds a page', async () => {
+      const { probe, row } = await menuOf(apiStub());
+
+      expect(labels(probe.rowMenu([row('folder:folder-sub'), row('page:page-1')]))).toEqual(['Move…', 'Release…', 'Duplicate', 'Delete']);
+      expect(labels(probe.rowMenu([row('folder:folder-sub'), row('folder:folder-sub')]))).toEqual(['Move…', 'Release…', 'Delete']);
+    });
   });
 
   describe('delete the open folder', () => {
@@ -245,8 +357,8 @@ describe('folder view', () => {
 
       fireEvent.click(await screen.findByRole('button', { name: 'Duplicate' }));
 
-      await waitFor(() => expect(api.duplicatePage).toHaveBeenCalledWith('proj', 'page-1'));
-      expect(api.duplicatePage).toHaveBeenCalledTimes(1);
+      await waitFor(() => expect(api.duplicateAsset).toHaveBeenCalledWith('proj', 'page-1'));
+      expect(api.duplicateAsset).toHaveBeenCalledTimes(1);
       lastToast(toasts).action!.run();
       await waitFor(() => expect(api.deleteAsset).toHaveBeenCalledWith('proj', 'page-1-copy'));
     });

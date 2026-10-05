@@ -18,8 +18,6 @@ import type { components } from '../../core/api/generated/schema.d.ts';
 import { FavoritesService } from '../../core/assets/favorites.service';
 import { useFrameItem } from '../../core/frame/use-frame-item';
 import { DeveloperModeService } from '../../core/frame/developer-mode.service';
-import { EditingLocaleStore } from '../../core/project/editing-locale.store';
-import { LocalesStore } from '../../core/project/locales.store';
 import { ProjectAccessStore } from '../../core/project/project-access.store';
 import { ProjectContextStore } from '../../core/project/project-context.store';
 import { ProjectPermissionsStore } from '../../core/project/project-permissions.store';
@@ -44,17 +42,19 @@ import type { SfMenuItem } from '../../shared/components/menu/sf-menu-item';
 import { SfAssetFavoriteComponent } from '../../shared/components/sf-asset-favorite.component';
 import { SfButtonComponent } from '../../shared/components/sf-button.component';
 import { SfCreateAssetDialogComponent, type CreateAssetFormValue } from '../../shared/components/sf-create-asset-dialog.component';
+import { SfRenameAssetDialogComponent } from '../../shared/components/sf-rename-asset-dialog.component';
 import { SfIconComponent } from '../../shared/components/sf-icon.component';
 import { moveBackBody } from '../../shared/folder-tree.util';
 import { restoreDeletedAsset } from '../../shared/restore-deleted-asset';
 import { ReleaseDialogComponent } from '../release/release-dialog.component';
 import { ReleaseEventsStore } from '../release/release-events.store';
-import { type ReleaseChoice, choicesFor } from '../release/release-choice.util';
+import type { ReleaseChoice } from '../release/release-choice.util';
 import { deleteQuestion, isOnline, localeStatuses, localeTag, statusLabel } from '../release/release-status.util';
 import { TimeTravelStore } from '../revisions/time-travel.store';
 import { FolderMoveDialogComponent } from './folder-move-dialog.component';
 import { FolderSettingsDrawerComponent } from './folder-settings-drawer.component';
 import { type FolderRow, folderChain, folderRows, folderTrail, pageUrl, releaseTone } from './folder-view.util';
+import { PagesItemActions } from './pages-item-actions';
 import { PagesTreeRefresh } from './pages-tree-refresh.service';
 
 type FolderView = components['schemas']['FolderView'];
@@ -87,6 +87,7 @@ type Dialog = { kind: 'release'; choices: ReleaseChoice[] } | { kind: 'move'; ro
     SfIconComponent,
     SfPageHeaderComponent,
     SfRelativeTimeComponent,
+    SfRenameAssetDialogComponent,
     SfStatusComponent,
     SfTableIdentityComponent,
     TranslocoPipe,
@@ -105,8 +106,7 @@ export class FolderViewComponent {
   private readonly releaseEvents = inject(ReleaseEventsStore);
   private readonly timeTravel = inject(TimeTravelStore);
   private readonly transloco = inject(TranslocoService);
-  private readonly locales = inject(LocalesStore);
-  private readonly editingLocale = inject(EditingLocaleStore);
+  private readonly actions = inject(PagesItemActions);
   protected readonly favorites = inject(FavoritesService);
   protected readonly developerMode = inject(DeveloperModeService);
   protected readonly permissions = inject(ProjectPermissionsStore);
@@ -153,6 +153,11 @@ export class FolderViewComponent {
   protected readonly creating = signal(false);
   protected readonly settingsOpen = signal(false);
   protected readonly settingsRename = signal(false);
+  /** The row the *Rename…* dialog is open for. */
+  protected readonly renaming = signal<FolderRow | null>(null);
+  protected readonly renameBusy = signal(false);
+  /** The folder the open *New page* / *New folder* dialog creates into; `null` = the open folder. */
+  private readonly createIn = signal<string | null>(null);
 
   protected readonly rowKey = (row: FolderRow): string => row.key;
   protected readonly rowLabel = (row: FolderRow): string => row.name;
@@ -172,13 +177,65 @@ export class FolderViewComponent {
     return columns;
   });
 
-  /** A right click on a row: *Open* (one row) and the bulk actions, acting on the row or on the selection it is part of. */
-  protected readonly rowMenu = (rows: FolderRow[]): ContextMenuItem[] => [
-    ...(rows.length === 1
-      ? [{ label: this.transloco.translate('shared.dataTable.open'), icon: 'open_in_new', shortcut: 'Enter', action: () => this.open(rows[0]) }]
-      : []),
-    ...bulkActionsAsMenu(this.bulkActions(), rows, this.rowKey),
-  ];
+  /**
+   * A right click on a row: the entries of the page tree's menu for that item (one row), or the bulk actions that fit
+   * (a selection: Move, Release, Duplicate when it holds pages, Delete) — the same as the bulk bar offers.
+   */
+  protected readonly rowMenu = (rows: FolderRow[]): ContextMenuItem[] =>
+    rows.length === 1
+      ? this.itemMenu(rows[0])
+      : bulkActionsAsMenu(
+          this.bulkActions().filter((action) => action.id !== 'duplicate' || rows.some((row) => row.kind === 'page')),
+          rows,
+          this.rowKey,
+        );
+
+  /** The page tree's menu for one item: New page/folder here, Rename…, Cut, Copy, Paste, Move to…, favorite, Duplicate, Release…, Delete. */
+  private itemMenu(row: FolderRow): ContextMenuItem[] {
+    const t = (key: string, params?: Record<string, unknown>) => this.transloco.translate(key, params);
+    const key = this.projectKey();
+    const editable = !this.readOnly();
+    const isFolder = row.kind === 'folder';
+    const separator: ContextMenuItem = { label: '', separator: true };
+    // A paste onto a folder goes into it; onto a page, next to it (into the open folder).
+    const pasteTarget = isFolder ? row.uuid : this.isRoot() ? null : (this.folder()?.uuid ?? null);
+    const items: ContextMenuItem[] = [];
+    if (editable) {
+      if (isFolder && this.pageTemplates().length > 0) {
+        items.push({ label: t('pages.tree.newPageHere'), icon: 'note_add', action: () => this.newPage(row.uuid) });
+      }
+      if (isFolder) {
+        items.push({ label: t('pages.folder.newFolder'), icon: 'create_new_folder', action: () => this.newFolder(row.uuid) });
+      }
+      items.push(
+        { label: t('templates.menu.rename'), icon: 'edit', action: () => this.renaming.set(row) },
+        separator,
+        { label: t('shared.tree.cut'), icon: 'content_cut', shortcut: 'Mod+X', action: () => this.actions.cut(key, [row]) },
+        ...(isFolder ? [] : [{ label: t('shared.tree.copy'), icon: 'content_copy', shortcut: 'Mod+C', action: () => this.actions.copy(key, [row]) }]),
+        {
+          label: t('shared.tree.paste'),
+          icon: 'content_paste',
+          shortcut: 'Mod+V',
+          disabled: !this.actions.canPaste(key, this.tree(), pasteTarget),
+          action: () => void this.actions.paste(key, this.tree(), pasteTarget),
+        },
+        { label: t('shared.tree.moveTo'), icon: 'drive_file_move', action: () => this.moveRows([row]) },
+        separator,
+      );
+    }
+    const on = this.favorites.isFavorite(row.uuid);
+    items.push({ label: t(on ? 'shared.favorite.remove' : 'shared.favorite.add', { name: row.name }), icon: 'star', action: () => this.actions.toggleFavorite(row) });
+    if (editable && !isFolder) {
+      items.push({ label: t('pages.tree.duplicate'), icon: 'content_copy', action: () => void this.actions.duplicate(key, row) });
+    }
+    if (editable && this.permissions.canRelease()) {
+      items.push({ label: t('pages.bulk.release'), icon: 'publish', action: () => void this.releaseRows([row]) });
+    }
+    if (editable) {
+      items.push(separator, { label: t('pages.bulk.delete'), icon: 'delete', danger: true, shortcut: 'Del', action: () => void this.deleteRows([row]) });
+    }
+    return items;
+  }
 
   /** A right click on empty space acts as one on the open folder: only the *New …* options. */
   protected readonly emptyMenu = (): ContextMenuItem[] =>
@@ -196,7 +253,7 @@ export class FolderViewComponent {
       actions.push({ id: 'move', label: t('move'), icon: 'drive_file_move', action: (s) => this.moveRows(s.rows) });
     }
     if (this.permissions.canRelease() && !this.readOnly()) {
-      actions.push({ id: 'release', label: t('release'), icon: 'publish', action: (s) => this.releaseRows(s.rows) });
+      actions.push({ id: 'release', label: t('release'), icon: 'publish', action: (s) => void this.releaseRows(s.rows) });
     }
     if (!this.readOnly()) {
       actions.push(
@@ -360,21 +417,36 @@ export class FolderViewComponent {
 
   protected readonly pageTemplates = computed(() => this.store.pageTemplates());
 
-  protected newPage(): void {
+  /** Opens *New page*; `into` is a sub-folder to create it in (default: the open folder). */
+  protected newPage(into: string | null = null): void {
     if (!this.readOnly()) {
+      this.createIn.set(into);
       this.newPageOpen.set(true);
     }
   }
 
-  protected newFolder(): void {
+  protected newFolder(into: string | null = null): void {
     if (!this.readOnly()) {
+      this.createIn.set(into);
       this.newFolderOpen.set(true);
     }
   }
 
   /** The folder new items are created in (`undefined` = the project root). */
   private target(): string | undefined {
-    return this.isRoot() ? undefined : (this.folder()?.uuid ?? undefined);
+    return this.createIn() ?? (this.isRoot() ? undefined : (this.folder()?.uuid ?? undefined));
+  }
+
+  // ── Rename ─────────────────────────────────────────────────────────────────
+
+  protected renameTo(row: FolderRow, name: string): void {
+    this.renameBusy.set(true);
+    this.actions.rename(this.projectKey(), row, name).subscribe((done) => {
+      this.renameBusy.set(false);
+      if (done) {
+        this.renaming.set(null);
+      }
+    });
   }
 
   protected submitNewPage(value: CreateAssetFormValue): void {
@@ -413,25 +485,15 @@ export class FolderViewComponent {
 
   /** *Release folder…*: everything in the folder that has something to release. */
   protected releaseFolder(): void {
-    this.releaseRows(this.rows());
+    void this.releaseRows(this.rows());
   }
 
-  private releaseRows(rows: readonly FolderRow[]): void {
-    const labelOf = (code: string) => this.locales.labelOf(code);
-    const locale = this.editingLocale.locale();
-    const choices = rows.flatMap((row) =>
-      choicesFor(
-        { uuid: row.uuid, type: row.kind === 'page' ? 'PAGE' : 'FOLDER', uid: row.uid, displayName: row.name, folderPath: row.path, release: row.release },
-        'release',
-        locale,
-        labelOf,
-      ).map((choice) => ({ ...choice, label: `${row.name} · ${choice.label}`, checked: true })),
-    );
-    if (choices.length === 0) {
-      this.toasts.show(this.transloco.translate('pages.bulk.nothingToRelease'), 'info');
-      return;
+  /** Pages release as they are; a folder with everything inside it (recursively). */
+  private async releaseRows(rows: readonly FolderRow[]): Promise<void> {
+    const choices = await this.actions.releaseDialogChoices(this.projectKey(), this.tree(), rows);
+    if (choices) {
+      this.dialog.set({ kind: 'release', choices });
     }
-    this.dialog.set({ kind: 'release', choices });
   }
 
   // ── Move ───────────────────────────────────────────────────────────────────
@@ -492,7 +554,7 @@ export class FolderViewComponent {
     const copies: string[] = [];
     concat(
       ...pages.map((page) =>
-        defer(() => this.api.duplicatePage(key, page.uuid)).pipe(
+        defer(() => this.api.duplicateAsset(key, page.uuid)).pipe(
           tap((copy) => {
             if (copy.uuid) {
               copies.push(copy.uuid);

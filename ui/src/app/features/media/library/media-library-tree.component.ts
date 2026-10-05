@@ -24,7 +24,9 @@ import {
 import type { SfTreeLoader, SfTreeNode } from '../../../shared/components/tree/tree-model';
 import { MediaUploadStore } from './media-upload.store';
 import { MediaFolderActions } from './media-folder-actions';
+import { MediaItemActions } from './media-item-actions';
 import { MediaMover } from './media-mover';
+import { MediaReleaseActions } from './media-release.actions';
 import { type FolderView, MediaLibraryStore } from './media-library.store';
 
 /** Whether a folder's name contains `query` (lower case), or any folder below it does: the filter keeps it. */
@@ -73,7 +75,9 @@ export class MediaLibraryTreeComponent {
   private readonly toasts = inject(ToastService);
   private readonly router = inject(Router);
   private readonly mover = inject(MediaMover);
+  private readonly items = inject(MediaItemActions);
   private readonly uploads = inject(MediaUploadStore);
+  private readonly releases = inject(MediaReleaseActions);
   private readonly favorites = inject(FavoritesService);
   private readonly favoriteTree = inject(FavoriteTreeService);
   private readonly tree = viewChild<SfTreeComponent<FolderView>>(SfTreeComponent);
@@ -155,6 +159,7 @@ export class MediaLibraryTreeComponent {
     }
     const on = this.favorites.isFavorite(node.id);
     return [
+      ...this.pasteFilesItems(node.id),
       ...(this.uploads.canUpload() && !this.library.favoritesView()
         ? [{ label: this.transloco.translate('media.toolbar.upload'), icon: 'upload', action: () => this.uploads.pickFiles(node.id) }]
         : []),
@@ -163,12 +168,34 @@ export class MediaLibraryTreeComponent {
         icon: 'star',
         action: () => this.toggleFavorite(node),
       },
+      ...(this.releases.canRelease() && !this.library.favoritesView()
+        ? [{ label: this.transloco.translate('media.menu.release'), icon: 'publish', action: () => this.releases.release([], [node.data as FolderView]) }]
+        : []),
     ];
   };
+
+  /**
+   * *Paste N files* for files cut or copied in the grid or list: `sf-tree` pastes only its own nodes, so the host adds the
+   * entry (nothing without files on the clipboard).
+   */
+  private pasteFilesItems(target: string | null): ContextMenuItem[] {
+    const clip = this.items.clipboardFiles();
+    return clip && this.library.canEdit() && !this.library.favoritesView()
+      ? [
+          {
+            label: this.transloco.translate('media.menu.pasteMany', { count: clip.nodes.length }),
+            icon: 'content_paste',
+            disabled: !this.items.canPasteFiles(target),
+            action: () => void this.items.pasteFiles(target),
+          },
+        ]
+      : [];
+  }
 
   /** A right click on empty space acts as one on the top level: *Upload* and *New folder*. */
   protected readonly rootMenuItems = (): ContextMenuItem[] =>
     [
+      ...this.pasteFilesItems(null),
       ...(this.uploads.canUpload() ? [{ label: this.transloco.translate('media.toolbar.upload'), icon: 'upload', action: () => this.uploads.pickFiles('') }] : []),
       ...(this.library.canEdit()
         ? [{ label: this.transloco.translate('shared.tree.newFolder'), icon: 'create_new_folder', action: () => void this.tree()?.startCreate(null, 'folder') }]
@@ -286,12 +313,9 @@ export class MediaLibraryTreeComponent {
   }
 
   private toggleFavorite(node: SfTreeNode<FolderView>): void {
-    const folder = node.data;
-    if (!folder?.uuid) {
-      return;
+    if (node.data) {
+      this.folders.toggleFavorite(node.data);
     }
-    const on = this.favorites.toggle({ type: 'FOLDER', uuid: folder.uuid, displayName: node.label, folderPath: folder.path });
-    this.toasts.show(this.transloco.translate(on ? 'shared.favorite.added' : 'shared.favorite.removed', { name: node.label }), 'info');
   }
 
   protected onCreate(request: SfTreeCreateRequest<FolderView>): void {

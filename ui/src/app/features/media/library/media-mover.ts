@@ -65,6 +65,30 @@ export class MediaMover {
     }
   }
 
+  /**
+   * Asks once where a mixed selection of files and folders goes (the open folder is "current"; the folders and what is inside
+   * them are blocked), then moves the folders and the files — each with its own Undo.
+   */
+  async moveSelection(files: readonly { uuid?: string; displayName?: string }[], folders: readonly string[]): Promise<void> {
+    const fileUuids = files.flatMap((file) => (file.uuid ? [file.uuid] : []));
+    if (fileUuids.length + folders.length === 0 || !this.library.canEdit()) {
+      return;
+    }
+    const target = await this.choose({
+      title: this.t('itemsTitle', { count: fileUuids.length + folders.length }),
+      current: this.library.folderUuid() || null,
+      excluded: folders,
+    });
+    if (target) {
+      if (folders.length > 0) {
+        await this.moveTo(folders, target.target, 'folder');
+      }
+      if (fileUuids.length > 0) {
+        await this.moveTo(fileUuids, target.target, 'file');
+      }
+    }
+  }
+
   private choose(data: Omit<MediaMoveDialogData, 'tree'>): Promise<MediaMoveDialogResult | undefined> {
     return this.dialogs.open<MediaMoveDialogResult, MediaMoveDialogData>(
       MediaMoveDialogComponent,

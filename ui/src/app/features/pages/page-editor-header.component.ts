@@ -17,7 +17,6 @@ import { PageDeleteDialogComponent } from './page-delete-dialog.component';
 import { PageEditorStore } from './page-editor.store';
 import { PagesTreeRefresh } from './pages-tree-refresh.service';
 
-type PageView = components['schemas']['PageView'];
 
 /**
  * The page editor's header (M35.18): the page's name as the `h1`, its favorite star and the language's translation count;
@@ -124,8 +123,8 @@ export class PageEditorHeaderComponent {
   }
 
   private duplicate(): void {
-    this.api.duplicatePage(this.editor.projectKey(), this.editor.uuid()).subscribe({
-      next: (copy: PageView) => {
+    this.api.duplicateAsset(this.editor.projectKey(), this.editor.uuid()).subscribe({
+      next: (copy) => {
         this.treeRefresh.notify();
         this.toast.show(this.transloco.translate('pages.editor.toast.duplicated', { name: copy.displayName ?? copy.uid }), 'success');
         if (copy.uuid) {

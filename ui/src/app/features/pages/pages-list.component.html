@@ -88,6 +88,10 @@
   <sf-page-delete-dialog [projectKey]="projectKey()" [page]="page" (deleted)="onPageDeleted()" (closed)="deleting.set(null)" />
 }
 
+@if (releasing(); as choices) {
+  <sf-release-dialog [projectKey]="projectKey()" mode="release" [choices]="choices" (done)="onReleased()" (closed)="releasing.set(null)" />
+}
+
 @if (moving()) {
   <sf-folder-move-dialog
     [tree]="folderTree()"

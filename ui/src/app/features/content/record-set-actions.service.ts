@@ -131,6 +131,33 @@ export class RecordSetActions {
     return done.length > 0;
   }
 
+  /**
+   * Duplicates the records into their own set, one request each (new unreleased drafts); what was copied stays undoable
+   * as one group (Undo deletes the copies). Resolves `true` when anything was copied.
+   */
+  async duplicateRecords(projectKey: string, records: readonly BulkRecord[], afterUndo?: () => void): Promise<boolean> {
+    const copies: string[] = [];
+    let failed = 0;
+    for (const record of records) {
+      try {
+        const copy = await firstValueFrom(this.api.duplicateAsset(projectKey, record.uuid));
+        if (copy.uuid) {
+          copies.push(copy.uuid);
+        }
+      } catch {
+        failed++;
+      }
+    }
+    if (copies.length > 0) {
+      const steps: UndoStep[] = copies.map((uuid) => () => this.api.deleteAsset(projectKey, uuid).pipe(tap(() => afterUndo?.())));
+      this.undo.offerGroup(this.t('bulk.duplicated', { count: copies.length, name: records[0].name }), steps);
+    }
+    if (failed > 0) {
+      this.toasts.show(this.t('bulk.duplicateFailed', { count: failed }), 'error');
+    }
+    return copies.length > 0;
+  }
+
   /** The sets records of `datasetUuid` can move to: its other live sets (a record never leaves its dataset). */
   moveTargets(projectKey: string, datasetUuid: string, currentSetUuid: string): Observable<MoveTarget[]> {
     return this.content

@@ -89,7 +89,7 @@ describe('PageEditorHeaderComponent', () => {
     fireEvent.click(screen.getByRole('button', { name: 'More actions' }));
     fireEvent.click(await screen.findByRole('menuitem', { name: /Duplicate/ }));
 
-    await waitFor(() => expect(api.duplicatePage).toHaveBeenCalledWith('proj', 'page-1'));
+    await waitFor(() => expect(api.duplicateAsset).toHaveBeenCalledWith('proj', 'page-1'));
     expect(navigate).toHaveBeenCalledWith(['/p', 'proj', 'pages', 'page-3']);
     expect(toasts.toasts().at(-1)?.message).toBe('Created “About copy”.');
   });

@@ -656,10 +656,19 @@ export class ApiClient {
     );
   }
 
-  duplicatePage(projectKey: string, uuid: string): Observable<S['PageView']> {
-    return this.http.post<S['PageView']>(
-      `${BASE}/projects/${projectKey}/pages/${uuid}/duplicate`,
-      null,
+  /**
+   * Copies any asset but a folder (page, record, record set, navigation item, media file, global set) as a new
+   * unreleased draft named "<name> copy" in `folderUuid` (a record set for a record), or in its own folder when
+   * absent/null. One transaction; 201 with the copy.
+   */
+  duplicateAsset(
+    projectKey: string,
+    uuid: string,
+    folderUuid?: string | null,
+  ): Observable<S['AssetCopyView']> {
+    return this.http.post<S['AssetCopyView']>(
+      `${BASE}/projects/${projectKey}/assets/${uuid}/duplicate`,
+      folderUuid ? { folderUuid } : null,
       { withCredentials: true },
     );
   }

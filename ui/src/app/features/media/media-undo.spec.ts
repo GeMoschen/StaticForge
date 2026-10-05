@@ -15,6 +15,8 @@ import { MediaDrawerStore } from './drawer/media-drawer.store';
 import { MediaDrawerUsagesStore } from './drawer/media-drawer-usages.store';
 import { MediaFolderActions } from './library/media-folder-actions';
 import { MediaItemActions } from './library/media-item-actions';
+import { MediaReleaseActions } from './library/media-release.actions';
+import { MediaSelectionActions } from './library/media-selection.actions';
 import { MediaLibraryStore } from './library/media-library.store';
 import { MediaMover } from './library/media-mover';
 
@@ -77,11 +79,13 @@ describe('media undo', () => {
         MediaMover,
         MediaItemActions,
         MediaFolderActions,
+        MediaReleaseActions,
+        MediaSelectionActions,
         MediaDrawerStore,
         MediaDrawerUsagesStore,
         { provide: ApiClient, useValue: api },
         { provide: ConfirmService, useValue: confirms },
-        { provide: ProjectPermissionsStore, useValue: { canEditContent: signal(true) } },
+        { provide: ProjectPermissionsStore, useValue: { canEditContent: signal(true), canRelease: signal(true) } },
       ],
     });
     TestBed.inject(ProjectContextStore).mediaFolderTree.set(TREE);

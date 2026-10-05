@@ -10,21 +10,25 @@ import { ConfirmService } from '../../../shared/components/dialog/confirm.servic
 import { typeToConfirmFor } from '../../../shared/components/dialog/delete-confirm';
 import { DialogService } from '../../../shared/components/dialog/dialog.service';
 import type { SfMenuItem } from '../../../shared/components/menu/sf-menu-item';
+import { toContextItems } from '../../../shared/components/menu/sf-menu-item';
 import { ContextMenuItem, ContextMenuService, type ContextMenuTarget } from '../../../shared/services/context-menu.service';
+import { TreeClipboardService } from '../../../shared/services/tree-clipboard.service';
 import { isOnline } from '../../release/release-status.util';
 import { saveBlob, zipSlug } from './media-download.util';
 import { type MediaRenameDialogData, MediaRenameDialogComponent } from './media-rename-dialog.component';
 import { MediaMover } from './media-mover';
+import { MediaReleaseActions } from './media-release.actions';
+import { MediaSelectionActions } from './media-selection.actions';
 import { type MediaSummaryView, type MediaView, MediaLibraryStore } from './media-library.store';
 
 /** A file as the actions need it: what the library's list reports (a drawer's full view carries all of it). */
 type FileRef = Pick<MediaSummaryView, 'uuid' | 'displayName' | 'uid' | 'revision' | 'release' | 'usageCount' | 'folderPath' | 'mimeType'>;
 
 /**
- * Everything you can do to a media file of the grid and the list (decision 92): the one menu — *Open, Rename…, Move…,
- * Download, Copy link, Add to favorites, Delete…* — on a card or row (right click, Shift+F10, the ⋮ button), which acts on
- * the whole selection when the file is part of a multi-file selection (*Move N files…, Download N files as ZIP, Delete N
- * files…*), plus rename (dialog), download (one file as itself, several as one ZIP named after the folder), copy link,
+ * Everything you can do to a media file of the grid and the list (decision 92): the one menu — *Rename…, Move…,
+ * Download, Copy link, Add to favorites, Release…, Delete…* — on a card or row (right click, Shift+F10, the ⋮ button), which acts on
+ * the whole selection when the file is part of a multi-file selection (*Move N files…, Download N files as ZIP, Release N
+ * items…, Delete N files…*; see {@link MediaSelectionActions}, which also covers folders in the selection), plus rename (dialog), download (one file as itself, several as one ZIP named after the folder), copy link,
  * delete (typed word from 25 files) and favorites. Every rename, move and delete offers Undo; a bulk operation undoes as a
  * group. Moving lives in {@link MediaMover}.
  */
@@ -40,7 +44,13 @@ export class MediaItemActions {
   private readonly transloco = inject(TranslocoService);
   private readonly favorites = inject(FavoritesService);
   private readonly mover = inject(MediaMover);
+  private readonly clipboard = inject(TreeClipboardService);
   private readonly library = inject(MediaLibraryStore);
+  private readonly releases = inject(MediaReleaseActions);
+  // Resolved when needed: the selection's actions use this service too.
+  private get selection(): MediaSelectionActions {
+    return this.injector.get(MediaSelectionActions);
+  }
 
   private t(key: string, params?: Record<string, unknown>): string {
     return this.transloco.translate(`media.${key}`, params);
@@ -55,42 +65,33 @@ export class MediaItemActions {
   }
 
   /**
-   * The entries of a file's menu (card, list row, ⋮ button): *Open, Rename…, Move…, Download, Copy link, favorite,
-   * Delete…*; for a multi-file selection only the bulk actions with the count. A read-only project keeps what only reads.
+   * The entries of a file's menu (card, list row, ⋮ button): *Rename…, Move…, Download, Copy link, favorite, Release…,
+   * Delete…*; inside a selection of several files and folders the selection's actions with the count. A read-only project
+   * keeps what only reads.
    */
   menuItems(file: FileRef): SfMenuItem[] {
-    const targets = this.menuTargets(file);
-    const count = targets.length;
     const writable = this.library.canEdit();
-    if (count > 1) {
-      return [
-        ...(writable
-          ? [{ id: 'move', label: this.t('menu.moveMany', { count }), icon: 'drive_file_move', action: () => void this.mover.moveFiles(targets) }]
-          : []),
-        { id: 'download', label: this.t('menu.downloadMany', { count }), icon: 'download', action: () => void this.download(targets) },
-        ...(writable
-          ? [
-              {
-                id: 'delete',
-                label: this.t('menu.deleteMany', { count }),
-                icon: 'delete',
-                danger: true,
-                separatorBefore: true,
-                shortcut: 'Delete',
-                action: () => void this.deleteSelection(),
-              },
-            ]
-          : []),
-      ];
+    if (this.selection.multiFor(file.uuid)) {
+      return this.selection.actions('menu').map(({ id, label, icon, danger, action }) => ({
+        id,
+        label,
+        icon,
+        danger,
+        separatorBefore: id === 'delete',
+        shortcut: id === 'delete' ? 'Delete' : undefined,
+        action,
+      }));
     }
     const name = file.displayName ?? file.uid ?? '';
     const favorite = this.isFavorite(file);
     return [
-      { id: 'open', label: this.t('menu.open'), icon: 'open_in_new', shortcut: 'Enter', action: () => this.library.openAsset(file.uuid ?? null) },
       ...(writable
         ? [
             { id: 'rename', label: this.t('menu.rename'), icon: 'edit', shortcut: 'F2', action: () => void this.rename(file) },
             { id: 'move', label: this.t('menu.move'), icon: 'drive_file_move', action: () => void this.mover.moveFiles([file]) },
+            { id: 'cut', label: this.t('menu.cut'), icon: 'content_cut', separatorBefore: true, shortcut: 'Mod+X', action: () => this.cutFiles([file]) },
+            { id: 'copy', label: this.t('menu.copy'), icon: 'content_copy', shortcut: 'Mod+C', action: () => this.copyFiles([file]) },
+            { id: 'duplicate', label: this.t('menu.duplicate'), icon: 'file_copy', action: () => void this.duplicate([file]) },
           ]
         : []),
       { id: 'download', label: this.t('menu.download'), icon: 'download', action: () => void this.download([file]) },
@@ -101,6 +102,9 @@ export class MediaItemActions {
         icon: 'star',
         action: () => this.toggleFavorite(file),
       },
+      ...(this.releases.canRelease()
+        ? [{ id: 'release', label: this.t('menu.release'), icon: 'publish', action: () => this.releases.release([file as MediaSummaryView]) }]
+        : []),
       ...(writable
         ? [
             {
@@ -122,11 +126,7 @@ export class MediaItemActions {
     if (!file.uuid) {
       return;
     }
-    const items: ContextMenuItem[] = this.menuItems(file).flatMap((item) => [
-      ...(item.separatorBefore ? [{ label: '', separator: true }] : []),
-      { label: item.label, icon: item.icon, danger: item.danger, shortcut: item.shortcut, action: item.action },
-    ]);
-    this.menu.open(target, items);
+    this.menu.open(target, toContextItems(this.menuItems(file)));
   }
 
   // ── Rename ─────────────────────────────────────────────────────────────────
@@ -193,6 +193,116 @@ export class MediaItemActions {
         }
       }),
     );
+  }
+
+  // ── Copy, duplicate and paste (the shared clipboard) ───────────────────────
+
+  /** Files are not nodes of the folder tree: they sit on the shared clipboard under their own scope, which the tree never pastes. */
+  private fileScope(): string {
+    return `${this.library.projectKey()}:media-files`;
+  }
+
+  private clipNodes(files: readonly FileRef[]) {
+    return files.flatMap((file) =>
+      file.uuid
+        ? [{ id: file.uuid, label: file.displayName ?? file.uid ?? '', icon: 'description', data: { folderUuid: this.library.parentFolderUuidOf(file.uuid) ?? null } }]
+        : [],
+    );
+  }
+
+  /** *Cut*: the files go on the clipboard to be moved by *Paste* onto a folder. */
+  cutFiles(files: readonly FileRef[]): void {
+    const nodes = this.clipNodes(files);
+    if (nodes.length > 0 && this.library.canEdit()) {
+      this.clipboard.cutNodes(this.fileScope(), nodes);
+    }
+  }
+
+  /** *Copy*: the files go on the clipboard to be duplicated into the folder *Paste* is used on. */
+  copyFiles(files: readonly FileRef[]): void {
+    const nodes = this.clipNodes(files);
+    if (nodes.length > 0 && this.library.canEdit()) {
+      this.clipboard.copyNodes(this.fileScope(), nodes);
+    }
+  }
+
+  /** The files on the clipboard (`null`: none, or something else is there). */
+  clipboardFiles(): { mode: 'cut' | 'copy'; nodes: readonly { id: string; label: string; data?: unknown }[] } | null {
+    const clip = this.clipboard.nodes();
+    return clip && clip.scope === this.fileScope() && clip.nodes.length > 0 ? clip : null;
+  }
+
+  /** Whether *Paste* has files for the folder `target` (`null`: the top level): cut files are not pasted where they already are. */
+  canPasteFiles(target: string | null): boolean {
+    const clip = this.clipboardFiles();
+    if (!clip || !this.library.canEdit()) {
+      return false;
+    }
+    return clip.mode === 'copy' || clip.nodes.some((node) => ((node.data as { folderUuid?: string | null } | undefined)?.folderUuid ?? null) !== target);
+  }
+
+  /** *Paste* onto a folder: cut files move into it, copied files are duplicated into it (one Undo either way). */
+  async pasteFiles(target: string | null): Promise<void> {
+    const clip = this.clipboardFiles();
+    if (!clip || !this.canPasteFiles(target)) {
+      return;
+    }
+    if (clip.mode === 'cut') {
+      this.clipboard.clear();
+      await this.mover.moveTo(clip.nodes.map((node) => node.id), target, 'file');
+      return;
+    }
+    await this.copyInto(clip.nodes.map((node) => ({ uuid: node.id, name: node.label })), target);
+  }
+
+  /** *Duplicate*: a copy of each file next to it ("name copy", an unreleased draft), with Undo. */
+  async duplicate(files: readonly FileRef[]): Promise<void> {
+    if (!this.library.canEdit()) {
+      return;
+    }
+    await this.copyInto(
+      files.flatMap((file) => (file.uuid ? [{ uuid: file.uuid, name: file.displayName ?? file.uid ?? '' }] : [])),
+      undefined,
+    );
+  }
+
+  /**
+   * Copies the files into the folder `target` (`undefined`: each stays in its folder; `null`: the top level) — one request
+   * per file, each one transaction on the server — then reloads and offers one Undo that deletes the copies.
+   */
+  private async copyInto(files: readonly { uuid: string; name: string }[], target: string | null | undefined): Promise<void> {
+    if (files.length === 0 || !this.library.canEdit()) {
+      return;
+    }
+    const key = this.library.projectKey();
+    const copies: string[] = [];
+    const names: string[] = [];
+    let failed = 0;
+    for (const file of files) {
+      try {
+        const copy = await firstValueFrom(this.api.duplicateAsset(key, file.uuid, target));
+        if (copy.uuid) {
+          copies.push(copy.uuid);
+          names.push(file.name);
+        }
+      } catch {
+        failed += 1;
+      }
+    }
+    if (failed > 0) {
+      this.toasts.show(this.t('copy.failed', { failed, total: files.length }), 'error');
+    }
+    if (copies.length === 0) {
+      return;
+    }
+    const folder = target ? (this.library.labelOf(target) ?? '') : this.t('library.title');
+    const message = this.t(target === undefined ? 'copy.duplicated' : 'copy.pasted', { count: copies.length, name: names[0], folder });
+    // Undone last to first; the first step (undone last) reads the library again.
+    this.undo.offerGroup(message, [
+      () => Promise.resolve(this.library.reloadMedia()),
+      ...copies.map((uuid) => () => this.api.deleteAsset(key, uuid)),
+    ]);
+    this.library.reloadMedia();
   }
 
   // ── Download and link ──────────────────────────────────────────────────────
@@ -314,8 +424,8 @@ export class MediaItemActions {
 
   /** Delete on a card or row: the selection when the file is part of a multi-file selection, else the file itself. */
   async deleteFile(file: FileRef): Promise<void> {
-    if (this.library.isSelected(file.uuid) && this.library.selected().length > 1) {
-      await this.deleteSelection();
+    if (this.selection.multiFor(file.uuid)) {
+      await this.selection.delete();
     } else if (file.uuid) {
       await this.deleteMedia({
         uuid: file.uuid,

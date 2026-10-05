@@ -13,7 +13,9 @@
   [emptyTitle]="'media.empty.title' | transloco"
   (selectionChange)="onSelection($event.keys)"
   (rowOpen)="onRowOpen($event)"
-  (contextmenu)="onContextMenu($event)"
+  [rowMenu]="rowMenu"
+  [emptyMenu]="emptyMenu"
+  emptyClickClears
   (keydown)="onKeydown($event)"
 >
   <ng-template sfDataTableCell="thumb" [sfDataTableCellRows]="rows()" let-row>

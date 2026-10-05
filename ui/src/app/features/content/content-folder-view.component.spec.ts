@@ -13,6 +13,8 @@ import { provideFavoritesStub } from '../../core/assets/testing/favorites.testin
 import { ProjectPermissionsStore } from '../../core/project/project-permissions.store';
 import { ToastService } from '../../core/ui/toast.service';
 import { SfDataTableComponent } from '../../shared/components/data-table/sf-data-table.component';
+import { TreeClipboardService } from '../../shared/services/tree-clipboard.service';
+import type { ContextMenuItem } from '../../shared/services/context-menu.service';
 import { ConfirmService } from '../../shared/components/dialog/confirm.service';
 import { ContentFolderViewComponent } from './content-folder-view.component';
 import { ContentStoreRefresh } from './content-store-refresh.service';
@@ -106,6 +108,8 @@ function stubs() {
       restoreFolder: vi.fn().mockReturnValue(of({})),
       assetHistory: vi.fn().mockReturnValue(of([{ revision: 8, deleted: true }, { revision: 3, deleted: false }])),
       restoreAsset: vi.fn().mockReturnValue(of({})),
+      duplicateAsset: vi.fn().mockImplementation((_key: string, uuid: string) => of({ uuid: `${uuid}-copy` })),
+      deleteAsset: vi.fn().mockReturnValue(of(undefined)),
     },
   };
 }
@@ -113,7 +117,7 @@ function stubs() {
 const lastToast = (toasts: ToastService) => toasts.toasts().at(-1)!;
 
 async function open(
-  options: { folderUuid?: string | null; canEdit?: boolean; datasets?: DatasetSummaryView[]; loading?: boolean; failed?: boolean; confirm?: boolean; sets?: RecordSetSummaryView[] } = {},
+  options: { folderUuid?: string | null; canEdit?: boolean; datasets?: DatasetSummaryView[]; loading?: boolean; failed?: boolean; confirm?: boolean; sets?: RecordSetSummaryView[]; canRelease?: boolean } = {},
 ) {
   const { content, api } = stubs();
   const confirm = vi.fn().mockResolvedValue(options.confirm ?? true);
@@ -136,7 +140,7 @@ async function open(
       { provide: ContentService, useValue: content },
       { provide: ApiClient, useValue: api },
       { provide: ConfirmService, useValue: { confirm } },
-      { provide: ProjectPermissionsStore, useValue: { canEditContent: signal(options.canEdit ?? true) } },
+      { provide: ProjectPermissionsStore, useValue: { canEditContent: signal(options.canEdit ?? true), canRelease: signal(options.canRelease ?? true) } },
     ],
   });
   const component = view.fixture.componentInstance;
@@ -146,6 +150,10 @@ async function open(
     newFolder: vi.fn(),
     newRecordSet: vi.fn(),
     rename: vi.fn(),
+    newFolderIn: vi.fn(),
+    newRecordSetIn: vi.fn(),
+    renameEntry: vi.fn(),
+    releaseEntries: vi.fn(),
     retry: vi.fn(),
   };
   for (const [name, spy] of Object.entries(outputs)) {
@@ -414,6 +422,163 @@ describe('the Content folder view', () => {
 
       await waitFor(() => expect(content.moveAsset).toHaveBeenCalledWith('proj', 'set-espresso', undefined));
       await waitFor(() => expect(content.moveFolder).toHaveBeenCalledWith('proj', 'spring', undefined));
+    });
+  });
+
+  describe('the row menu', () => {
+    type Menu = (rows: unknown[]) => ContextMenuItem[];
+    const menuOf = (view: { fixture: { componentInstance: unknown } }) => (view.fixture.componentInstance as { rowMenu: Menu }).rowMenu;
+    const rowsOf = (view: { fixture: { componentInstance: unknown } }) => (view.fixture.componentInstance as { rows: () => unknown[] }).rows();
+    const labels = (items: ContextMenuItem[]) => items.filter((item) => !item.separator).map((item) => item.label);
+
+    it('offers a folder row the entries of the tree menu, Open first', async () => {
+      const { view } = await open();
+      const [folder] = rowsOf(view);
+
+      expect(labels(menuOf(view)([folder]))).toEqual([
+        'Open',
+        'New folder',
+        'New record set',
+        'Rename…',
+        'Cut',
+        'Paste',
+        'Move to…',
+        'Add “Spring 2026” to favorites',
+        'Release…',
+        'Delete',
+      ]);
+    });
+
+    it('offers a record set row no New entries, and no Release without the right', async () => {
+      const { view } = await open({ canRelease: false });
+      const set = rowsOf(view)[1];
+
+      expect(labels(menuOf(view)([set]))).toEqual(['Open', 'Rename…', 'Cut', 'Copy', 'Paste', 'Move to…', 'Add “Espresso blends” to favorites', 'Delete']);
+    });
+
+    it('creates inside the folder, renames in the dialog and releases the row', async () => {
+      const { view, outputs } = await open();
+      const [folder] = rowsOf(view);
+      const items = menuOf(view)([folder]);
+      const run = (label: string) => items.find((item) => item.label === label)!.action!();
+
+      run('New folder');
+      run('New record set');
+      run('Rename…');
+      run('Release…');
+
+      expect(outputs.newFolderIn).toHaveBeenCalledWith('spring');
+      expect(outputs.newRecordSetIn).toHaveBeenCalledWith('spring');
+      expect(outputs.renameEntry).toHaveBeenCalledWith(folder);
+      expect(outputs.releaseEntries).toHaveBeenCalledWith([folder]);
+    });
+
+    it('cuts a set and pastes it onto a folder row with the same move the tree does, Undo puts it back', async () => {
+      const { view, content, toasts } = await open();
+      const [folder, set] = rowsOf(view);
+      menuOf(view)([set]).find((item) => item.label === 'Cut')!.action!();
+      expect(TestBed.inject(TreeClipboardService).nodes()?.scope).toBe('proj:content');
+
+      const paste = menuOf(view)([folder]).find((item) => item.label === 'Paste')!;
+      expect(paste.disabled).toBeFalsy();
+      paste.action!();
+
+      await waitFor(() => expect(content.moveAsset).toHaveBeenCalledWith('proj', 'set-espresso', 'spring'));
+      await waitFor(() => expect(lastToast(toasts).message).toBe('Moved “Espresso blends”'));
+      expect(TestBed.inject(TreeClipboardService).nodes()).toBeNull();
+    });
+
+    it('copies a set and pastes it onto a folder row: one duplicate into that folder, one Undo deletes the copy', async () => {
+      const { view, api, toasts } = await open();
+      const [folder, set] = rowsOf(view);
+      menuOf(view)([set]).find((item) => item.label === 'Copy')!.action!();
+      expect(TestBed.inject(TreeClipboardService).nodes()).toMatchObject({ mode: 'copy', scope: 'proj:content' });
+
+      const paste = menuOf(view)([folder]).find((item) => item.label === 'Paste')!;
+      expect(paste.disabled).toBeFalsy();
+      paste.action!();
+
+      await waitFor(() => expect(api.duplicateAsset).toHaveBeenCalledWith('proj', 'set-espresso', 'spring'));
+      await waitFor(() => expect(lastToast(toasts).message).toBe('Copied “Espresso blends”'));
+      // a copy stays on the clipboard: it can be pasted again
+      expect(TestBed.inject(TreeClipboardService).nodes()?.mode).toBe('copy');
+      lastToast(toasts).action!.run();
+      await waitFor(() => expect(api.deleteAsset).toHaveBeenCalledWith('proj', 'set-espresso-copy'));
+    });
+
+    it('copies several sets with one call each and offers one Undo; a copy can be pasted next to the set too', async () => {
+      const { view, api } = await open();
+      const [, espresso, tours] = rowsOf(view);
+      const items = menuOf(view)([espresso, tours]);
+      expect(labels(items)).toContain('Copy');
+      items.find((item) => item.label === 'Copy')!.action!();
+
+      menuOf(view)([espresso]).find((item) => item.label === 'Paste')!.action!();
+
+      await waitFor(() => expect(api.duplicateAsset).toHaveBeenCalledTimes(2));
+      expect(api.duplicateAsset).toHaveBeenNthCalledWith(1, 'proj', 'set-espresso', 'shop');
+      expect(api.duplicateAsset).toHaveBeenNthCalledWith(2, 'proj', 'set-tours', 'shop');
+    });
+
+    it('does not offer Copy on a folder or a selection holding one, and does not paste a copied folder', async () => {
+      const { view } = await open();
+      const rows = rowsOf(view);
+
+      expect(labels(menuOf(view)([rows[0]]))).not.toContain('Copy');
+      expect(labels(menuOf(view)(rows))).not.toContain('Copy');
+      TestBed.inject(TreeClipboardService).copyNodes('proj:content', [{ id: 'spring', label: 'Spring 2026', data: rows[0] } as never]);
+      expect(menuOf(view)([rows[0]]).find((item) => item.label === 'Paste')!.disabled).toBe(true);
+    });
+
+    it('says so when a copy fails, and keeps the Undo of what was copied', async () => {
+      const { view, api, toasts } = await open();
+      const [folder, espresso, tours] = rowsOf(view);
+      api.duplicateAsset.mockImplementationOnce((_k: string, uuid: string) => of({ uuid: `${uuid}-copy` })).mockReturnValueOnce(throwError(() => new Error('422')));
+      menuOf(view)([espresso, tours]).find((item) => item.label === 'Copy')!.action!();
+
+      menuOf(view)([folder]).find((item) => item.label === 'Paste')!.action!();
+
+      await waitFor(() => expect(toasts.toasts().some((toast) => toast.kind === 'error' && /Could not copy/.test(toast.message))).toBe(true));
+      expect(toasts.toasts().some((toast) => toast.message === 'Copied “Espresso blends”')).toBe(true);
+    });
+
+    it('does not paste a folder into itself or a set where it already is', async () => {
+      const { view } = await open();
+      const [folder, set] = rowsOf(view);
+      menuOf(view)([folder]).find((item) => item.label === 'Cut')!.action!();
+      expect(menuOf(view)([folder]).find((item) => item.label === 'Paste')!.disabled).toBe(true);
+
+      menuOf(view)([set]).find((item) => item.label === 'Cut')!.action!();
+      // a set row pastes next to itself: into the open folder, where it already is
+      expect(menuOf(view)([set]).find((item) => item.label === 'Paste')!.disabled).toBe(true);
+    });
+
+    it('offers a selection Cut and the bulk actions: Move…, Release…, Delete', async () => {
+      const { view } = await open();
+
+      expect(labels(menuOf(view)(rowsOf(view)))).toEqual(['Cut', 'Move…', 'Release…', 'Delete']);
+    });
+  });
+
+  describe('the bulk bar', () => {
+    it('releases the selection through the area', async () => {
+      const { outputs } = await open();
+      await screen.findByText('Espresso blends');
+      fireEvent.click(screen.getByRole('checkbox', { name: 'Select all on this page' }));
+
+      fireEvent.click(await screen.findByRole('button', { name: 'Release…' }));
+
+      expect(outputs.releaseEntries).toHaveBeenCalled();
+      expect(outputs.releaseEntries.mock.calls[0][0].map((row: { uuid: string }) => row.uuid)).toEqual(['spring', 'set-espresso', 'set-tours']);
+    });
+
+    it('has no Release without the release right', async () => {
+      await open({ canRelease: false });
+      await screen.findByText('Espresso blends');
+      fireEvent.click(screen.getByRole('checkbox', { name: 'Select all on this page' }));
+
+      expect(await screen.findByRole('button', { name: 'Delete' })).toBeTruthy();
+      expect(screen.queryByRole('button', { name: 'Release…' })).toBeNull();
     });
   });
 });

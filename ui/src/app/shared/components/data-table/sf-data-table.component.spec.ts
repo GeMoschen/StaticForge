@@ -106,6 +106,7 @@ let config: Config = DEFAULTS;
       [bulkActions]="bulkActions"
       [rowMenu]="rowMenu"
       [emptyMenu]="emptyMenu"
+      emptyClickClears
       (queryChange)="queries.push($event)"
       (sortChange)="sorts.push($event)"
       (pageChange)="pages.push($event)"
@@ -441,6 +442,18 @@ describe('SfDataTableComponent', () => {
       fireEvent.click(within(dataRows()[1]).getByRole('checkbox'));
       fireEvent.contextMenu(dataRows()[1]);
       expect(host.menuRows.at(-1)).toEqual([ITEMS[0], ITEMS[1]]);
+    });
+
+    it('clears the selection on a left click on empty space, but not on a row', async () => {
+      const { container, host } = await setup({ selectable: true });
+      fireEvent.click(within(dataRows()[0]).getByRole('checkbox'));
+      expect(host.selections.at(-1)?.count).toBe(1);
+
+      fireEvent.click(dataRows()[1]);
+      expect(host.selections.at(-1)?.count).toBe(1);
+
+      fireEvent.click(container.querySelector<HTMLElement>('.sf-data-table__scroller')!);
+      expect(host.selections.at(-1)?.count).toBe(0);
     });
 
     it('opens the empty-space menu below the rows, but not on the header', async () => {

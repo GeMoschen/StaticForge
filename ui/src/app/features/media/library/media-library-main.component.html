@@ -25,16 +25,12 @@
     } @else {
       <sf-media-library-toolbar />
 
-      @if (library.view() === 'grid' && library.selectedItems().length > 0) {
+      @if (library.view() === 'grid' && library.selectionCount() > 0) {
         <div class="bulk" role="group" [attr.aria-label]="'shared.dataTable.bulkActions' | transloco">
-          <span class="bulk__count">{{ 'shared.dataTable.selected' | transloco: { count: library.selectedItems().length } }}</span>
+          <span class="bulk__count">{{ 'shared.dataTable.selected' | transloco: { count: library.selectionCount() } }}</span>
           <span class="bulk__actions">
-            @if (library.canEdit()) {
-              <sf-button size="sm" variant="secondary" icon="drive_file_move" (click)="mover.moveFiles(library.selectedItems())">{{ 'media.bulk.move' | transloco }}</sf-button>
-            }
-            <sf-button size="sm" variant="secondary" icon="download" (click)="items.download(library.selectedItems())">{{ 'media.bulk.download' | transloco }}</sf-button>
-            @if (library.canEdit()) {
-              <sf-button size="sm" variant="danger" icon="delete" (click)="items.deleteSelection()">{{ 'media.bulk.delete' | transloco }}</sf-button>
+            @for (action of selection.actions('bulk'); track action.id) {
+              <sf-button size="sm" [variant]="action.danger ? 'danger' : 'secondary'" [icon]="action.icon" (click)="action.action()">{{ action.label }}</sf-button>
             }
           </span>
           <sf-button size="sm" variant="ghost" (click)="library.clearSelection()">{{ 'shared.dataTable.clearSelection' | transloco }}</sf-button>

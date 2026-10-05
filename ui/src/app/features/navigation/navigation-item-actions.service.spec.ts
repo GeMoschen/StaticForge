@@ -50,6 +50,8 @@ describe('NavigationItemActions', () => {
       restoreFolder: vi.fn().mockReturnValue(of({})),
       assetHistory: vi.fn().mockReturnValue(of([{ revision: 7, deleted: true }, { revision: 3, deleted: false }])),
       restoreAsset: vi.fn().mockReturnValue(of({})),
+      duplicateAsset: vi.fn().mockImplementation((_k: string, uuid: string) => of({ uuid: `${uuid}-copy` })),
+      deleteAsset: vi.fn().mockReturnValue(of(undefined)),
     };
     confirms = { confirm: vi.fn().mockResolvedValue(true) };
     TestBed.configureTestingModule({
@@ -170,6 +172,32 @@ describe('NavigationItemActions', () => {
       const change = await actions.delete('proj', [entry('f')]);
       await actions.runUndo(change.steps);
       expect(TestBed.inject(ToastService).toasts().at(-1)?.kind).toBe('error');
+    });
+  });
+
+  describe('copy', () => {
+    it('duplicates each item into the target folder, skips folders, and Undo deletes the copies', async () => {
+      const change = await actions.copy('proj', [entry('a'), entry('f'), entry('b')], 'f');
+
+      expect(api['duplicateAsset']).toHaveBeenCalledTimes(2);
+      expect(api['duplicateAsset']).toHaveBeenCalledWith('proj', 'a', 'f');
+      expect(api['duplicateAsset']).toHaveBeenCalledWith('proj', 'b', 'f');
+      expect(change.failed).toBe(false);
+      expect(change.done.map((e) => e.uuid)).toEqual(['a', 'b']);
+      await actions.runUndo(change.steps);
+      expect(api['deleteAsset']).toHaveBeenCalledWith('proj', 'b-copy');
+      expect(api['deleteAsset']).toHaveBeenCalledWith('proj', 'a-copy');
+    });
+
+    it('copies to the top level with a null target and stops at the first failure', async () => {
+      api['duplicateAsset'].mockReturnValueOnce(of({ uuid: 'a-copy' })).mockReturnValueOnce(throwError(() => new Error('x')));
+
+      const change = await actions.copy('proj', [entry('a'), entry('b'), entry('c')], null);
+
+      expect(api['duplicateAsset']).toHaveBeenNthCalledWith(1, 'proj', 'a', null);
+      expect(change.failed).toBe(true);
+      expect(change.done.map((e) => e.uuid)).toEqual(['a']);
+      expect(change.steps).toHaveLength(1);
     });
   });
 

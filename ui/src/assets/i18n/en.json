@@ -5677,7 +5677,10 @@
         "deleted": "{count, plural, one {Deleted “{name}”.} other {Deleted # records.}}",
         "deleteFailed": "{count, plural, one {# record could not be deleted — pages or templates may still use it.} other {# records could not be deleted — pages or templates may still use them.}}",
         "moved": "{count, plural, one {Moved “{name}” to {target}.} other {Moved # records to {target}.}}",
-        "moveFailed": "{count, plural, one {# record could not be moved.} other {# records could not be moved.}}"
+        "moveFailed": "{count, plural, one {# record could not be moved.} other {# records could not be moved.}}",
+        "duplicate": "Duplicate",
+        "duplicated": "{count, plural, one {Duplicated “{name}”.} other {Duplicated # records.}}",
+        "duplicateFailed": "{count, plural, one {# record could not be duplicated.} other {# records could not be duplicated.}}"
       },
       "grid": {
         "columns": {
@@ -5806,6 +5809,8 @@
       "newRecord": "New record",
       "history": "History",
       "usedBy": "Used by",
+      "release": "Release…",
+      "nothingToRelease": "Nothing here is waiting to be released.",
       "favorites": "Favorites",
       "resize": "Resize the content tree",
       "nameTaken": "A folder or record set with this name already exists here.",
@@ -5824,6 +5829,7 @@
         "folderCreateFailed": "Could not create the folder — a folder with that name may already exist here.",
         "recordSetCreated": "Record set “{name}” created.",
         "recordSetCreateFailed": "Could not create the record set — you may need the editor role.",
+        "copyFailed": "Could not copy “{name}” — try again in a moment.",
         "renamed": "Renamed “{from}” to “{to}”.",
         "renameFailed": "Could not rename “{name}” — try again in a moment.",
         "moveFailed": "Could not move “{name}” — the target may be inside what you are moving.",
@@ -5856,11 +5862,13 @@
       },
       "menu": {
         "rename": "Rename",
+        "renameDialog": "Rename…",
         "move": "Move…",
         "delete": "Delete…"
       },
       "bulk": {
         "move": "Move…",
+        "release": "Release…",
         "delete": "Delete",
         "moveFailed": "Could not move everything.",
         "deleteFailed": "Could not delete everything."
@@ -6354,6 +6362,7 @@
         "renameFailed": "Could not rename “{name}” — try again in a moment.",
         "deleteFailed": "Could not delete “{name}” — try again in a moment.",
         "moveFailed": "Could not move “{name}” — the target may be inside what you are moving.",
+        "copyFailed": "Could not copy “{name}” — try again in a moment.",
         "reorderFailed": "Could not reorder “{name}” — the menu may have changed; it was read again.",
         "entrySet": "“{name}” is now the entry page.",
         "entryCleared": "The folder has no entry page now.",
@@ -6361,6 +6370,7 @@
         "shown": "{count, plural, one {“{name}” is in the menu again.} other {# entries are in the menu again.}}",
         "hidden": "{count, plural, one {“{name}” is hidden from the menu.} other {# entries are hidden from the menu.}}",
         "visibilityUnchanged": "Nothing changed — the selection already has that setting.",
+        "nothingToRelease": "Nothing here is waiting to be released.",
         "visibilityFailed": "Could not change “{name}” — try again in a moment."
       },
       "openRoot": "Open All navigation, with the menu’s entry page"
@@ -6388,12 +6398,16 @@
       },
       "bulk": {
         "move": "Move…",
+        "copy": "Copy",
+        "release": "Release…",
         "delete": "Delete",
         "show": "Show in menu",
         "hide": "Hide from menu"
       },
       "menu": {
         "entryPage": "Entry page…",
+        "release": "Release…",
+        "renameDialog": "Rename…",
         "rename": "Rename",
         "move": "Move…",
         "show": "Show in menu",
@@ -6560,7 +6574,19 @@
     "bulk": {
       "delete": "Delete",
       "move": "Move",
-      "download": "Download"
+      "download": "Download",
+      "cut": "Cut",
+      "copy": "Copy",
+      "duplicate": "Duplicate",
+      "release": "Release…",
+      "deleteTitle": "{count, plural, one {Delete # item?} other {Delete # items?}}",
+      "deleteMessage": "Folders are deleted with everything inside them.",
+      "deleteConfirm": "{count, plural, one {Delete # item} other {Delete # items}}",
+      "deleteDone": "{count, plural, one {Deleted “{name}”} other {Deleted # items}}",
+      "deleteFailedSome": "Could not delete {failed} of {total} items."
+    },
+    "release": {
+      "nothing": "Nothing here is waiting to be released."
     },
     "dropzone": {
       "text": "Drop files to upload to {folder}"
@@ -6609,8 +6635,24 @@
       "moveMany": "Move {count} files…",
       "downloadMany": "Download {count} files as ZIP",
       "deleteMany": "Delete {count} files…",
+      "release": "Release…",
+      "moveItems": "Move {count} items…",
+      "releaseItems": "Release {count} items…",
+      "deleteItems": "Delete {count} items…",
       "linkCopied": "Link copied.",
-      "linkFailed": "Could not copy the link."
+      "linkFailed": "Could not copy the link.",
+      "cut": "Cut",
+      "copy": "Copy",
+      "duplicate": "Duplicate",
+      "cutMany": "{count, plural, one {Cut # file} other {Cut # files}}",
+      "copyMany": "{count, plural, one {Copy # file} other {Copy # files}}",
+      "duplicateMany": "{count, plural, one {Duplicate # file} other {Duplicate # files}}",
+      "pasteMany": "{count, plural, one {Paste # file} other {Paste # files}}"
+    },
+    "copy": {
+      "duplicated": "{count, plural, one {Duplicated “{name}”} other {Duplicated # files}}",
+      "pasted": "{count, plural, one {Copied “{name}” to {folder}} other {Copied # files to {folder}}}",
+      "failed": "Could not copy {failed} of {total} files."
     },
     "rename": {
       "title": "Rename “{name}”",
@@ -6640,6 +6682,7 @@
     "move": {
       "title": "{count, plural, one {Move “{name}”} other {Move # files}}",
       "folderTitle": "{count, plural, one {Move folder “{name}”} other {Move # folders}}",
+      "itemsTitle": "Move {count} items",
       "lead": "Choose the folder to move to.",
       "tree": "Folders",
       "current": "Current folder",

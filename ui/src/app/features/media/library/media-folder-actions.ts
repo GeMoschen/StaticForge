@@ -2,18 +2,23 @@ import { Injectable, Injector, inject, signal } from '@angular/core';
 import { TranslocoService } from '@jsverse/transloco';
 import { type Observable, firstValueFrom, tap } from 'rxjs';
 import { ApiClient } from '../../../core/api/api.client';
+import { FavoritesService } from '../../../core/assets/favorites.service';
 import { ToastService } from '../../../core/ui/toast.service';
 import { UndoService } from '../../../core/ui/undo.service';
 import { ConfirmService } from '../../../shared/components/dialog/confirm.service';
 import { typeToConfirmFor } from '../../../shared/components/dialog/delete-confirm';
 import { DialogService } from '../../../shared/components/dialog/dialog.service';
-import type { SfMenuItem } from '../../../shared/components/menu/sf-menu-item';
+import { type SfMenuItem, toContextItems } from '../../../shared/components/menu/sf-menu-item';
 import { type ContextMenuItem, ContextMenuService, type ContextMenuTarget } from '../../../shared/services/context-menu.service';
+import { TreeClipboardService } from '../../../shared/services/tree-clipboard.service';
 import { isOnline } from '../../release/release-status.util';
+import { MediaItemActions } from './media-item-actions';
 import { MediaMover } from './media-mover';
+import { MediaReleaseActions } from './media-release.actions';
+import { MediaSelectionActions } from './media-selection.actions';
 import { MediaUploadStore } from './media-upload.store';
 import { type FolderView, MediaLibraryStore } from './media-library.store';
-import { findParentFolder, folderContentCount } from './media-library.util';
+import { findFolder, findParentFolder, folderContentCount } from './media-library.util';
 import { type MediaRenameDialogData, MediaRenameDialogComponent } from './media-rename-dialog.component';
 
 /** A request to the folder tree from outside it (the page header's folder menu, the empty library's *New folder*). */
@@ -40,6 +45,16 @@ export class MediaFolderActions {
   private readonly transloco = inject(TranslocoService);
   private readonly library = inject(MediaLibraryStore);
   private readonly contextMenu = inject(ContextMenuService);
+  private readonly clipboard = inject(TreeClipboardService);
+  private readonly favorites = inject(FavoritesService);
+  private readonly releases = inject(MediaReleaseActions);
+  // Resolved when needed: the selection's actions use this service too.
+  private get selection(): MediaSelectionActions {
+    return this.injector.get(MediaSelectionActions);
+  }
+  private get items(): MediaItemActions {
+    return this.injector.get(MediaItemActions);
+  }
 
   /** The tree is asked to start an inline rename or create; the tree performs it and clears the request. */
   readonly treeRequest = signal<MediaTreeRequest | null>(null);
@@ -72,20 +87,124 @@ export class MediaFolderActions {
 
   // ── Menu ────────────────────────────────────────────────────────────────
 
-  /** The entries of a folder tile's menu (card, list row, ⋮ button): *Open, Rename…, Move…, Delete…*; a read-only project only opens. */
+  /**
+   * The entries of a folder tile's menu (card, list row, ⋮ button) — the same as the folder tree's: *New folder, Rename…,
+   * Cut, Paste, Move to…, Upload, favorite, Release…, Delete…* (a read-only project keeps *Upload*, the favorite and
+   * *Release…* as far as it may). Inside a selection of several files and folders: the selection's actions.
+   */
   menuItems(folder: FolderView): SfMenuItem[] {
+    if (this.selection.multiFor(folder.uuid)) {
+      return this.selection.actions('menu').map(({ id, label, icon, danger, action }) => ({
+        id,
+        label,
+        icon,
+        danger,
+        separatorBefore: id === 'delete',
+        shortcut: id === 'delete' ? 'Delete' : undefined,
+        action,
+      }));
+    }
     const t = (id: string) => this.transloco.translate(`media.library.${id}`);
+    const tree = (id: string) => this.transloco.translate(`shared.tree.${id}`);
     const writable = this.library.canEdit();
-    return [
-      { id: 'open', label: this.transloco.translate('media.menu.open'), icon: 'open_in_new', shortcut: 'Enter', action: () => void this.library.openFolder(folder.uuid ?? null) },
+    const uploads = this.injector.get(MediaUploadStore);
+    const name = folder.displayName ?? folder.uid ?? '';
+    const on = this.favorites.isFavorite(folder.uuid);
+    const section = (items: SfMenuItem[]): SfMenuItem[] => items.map((item, index) => (index === 0 ? { ...item, separatorBefore: true } : item));
+    const items: SfMenuItem[] = [
       ...(writable
         ? [
+            { id: 'create', label: tree('newFolder'), icon: 'create_new_folder', action: () => this.startCreate(folder.uuid ?? null) },
             { id: 'rename', label: t('rename'), icon: 'edit', shortcut: 'F2', action: () => void this.rename(folder) },
-            { id: 'move', label: t('move'), icon: 'drive_file_move', action: () => void this.injector.get(MediaMover).moveFolders(folder.uuid ? [folder.uuid] : []) },
-            { id: 'delete', label: t('delete'), icon: 'delete', danger: true, separatorBefore: true, action: () => void this.deleteFolder(folder) },
+            ...section([
+              { id: 'cut', label: tree('cut'), icon: 'content_cut', shortcut: 'Mod+X', action: () => this.cut(folder) },
+              { id: 'paste', label: tree('paste'), icon: 'content_paste', shortcut: 'Mod+V', disabled: !this.canPaste(folder), action: () => void this.paste(folder) },
+              { id: 'move', label: tree('moveTo'), icon: 'drive_file_move', action: () => void this.injector.get(MediaMover).moveFolders(folder.uuid ? [folder.uuid] : []) },
+            ]),
           ]
         : []),
+      ...section([
+        ...(uploads.canUpload()
+          ? [{ id: 'upload', label: this.transloco.translate('media.toolbar.upload'), icon: 'upload', action: () => uploads.pickFiles(folder.uuid ?? '') }]
+          : []),
+        { id: 'favorite', label: this.transloco.translate(on ? 'shared.favorite.remove' : 'shared.favorite.add', { name }), icon: 'star', action: () => this.toggleFavorite(folder) },
+        ...(this.releases.canRelease()
+          ? [{ id: 'release', label: this.transloco.translate('media.menu.release'), icon: 'publish', action: () => this.releases.release([], [folder]) }]
+          : []),
+      ]),
+      ...(writable
+        ? [{ id: 'delete', label: t('delete'), icon: 'delete', danger: true, separatorBefore: true, shortcut: 'Delete', action: () => void this.deleteFolder(folder) }]
+        : []),
     ];
+    // Nothing above the first entry to separate it from.
+    return items.map((item, index) => (index === 0 ? { ...item, separatorBefore: false } : item));
+  }
+
+  /** Delete on a tile or row: the selection when the folder is part of a selection of several, else the folder. */
+  async deleteFromTile(folder: FolderView): Promise<void> {
+    if (this.selection.multiFor(folder.uuid)) {
+      await this.selection.delete();
+    } else {
+      await this.deleteFolder(folder);
+    }
+  }
+
+  /** Stars the folder or takes the star off, and says so (decision 57). */
+  toggleFavorite(folder: FolderView): void {
+    if (!folder.uuid) {
+      return;
+    }
+    const name = folder.displayName ?? folder.uid ?? '';
+    const on = this.favorites.toggle({ type: 'FOLDER', uuid: folder.uuid, displayName: name, folderPath: folder.path });
+    this.toasts.show(this.transloco.translate(on ? 'shared.favorite.added' : 'shared.favorite.removed', { name }), 'info');
+  }
+
+  // ── Cut and paste (the tree's clipboard) ────────────────────────────────
+
+  /** The clipboard scope of the media tree of this project (`sf-tree` keeps `projectKey:treeId`). */
+  private clipboardScope(): string {
+    return `${this.library.projectKey()}:media`;
+  }
+
+  /** *Cut*: the folder goes on the tree's clipboard, to be pasted onto a folder (here or in the tree). */
+  cut(folder: FolderView): void {
+    if (folder.uuid && this.library.canEdit()) {
+      this.clipboard.cutNodes(this.clipboardScope(), [
+        { id: folder.uuid, label: folder.displayName ?? folder.uid ?? '', icon: 'folder', droppable: true, data: folder },
+      ]);
+    }
+  }
+
+  /** The folders cut in the tree or on a tile that may go into `target`: not into themselves or what is inside them. */
+  private pastable(target: FolderView): string[] {
+    const clip = this.clipboard.nodes();
+    if (!clip || clip.mode !== 'cut' || clip.scope !== this.clipboardScope() || !target.uuid) {
+      return [];
+    }
+    const ids = clip.nodes.map((node) => node.id);
+    const inside = (id: string) => {
+      const cut = findFolder(this.library.tree(), id);
+      return id === target.uuid || (cut !== null && findFolder(cut.children ?? [], target.uuid ?? '') !== null);
+    };
+    return ids.some(inside) ? [] : ids;
+  }
+
+  canPaste(target: FolderView): boolean {
+    return this.library.canEdit() && (this.pastable(target).length > 0 || this.items.canPasteFiles(target.uuid ?? null));
+  }
+
+  /** *Paste* onto a folder: cut folders move into it, as a paste in the tree does; cut or copied files move or are copied into it. */
+  async paste(target: FolderView): Promise<void> {
+    if (this.items.clipboardFiles()) {
+      await this.items.pasteFiles(target.uuid ?? null);
+      return;
+    }
+    const ids = this.canPaste(target) ? this.pastable(target) : [];
+    if (ids.length === 0 || !target.uuid) {
+      return;
+    }
+    this.clipboard.clear();
+    await this.injector.get(MediaMover).moveTo(ids, target.uuid, 'folder');
   }
 
   /**
@@ -93,28 +212,36 @@ export class MediaFolderActions {
    * changes the folder itself. A read-only project has none.
    */
   openFolderContextMenu(event: MouseEvent): void {
-    const uploads = this.injector.get(MediaUploadStore);
-    if (!this.library.canEdit() && !uploads.canUpload()) {
-      return;
+    const items = this.openFolderMenuItems();
+    if (items.length) {
+      event.preventDefault();
+      this.contextMenu.open(event, items);
     }
-    const writable = this.library.canEdit();
-    const items: ContextMenuItem[] = [
+  }
+
+  /** The entries of that menu (*Upload*, *New folder*), for a table's `emptyMenu`. */
+  openFolderMenuItems(): ContextMenuItem[] {
+    const uploads = this.injector.get(MediaUploadStore);
+    const open = this.library.folderUuid() || null;
+    return [
       ...(uploads.canUpload() ? [{ label: this.transloco.translate('media.toolbar.upload'), icon: 'upload', action: () => uploads.pickFiles() }] : []),
-      ...(writable ? [{ label: this.transloco.translate('shared.tree.newFolder'), icon: 'create_new_folder', action: () => this.startCreate() }] : []),
+      ...(this.library.canEdit()
+        ? [
+            { label: this.transloco.translate('shared.tree.newFolder'), icon: 'create_new_folder', action: () => this.startCreate() },
+            {
+              label: this.transloco.translate('shared.tree.paste'),
+              icon: 'content_paste',
+              disabled: !this.items.canPasteFiles(open),
+              action: () => void this.items.pasteFiles(open),
+            },
+          ]
+        : []),
     ];
-    event.preventDefault();
-    this.contextMenu.open(event, items);
   }
 
   /** The folder tile's context menu: at the pointer for a right click, below the element for Shift+F10 and the ⋮ button. */
   onFolderContextMenu(folder: FolderView, target: ContextMenuTarget): void {
-    this.contextMenu.open(
-      target,
-      this.menuItems(folder).flatMap((item) => [
-        ...(item.separatorBefore ? [{ label: '', separator: true }] : []),
-        { label: item.label, icon: item.icon, danger: item.danger, shortcut: item.shortcut, action: item.action },
-      ]),
-    );
+    this.contextMenu.open(target, toContextItems(this.menuItems(folder)));
   }
 
   // ── Rename ──────────────────────────────────────────────────────────────

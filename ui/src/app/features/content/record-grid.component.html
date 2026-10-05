@@ -24,6 +24,9 @@
   [label]="'content.recordSet.grid.table' | transloco: { name: dataset().displayName ?? dataset().uid }"
   [searchPlaceholder]="'content.recordSet.grid.search' | transloco"
   [bulkActions]="bulkActions()"
+  [rowMenu]="rowMenu"
+  [emptyMenu]="emptyMenu"
+  emptyClickClears
   [loading]="loading()"
   [error]="tableError()"
   [emptyTitle]="emptyTitle()"

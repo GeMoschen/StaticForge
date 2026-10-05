@@ -10,16 +10,26 @@
       <div
         class="card card--folder"
         role="gridcell"
-        tabindex="0"
+        [class.is-selected]="library.isFolderSelected(folder.uuid)"
+        [attr.tabindex]="tabStop() === folderKey(folder) ? 0 : -1"
+        [attr.aria-selected]="library.isFolderSelected(folder.uuid)"
         [attr.aria-label]="folder.displayName ?? folder.uid"
         [attr.data-folder]="folder.uuid"
-        (click)="openFolder(folder)"
-        (keydown)="onFolderKeydown($event, folder)"
+        (focus)="onFocus(folderKey(folder))"
+        (click)="onCardClick(folderKey(folder), $event)"
+        (dblclick)="onCardDblClick(folderKey(folder), $event)"
         (contextmenu)="onFolderContextMenu($event, folder)"
       >
         <div class="card__thumb card__thumb--folder">
           <sf-icon class="card__folder-icon" name="folder" />
         </div>
+        <sf-checkbox
+          class="card__check"
+          [value]="library.isFolderSelected(folder.uuid)"
+          [controlTabindex]="-1"
+          [aria-label]="'media.grid.select' | transloco: { name: folder.displayName ?? folder.uid }"
+          (valueChange)="onCheck(folderKey(folder))"
+        />
         <span class="card__more" (click)="$event.stopPropagation()">
           <sf-menu size="sm" [items]="folders.menuItems(folder)" [label]="'media.menu.label' | transloco: { name: folder.displayName ?? folder.uid }" />
         </span>
@@ -35,13 +45,14 @@
         role="gridcell"
         [class.is-selected]="library.isSelected(file.uuid)"
         [class.is-open]="library.assetUuid() === file.uuid"
-        [attr.tabindex]="tabStop() === file.uuid ? 0 : -1"
+        [attr.tabindex]="tabStop() === fileKey(file) ? 0 : -1"
         [attr.aria-selected]="library.isSelected(file.uuid)"
         [attr.aria-label]="cardLabel(file)"
         [attr.data-file]="file.uuid"
         [attr.draggable]="library.canEdit() ? 'true' : null"
-        (focus)="onFocus(file)"
-        (click)="onClick(file, $event)"
+        (focus)="onFocus(fileKey(file))"
+        (click)="onCardClick(fileKey(file), $event)"
+        (dblclick)="onCardDblClick(fileKey(file), $event)"
         (contextmenu)="onContextMenu($event, file)"
         (dragstart)="mover.startDrag($event, file.uuid)"
       >
@@ -53,7 +64,7 @@
           [value]="library.isSelected(file.uuid)"
           [controlTabindex]="-1"
           [aria-label]="'media.grid.select' | transloco: { name: file.displayName }"
-          (valueChange)="onCheck(file)"
+          (valueChange)="onCheck(fileKey(file))"
         />
         <span class="card__more">
           <sf-menu size="sm" [items]="items.menuItems(file)" [label]="'media.menu.label' | transloco: { name: file.displayName }" />
@@ -73,3 +84,13 @@
     <p class="grid__more" role="status">{{ 'media.library.loadingMore' | transloco }}</p>
   }
 </div>
+@if (marquee(); as band) {
+  <div
+    class="grid__marquee"
+    aria-hidden="true"
+    [style.left.px]="band.left"
+    [style.top.px]="band.top"
+    [style.width.px]="band.width"
+    [style.height.px]="band.height"
+  ></div>
+}

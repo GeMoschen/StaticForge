@@ -65,7 +65,8 @@ export interface NavVisibilityRequest {
 })
 export class NavFolderViewComponent {
   private readonly transloco = inject(TranslocoService);
-  protected readonly canEdit = inject(ProjectPermissionsStore).canEditContent;
+  private readonly permissions = inject(ProjectPermissionsStore);
+  protected readonly canEdit = this.permissions.canEditContent;
   protected readonly developerMode = inject(DeveloperModeService).enabled;
 
   readonly projectKey = input.required<string>();
@@ -80,8 +81,16 @@ export class NavFolderViewComponent {
   readonly newItem = output<void>();
   readonly rename = output<string>();
   readonly moveEntries = output<readonly NavEntry[]>();
+  readonly copyEntries = output<readonly NavEntry[]>();
   readonly deleteEntries = output<readonly NavEntry[]>();
   readonly retry = output<void>();
+  /** *Release…* on the selected rows (a folder with everything inside it): the area opens the release dialog. */
+  readonly releaseEntries = output<readonly NavEntry[]>();
+  /**
+   * The context menu of one row, as the area builds it (the same entries as the tree's menu for that entry). Without it
+   * (or for a selection of several rows) a right click offers the bulk actions.
+   */
+  readonly entryMenu = input<((entry: NavEntry) => ContextMenuItem[]) | null>(null);
   /** *Entry page…* (the ⋮ menu) and the line's *Change…*: the area opens the entry-page drawer for this folder. */
   readonly changeEntry = output<NavEntry>();
   /** *Show in menu* / *Hide from menu* on rows, or on the folder itself from its ⋮ menu. */
@@ -127,29 +136,49 @@ export class NavFolderViewComponent {
     ];
   });
 
-  /** A right click on a row: *Open* (one row) and the bulk actions, acting on the row or on the selection it is part of. */
-  protected readonly rowMenu = (rows: NavRow[]): ContextMenuItem[] => [
-    ...(rows.length === 1
-      ? [{ label: this.transloco.translate('shared.dataTable.open'), icon: 'open_in_new', shortcut: 'Enter', action: () => this.openEntry.emit(rows[0].entry.uuid) }]
-      : []),
-    ...bulkActionsAsMenu(this.bulkActions(), rows, this.rowKey),
-  ];
+  /**
+   * A right click on a row: *Open* and the tree's menu for that entry (one row); on a selection of several rows the bulk
+   * actions, acting on that selection.
+   */
+  protected readonly rowMenu = (rows: NavRow[]): ContextMenuItem[] => {
+    if (rows.length !== 1) {
+      return bulkActionsAsMenu(this.bulkActions(), rows, this.rowKey);
+    }
+    const open: ContextMenuItem = {
+      label: this.transloco.translate('shared.dataTable.open'),
+      icon: 'open_in_new',
+      shortcut: 'Enter',
+      action: () => this.openEntry.emit(rows[0].entry.uuid),
+    };
+    const build = this.entryMenu();
+    return build ? [open, { label: '', separator: true }, ...build(rows[0].entry)] : [open, ...bulkActionsAsMenu(this.bulkActions(), rows, this.rowKey)];
+  };
 
   /** A right click on empty space acts as one on the open folder: only the *New …* option. */
   protected readonly emptyMenu = (): ContextMenuItem[] =>
     this.canEdit() ? [{ label: this.transloco.translate('navigation.tree.newMenuItem'), icon: 'add_link', action: () => this.newItem.emit() }] : [];
 
   protected readonly bulkActions = computed<SfDataTableBulkAction<NavRow>[]>(() => {
-    if (!this.canEdit()) {
-      return [];
-    }
     const t = (id: string) => this.transloco.translate(`navigation.folder.bulk.${id}`);
-    return [
-      { id: 'move', label: t('move'), icon: 'drive_file_move', action: (selection) => this.moveEntries.emit(selection.rows.map((row) => row.entry)) },
-      { id: 'show', label: t('show'), icon: 'visibility', action: (selection) => this.setVisible.emit({ entries: selection.rows.map((row) => row.entry), visible: true }) },
-      { id: 'hide', label: t('hide'), icon: 'visibility_off', action: (selection) => this.setVisible.emit({ entries: selection.rows.map((row) => row.entry), visible: false }) },
-      { id: 'delete', label: t('delete'), icon: 'delete', variant: 'danger', action: (selection) => this.deleteEntries.emit(selection.rows.map((row) => row.entry)) },
-    ];
+    const edit = this.canEdit();
+    const actions: SfDataTableBulkAction<NavRow>[] = [];
+    if (edit) {
+      actions.push({ id: 'move', label: t('move'), icon: 'drive_file_move', action: (selection) => this.moveEntries.emit(selection.rows.map((row) => row.entry)) });
+    }
+    if (edit) {
+      actions.push({ id: 'copy', label: t('copy'), icon: 'content_copy', action: (selection) => this.copyEntries.emit(selection.rows.map((row) => row.entry)) });
+    }
+    if (this.permissions.canRelease()) {
+      actions.push({ id: 'release', label: t('release'), icon: 'publish', action: (selection) => this.releaseEntries.emit(selection.rows.map((row) => row.entry)) });
+    }
+    if (edit) {
+      actions.push(
+        { id: 'show', label: t('show'), icon: 'visibility', action: (selection) => this.setVisible.emit({ entries: selection.rows.map((row) => row.entry), visible: true }) },
+        { id: 'hide', label: t('hide'), icon: 'visibility_off', action: (selection) => this.setVisible.emit({ entries: selection.rows.map((row) => row.entry), visible: false }) },
+        { id: 'delete', label: t('delete'), icon: 'delete', variant: 'danger', action: (selection) => this.deleteEntries.emit(selection.rows.map((row) => row.entry)) },
+      );
+    }
+    return actions;
   });
 
   protected readonly moreActions = computed<SfMenuItem[]>(() => {

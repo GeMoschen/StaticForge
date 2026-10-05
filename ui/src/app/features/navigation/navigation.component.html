@@ -82,9 +82,12 @@
           (newItem)="openNewItemHere()"
           (rename)="renameInTree($event)"
           (moveEntries)="openMoveDialog($event)"
+          (copyEntries)="copyEntries($event)"
           (deleteEntries)="deleteEntries($event)"
           (changeEntry)="openEntryDrawer($event)"
           (setVisible)="setVisibility($event)"
+          (releaseEntries)="releaseEntries($event)"
+          [entryMenu]="listMenu"
           (retry)="changed()"
         />
       }
@@ -158,4 +161,22 @@
     (chosen)="onMoveChosen($event)"
     (cancelled)="moving.set(null)"
   />
+}
+
+@if (renaming(); as entry) {
+  <sf-rename-asset-dialog
+    [open]="true"
+    [projectKey]="projectKey()"
+    [uuid]="entry.uuid"
+    [uid]="entry.uid"
+    [displayName]="entry.label"
+    [submittingName]="renameBusy()"
+    (renameDisplayName)="submitRename($event)"
+    (uidChanged)="changed()"
+    (closed)="closeRename()"
+  />
+}
+
+@if (releasing(); as choices) {
+  <sf-release-dialog [projectKey]="projectKey()" mode="release" [choices]="choices" (done)="releaseDone()" (closed)="releasing.set(null)" />
 }

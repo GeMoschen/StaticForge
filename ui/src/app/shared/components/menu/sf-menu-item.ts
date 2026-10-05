@@ -1,3 +1,5 @@
+import type { ContextMenuItem } from '../../services/context-menu.service';
+
 /** One entry of a menu (`sf-menu`, the context menu and their submenus). */
 export interface SfMenuItem {
   id: string;
@@ -86,4 +88,22 @@ export function toAriaKeyShortcuts(shortcut: string | undefined, isMac: boolean)
       return ARIA_KEYS[lower] ?? (key.length === 1 ? key.toUpperCase() : key);
     })
     .join('+');
+}
+
+/** Menu items as context-menu entries: `separatorBefore` becomes a separator entry. */
+export function toContextItems(items: readonly SfMenuItem[]): ContextMenuItem[] {
+  return items.flatMap((item) => {
+    const entry: ContextMenuItem = {
+      label: item.label,
+      icon: item.icon,
+      danger: item.danger,
+      disabled: item.disabled,
+      disabledReason: item.disabledReason,
+      shortcut: item.shortcut,
+      group: item.group,
+      children: item.children ? toContextItems(item.children) : undefined,
+      action: item.action,
+    };
+    return item.separatorBefore ? [{ label: '', separator: true }, entry] : [entry];
+  });
 }

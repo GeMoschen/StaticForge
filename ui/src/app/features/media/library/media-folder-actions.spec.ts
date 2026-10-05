@@ -13,6 +13,13 @@ import { ToastService } from '../../../core/ui/toast.service';
 import { ConfirmService } from '../../../shared/components/dialog/confirm.service';
 import { DialogService } from '../../../shared/components/dialog/dialog.service';
 import { MediaFolderActions } from './media-folder-actions';
+import { MediaReleaseActions } from './media-release.actions';
+import { MediaSelectionActions } from './media-selection.actions';
+import { FavoritesService } from '../../../core/assets/favorites.service';
+import { TreeClipboardService } from '../../../shared/services/tree-clipboard.service';
+import { MediaItemActions } from './media-item-actions';
+import { MediaMover } from './media-mover';
+import { MediaUploadStore } from './media-upload.store';
 import { MediaLibraryStore } from './media-library.store';
 import { MEDIA_TREE, productFiles, projectStub } from './media-library.testing';
 
@@ -25,8 +32,10 @@ function setup(options: { readOnly?: boolean; renamed?: string } = {}) {
     deleteFolder: vi.fn().mockReturnValue(of(undefined)),
     restoreFolder: vi.fn().mockReturnValue(of({})),
     renameFolder: vi.fn().mockReturnValue(of({ revision: 8 })),
+    duplicateAsset: vi.fn().mockReturnValue(of({ uuid: 'copy-uuid' })),
   };
   const confirm = { confirm: vi.fn().mockResolvedValue(true) };
+  const mover = { moveTo: vi.fn().mockResolvedValue(undefined), moveFolders: vi.fn(), moveSelection: vi.fn() };
   const dialogs = { open: vi.fn().mockReturnValue({ result: Promise.resolve(options.renamed) }) };
   TestBed.configureTestingModule({
     providers: [
@@ -35,11 +44,17 @@ function setup(options: { readOnly?: boolean; renamed?: string } = {}) {
       provideRouter([]),
       MediaLibraryStore,
       MediaFolderActions,
+      MediaItemActions,
+      MediaReleaseActions,
+      MediaSelectionActions,
       { provide: ApiClient, useValue: api },
       { provide: ProjectContextStore, useValue: projectStub() },
       { provide: ConfirmService, useValue: confirm },
+      { provide: MediaMover, useValue: mover },
+      { provide: MediaUploadStore, useValue: { canUpload: () => true, pickFiles: vi.fn() } },
+      { provide: FavoritesService, useValue: { isFavorite: () => false, toggle: vi.fn() } },
       { provide: DialogService, useValue: dialogs },
-      { provide: ProjectPermissionsStore, useValue: { canEditContent: signal(true) } },
+      { provide: ProjectPermissionsStore, useValue: { canEditContent: signal(true), canRelease: signal(true) } },
       { provide: EditingLocaleStore, useValue: { locale: signal(null) } },
     ],
   });
@@ -48,7 +63,7 @@ function setup(options: { readOnly?: boolean; renamed?: string } = {}) {
   Object.defineProperty(library, 'readOnly', { value: signal(options.readOnly ?? false) });
   library.reloadFolders = vi.fn();
   library.openFolder = vi.fn();
-  return { actions: TestBed.inject(MediaFolderActions), library, api, confirm, dialogs, toasts: TestBed.inject(ToastService) };
+  return { actions: TestBed.inject(MediaFolderActions), library, api, confirm, mover, dialogs, toasts: TestBed.inject(ToastService) };
 }
 
 describe('MediaFolderActions', () => {
@@ -165,6 +180,106 @@ describe('MediaFolderActions', () => {
 
       expect(toasts.toasts().at(-1)).toMatchObject({ kind: 'error', message: 'Could not rename “Products” — try again in a moment.' });
       expect(library.reloadFolders).toHaveBeenCalled();
+    });
+  });
+
+  describe('the folder menu of a tile or row', () => {
+    it('has the tree\'s entries, Release… and no Open', () => {
+      const { actions } = setup();
+
+      const items = actions.menuItems(PRODUCTS);
+
+      expect(items.map((item) => item.id)).toEqual(['create', 'rename', 'cut', 'paste', 'move', 'upload', 'favorite', 'release', 'delete']);
+      expect(items.find((item) => item.id === 'paste')?.disabled).toBe(true);
+      expect(items.at(-1)).toMatchObject({ danger: true, separatorBefore: true });
+    });
+
+    it('keeps Upload, the favorite and Release… for a read-only project that may release', () => {
+      const { actions } = setup({ readOnly: true });
+
+      expect(actions.menuItems(PRODUCTS).map((item) => item.id)).toEqual(['upload', 'favorite']);
+    });
+
+    it('cuts a folder and pastes it onto another, but not into itself or what lies inside it', () => {
+      const { actions, mover } = setup();
+      const clipboard = TestBed.inject(TreeClipboardService);
+
+      actions.cut(PRODUCTS);
+      expect(actions.canPaste(PRODUCTS)).toBe(false);
+      expect(actions.canPaste(PRODUCTS.children![0])).toBe(false);
+      expect(actions.canPaste(TEAM)).toBe(true);
+
+      void actions.paste(TEAM);
+
+      expect(mover.moveTo).toHaveBeenCalledWith(['products-uuid'], 'team-uuid', 'folder');
+      expect(clipboard.nodes()).toBeNull();
+    });
+    it('pastes cut and copied files onto a folder (tile menu) and into the open folder (empty-space menu)', async () => {
+      const { actions, mover, api, library } = setup();
+      library.items.set(productFiles());
+      library.allMedia.set(productFiles());
+      library.reloadMedia = vi.fn();
+      const items = TestBed.inject(MediaItemActions);
+
+      items.cutFiles([productFiles()[0]]);
+      expect(actions.canPaste(TEAM)).toBe(true);
+      await actions.paste(TEAM);
+      expect(mover.moveTo).toHaveBeenCalledWith([productFiles()[0].uuid], 'team-uuid', 'file');
+
+      items.copyFiles([productFiles()[1]]);
+      const paste = actions.openFolderMenuItems().find((item) => item.label === 'Paste');
+      expect(paste?.disabled).toBe(false);
+      await actions.paste(TEAM);
+      expect(api.duplicateAsset).toHaveBeenCalledWith('proj', productFiles()[1].uuid, 'team-uuid');
+    });
+  });
+
+  describe('a selection of folders and files', () => {
+    it('offers Move, Release… and Delete for the items, and a menu on a selected folder acts on all of them', () => {
+      const { actions, library, mover } = setup();
+      library.items.set(productFiles());
+      library.setSelection(['uuid-latte-art-jpg']);
+      library.setFolderSelection(['team-uuid', 'archive-uuid']);
+
+      const labels = actions.menuItems(TEAM).map((item) => item.label);
+
+      expect(labels).toEqual([
+        'Move 3 items…',
+        'Copy 1 file',
+        'Duplicate 1 file',
+        'Download',
+        'Release 3 items…',
+        'Delete 3 items…',
+      ]);
+      void actions.menuItems(TEAM)[0].action!();
+      expect(mover.moveSelection).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('releasing', () => {
+    it('releases a folder with everything inside it, all ticked', () => {
+      const { library } = setup();
+      const releases = TestBed.inject(MediaReleaseActions);
+      library.allMedia.set([
+        ...productFiles(),
+        { ...productFiles()[1], uuid: 'deep', displayName: 'deep.jpg', folderPath: '/media_root/products/roastery/' },
+      ]);
+
+      releases.release([], [PRODUCTS]);
+
+      const choices = releases.choices();
+      expect(choices?.map((choice) => choice.assetUuid).sort()).toEqual(['deep', 'uuid-latte-art-jpg']);
+      expect(choices?.every((choice) => choice.checked)).toBe(true);
+    });
+
+    it('says so when nothing is waiting to be released', () => {
+      const { toasts } = setup();
+      const releases = TestBed.inject(MediaReleaseActions);
+
+      releases.release([productFiles()[0]], []);
+
+      expect(releases.choices()).toBeNull();
+      expect(toasts.toasts().at(-1)?.message).toBe('Nothing here is waiting to be released.');
     });
   });
 

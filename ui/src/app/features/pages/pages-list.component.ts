@@ -14,7 +14,7 @@ import {
 import { toSignal } from '@angular/core/rxjs-interop';
 import { NavigationEnd, Router, RouterOutlet } from '@angular/router';
 import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
-import { filter, firstValueFrom, map, tap, type Observable, type Subscription } from 'rxjs';
+import { filter, firstValueFrom, map, type Subscription } from 'rxjs';
 import { ApiClient } from '../../core/api/api.client';
 import type { components } from '../../core/api/generated/schema.d.ts';
 import { FAVORITES_NODE, FavoriteTreeService, isFavoriteNode } from '../../core/assets/favorite-tree.service';
@@ -49,12 +49,15 @@ import { restoreDeletedAsset } from '../../shared/restore-deleted-asset';
 import type { ContextMenuItem } from '../../shared/services/context-menu.service';
 import { sortFolderTree } from '../../shared/tree-sort.util';
 import { FavoritesViewComponent } from '../favorites/favorites-view.component';
+import { ReleaseDialogComponent } from '../release/release-dialog.component';
+import type { ReleaseChoice } from '../release/release-choice.util';
 import { isOnline } from '../release/release-status.util';
 import { ReleaseEventsStore, withObservedRelease } from '../release/release-events.store';
 import { TimeTravelStore } from '../revisions/time-travel.store';
 import { FolderMoveDialogComponent } from './folder-move-dialog.component';
 import { FolderViewComponent } from './folder-view.component';
 import { PageDeleteDialogComponent } from './page-delete-dialog.component';
+import { PagesItemActions } from './pages-item-actions';
 import { PagesTreeRefresh } from './pages-tree-refresh.service';
 import {
   EMPTY_INDEX,
@@ -94,6 +97,7 @@ const WIDE_QUERY = '(min-width: 1280px)';
     FolderMoveDialogComponent,
     FolderViewComponent,
     PageDeleteDialogComponent,
+    ReleaseDialogComponent,
     RouterOutlet,
     SfCreateAssetDialogComponent,
     SfEmptyStateComponent,
@@ -118,6 +122,7 @@ export class PagesListComponent {
   private readonly timeTravel = inject(TimeTravelStore);
   private readonly releaseEvents = inject(ReleaseEventsStore);
   private readonly favorites = inject(FavoritesService);
+  private readonly actions = inject(PagesItemActions);
   private readonly favoriteTree = inject(FavoriteTreeService);
   private readonly editingLocale = inject(EditingLocaleStore);
   private readonly permissions = inject(ProjectPermissionsStore);
@@ -287,7 +292,12 @@ export class PagesListComponent {
   };
 
   protected readonly menuItems = (nodes: readonly SfTreeNode<PageNodeData>[]): ContextMenuItem[] => {
-    const node = nodes.length === 1 ? nodes[0] : null;
+    if (nodes.length > 1) {
+      // A selection: Move and Delete are the tree's own; Release is ours.
+      const items = nodes.flatMap((node) => (node.data && !isFavoriteNode(node.id) ? [node.data] : []));
+      return items.length === nodes.length && this.canRelease() ? [this.releaseEntry(items)] : [];
+    }
+    const node = nodes[0] ?? null;
     const data = node?.data;
     if (!node || !data || isFavoriteNode(node.id)) {
       return [];
@@ -297,16 +307,27 @@ export class PagesListComponent {
       items.push({ label: this.transloco.translate('pages.tree.newPageHere'), icon: 'note_add', action: () => this.openNewPage(node.id) });
     }
     if (data.kind === 'page' && !this.readOnly()) {
-      items.push({ label: this.transloco.translate('pages.tree.duplicate'), icon: 'content_copy', action: () => void this.duplicate(node) });
+      items.push({ label: this.transloco.translate('pages.tree.duplicate'), icon: 'content_copy', action: () => void this.actions.duplicate(this.projectKey(), data) });
+    }
+    if (this.canRelease()) {
+      items.push(this.releaseEntry([data]));
     }
     const on = this.favorites.isFavorite(node.id);
     items.push({
       label: this.transloco.translate(on ? 'shared.favorite.remove' : 'shared.favorite.add', { name: node.label }),
       icon: 'star',
-      action: () => this.toggleFavorite(node),
+      action: () => this.actions.toggleFavorite(data),
     });
     return items;
   };
+
+  private canRelease(): boolean {
+    return this.permissions.canRelease() && !this.readOnly();
+  }
+
+  private releaseEntry(items: readonly PageNodeData[]): ContextMenuItem {
+    return { label: this.transloco.translate('pages.bulk.release'), icon: 'publish', action: () => void this.openRelease(items) };
+  }
 
   /** A right click on empty space acts as one on the root folder: only the *New …* options. */
   protected readonly rootMenuItems = (): ContextMenuItem[] =>
@@ -345,6 +366,7 @@ export class PagesListComponent {
   private newPageFolder: string | null = null;
   protected readonly deleting = signal<AssetSummaryView | null>(null);
   protected readonly moving = signal<readonly SfTreeNode<PageNodeData>[] | null>(null);
+  protected readonly releasing = signal<ReleaseChoice[] | null>(null);
 
   constructor() {
     effect(() => {
@@ -504,20 +526,19 @@ export class PagesListComponent {
     void this.tree()?.startCreate(null, 'folder');
   }
 
-  // ── Favorites ──────────────────────────────────────────────────────────────
+  // ── Release ────────────────────────────────────────────────────────────────
 
-  private toggleFavorite(node: SfTreeNode<PageNodeData>): void {
-    const data = node.data;
-    if (!data) {
-      return;
+  /** *Release…*: a page, or a folder with everything inside it (nothing to release says so). */
+  private async openRelease(items: readonly PageNodeData[]): Promise<void> {
+    const choices = await this.actions.releaseDialogChoices(this.projectKey(), this.folderTree(), items);
+    if (choices) {
+      this.releasing.set(choices);
     }
-    const on = this.favorites.toggle({
-      type: data.kind === 'folder' ? 'FOLDER' : 'PAGE',
-      uuid: data.uuid,
-      displayName: data.name,
-      folderPath: data.path,
-    });
-    this.toasts.show(this.transloco.translate(on ? 'shared.favorite.added' : 'shared.favorite.removed', { name: node.label }), 'info');
+  }
+
+  protected onReleased(): void {
+    this.releasing.set(null);
+    this.treeRefresh.notify();
   }
 
   // ── Create ─────────────────────────────────────────────────────────────────
@@ -581,21 +602,7 @@ export class PagesListComponent {
     if (!data || this.readOnly()) {
       return;
     }
-    const key = this.projectKey();
-    const from = data.name;
-    const rename = (name: string, etag?: number): Observable<{ revision?: number }> =>
-      data.kind === 'folder'
-        ? this.api.renameFolder(key, data.uuid, { displayName: name }, etag)
-        : this.api.renameAsset(key, data.uuid, { displayName: name }, etag);
-    rename(request.name).subscribe({
-      next: (renamed) => {
-        const message = this.transloco.translate('pages.tree.toast.renamed', { from, to: request.name });
-        // Undo renames back; the etag is the revision the rename produced.
-        this.undo.offer(message, () => rename(from, renamed.revision).pipe(tap(() => this.changed())));
-        this.changed();
-      },
-      error: () => this.toasts.show(this.transloco.translate('pages.tree.toast.renameFailed', { name: from }), 'error'),
-    });
+    this.actions.rename(this.projectKey(), data, request.name).subscribe();
   }
 
   // ── Delete ─────────────────────────────────────────────────────────────────
@@ -687,80 +694,14 @@ export class PagesListComponent {
     return (this.moving() ?? []).filter((node) => node.data?.kind === 'folder').map((node) => node.id);
   }
 
-  /**
-   * Moves (or, for pages, duplicates into) the folder `target` (`null` = the root). Undo moves back, or deletes the copies.
-   * Stops at the first failure; what was done up to there stays and is announced.
-   */
-  private async transfer(
+  /** Moves (or, for pages, duplicates into) the folder `target` (`null` = the root); see `PagesItemActions.transfer`. */
+  private transfer(
     nodes: readonly SfTreeNode<PageNodeData>[],
     target: string | null,
     copy: boolean,
     completed: (undo?: () => void) => void,
   ): Promise<void> {
-    const key = this.projectKey();
-    const index = this.index();
-    const body = target === null ? {} : { folderUuid: target };
-    const undoSteps: (() => Observable<unknown>)[] = [];
-    try {
-      for (const node of nodes) {
-        const data = node.data;
-        if (!data) {
-          continue;
-        }
-        if (copy) {
-          const copied = await firstValueFrom(this.api.duplicatePage(key, data.uuid));
-          const uuid = copied.uuid;
-          if (uuid) {
-            if ((index.parentOf.get(data.uuid) ?? null) !== target) {
-              await firstValueFrom(this.api.moveAsset(key, uuid, body), { defaultValue: undefined });
-            }
-            undoSteps.push(() => this.api.deleteAsset(key, uuid));
-          }
-        } else {
-          const back = index.parentOf.get(data.uuid) ?? null;
-          await firstValueFrom(this.api.moveAsset(key, data.uuid, body), { defaultValue: undefined });
-          undoSteps.push(() => this.api.moveAsset(key, data.uuid, back === null ? {} : { folderUuid: back }));
-        }
-      }
-    } catch {
-      this.toasts.show(this.transloco.translate(copy ? 'pages.tree.toast.copyFailed' : 'pages.tree.toast.moveFailed', { name: nodes[0]?.label ?? '' }), 'error');
-      this.changed();
-      return;
-    }
-    this.changed();
-    completed(
-      undoSteps.length > 0
-        ? () => void this.runUndo(undoSteps)
-        : undefined,
-    );
-  }
-
-  private async runUndo(steps: readonly (() => Observable<unknown>)[]): Promise<void> {
-    try {
-      for (const step of [...steps].reverse()) {
-        await firstValueFrom(step(), { defaultValue: undefined });
-      }
-      this.toasts.show(this.transloco.translate('shared.undo.done'), 'info');
-    } catch {
-      this.toasts.show(this.transloco.translate('shared.undo.failed'), 'error');
-    }
-    this.changed();
-  }
-
-  private async duplicate(node: SfTreeNode<PageNodeData>): Promise<void> {
-    const key = this.projectKey();
-    try {
-      const copy = await firstValueFrom(this.api.duplicatePage(key, node.id));
-      const uuid = copy.uuid;
-      this.changed();
-      const message = this.transloco.translate('pages.tree.toast.duplicated', { name: node.label });
-      if (uuid) {
-        this.undo.offer(message, () => this.api.deleteAsset(key, uuid).pipe(tap(() => this.changed())));
-      } else {
-        this.toasts.show(message, 'success');
-      }
-    } catch {
-      this.toasts.show(this.transloco.translate('pages.tree.toast.duplicateFailed', { name: node.label }), 'error');
-    }
+    const parentOf = this.index().parentOf;
+    return this.actions.transfer(this.projectKey(), nodes, target, copy, (uuid) => parentOf.get(uuid) ?? null, completed);
   }
 }

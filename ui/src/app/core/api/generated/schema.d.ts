@@ -820,6 +820,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{projectKey}/records/{uuid}/duplicate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @deprecated */
+        post: operations["duplicateRecord"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{projectKey}/record-sets": {
         parameters: {
             query?: never;
@@ -925,6 +942,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /** @deprecated */
         post: operations["duplicate"];
         delete?: never;
         options?: never;
@@ -1438,6 +1456,22 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["move_1"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectKey}/assets/{uuid}/duplicate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["duplicate_1"];
         delete?: never;
         options?: never;
         head?: never;
@@ -4100,6 +4134,22 @@ export interface components {
             scheduled?: components["schemas"]["ScheduledRefView"][];
             compacted?: boolean;
         };
+        DuplicateAssetRequest: {
+            /** Format: uuid */
+            folderUuid?: string;
+        };
+        AssetCopyView: {
+            /** Format: uuid */
+            uuid?: string;
+            uid?: string;
+            type?: string;
+            displayName?: string;
+            /** Format: uuid */
+            folderUuid?: string;
+            folderPath?: string;
+            /** Format: int64 */
+            revision?: number;
+        };
         LoginResponse: {
             accessToken?: string;
             tokenType?: string;
@@ -4295,6 +4345,8 @@ export interface components {
             totalElements?: number;
             /** Format: int32 */
             totalPages?: number;
+            first?: boolean;
+            last?: boolean;
             /** Format: int32 */
             size?: number;
             content?: components["schemas"]["UrlRegistryEntryView"][];
@@ -4304,8 +4356,6 @@ export interface components {
             /** Format: int32 */
             numberOfElements?: number;
             pageable?: components["schemas"]["PageableObject"];
-            first?: boolean;
-            last?: boolean;
             empty?: boolean;
         };
         PageableObject: {
@@ -4313,11 +4363,11 @@ export interface components {
             offset?: number;
             sort?: components["schemas"]["SortObject"][];
             paged?: boolean;
+            unpaged?: boolean;
             /** Format: int32 */
             pageNumber?: number;
             /** Format: int32 */
             pageSize?: number;
-            unpaged?: boolean;
         };
         SortObject: {
             direction?: string;
@@ -4357,6 +4407,8 @@ export interface components {
             totalElements?: number;
             /** Format: int32 */
             totalPages?: number;
+            first?: boolean;
+            last?: boolean;
             /** Format: int32 */
             size?: number;
             content?: components["schemas"]["TemplateSummary"][];
@@ -4366,8 +4418,6 @@ export interface components {
             /** Format: int32 */
             numberOfElements?: number;
             pageable?: components["schemas"]["PageableObject"];
-            first?: boolean;
-            last?: boolean;
             empty?: boolean;
         };
         TemplateSummary: {
@@ -4640,6 +4690,8 @@ export interface components {
             totalElements?: number;
             /** Format: int32 */
             totalPages?: number;
+            first?: boolean;
+            last?: boolean;
             /** Format: int32 */
             size?: number;
             content?: components["schemas"]["MediaSummaryView"][];
@@ -4649,8 +4701,6 @@ export interface components {
             /** Format: int32 */
             numberOfElements?: number;
             pageable?: components["schemas"]["PageableObject"];
-            first?: boolean;
-            last?: boolean;
             empty?: boolean;
         };
         MediaTextView: {
@@ -4807,6 +4857,8 @@ export interface components {
             totalElements?: number;
             /** Format: int32 */
             totalPages?: number;
+            first?: boolean;
+            last?: boolean;
             /** Format: int32 */
             size?: number;
             content?: components["schemas"]["AssetSummaryView"][];
@@ -4816,8 +4868,6 @@ export interface components {
             /** Format: int32 */
             numberOfElements?: number;
             pageable?: components["schemas"]["PageableObject"];
-            first?: boolean;
-            last?: boolean;
             empty?: boolean;
         };
         UsageDto: {
@@ -7099,6 +7149,29 @@ export interface operations {
             };
         };
     };
+    duplicateRecord: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectKey: string;
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RecordDetailView"];
+                };
+            };
+        };
+    };
     list_7: {
         parameters: {
             query?: {
@@ -8426,6 +8499,33 @@ export interface operations {
                 };
                 content: {
                     "*/*": Record<string, never>;
+                };
+            };
+        };
+    };
+    duplicate_1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectKey: string;
+                uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["DuplicateAssetRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["AssetCopyView"];
                 };
             };
         };

@@ -117,7 +117,8 @@ async function setup(options: SetupOptions = {}) {
         provide: ProjectPermissionsStore,
         useFactory: () => {
           const access = inject(ProjectAccessStore);
-          return { canEditContent: computed(() => !access.readOnly() && !options.viewer) };
+          const editor = computed(() => !access.readOnly() && !options.viewer);
+          return { canEditContent: editor, canRelease: editor };
         },
       },
     ],
@@ -197,19 +198,22 @@ describe('the media library actions (phase B)', () => {
   });
 
   describe('the file menu on a card', () => {
-    it('opens on a right click with Open, Rename, Move, Download, Copy link, the favorite entry and Delete after a separator', async () => {
+    it('opens on a right click with Rename, Move, Download, Copy link, the favorite entry, Release and Delete after a separator', async () => {
       await setup({ inputs: { folder: 'products-uuid' } });
       await screen.findAllByRole('gridcell');
 
       fireEvent.contextMenu(card('brand.css'));
 
       expect(contextMenuItems().map((item) => item.label)).toEqual([
-        'Open',
         'Rename…',
         'Move…',
+        'Cut',
+        'Copy',
+        'Duplicate',
         'Download',
         'Copy link',
         'Add “brand.css” to favorites',
+        'Release…',
         'Delete…',
       ]);
       expect(contextMenuItems().at(-1)).toMatchObject({ label: 'Delete…', danger: true, separatorBefore: true });
@@ -233,7 +237,7 @@ describe('the media library actions (phase B)', () => {
       fireEvent.click(within(card('brand.css')).getByRole('button', { name: 'Actions for brand.css' }));
 
       const menu = await screen.findByRole('menu');
-      expect(menuItemNames(menu)).toHaveLength(7);
+      expect(menuItemNames(menu)).toHaveLength(10);
     });
 
     it('acts on the whole selection when the file is part of a multi-file selection', async () => {
@@ -244,7 +248,15 @@ describe('the media library actions (phase B)', () => {
 
       const menu = await openCardMenu('brand.css');
 
-      expect(menuItemNames(menu)).toEqual(['Move 2 files…', 'Download 2 files as ZIP', 'Delete 2 files…']);
+      expect(menuItemNames(menu)).toEqual([
+        'Move 2 files…',
+        'Cut 2 files',
+        'Copy 2 files',
+        'Duplicate 2 files',
+        'Download 2 files as ZIP',
+        'Release 2 items…',
+        'Delete 2 files…',
+      ]);
       fireEvent.click(within(menu).getByRole('menuitem', { name: 'Download 2 files as ZIP' }));
       await waitFor(() => expect(api.downloadMediaZip).toHaveBeenCalledWith('proj', ['uuid-brand-css', 'uuid-logo-svg'], 'products'));
     });
@@ -281,7 +293,7 @@ describe('the media library actions (phase B)', () => {
 
       const menu = await openCardMenu('brand.css');
 
-      expect(menuItemNames(menu)).toEqual(['Open', 'Download', 'Copy link', 'Add “brand.css” to favorites']);
+      expect(menuItemNames(menu)).toEqual(['Download', 'Copy link', 'Add “brand.css” to favorites']);
     });
   });
 
@@ -365,7 +377,7 @@ describe('the media library actions (phase B)', () => {
 
       const bar = await screen.findByRole('group', { name: 'Bulk actions' });
 
-      expect(within(bar).getAllByRole('button').map(buttonName)).toEqual(['Move', 'Download', 'Delete', 'Clear selection']);
+      expect(within(bar).getAllByRole('button').map(buttonName)).toEqual(['Move', 'Cut', 'Copy', 'Duplicate', 'Download', 'Release…', 'Delete', 'Clear selection']);
     });
 
     it('downloads the selection as one ZIP named after the folder', async () => {

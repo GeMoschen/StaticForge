@@ -65,7 +65,7 @@ export async function renderPageEditorShell(options: PageEditorHarnessOptions = 
     templateDetail: vi.fn().mockReturnValue(of({ uuid: 'tpl-1', effectiveDefinition: { editors: [], bodies: [] } })),
     translationStatus: vi.fn().mockReturnValue(of({ locales: [] })),
     renameAsset: vi.fn().mockReturnValue(of({ displayName: 'Renamed', revision: 2 })),
-    duplicatePage: vi.fn().mockReturnValue(of(testPage('page-3', 'About copy'))),
+    duplicateAsset: vi.fn().mockReturnValue(of(testPage('page-3', 'About copy'))),
     deleteAsset: vi.fn().mockReturnValue(of(undefined)),
     updatePage: vi.fn().mockImplementation((_key: string, _uuid: string, payload: Record<string, unknown>) =>
       of({ ...pages['page-1'], nav: payload['nav'], revision: 8 }),

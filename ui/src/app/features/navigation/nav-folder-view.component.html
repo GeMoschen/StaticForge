@@ -57,6 +57,7 @@
     [bulkActions]="bulkActions()"
   [rowMenu]="rowMenu"
   [emptyMenu]="emptyMenu"
+  emptyClickClears
     [loading]="loading()"
     [error]="failed() ? ('navigation.folder.loadFailed' | transloco) : null"
     [label]="'navigation.folder.table' | transloco: { name: folder().label }"

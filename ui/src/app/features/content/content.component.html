@@ -79,6 +79,10 @@
             (newFolder)="openNewFolder()"
             (newRecordSet)="openNewSetHere()"
             (rename)="renameInTree($event)"
+            (newFolderIn)="openNewFolderIn($event)"
+            (newRecordSetIn)="openNewSet($event)"
+            (renameEntry)="openRenameDialog($event)"
+            (releaseEntries)="releaseEntries($event)"
             (retry)="changed()"
           />
         }
@@ -118,4 +122,23 @@
     (chosen)="onMoveChosen($event)"
     (cancelled)="moving.set(null)"
   />
+}
+
+@if (renaming(); as entry) {
+  <sf-rename-asset-dialog
+    [open]="true"
+    [projectKey]="projectKey()"
+    [uuid]="entry.uuid"
+    [uid]="entry.uid"
+    [displayName]="entry.name"
+    [submittingName]="renameBusy()"
+    [undoableUid]="true"
+    (renameDisplayName)="renameDisplayName($event)"
+    (uidChanged)="changed()"
+    (closed)="renaming.set(null)"
+  />
+}
+
+@if (releaseChoices(); as choices) {
+  <sf-release-dialog [projectKey]="projectKey()" mode="release" [choices]="choices" (done)="releaseChoices.set(null)" (closed)="releaseChoices.set(null)" />
 }

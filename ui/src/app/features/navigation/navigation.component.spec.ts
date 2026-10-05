@@ -11,11 +11,15 @@ import { AuthStore } from '../../core/auth/auth.store';
 import { DeveloperModeService } from '../../core/frame/developer-mode.service';
 import { PreferencesService } from '../../core/preferences/preferences.service';
 import { EditingLocaleStore } from '../../core/project/editing-locale.store';
+import { LocalesStore } from '../../core/project/locales.store';
 import { provideProjectPermissions } from '../../core/project/testing/project-permissions.testing';
 import { ToastService } from '../../core/ui/toast.service';
 import { UndoService } from '../../core/ui/undo.service';
 import { ConfirmService } from '../../shared/components/dialog/confirm.service';
+import { SfRenameAssetDialogComponent } from '../../shared/components/sf-rename-asset-dialog.component';
+import { TreeClipboardService } from '../../shared/services/tree-clipboard.service';
 import { FavoritesViewComponent } from '../favorites/favorites-view.component';
+import { ReleaseDialogComponent } from '../release/release-dialog.component';
 import { TimeTravelStore } from '../revisions/time-travel.store';
 import { NavEntryDrawerComponent } from './nav-entry-drawer.component';
 import { NavFolderViewComponent } from './nav-folder-view.component';
@@ -43,6 +47,8 @@ class FolderViewStub {
   readonly retry = output<void>();
   readonly changeEntry = output<unknown>();
   readonly setVisible = output<unknown>();
+  readonly releaseEntries = output<unknown>();
+  readonly entryMenu = input<unknown>();
 }
 
 @Component({
@@ -72,6 +78,39 @@ class ItemDetailStub {
   readonly move = output<void>();
   readonly remove = output<void>();
   readonly openPage = output<string>();
+}
+
+@Component({
+  selector: 'sf-release-dialog',
+  standalone: true,
+  template: '<p data-testid="release-dialog">{{ choices().length }} choices, {{ ticked() }} ticked</p>',
+})
+class ReleaseDialogStub {
+  readonly projectKey = input.required<string>();
+  readonly mode = input<string>('release');
+  readonly choices = input.required<{ label: string; checked: boolean }[]>();
+  readonly done = output<unknown>();
+  readonly closed = output<void>();
+  ticked(): number {
+    return this.choices().filter((choice) => choice.checked).length;
+  }
+}
+
+@Component({
+  selector: 'sf-rename-asset-dialog',
+  standalone: true,
+  template: '<p data-testid="rename-dialog">{{ displayName() }}</p>',
+})
+class RenameDialogStub {
+  readonly open = input.required<boolean>();
+  readonly projectKey = input.required<string>();
+  readonly uuid = input.required<string>();
+  readonly uid = input.required<string>();
+  readonly displayName = input.required<string>();
+  readonly submittingName = input(false);
+  readonly renameDisplayName = output<string>();
+  readonly uidChanged = output<string>();
+  readonly closed = output<void>();
 }
 
 @Component({ selector: 'sf-favorites-view', standalone: true, template: '<p data-testid="favorites-view"></p>' })
@@ -126,6 +165,7 @@ interface SetupOptions {
   inputs?: Record<string, unknown>;
   confirm?: boolean;
   readOnly?: boolean;
+  permissions?: string[];
 }
 
 async function setup(options: SetupOptions = {}) {
@@ -164,7 +204,8 @@ async function setup(options: SetupOptions = {}) {
       { provide: ConfirmService, useValue: confirm },
       { provide: AuthStore, useValue: { roleFor: () => role, isArchived: () => false } },
       { provide: TimeTravelStore, useValue: new TimeTravelStore() },
-      provideProjectPermissions({ role: () => role, readOnly: () => options.readOnly ?? false }),
+      provideProjectPermissions({ role: () => role, readOnly: () => options.readOnly ?? false, permissions: () => options.permissions ?? [] }),
+      { provide: LocalesStore, useValue: { labelOf: (code: string) => code } },
       { provide: DeveloperModeService, useValue: { enabled: signal(options.dev ?? false) } },
       { provide: EditingLocaleStore, useValue: { locale: signal(null) } },
       {
@@ -181,8 +222,10 @@ async function setup(options: SetupOptions = {}) {
     ],
     configureTestBed: (tb) => {
       tb.overrideComponent(NavigationComponent, {
-        remove: { imports: [NavFolderViewComponent, NavEntryDrawerComponent, NavItemDetailComponent, FavoritesViewComponent] },
-        add: { imports: [FolderViewStub, EntryDrawerStub, ItemDetailStub, FavoritesViewStub] },
+        remove: {
+          imports: [NavFolderViewComponent, NavEntryDrawerComponent, NavItemDetailComponent, FavoritesViewComponent, ReleaseDialogComponent, SfRenameAssetDialogComponent],
+        },
+        add: { imports: [FolderViewStub, EntryDrawerStub, ItemDetailStub, FavoritesViewStub, ReleaseDialogStub, RenameDialogStub] },
       });
     },
   });
@@ -194,6 +237,9 @@ async function setup(options: SetupOptions = {}) {
     deleteEntries(entries: unknown[]): Promise<void>;
     openMoveDialog(entries: unknown[]): void;
     menuItems(nodes: unknown[]): { label: string; action: () => void }[];
+    listMenu(entry: unknown): { label: string; disabled?: boolean; separator?: boolean; action: () => void }[];
+    releaseEntries(entries: unknown[]): void;
+    submitRename(name: string): Promise<void>;
     setVisibility(request: unknown): Promise<void>;
     openEntryDrawer(folder: unknown): void;
     validateName(name: string, context: unknown): string | null;
@@ -612,6 +658,142 @@ describe('NavigationComponent (menu)', () => {
       await waitFor(() => expect(names().length).toBe(3));
       await instance.setVisibility({ entries: [node('n-home', 'Home').data], visible: false });
       expect(nav.setVisibleInMenu).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('Release…', () => {
+    const RELEASABLE: NavTreeView[] = [
+      {
+        ...FOREST[0],
+        children: [
+          {
+            ...FOREST[0].children![1],
+            release: { '': { status: 'CHANGED' } },
+            children: [
+              { ...FOREST[0].children![1].children![0], release: { '': { status: 'NEW' } } },
+              { ...FOREST[0].children![1].children![1], release: { '': { status: 'PUBLISHED' } } },
+            ],
+          },
+          { ...FOREST[0].children![2], release: { '': { status: 'PUBLISHED' } } },
+        ],
+      },
+    ];
+    const entryOf = (uuid: string) => ({ ...node(uuid, uuid).data });
+
+    it('is in the tree menu of a folder and an item for those who may release', async () => {
+      const { instance } = await setup({ forest: RELEASABLE, permissions: ['RELEASE'] });
+      await waitFor(() => expect(names().length).toBe(2));
+      expect(instance.menuItems([node('n-company', 'Company', 'folder')]).map((i) => i.label)).toContain('Release…');
+      expect(instance.menuItems([node('n-blog', 'Blog')]).map((i) => i.label)).toContain('Release…');
+    });
+
+    it('is not offered without the release right', async () => {
+      const { instance } = await setup({ forest: RELEASABLE });
+      await waitFor(() => expect(names().length).toBe(2));
+      expect(instance.menuItems([node('n-company', 'Company', 'folder')]).map((i) => i.label)).not.toContain('Release…');
+      expect(instance.listMenu(entryOf('n-company')).map((i) => i.label)).not.toContain('Release…');
+    });
+
+    it('releases a folder with everything inside it, all ticked — only what has something to release', async () => {
+      const { instance } = await setup({ forest: RELEASABLE, permissions: ['RELEASE'] });
+      await waitFor(() => expect(names().length).toBe(2));
+      const folder = { ...entryOf('n-company'), kind: 'folder' as const, release: { '': { status: 'CHANGED' } } };
+      instance.menuItems([{ id: 'n-company', label: 'Company', data: folder }]).find((i) => i.label === 'Release…')!.action();
+      // Company (changed) and About us (new); Team is published already.
+      expect(await screen.findByTestId('release-dialog')).toHaveTextContent('2 choices, 2 ticked');
+    });
+
+    it('says so when nothing is waiting to be released', async () => {
+      const { instance, toasts } = await setup({ forest: RELEASABLE, permissions: ['RELEASE'] });
+      await waitFor(() => expect(names().length).toBe(2));
+      instance.releaseEntries([{ ...entryOf('n-blog'), release: { '': { status: 'PUBLISHED' } } }]);
+      expect(toasts.toasts().at(-1)?.message).toBe('Nothing here is waiting to be released.');
+      expect(screen.queryByTestId('release-dialog')).toBeNull();
+    });
+  });
+
+  describe('the folder table\'s row menu', () => {
+    const entryOf = (uuid: string, kind: 'folder' | 'item' = 'item') => ({ ...node(uuid, uuid, kind).data });
+    const labels = (items: { label: string }[]) => items.map((i) => i.label).filter(Boolean);
+
+    it('has the tree\'s entries for a folder and for an item', async () => {
+      const { instance } = await setup({ permissions: ['RELEASE'] });
+      await waitFor(() => expect(names().length).toBe(3));
+      expect(labels(instance.listMenu(entryOf('n-company', 'folder')))).toEqual([
+        'New folder',
+        'Rename…',
+        'Cut',
+        'Paste',
+        'Move to…',
+        'New menu item',
+        'Entry page…',
+        'Hide from menu',
+        'Add “n-company” to favorites',
+        'Release…',
+        'Delete…',
+      ]);
+      const item = labels(instance.listMenu(entryOf('n-blog')));
+      expect(item).toContain('Rename…');
+      expect(item).not.toContain('New folder');
+      expect(item).not.toContain('Entry page…');
+    });
+
+    it('offers a viewer neither edits nor release', async () => {
+      const { instance } = await setup({ role: 'VIEWER' });
+      await waitFor(() => expect(names().length).toBe(3));
+      const items = labels(instance.listMenu(entryOf('n-company', 'folder')));
+      expect(items.some((label) => /Rename|Cut|Paste|Move|Delete|Release|New/.test(label))).toBe(false);
+    });
+
+    it('renames in a dialog: a folder through the folder endpoint, an item by its label', async () => {
+      const { instance, nav } = await setup();
+      await waitFor(() => expect(names().length).toBe(3));
+
+      instance.listMenu(entryOf('n-company', 'folder')).find((i) => i.label === 'Rename…')!.action();
+      expect(await screen.findByTestId('rename-dialog')).toHaveTextContent('Company');
+      await instance.submitRename('Firm');
+      expect(nav.renameFolder).toHaveBeenCalledWith('proj', 'n-company', 'Firm', '"rev-4"');
+      await waitFor(() => expect(screen.queryByTestId('rename-dialog')).toBeNull());
+
+      instance.listMenu(entryOf('n-blog')).find((i) => i.label === 'Rename…')!.action();
+      expect(await screen.findByTestId('rename-dialog')).toHaveTextContent('Blog');
+      await instance.submitRename('Journal');
+      expect(nav.updateReference).toHaveBeenCalledWith('proj', 'n-blog', expect.objectContaining({ label: 'Journal' }), expect.anything(), undefined);
+    });
+
+    it('keeps the dialog open when the rename fails', async () => {
+      const { instance } = await setup({ nav: { renameFolder: vi.fn().mockReturnValue(throwError(() => new Error('409'))) } });
+      await waitFor(() => expect(names().length).toBe(3));
+      instance.listMenu(entryOf('n-company', 'folder')).find((i) => i.label === 'Rename…')!.action();
+      await screen.findByTestId('rename-dialog');
+      await instance.submitRename('Firm');
+      expect(screen.getByTestId('rename-dialog')).toBeTruthy();
+    });
+
+    it('cuts into the tree\'s clipboard and pastes onto a folder row with the tree\'s move', async () => {
+      const { instance, nav } = await setup();
+      await waitFor(() => expect(names().length).toBe(3));
+      const clipboard = TestBed.inject(TreeClipboardService);
+      const paste = () => instance.listMenu(entryOf('n-company', 'folder')).find((i) => i.label === 'Paste')!;
+      expect(paste().disabled).toBe(true);
+
+      instance.listMenu(entryOf('n-blog')).find((i) => i.label === 'Cut')!.action();
+      expect(clipboard.nodes()?.scope).toBe('proj:navigation');
+      expect(paste().disabled).toBeFalsy();
+
+      paste().action();
+      await waitFor(() => expect(nav.moveReference).toHaveBeenCalledWith('proj', 'n-blog', 'n-company'));
+      expect(clipboard.nodes()).toBeNull();
+    });
+
+    it('does not paste a folder into itself or something inside it, nor where it already is', async () => {
+      const { instance } = await setup();
+      await waitFor(() => expect(names().length).toBe(3));
+      instance.listMenu(entryOf('n-company', 'folder')).find((i) => i.label === 'Cut')!.action();
+      // into itself, into an entry inside it (its folder is the company), next to it (the top level, where it is)
+      expect(instance.listMenu(entryOf('n-company', 'folder')).find((i) => i.label === 'Paste')!.disabled).toBe(true);
+      expect(instance.listMenu(entryOf('n-about')).find((i) => i.label === 'Paste')!.disabled).toBe(true);
+      expect(instance.listMenu(entryOf('n-blog')).find((i) => i.label === 'Paste')!.disabled).toBe(true);
     });
   });
 

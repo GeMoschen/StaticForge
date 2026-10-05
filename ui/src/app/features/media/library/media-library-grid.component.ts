@@ -24,27 +24,60 @@ import { MediaMover } from './media-mover';
 import { MediaLibraryStore, type FolderView, type MediaSummaryView } from './media-library.store';
 import { formatOf } from './media-library.util';
 import { MediaPreviewComponent } from './media-preview.component';
+import { MediaSelectionActions } from './media-selection.actions';
 
 /** Start loading more cards this far (px) before the end of the grid is reached. */
 const NEAR_END_PX = 200;
+/** A press-and-drag shorter than this (px) on empty space is a plain click. */
+const MARQUEE_THRESHOLD_PX = 4;
+
+/** One card of the grid: folders come first, then the files, in the order shown. `key` is `d:<uuid>` or `f:<uuid>`. */
+interface Entry {
+  readonly key: string;
+  readonly kind: 'folder' | 'file';
+  readonly uuid: string;
+}
+
+/** A rubber-band rectangle in the grid's own (scroll-aware) coordinates. */
+interface MarqueeRect {
+  readonly left: number;
+  readonly top: number;
+  readonly width: number;
+  readonly height: number;
+}
+
+interface MarqueeDrag {
+  readonly x: number;
+  readonly y: number;
+  readonly additive: boolean;
+  readonly baseFiles: readonly string[];
+  readonly baseFolders: readonly string[];
+  dragging: boolean;
+}
 
 /**
- * The library grid (decision 22): one focusable card per file — the preview on the sunken surface, the name (truncated at
- * the end only), "JPG · 1.2 MB", a labelled checkbox top left (shown on hover, focus or when selected) and a status icon
- * when the file is not released.
+ * The library grid (decision 22): one focusable card per folder and file (folders first) — the preview on the sunken
+ * surface, the name (truncated at the end only), "JPG · 1.2 MB", a labelled checkbox top left (shown on hover, focus or
+ * when selected) and a status icon when the file is not released.
  *
- * A `role=grid` with a roving tabindex: ←/→/↑/↓ move across the cards as laid out, Home/End go to the first/last,
- * Space toggles the selection, Enter opens the detail, Ctrl/⌘+A selects all, F2 renames, Delete deletes (the selection
- * when the card is in it), Shift+F10 (or the menu key) opens the card's menu. A click opens the file; Ctrl/⌘+click
- * toggles it, Shift+click selects a range. The cards are rendered in chunks as the end scrolls into view, so a big
- * folder costs what is on screen.
+ * It behaves like the Explorer, folders and files being ONE ordered list. A click selects only that card (and makes it
+ * the anchor); Ctrl/⌘+click toggles it, Shift+click selects the range from the anchor (Ctrl+Shift adds it); a double
+ * click opens (a folder is entered, a file shows its detail). A click on empty space clears the selection, a press and
+ * drag on empty space draws a rubber band that selects the cards it touches (Ctrl/⌘ keeps the selection). A right click
+ * selects an unselected card first, then opens its menu.
+ *
+ * A `role=grid` with ONE roving tab stop: the arrow keys move the focus across the cards as laid out and select that
+ * card (Shift extends the range, Ctrl/⌘ moves the focus only), Home/End jump, Space toggles, Enter opens, Ctrl/⌘+A selects
+ * all, F2 renames, Delete deletes (the selection when there is one), Shift+F10 (or the menu key) opens the menu, Escape
+ * clears the selection. The files are rendered in chunks as the end scrolls into view, so a big folder costs what is on
+ * screen.
  */
 @Component({
   selector: 'sf-media-library-grid',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [MediaPreviewComponent, SfCheckboxComponent, SfIconComponent, SfFileSizePipe, SfMenuComponent, SfStatusComponent, TranslocoPipe],
-  host: { '(contextmenu)': 'onEmptyContextMenu($event)' },
+  host: { '(contextmenu)': 'onEmptyContextMenu($event)', '(mousedown)': 'onMarqueeStart($event)' },
   templateUrl: './media-library-grid.component.html',
   styleUrl: './media-library-grid.component.scss',
 })
@@ -53,6 +86,7 @@ export class MediaLibraryGridComponent implements AfterViewInit {
   protected readonly items = inject(MediaItemActions);
   protected readonly folders = inject(MediaFolderActions);
   protected readonly mover = inject(MediaMover);
+  private readonly selection = inject(MediaSelectionActions);
   private readonly transloco = inject(TranslocoService);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef).nativeElement;
   private readonly changes = inject(ChangeDetectorRef);
@@ -60,20 +94,31 @@ export class MediaLibraryGridComponent implements AfterViewInit {
   private readonly fileSize = new SfFileSizePipe();
   private observer: IntersectionObserver | null = null;
 
-  /** The card in the tab order (by uuid, so it survives sorting and filtering). */
-  private readonly activeUuid = signal<string | null>(null);
-  /** The anchor of Shift+click ranges. */
+  /** The card in the tab order (its entry key, so it survives sorting and filtering). */
+  private readonly activeKey = signal<string | null>(null);
+  /** The anchor of Shift ranges (an entry key). */
   private anchor: string | null = null;
   /** A Shift+F10 press opened the menu already; the `contextmenu` event some browsers add must not open it twice. */
   private suppressContextMenu = false;
+  /** The rubber band being dragged, if any. */
+  private drag: MarqueeDrag | null = null;
+  protected readonly marquee = signal<MarqueeRect | null>(null);
 
   protected readonly folderName = computed(
     () => this.library.folderNode()?.displayName ?? this.transloco.translate('media.library.title'),
   );
+
+  /** Every card of the open folder in the order shown: the folders, then all files (rendered or not). */
+  private readonly entries = computed<Entry[]>(() => [
+    ...this.library.subfolders().flatMap((f) => (f.uuid ? [{ key: folderKey(f), kind: 'folder' as const, uuid: f.uuid }] : [])),
+    ...this.library.visible().flatMap((f) => (f.uuid ? [{ key: fileKey(f), kind: 'file' as const, uuid: f.uuid }] : [])),
+  ]);
   protected readonly tabStop = computed(() => {
-    const files = this.library.shown();
-    const active = this.activeUuid();
-    return files.some((f) => f.uuid === active) ? active : (files[0]?.uuid ?? null);
+    const all = this.entries();
+    const active = this.activeKey();
+    const rendered = this.library.subfolders().filter((f) => f.uuid).length + this.library.shown().length;
+    const index = all.findIndex((e) => e.key === active);
+    return index >= 0 && index < rendered ? active : (all[0]?.key ?? null);
   });
 
   constructor() {
@@ -82,7 +127,10 @@ export class MediaLibraryGridComponent implements AfterViewInit {
       this.library.shown();
       untracked(() => setTimeout(() => this.loadWhileNearEnd()));
     });
-    inject(DestroyRef).onDestroy(() => this.observer?.disconnect());
+    inject(DestroyRef).onDestroy(() => {
+      this.observer?.disconnect();
+      this.stopDrag();
+    });
   }
 
   ngAfterViewInit(): void {
@@ -113,6 +161,14 @@ export class MediaLibraryGridComponent implements AfterViewInit {
     return formatOf(file);
   }
 
+  protected folderKey(folder: FolderView): string {
+    return folderKey(folder);
+  }
+
+  protected fileKey(file: MediaSummaryView): string {
+    return fileKey(file);
+  }
+
   /** The card's name: file name, type and size, and the status when not released. */
   protected cardLabel(file: MediaSummaryView): string {
     const meta = this.transloco.translate('media.grid.meta', { type: formatOf(file), size: this.fileSize.transform(file.sizeBytes) });
@@ -120,15 +176,106 @@ export class MediaLibraryGridComponent implements AfterViewInit {
     return [file.displayName ?? file.uid ?? '', meta, ...(status ? [status.label] : [])].join(', ');
   }
 
-  /** A right click on empty space (not on a card) opens the menu of the open folder. */
+  // ── Selection ───────────────────────────────────────────────────────────
+
+  private isSelectedKey(key: string): boolean {
+    return key.startsWith('d:') ? this.library.isFolderSelected(key.slice(2)) : this.library.isSelected(key.slice(2));
+  }
+
+  /** Replaces the selection with the given entries. */
+  private select(entries: readonly Entry[], keepFiles: readonly string[] = [], keepFolders: readonly string[] = []): void {
+    this.library.setSelection([...new Set([...keepFiles, ...entries.filter((e) => e.kind === 'file').map((e) => e.uuid)])]);
+    this.library.setFolderSelection([...new Set([...keepFolders, ...entries.filter((e) => e.kind === 'folder').map((e) => e.uuid)])]);
+  }
+
+  private selectOnly(key: string): void {
+    const entry = this.entries().find((e) => e.key === key);
+    this.select(entry ? [entry] : []);
+    this.anchor = key;
+    this.activeKey.set(key);
+  }
+
+  /** Selects the entries from the anchor to `key` (the anchor itself when there is none yet). */
+  private selectRange(key: string, additive: boolean): void {
+    const all = this.entries();
+    const from = all.findIndex((e) => e.key === (this.anchor ?? key));
+    const to = all.findIndex((e) => e.key === key);
+    if (to < 0) {
+      return;
+    }
+    const [a, b] = from < 0 ? [to, to] : [Math.min(from, to), Math.max(from, to)];
+    this.anchor ??= key;
+    this.select(all.slice(a, b + 1), additive ? this.library.selected() : [], additive ? this.library.selectedFolderUuids() : []);
+    this.activeKey.set(key);
+  }
+
+  private toggleKey(key: string): void {
+    if (key.startsWith('d:')) {
+      this.library.toggleFolder(key.slice(2));
+    } else {
+      this.library.toggle(key.slice(2));
+    }
+    this.anchor = key;
+    this.activeKey.set(key);
+  }
+
+  /** A right click or the menu key on an unselected card selects it first (and only it), as the Explorer does. */
+  private ensureSelected(key: string): void {
+    if (!this.isSelectedKey(key)) {
+      this.selectOnly(key);
+    } else {
+      this.activeKey.set(key);
+    }
+  }
+
+  // ── Pointer ─────────────────────────────────────────────────────────────
+
+  /** A right click on empty space (not on a card) opens the menu of the open folder; the selection stays. */
   protected onEmptyContextMenu(event: MouseEvent): void {
     if (!(event.target instanceof Element && event.target.closest('.card'))) {
       this.folders.openFolderContextMenu(event);
     }
   }
 
-  protected openFolder(folder: FolderView): void {
-    void this.library.openFolder(folder.uuid ?? null);
+  private static ignored(event: Event): boolean {
+    return event.target instanceof Element && !!event.target.closest('.card__check, .card__more');
+  }
+
+  /** A click selects only the card; Ctrl/⌘ toggles it, Shift selects the range from the anchor (the checkbox and ⋮ act on their own). */
+  protected onCardClick(key: string, event: MouseEvent): void {
+    if (MediaLibraryGridComponent.ignored(event)) {
+      return;
+    }
+    if (event.shiftKey) {
+      this.selectRange(key, event.ctrlKey || event.metaKey);
+    } else if (event.ctrlKey || event.metaKey) {
+      this.toggleKey(key);
+    } else {
+      this.selectOnly(key);
+    }
+  }
+
+  /** A double click opens: a folder is entered, a file shows its detail. */
+  protected onCardDblClick(key: string, event: MouseEvent): void {
+    if (!MediaLibraryGridComponent.ignored(event)) {
+      this.open(key);
+    }
+  }
+
+  private open(key: string): void {
+    if (key.startsWith('d:')) {
+      void this.library.openFolder(key.slice(2));
+    } else {
+      void this.library.openAsset(key.slice(2));
+    }
+  }
+
+  protected onCheck(key: string): void {
+    this.toggleKey(key);
+  }
+
+  protected onFocus(key: string): void {
+    this.activeKey.set(key);
   }
 
   protected onFolderContextMenu(event: MouseEvent, folder: FolderView): void {
@@ -137,30 +284,8 @@ export class MediaLibraryGridComponent implements AfterViewInit {
       this.suppressContextMenu = false;
       return;
     }
+    this.ensureSelected(folderKey(folder));
     this.folders.onFolderContextMenu(folder, event);
-  }
-
-  /** Enter opens the folder, F2 renames it, Shift+F10 / the menu key open its menu; Tab moves on to the next tile. */
-  protected onFolderKeydown(event: KeyboardEvent, folder: FolderView): void {
-    if (event.target !== event.currentTarget) {
-      return; // the ⋮ menu button handles its own keys
-    }
-    if (event.key === 'Enter') {
-      event.preventDefault();
-      this.openFolder(folder);
-    } else if (event.key === 'F2' && !event.ctrlKey && !event.metaKey && !event.altKey && this.library.canEdit()) {
-      event.preventDefault();
-      void this.folders.rename(folder);
-    } else if (event.key === 'ContextMenu' || (event.key === 'F10' && event.shiftKey)) {
-      event.preventDefault();
-      this.suppressContextMenu = true;
-      setTimeout(() => (this.suppressContextMenu = false));
-      this.folders.onFolderContextMenu(folder, event.currentTarget as HTMLElement);
-    }
-  }
-
-  protected onFocus(file: MediaSummaryView): void {
-    this.activeUuid.set(file.uuid ?? null);
   }
 
   protected onContextMenu(event: MouseEvent, file: MediaSummaryView): void {
@@ -169,52 +294,116 @@ export class MediaLibraryGridComponent implements AfterViewInit {
       event.preventDefault();
       return;
     }
+    this.ensureSelected(fileKey(file));
     this.items.onItemContextMenu(file, event);
   }
 
-  protected onClick(file: MediaSummaryView, event: MouseEvent): void {
-    const uuid = file.uuid;
-    if (!uuid || (event.target as HTMLElement).closest('.card__check, .card__more')) {
-      return; // the checkbox and the ⋮ menu act on their own
+  // ── Rubber band ─────────────────────────────────────────────────────────
+
+  /** Pressing on empty space starts a rubber band; without moving it is a click that clears the selection. */
+  protected onMarqueeStart(event: MouseEvent): void {
+    const hostRect = this.host.getBoundingClientRect();
+    const onScrollbar = this.host.clientWidth > 0 && event.clientX - hostRect.left >= this.host.clientWidth;
+    if (event.button !== 0 || onScrollbar || !(event.target instanceof Element) || event.target.closest('.card')) {
+      return;
     }
-    this.activeUuid.set(uuid);
-    if (event.shiftKey && this.anchor) {
-      this.library.selectRange(this.anchor, uuid);
-    } else if (event.ctrlKey || event.metaKey) {
-      this.library.toggle(uuid);
-      this.anchor = uuid;
-    } else {
-      this.anchor = uuid;
-      this.library.openAsset(uuid);
-    }
+    event.preventDefault(); // no text selection while dragging
+    const additive = event.ctrlKey || event.metaKey;
+    const { x, y } = this.contentPoint(event);
+    this.drag = {
+      x,
+      y,
+      additive,
+      baseFiles: additive ? [...this.library.selected()] : [],
+      baseFolders: additive ? [...this.library.selectedFolderUuids()] : [],
+      dragging: false,
+    };
+    document.addEventListener('mousemove', this.onDragMove);
+    document.addEventListener('mouseup', this.onDragEnd);
   }
 
-  protected onCheck(file: MediaSummaryView): void {
-    this.library.toggle(file.uuid);
-    this.anchor = file.uuid ?? null;
+  /** A client point in the grid's scroll-aware coordinates. */
+  private contentPoint(event: MouseEvent): { x: number; y: number } {
+    const rect = this.host.getBoundingClientRect();
+    return { x: event.clientX - rect.left + this.host.scrollLeft, y: event.clientY - rect.top + this.host.scrollTop };
   }
+
+  private readonly onDragMove = (event: MouseEvent): void => {
+    const drag = this.drag;
+    if (!drag) {
+      return;
+    }
+    const { x, y } = this.contentPoint(event);
+    if (!drag.dragging && Math.hypot(x - drag.x, y - drag.y) < MARQUEE_THRESHOLD_PX) {
+      return;
+    }
+    drag.dragging = true;
+    const rect: MarqueeRect = { left: Math.min(x, drag.x), top: Math.min(y, drag.y), width: Math.abs(x - drag.x), height: Math.abs(y - drag.y) };
+    this.marquee.set(rect);
+    this.select(this.touched(rect), drag.baseFiles, drag.baseFolders);
+  };
+
+  private readonly onDragEnd = (): void => {
+    const drag = this.drag;
+    this.stopDrag();
+    if (drag && !drag.dragging && !drag.additive) {
+      this.library.clearSelection();
+    }
+  };
+
+  private stopDrag(): void {
+    this.drag = null;
+    this.marquee.set(null);
+    document.removeEventListener('mousemove', this.onDragMove);
+    document.removeEventListener('mouseup', this.onDragEnd);
+  }
+
+  /** The rendered cards the rectangle touches. */
+  private touched(rect: MarqueeRect): Entry[] {
+    const origin = this.host.getBoundingClientRect();
+    const result: Entry[] = [];
+    for (const card of Array.from(this.host.querySelectorAll<HTMLElement>('.card'))) {
+      const box = card.getBoundingClientRect();
+      const left = box.left - origin.left + this.host.scrollLeft;
+      const top = box.top - origin.top + this.host.scrollTop;
+      if (left < rect.left + rect.width && left + box.width > rect.left && top < rect.top + rect.height && top + box.height > rect.top) {
+        const { folder, file } = card.dataset;
+        if (folder) {
+          result.push({ key: `d:${folder}`, kind: 'folder', uuid: folder });
+        } else if (file) {
+          result.push({ key: `f:${file}`, kind: 'file', uuid: file });
+        }
+      }
+    }
+    return result;
+  }
+
+  // ── Keyboard ────────────────────────────────────────────────────────────
 
   protected onKeydown(event: KeyboardEvent): void {
-    if (event.altKey || (event.target as HTMLElement).closest('.card__more')) {
-      return; // the ⋮ menu button handles its own keys
+    const target = event.target as HTMLElement;
+    if (event.altKey || target.closest('.card__more') || target.closest('.card') !== target) {
+      return; // the ⋮ menu button and the checkbox handle their own keys
     }
-    const files = this.library.visible();
-    const current = files.findIndex((f) => f.uuid === this.tabStop());
+    const all = this.entries();
+    const key = target.dataset['folder'] ? `d:${target.dataset['folder']}` : `f:${target.dataset['file']}`;
+    const current = all.findIndex((e) => e.key === key);
     if (current < 0) {
       return;
     }
-    const file = files[current];
+    const entry = all[current];
     const columns = this.columns();
+    const mod = event.ctrlKey || event.metaKey;
     let next = current;
     switch (event.key) {
       case 'ArrowRight':
-        next = Math.min(files.length - 1, current + 1);
+        next = Math.min(all.length - 1, current + 1);
         break;
       case 'ArrowLeft':
         next = Math.max(0, current - 1);
         break;
       case 'ArrowDown':
-        next = current + columns < files.length ? current + columns : current;
+        next = current + columns < all.length ? current + columns : current;
         break;
       case 'ArrowUp':
         next = current - columns >= 0 ? current - columns : current;
@@ -223,25 +412,33 @@ export class MediaLibraryGridComponent implements AfterViewInit {
         next = 0;
         break;
       case 'End':
-        next = files.length - 1;
+        next = all.length - 1;
         break;
       case ' ':
         event.preventDefault();
-        this.onCheck(file);
+        this.toggleKey(entry.key);
         return;
       case 'Enter':
         event.preventDefault();
-        this.library.openAsset(file.uuid ?? null);
+        this.open(entry.key);
+        return;
+      case 'Escape':
+        if (this.library.selectionCount() > 0) {
+          event.preventDefault();
+          this.library.clearSelection();
+        }
         return;
       case 'F2':
-        if (!event.ctrlKey && !event.metaKey && this.library.canEdit()) {
+        if (!mod && this.library.canEdit()) {
           event.preventDefault();
-          void this.items.rename(file);
+          this.rename(all, entry);
         }
         return;
       case 'Delete':
-        event.preventDefault();
-        void this.items.deleteFile(file);
+        if (this.library.canEdit()) {
+          event.preventDefault();
+          void this.delete(entry);
+        }
         return;
       case 'F10':
       case 'ContextMenu':
@@ -249,15 +446,12 @@ export class MediaLibraryGridComponent implements AfterViewInit {
           event.preventDefault();
           this.suppressContextMenu = true;
           setTimeout(() => (this.suppressContextMenu = false));
-          const card = this.card(file.uuid);
-          if (card) {
-            this.items.onItemContextMenu(file, card);
-          }
+          this.openMenu(entry);
         }
         return;
       case 'a':
       case 'A':
-        if (event.ctrlKey || event.metaKey) {
+        if (mod) {
           event.preventDefault();
           this.library.selectAll();
         }
@@ -266,31 +460,100 @@ export class MediaLibraryGridComponent implements AfterViewInit {
         return;
     }
     event.preventDefault();
-    this.focusIndex(files, next);
+    this.moveTo(all, next, event);
   }
 
-  /** Moves the focus to the card at `index` of the visible list, rendering it first when it is past the chunk. */
-  private focusIndex(files: readonly MediaSummaryView[], index: number): void {
-    const target = files[index];
-    if (!target?.uuid) {
+  /** Moves the focus to `index` of the entries (Ctrl/⌘: focus only; Shift: extends the range; else selects only it). */
+  private moveTo(all: readonly Entry[], index: number, event: KeyboardEvent): void {
+    const target = all[index];
+    if (!target) {
       return;
     }
-    this.activeUuid.set(target.uuid);
-    if (index >= this.library.renderLimit()) {
-      this.library.renderLimit.set(index + 1);
+    if (event.ctrlKey || event.metaKey) {
+      this.activeKey.set(target.key);
+    } else if (event.shiftKey) {
+      this.selectRange(target.key, false);
+    } else {
+      this.selectOnly(target.key);
+    }
+    const fileIndex = index - this.library.subfolders().filter((f) => f.uuid).length;
+    if (fileIndex >= this.library.renderLimit()) {
+      this.library.renderLimit.set(fileIndex + 1);
       this.changes.detectChanges();
     }
-    this.card(target.uuid)?.focus();
+    this.card(target.key)?.focus();
   }
 
-  private card(uuid: string | undefined): HTMLElement | null {
-    return uuid ? (Array.from(this.host.querySelectorAll<HTMLElement>('.card')).find((card) => card.dataset['file'] === uuid) ?? null) : null;
+  private openMenu(entry: Entry): void {
+    this.ensureSelected(entry.key);
+    const card = this.card(entry.key);
+    if (!card) {
+      return;
+    }
+    if (entry.kind === 'folder') {
+      const folder = this.library.subfolders().find((f) => f.uuid === entry.uuid);
+      if (folder) {
+        this.folders.onFolderContextMenu(folder, card);
+      }
+    } else {
+      const file = this.library.visible().find((f) => f.uuid === entry.uuid);
+      if (file) {
+        this.items.onItemContextMenu(file, card);
+      }
+    }
   }
 
-  /** How many cards share the first row (the grid reflows with the width). */
+  /** F2 renames the one selected item, else the focused one; nothing when several are selected. */
+  private rename(all: readonly Entry[], focused: Entry): void {
+    const count = this.library.selectionCount();
+    if (count > 1) {
+      return;
+    }
+    const entry = count === 1 ? (all.find((e) => this.isSelectedKey(e.key)) ?? focused) : focused;
+    if (entry.kind === 'folder') {
+      const folder = this.library.subfolders().find((f) => f.uuid === entry.uuid);
+      if (folder) {
+        void this.folders.rename(folder);
+      }
+    } else {
+      const file = this.library.visible().find((f) => f.uuid === entry.uuid);
+      if (file) {
+        void this.items.rename(file);
+      }
+    }
+  }
+
+  /** Delete deletes the selection; with nothing selected the focused item. */
+  private async delete(focused: Entry): Promise<void> {
+    if (this.library.selectionCount() > 0) {
+      return this.selection.delete();
+    }
+    if (focused.kind === 'folder') {
+      const folder = this.library.subfolders().find((f) => f.uuid === focused.uuid);
+      return folder ? this.folders.deleteFromTile(folder) : undefined;
+    }
+    const file = this.library.visible().find((f) => f.uuid === focused.uuid);
+    return file ? this.items.deleteFile(file) : undefined;
+  }
+
+  private card(key: string): HTMLElement | null {
+    const kind = key.startsWith('d:') ? 'folder' : 'file';
+    const uuid = key.slice(2);
+    return Array.from(this.host.querySelectorAll<HTMLElement>('.card')).find((card) => card.dataset[kind] === uuid) ?? null;
+  }
+
+  /** How many cards share the first row (the grid reflows with the width); folders and files flow together. */
   private columns(): number {
     const cards = Array.from(this.host.querySelectorAll<HTMLElement>('.card'));
     const top = cards[0]?.offsetTop ?? 0;
     return Math.max(1, cards.filter((card) => card.offsetTop === top).length);
   }
+}
+
+function folderKey(folder: FolderView): string {
+  return `d:${folder.uuid}`;
+}
+
+function fileKey(file: MediaSummaryView): string {
+  return `f:${file.uuid}`;
 }

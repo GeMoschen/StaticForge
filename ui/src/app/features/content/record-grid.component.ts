@@ -18,6 +18,7 @@ import { EditingLocaleStore } from '../../core/project/editing-locale.store';
 import { LocalesStore } from '../../core/project/locales.store';
 import { ProjectPermissionsStore } from '../../core/project/project-permissions.store';
 import { ToastService } from '../../core/ui/toast.service';
+import { bulkActionsAsMenu } from '../../shared/components/data-table/data-table-menu';
 import type {
   SfDataTableBulkAction,
   SfDataTableColumn,
@@ -35,6 +36,7 @@ import { SfAssetFavoriteComponent } from '../../shared/components/sf-asset-favor
 import { SfButtonComponent } from '../../shared/components/sf-button.component';
 import { SfIconComponent } from '../../shared/components/sf-icon.component';
 import { SfTooltipDirective } from '../../shared/directives/sf-tooltip.directive';
+import type { ContextMenuItem } from '../../shared/services/context-menu.service';
 import type { ContentDefinition } from '../forms/form.model';
 import { releaseTone } from '../pages/folder-view.util';
 import { ReleaseDialogComponent } from '../release/release-dialog.component';
@@ -89,9 +91,10 @@ const UID_COLUMN = '_uid';
  * header sorts by a column, Shift adds a further key. Developer mode adds an expression box over field names
  * ({@code role == 'lead'}), evaluated by the server, which reports where an invalid one goes wrong.
  *
- * <p>Rows are selectable: **Release…**, **Move…** (into another set of the dataset) and **Delete** (the word `delete` from
+ * <p>Rows are selectable: **Release…**, **Move…** (into another set of the dataset), **Duplicate** (unreleased copies in the
+ * same set; Undo deletes them) and **Delete** (the word `delete` from
  * 25 records on; one Undo for the group) work on the selection, and "select all N matching" reaches records on other
- * pages. Opening a row emits `open`.
+ * pages. A right click on a row offers the same actions for that row or the selection. Opening a row emits `open`.
  */
 @Component({
   selector: 'sf-record-grid',
@@ -141,6 +144,8 @@ export class RecordGridComponent {
   readonly modeChange = output<RecordGridMode>();
   /** A bulk action changed records (deleted, moved): the set's count and the tree are stale. */
   readonly changed = output<void>();
+  /** The empty-space menu's *New record*: the set view creates it (a record always goes into a set). */
+  readonly newRecord = output<void>();
 
   private readonly content = inject(ContentService);
   private readonly actions = inject(RecordSetActions);
@@ -207,6 +212,10 @@ export class RecordGridComponent {
     { value: 'all', label: this.transloco.translate('content.recordSet.grid.mode.all') },
   ]);
 
+  /** A right click on empty space acts as one on the set: only *New record*. */
+  protected readonly emptyMenu = (): ContextMenuItem[] =>
+    this.readOnly() ? [] : [{ label: this.transloco.translate('content.recordSet.newRecord'), icon: 'add', action: () => this.newRecord.emit() }];
+
   protected readonly bulkActions = computed<SfDataTableBulkAction<RecordRowView>[]>(() => {
     if (this.readOnly()) {
       return [];
@@ -218,10 +227,18 @@ export class RecordGridComponent {
     }
     actions.push(
       { id: 'move', label: t('move'), icon: 'drive_file_move', action: (s) => void this.moveSelection(s) },
+      { id: 'duplicate', label: t('duplicate'), icon: 'content_copy', action: (s) => void this.duplicateSelection(s) },
       { id: 'delete', label: t('delete'), icon: 'delete', variant: 'danger', action: (s) => void this.deleteSelection(s) },
     );
     return actions;
   });
+
+  /**
+   * A right click on a row: Release…, Move…, Duplicate, then Delete — the bulk actions, acting on the right-clicked row or,
+   * when it is part of a multi-selection, on the selection.
+   */
+  protected readonly rowMenu = (rows: RecordRowView[]): ContextMenuItem[] =>
+    bulkActionsAsMenu(this.bulkActions(), rows, this.rowKey);
 
   /** Something to hand to the set query: an applied filter or a header sort. */
   protected readonly hasGridFilter = computed(() => this.where() !== '' || (this.query()?.sort.length ?? 0) > 0);
@@ -485,6 +502,13 @@ export class RecordGridComponent {
     this.moving.set(false);
     this.moveDialog.set(null);
     if (moved) {
+      this.afterChange();
+    }
+  }
+
+  private async duplicateSelection(selection: SfDataTableSelection<RecordRowView>): Promise<void> {
+    const records = (await this.resolve(selection)).map((row) => this.bulkRecord(row));
+    if (await this.actions.duplicateRecords(this.projectKey(), records, () => this.afterChange())) {
       this.afterChange();
     }
   }

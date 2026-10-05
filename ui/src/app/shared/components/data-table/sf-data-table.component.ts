@@ -211,6 +211,8 @@ export class SfDataTableComponent<T> implements OnInit, OnDestroy {
    * selection when the row is part of a selection of several, else the row alone. No entries, no menu.
    */
   readonly rowMenu = input<((rows: T[]) => ContextMenuItem[]) | null>(null);
+  /** A left click on empty space (below the rows) clears the selection. */
+  readonly emptyClickClears = input(false, { transform: booleanAttribute });
   /** The menu of a right click on empty space (below the rows); no entries, no menu. */
   readonly emptyMenu = input<(() => ContextMenuItem[]) | null>(null);
   readonly searchable = input(false, { transform: booleanAttribute });
@@ -808,6 +810,13 @@ export class SfDataTableComponent<T> implements OnInit, OnDestroy {
   }
 
   // ── Row keyboard and pointer ──────────────────────────────────────────────
+
+  protected onScrollerClick(event: MouseEvent): void {
+    const target = event.target instanceof Element ? event.target : null;
+    if (this.emptyClickClears() && event.button === 0 && target && !target.closest('thead, tr.sf-data-table__row') && this.selectedCount() > 0) {
+      this.clearSelection();
+    }
+  }
 
   /** A right click: a row's menu, or the empty-space menu below the rows (the header has none). */
   protected onContextMenu(event: MouseEvent): void {

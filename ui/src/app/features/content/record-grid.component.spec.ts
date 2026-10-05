@@ -14,6 +14,7 @@ import { EditingLocaleStore } from '../../core/project/editing-locale.store';
 import { LocalesStore } from '../../core/project/locales.store';
 import { provideProjectPermissions } from '../../core/project/testing/project-permissions.testing';
 import { ToastService } from '../../core/ui/toast.service';
+import { ContextMenuService } from '../../shared/services/context-menu.service';
 import { ConfirmService } from '../../shared/components/dialog/confirm.service';
 import { ReleaseDialogComponent } from '../release/release-dialog.component';
 import type { ReleaseChoice } from '../release/release-choice.util';
@@ -85,6 +86,7 @@ function apiStub() {
     deleteAsset: vi.fn().mockReturnValue(of(undefined)),
     assetHistory: vi.fn().mockReturnValue(of([{ revision: 4, deleted: false }])),
     restoreAsset: vi.fn().mockReturnValue(of({})),
+    duplicateAsset: vi.fn().mockImplementation((_k: string, uuid: string) => of({ uuid: `${uuid}-copy` })),
   };
 }
 
@@ -337,6 +339,48 @@ describe('RecordGridComponent (record set table)', () => {
     expect(open).toHaveBeenCalledWith('r1');
   });
 
+  describe('the row context menu', () => {
+    const all = { inputs: { mode: 'all' as RecordGridMode } };
+    const menuLabels = () =>
+      TestBed.inject(ContextMenuService)
+        .state()!
+        .items.map((item) => `${item.separatorBefore ? '| ' : ''}${item.label}`);
+
+    it('offers Release, Move, Duplicate and — after a separator — Delete on a right click, without Open', async () => {
+      await setup(contentStub(), all);
+      fireEvent.contextMenu(await screen.findByText('Bob'));
+
+      await waitFor(() => expect(TestBed.inject(ContextMenuService).state()).not.toBeNull());
+      expect(menuLabels()).toEqual(['Release…', 'Move…', 'Duplicate', '| Delete']);
+    });
+
+    it('acts on the right-clicked record, and on the whole selection when the row is part of one', async () => {
+      const { api } = await setup(contentStub(), all);
+      await screen.findByText('Bob');
+
+      fireEvent.contextMenu(screen.getByText('Bob'));
+      await waitFor(() => expect(TestBed.inject(ContextMenuService).state()).not.toBeNull());
+      TestBed.inject(ContextMenuService).state()!.items.find((i) => i.label === 'Duplicate')!.action!();
+      await waitFor(() => expect(api.duplicateAsset).toHaveBeenCalledTimes(1));
+      expect(api.duplicateAsset).toHaveBeenCalledWith('proj', 'r2');
+
+      api.duplicateAsset.mockClear();
+      selectRow('Ada');
+      selectRow('Bob');
+      fireEvent.contextMenu(screen.getByText('Bob'));
+      await waitFor(() => expect(TestBed.inject(ContextMenuService).state()).not.toBeNull());
+      TestBed.inject(ContextMenuService).state()!.items.find((i) => i.label === 'Duplicate')!.action!();
+      await waitFor(() => expect(api.duplicateAsset).toHaveBeenCalledTimes(2));
+    });
+
+    it('has no menu where the records are read-only', async () => {
+      await setup(contentStub(), { inputs: { mode: 'all' as RecordGridMode, readOnly: true } });
+      fireEvent.contextMenu(await screen.findByText('Bob'));
+
+      expect(TestBed.inject(ContextMenuService).state()).toBeNull();
+    });
+  });
+
   describe('selection and bulk actions', () => {
     const all = { inputs: { mode: 'all' as RecordGridMode } };
 
@@ -399,6 +443,47 @@ describe('RecordGridComponent (record set table)', () => {
       await waitFor(() => expect(api.restoreAsset).toHaveBeenCalledTimes(2));
       expect(api.restoreAsset).toHaveBeenCalledWith('proj', 'r2', { fromRevision: 4 });
       expect(api.restoreAsset).toHaveBeenLastCalledWith('proj', 'r1', { fromRevision: 4 });
+    });
+
+    it('duplicates the selected records, offers one Undo that deletes the copies, and reloads the grid', async () => {
+      const content = contentStub();
+      const { api, changed, toasts } = await setup(content, all);
+      await screen.findByText('Bob');
+      selectRow('Ada');
+      selectRow('Bob');
+      content.listSetRecords.mockClear();
+
+      fireEvent.click(bulk('Duplicate'));
+
+      await waitFor(() => expect(api.duplicateAsset).toHaveBeenCalledTimes(2));
+      expect(api.duplicateAsset).toHaveBeenNthCalledWith(1, 'proj', 'r1');
+      expect(api.duplicateAsset).toHaveBeenNthCalledWith(2, 'proj', 'r2');
+      await waitFor(() => expect(changed).toHaveBeenCalled());
+      expect(content.listSetRecords).toHaveBeenCalled();
+      const toast = toasts.toasts().at(-1)!;
+      expect(toast.message).toBe('Duplicated 2 records.');
+
+      toast.action!.run();
+
+      await waitFor(() => expect(api.deleteAsset).toHaveBeenCalledTimes(2));
+      expect(api.deleteAsset).toHaveBeenCalledWith('proj', 'r1-copy');
+      expect(api.deleteAsset).toHaveBeenCalledWith('proj', 'r2-copy');
+    });
+
+    it('names the record when one is duplicated and reports the ones that failed', async () => {
+      const api = apiStub();
+      api.duplicateAsset.mockImplementation((_k: string, uuid: string) =>
+        uuid === 'r2' ? throwError(() => new HttpErrorResponse({ status: 500 })) : of({ uuid: 'r1-copy' }),
+      );
+      const { toasts } = await setup(contentStub(), { ...all, api });
+      await screen.findByText('Bob');
+      selectRow('Ada');
+      selectRow('Bob');
+
+      fireEvent.click(bulk('Duplicate'));
+
+      await waitFor(() => expect(toasts.toasts().some((t) => t.message === 'Duplicated “Ada”.' && !!t.action)).toBe(true));
+      expect(toasts.toasts().some((t) => t.message?.includes('1 record could not be duplicated'))).toBe(true);
     });
 
     it('deletes one record with its name in the question', async () => {

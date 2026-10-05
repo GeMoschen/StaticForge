@@ -1,14 +1,17 @@
-import { bulkActionsAsMenu } from '../../shared/components/data-table/data-table-menu';
 import type { ContextMenuItem } from '../../shared/services/context-menu.service';
 import { ChangeDetectionStrategy, Component, computed, inject, input, output, signal } from '@angular/core';
 import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
 import type { components } from '../../core/api/generated/schema.d.ts';
+import { FavoritesService } from '../../core/assets/favorites.service';
 import { useFrameItem } from '../../core/frame/use-frame-item';
 import { ProjectPermissionsStore } from '../../core/project/project-permissions.store';
+import type { SfTreeNode } from '../../shared/components/tree/tree-model';
+import { TreeClipboardService } from '../../shared/services/tree-clipboard.service';
 import { ShortcutService } from '../../core/ui/shortcut.service';
 import { UndoService, type UndoStep } from '../../core/ui/undo.service';
 import type {
   SfDataTableBulkAction,
+  SfDataTableSelection,
   SfDataTableColumn,
   SfDataTableFilter,
 } from '../../shared/components/data-table/data-table.types';
@@ -35,6 +38,7 @@ import {
   folderChain,
   folderTrail,
   foldersOnly,
+  idPath,
 } from './content-tree.util';
 import type { DatasetSummaryView } from './content.service';
 
@@ -79,7 +83,10 @@ export class ContentFolderViewComponent {
   private readonly undo = inject(UndoService);
   private readonly toasts = inject(ToastService);
   private readonly transloco = inject(TranslocoService);
-  protected readonly canEdit = inject(ProjectPermissionsStore).canEditContent;
+  private readonly favorites = inject(FavoritesService);
+  private readonly clipboard = inject(TreeClipboardService);
+  private readonly permissions = inject(ProjectPermissionsStore);
+  protected readonly canEdit = this.permissions.canEditContent;
 
   readonly projectKey = input.required<string>();
   /** The open folder; `null` is the store root (so is a uuid that is not in the tree any more). */
@@ -95,6 +102,13 @@ export class ContentFolderViewComponent {
   readonly openFolder = output<string | null>();
   readonly newFolder = output<void>();
   readonly newRecordSet = output<void>();
+  /** A row's *New folder* / *New record set here*: the folder to create in. */
+  readonly newFolderIn = output<string>();
+  readonly newRecordSetIn = output<string>();
+  /** A row's *Rename…*: the area shows the shared rename dialog. */
+  readonly renameEntry = output<ContentEntry>();
+  /** *Release…* on rows: the area builds the choices (a folder with everything inside) and shows the release dialog. */
+  readonly releaseEntries = output<readonly ContentEntry[]>();
   /** The header's *Rename*: the area starts the inline rename in its tree. */
   readonly rename = output<string>();
   readonly retry = output<void>();
@@ -145,13 +159,67 @@ export class ContentFolderViewComponent {
     },
   ]);
 
-  /** A right click on a row: *Open* (one row) and the bulk actions, acting on the row or on the selection it is part of. */
-  protected readonly rowMenu = (rows: ContentEntry[]): ContextMenuItem[] => [
-    ...(rows.length === 1
-      ? [{ label: this.transloco.translate('shared.dataTable.open'), icon: 'open_in_new', shortcut: 'Enter', action: () => this.open(rows[0]) }]
-      : []),
-    ...bulkActionsAsMenu(this.bulkActions(), rows, this.rowKey),
-  ];
+  /**
+   * A right click on a row: *Open* first, then the same entries as the Content tree's menu for that item (*New folder* and
+   * *New record set here* in a folder, *Rename…*, *Cut*, *Paste*, *Move to…*, the favorite toggle, *Release…*,
+   * *Delete*). On a selection of several rows: *Cut* and the bulk actions.
+   */
+  protected readonly rowMenu = (rows: ContentEntry[]): ContextMenuItem[] => {
+    const t = (key: string, params?: Record<string, unknown>) => this.transloco.translate(key, params);
+    const edit = this.canEdit();
+    const items: ContextMenuItem[] = [];
+    const cut: ContextMenuItem = { label: t('shared.tree.cut'), icon: 'content_cut', shortcut: 'Mod+X', action: () => this.cut(rows) };
+    const copy: ContextMenuItem = { label: t('shared.tree.copy'), icon: 'content_copy', shortcut: 'Mod+C', action: () => this.copy(rows) };
+    // Only record sets are copied: *Copy* is left out when the selection holds a folder.
+    const copyable = edit && rows.every((row) => row.kind === 'set');
+    if (rows.length !== 1) {
+      return [...(edit ? [cut] : []), ...(copyable ? [copy] : []), ...this.bulkMenu(rows)];
+    }
+    const row = rows[0];
+    items.push({ label: t('shared.dataTable.open'), icon: 'open_in_new', shortcut: 'Enter', action: () => this.open(row) });
+    if (edit && row.kind === 'folder') {
+      items.push(
+        { label: t('content.tree.newFolder'), icon: 'create_new_folder', action: () => this.newFolderIn.emit(row.uuid) },
+        {
+          label: t('content.tree.newRecordSet'),
+          icon: 'playlist_add',
+          disabled: this.datasets().length === 0,
+          action: () => this.newRecordSetIn.emit(row.uuid),
+        },
+      );
+    }
+    if (edit) {
+      const target = this.pasteTarget(row);
+      items.push(
+        { label: t('content.folder.menu.renameDialog'), icon: 'edit', shortcut: 'F2', action: () => this.renameEntry.emit(row) },
+        cut,
+        ...(copyable ? [copy] : []),
+        { label: t('shared.tree.paste'), icon: 'content_paste', shortcut: 'Mod+V', disabled: !this.canPaste(target), action: () => this.paste(target) },
+        { label: t('shared.tree.moveTo'), icon: 'drive_file_move', action: () => this.moving.set({ entries: rows }) },
+      );
+    }
+    const on = this.favorites.isFavorite(row.uuid);
+    items.push({
+      label: t(on ? 'shared.favorite.remove' : 'shared.favorite.add', { name: row.name }),
+      icon: 'star',
+      action: () => this.toggleFavorite(row),
+    });
+    if (this.permissions.canRelease()) {
+      items.push({ label: t('content.folder.bulk.release'), icon: 'publish', action: () => this.releaseEntries.emit(rows) });
+    }
+    if (edit) {
+      items.push({ label: '', separator: true }, { label: t('shared.tree.deleteConfirm', { count: 1 }), icon: 'delete', danger: true, shortcut: 'Del', action: () => void this.delete(rows) });
+    }
+    return items;
+  };
+
+  private bulkMenu(rows: ContentEntry[]): ContextMenuItem[] {
+    const selection = { keys: rows.map(this.rowKey), rows, allMatching: false, count: rows.length };
+    return this.bulkActions().flatMap((action) => [
+      ...(action.variant === 'danger' ? [{ label: '', separator: true }] : []),
+      { label: action.label, icon: action.icon, danger: action.variant === 'danger', action: () => action.action?.(selection) },
+    ]);
+  }
 
   /** A right click on empty space acts as one on the open folder: only the *New …* options. */
   protected readonly emptyMenu = (): ContextMenuItem[] =>
@@ -171,6 +239,9 @@ export class ContentFolderViewComponent {
     const t = (id: string) => this.transloco.translate(`content.folder.bulk.${id}`);
     return [
       { id: 'move', label: t('move'), icon: 'drive_file_move', action: (selection) => this.moving.set({ entries: selection.rows }) },
+      ...(this.permissions.canRelease()
+        ? [{ id: 'release', label: t('release'), icon: 'publish', action: (selection: SfDataTableSelection<ContentEntry>) => this.releaseEntries.emit(selection.rows) }]
+        : []),
       { id: 'delete', label: t('delete'), icon: 'delete', variant: 'danger', action: (selection) => void this.delete(selection.rows) },
     ];
   });
@@ -255,6 +326,81 @@ export class ContentFolderViewComponent {
     }
   }
 
+  // ── Favorites, cut and paste ───────────────────────────────────────────────
+
+  private toggleFavorite(row: ContentEntry): void {
+    const on = this.favorites.toggle({
+      type: row.kind === 'folder' ? 'FOLDER' : 'RECORD_SET',
+      uuid: row.uuid,
+      displayName: row.name,
+      folderPath: row.path,
+    });
+    this.toasts.show(this.transloco.translate(on ? 'shared.favorite.added' : 'shared.favorite.removed', { name: row.name }), 'info');
+  }
+
+  /** The tree's clipboard scope (`<project>:<treeId>`): a cut here pastes in the tree and the other way round. */
+  private clipboardScope(): string {
+    return `${this.projectKey()}:content`;
+  }
+
+  private cut(rows: readonly ContentEntry[]): void {
+    if (this.canEdit() && rows.length > 0) {
+      const nodes: SfTreeNode<ContentEntry>[] = rows.map((row) => ({ id: row.uuid, label: row.name, data: row }));
+      this.clipboard.cutNodes(this.clipboardScope(), nodes as SfTreeNode[]);
+    }
+  }
+
+  private copy(rows: readonly ContentEntry[]): void {
+    if (this.canEdit() && rows.length > 0 && rows.every((row) => row.kind === 'set')) {
+      const nodes: SfTreeNode<ContentEntry>[] = rows.map((row) => ({ id: row.uuid, label: row.name, data: row }));
+      this.clipboard.copyNodes(this.clipboardScope(), nodes as SfTreeNode[]);
+    }
+  }
+
+  /** Where a paste onto a row goes, as the tree does it: into a folder, next to a record set (the open folder). `null` = root. */
+  private pasteTarget(row: ContentEntry): string | null {
+    return row.kind === 'folder' ? row.uuid : (this.folder()?.uuid ?? null);
+  }
+
+  private pasted(): ContentEntry[] {
+    const clip = this.clipboard.nodes();
+    if (!clip || clip.scope !== this.clipboardScope()) {
+      return [];
+    }
+    return clip.nodes.flatMap((node) => (node.data ? [node.data as ContentEntry] : []));
+  }
+
+  /**
+   * Something is cut, it does not go into itself or below itself, and it is not already there; something copied is
+   * record sets only and goes anywhere.
+   */
+  private canPaste(target: string | null): boolean {
+    const entries = this.pasted();
+    if (this.clipboard.nodes()?.mode === 'copy') {
+      return entries.length > 0 && entries.every((entry) => entry.kind === 'set');
+    }
+    const index = this.index();
+    const chain = target ? idPath(index, target) : [];
+    return (
+      entries.length > 0 &&
+      !entries.some((entry) => entry.kind === 'folder' && chain.includes(entry.uuid)) &&
+      !entries.every((entry) => (index.parentOf.get(entry.uuid) ?? null) === target)
+    );
+  }
+
+  private paste(target: string | null): void {
+    const entries = this.pasted();
+    if (!this.canEdit() || !this.canPaste(target)) {
+      return;
+    }
+    if (this.clipboard.nodes()?.mode === 'copy') {
+      void this.copyInto(entries, target);
+      return;
+    }
+    this.clipboard.clear();
+    void this.move(entries, target);
+  }
+
   // ── Move ───────────────────────────────────────────────────────────────────
 
   protected excludedFolders(entries: readonly ContentEntry[]): string[] {
@@ -278,6 +424,19 @@ export class ContentFolderViewComponent {
     }
     if (change.failed) {
       this.toasts.show(this.transloco.translate('content.folder.bulk.moveFailed'), 'error');
+    }
+    this.refresh.notify();
+  }
+
+  /** Paste after *Copy*: the record sets are duplicated into `target`, with one Undo that deletes the copies. */
+  private async copyInto(entries: readonly ContentEntry[], target: string | null): Promise<void> {
+    const change = await this.actions.copy(this.projectKey(), entries, target);
+    if (change.steps.length > 0) {
+      const message = this.transloco.translate('shared.tree.copied', { count: change.steps.length, name: change.done[0].name });
+      this.undo.offerGroup(message, this.withRefresh(change.steps));
+    }
+    if (change.failed) {
+      this.toasts.show(this.transloco.translate('content.tree.toast.copyFailed', { name: entries[change.done.length]?.name ?? '' }), 'error');
     }
     this.refresh.notify();
   }

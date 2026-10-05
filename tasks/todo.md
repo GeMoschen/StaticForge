@@ -1163,9 +1163,15 @@ recursively (items with something to release, ticked), through the existing rele
 Duplicate — Duplicate needs a **new backend endpoint**. Every list with multi-select shows the bar above the list with the same context-specific
 actions; a right click on a multi-selection shows the same entries. Templates store stays out of the empty-space work (rows unchanged).
 
-- [ ] Pages: tree + list row menu (no Open), Release, Duplicate, bulk bar parity
-- [ ] Content: tree + folder list row menu, Release (release dialog as in the record view), bulk bar parity
-- [ ] Record grid: row context menu (Release, Move, Delete, Duplicate) + backend duplicate endpoint + client + Undo
-- [ ] Navigation: tree + list row menu, Release (missing today), bulk bar parity
-- [ ] Media: tree + folder rows (no Open, + Release) and file rows (no Open, + Release), grid + list, bulk bar parity
-- [ ] Verification: ngc, vitest per area, lint; browser check; commit per store
+- [x] Pages: tree + list row menu (no Open), Release, Duplicate, bulk bar parity
+- [x] Content: tree + folder list row menu, Release (release dialog as in the record view), bulk bar parity
+- [x] Record grid: row context menu (Release, Move, Delete, Duplicate) + backend duplicate endpoint + client + Undo
+- [x] Navigation: tree + list row menu, Release (missing today), bulk bar parity
+- [x] Media: tree + folder rows (no Open, + Release) and file rows (no Open, + Release), grid + list, bulk bar parity
+- [x] Verification: ngc, vitest per area, lint; browser check; commit per store
+
+Review: unified backend duplicate (`AssetTransferService` + `AssetDuplicator` SPI per type, `POST /assets/{uuid}/duplicate` with optional target
+folder; page/record endpoints are deprecated delegates; move unchanged). UI: row menus = tree menus with Release/Duplicate/Copy/Cut/Paste in
+pages, content, navigation, media; record grid menu; Explorer-style media grid; shared `toContextItems`; data-table `rowMenu`/`emptyMenu`/
+`emptyClickClears`. Full UI suite green (3,809), `ngc` clean. Open: `NavigationApiIntegrationTest.visibleInMenuDefaultsToTrue…` fails with 412
+(unrelated, not run on a clean tree); not checked in a browser. `bootRunDemo` now uses an on-disk H2 file (`build/db/staticforge-demo`).

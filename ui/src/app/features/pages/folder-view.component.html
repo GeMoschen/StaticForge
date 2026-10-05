@@ -21,6 +21,7 @@
   [bulkActions]="bulkActions()"
   [rowMenu]="rowMenu"
   [emptyMenu]="emptyMenu"
+  emptyClickClears
   [loading]="loading()"
   [error]="failed() ? ('pages.folder.loadFailed' | transloco) : null"
   [emptyTitle]="'pages.folder.empty' | transloco"
@@ -88,6 +89,21 @@
     [startRenaming]="settingsRename()"
     (closed)="settingsOpen.set(false)"
     (changed)="onSettingsChanged()"
+  />
+}
+
+@if (renaming(); as row) {
+  <sf-rename-asset-dialog
+    [open]="true"
+    [projectKey]="projectKey()"
+    [uuid]="row.uuid"
+    [uid]="row.uid"
+    [displayName]="row.name"
+    [submittingName]="renameBusy()"
+    [undoableUid]="true"
+    (renameDisplayName)="renameTo(row, $event)"
+    (uidChanged)="onSettingsChanged()"
+    (closed)="renaming.set(null)"
   />
 }
 

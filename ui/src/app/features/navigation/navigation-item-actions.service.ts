@@ -106,6 +106,31 @@ export class NavigationItemActions {
   }
 
   /**
+   * Duplicates the items among `entries` into the folder `target` (`null` = the top level), one call each; folders are
+   * not copyable and skipped. Each copy is an unreleased draft at the end of the target folder; Undo deletes it.
+   */
+  async copy(projectKey: string, entries: readonly NavEntry[], target: string | null): Promise<NavChange> {
+    const done: NavEntry[] = [];
+    const steps: UndoStep[] = [];
+    try {
+      for (const entry of entries) {
+        if (entry.kind !== 'item') {
+          continue;
+        }
+        const copied = await firstValueFrom(this.api.duplicateAsset(projectKey, entry.uuid, target));
+        done.push(entry);
+        const uuid = copied.uuid;
+        if (uuid) {
+          steps.push(() => this.api.deleteAsset(projectKey, uuid));
+        }
+      }
+    } catch {
+      return { done, steps, failed: true };
+    }
+    return { done, steps, failed: false };
+  }
+
+  /**
    * Shows or hides entries in the generated menu ("Visible in menu"), one revision each, in order; it stops at the first
    * failure and what was changed before stays so. Entries that already have the value are skipped (they are not in
    * `done`). Undo writes each entry's previous value back against the revision its own write produced.

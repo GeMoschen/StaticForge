@@ -11,6 +11,10 @@
   <sf-media-library-main sfSplitterEnd class="media__pane media__library" />
 </sf-splitter>
 
+@if (release.choices(); as choices) {
+  <sf-release-dialog [projectKey]="projectKey()" mode="release" [choices]="choices" (done)="release.close()" (closed)="release.close()" />
+}
+
 @if (library.selectedMedia(); as media) {
   <sf-media-detail-drawer
     [projectKey]="projectKey()"

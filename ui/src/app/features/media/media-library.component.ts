@@ -3,10 +3,13 @@ import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
 import { ProjectContextStore } from '../../core/project/project-context.store';
 import { ToastService } from '../../core/ui/toast.service';
 import { SfSplitterComponent } from '../../shared/components/splitter/sf-splitter.component';
+import { ReleaseDialogComponent } from '../release/release-dialog.component';
 import { ReleaseEventsStore, withObservedRelease } from '../release/release-events.store';
 import { MediaFolderActions } from './library/media-folder-actions';
 import { MediaItemActions } from './library/media-item-actions';
 import { MediaMover } from './library/media-mover';
+import { MediaReleaseActions } from './library/media-release.actions';
+import { MediaSelectionActions } from './library/media-selection.actions';
 import { MediaLibraryMainComponent } from './library/media-library-main.component';
 import { MediaLibraryTreeComponent } from './library/media-library-tree.component';
 import { type MediaView, MediaLibraryStore } from './library/media-library.store';
@@ -35,10 +38,11 @@ const WIDE_QUERY = '(min-width: 1280px)';
     MediaDetailDrawerComponent,
     MediaLibraryMainComponent,
     MediaLibraryTreeComponent,
+    ReleaseDialogComponent,
     SfSplitterComponent,
     TranslocoPipe,
   ],
-  providers: [MediaLibraryStore, MediaThumbnailStore, MediaUploadStore, MediaMover, MediaFolderActions, MediaItemActions],
+  providers: [MediaLibraryStore, MediaThumbnailStore, MediaUploadStore, MediaMover, MediaFolderActions, MediaItemActions, MediaReleaseActions, MediaSelectionActions],
   templateUrl: './media-library.component.html',
   styleUrl: './media-library.component.scss',
 })
@@ -69,6 +73,7 @@ export class MediaLibraryComponent {
   protected readonly library = inject(MediaLibraryStore);
   private readonly itemActions = inject(MediaItemActions);
   private readonly mover = inject(MediaMover);
+  protected readonly release = inject(MediaReleaseActions);
 
   protected readonly treeWidth =
     typeof matchMedia !== 'function' || matchMedia(WIDE_QUERY).matches ? TREE_WIDTH : TREE_WIDTH_NARROW;

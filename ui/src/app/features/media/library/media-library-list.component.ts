@@ -1,5 +1,7 @@
 import { ChangeDetectionStrategy, Component, booleanAttribute, computed, effect, inject, input, untracked, viewChild } from '@angular/core';
 import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
+import { toContextItems } from '../../../shared/components/menu/sf-menu-item';
+import type { ContextMenuItem } from '../../../shared/services/context-menu.service';
 import { SfDataTableCellDirective } from '../../../shared/components/data-table/sf-data-table-templates.directive';
 import type { SfDataTableBulkAction, SfDataTableColumn } from '../../../shared/components/data-table/data-table.types';
 import { SfDataTableComponent } from '../../../shared/components/data-table/sf-data-table.component';
@@ -10,7 +12,7 @@ import { SfAssetFavoriteComponent } from '../../../shared/components/sf-asset-fa
 import { SfFileSizePipe } from '../../../shared/pipes/sf-file-size.pipe';
 import { MediaFolderActions } from './media-folder-actions';
 import { MediaItemActions } from './media-item-actions';
-import { MediaMover } from './media-mover';
+import { MediaSelectionActions } from './media-selection.actions';
 import { MediaLibraryStore, type FolderView, type MediaSummaryView } from './media-library.store';
 import { changedTime, formatOf } from './media-library.util';
 import { MediaPreviewComponent } from './media-preview.component';
@@ -61,11 +63,9 @@ export class MediaLibraryListComponent {
   protected readonly library = inject(MediaLibraryStore);
   protected readonly items = inject(MediaItemActions);
   protected readonly folders = inject(MediaFolderActions);
-  private readonly mover = inject(MediaMover);
+  private readonly selection = inject(MediaSelectionActions);
   private readonly transloco = inject(TranslocoService);
   private readonly table = viewChild(SfDataTableComponent<MediaListRow>);
-  /** A Shift+F10 press opened the menu already; the `contextmenu` event some browsers add must not open it twice. */
-  private suppressContextMenu = false;
 
   protected readonly folderName = computed(
     () => this.library.folderNode()?.displayName ?? this.transloco.translate('media.library.title'),
@@ -100,31 +100,40 @@ export class MediaLibraryListComponent {
     ];
   });
 
-  /** Move, Download and Delete act on the selection (a read-only project can only download). */
+  /**
+   * Move, Download (the files), Release… and Delete act on the selection of files and folders (a read-only project can only
+   * download). The table is told the selection by {@link onSelection} before a button is pressed.
+   */
   protected readonly bulkActions = computed<SfDataTableBulkAction<MediaListRow>[]>(() => {
-    const t = (id: string) => this.transloco.translate(`media.bulk.${id}`);
-    const download = { id: 'download', label: t('download'), icon: 'download', action: () => void this.items.download(this.library.selectedItems()) };
-    return !this.library.canEdit()
-      ? [download]
-      : [
-          { id: 'move', label: t('move'), icon: 'drive_file_move', action: () => void this.mover.moveFiles(this.library.selectedItems()) },
-          download,
-          { id: 'delete', label: t('delete'), icon: 'delete', variant: 'danger', action: () => void this.items.deleteSelection() },
-        ];
+    return this.selection
+      .actions('bulk')
+      .map<SfDataTableBulkAction<MediaListRow>>(({ id, label, icon, danger, action }) => ({ id, label, icon, variant: danger ? 'danger' : undefined, action }));
   });
+
+  /**
+   * A right click on a row (or Shift+F10 / the menu key): the table opens this menu. The file and folder menus switch to the
+   * selection's menu when the row is part of a selection of two or more.
+   */
+  protected readonly rowMenu = (rows: MediaListRow[]): ContextMenuItem[] => {
+    const row = rows[0];
+    return row ? toContextItems(isFolderRow(row) ? this.folders.menuItems(row.folder) : this.items.menuItems(row)) : [];
+  };
+  /** A right click on empty space below the rows: the open folder's *Upload* and *New folder*. */
+  protected readonly emptyMenu = (): ContextMenuItem[] => this.folders.openFolderMenuItems();
 
   constructor() {
     // The table shows the library's selection (the grid's, and what a delete or a filter took out of it).
     effect(() => {
-      const selected = this.library.selected();
+      const selected = [...this.library.selected(), ...this.library.selectedFolderUuids()];
       untracked(() => this.table()?.selectKeys(selected));
     });
   }
 
-  /** The selection is the files' (a ticked folder row is not part of it); a folder row opens, a file row opens its detail. */
+  /** The ticked rows are the library's selection: files and folders; a folder row opens, a file row opens its detail. */
   protected onSelection(keys: readonly string[]): void {
     const folders = new Set(this.library.subfolders().map((folder) => folder.uuid));
     this.library.setSelection(keys.filter((key) => !folders.has(key)));
+    this.library.setFolderSelection(keys.filter((key) => folders.has(key)));
   }
 
   protected onRowOpen(row: MediaListRow): void {
@@ -146,56 +155,22 @@ export class MediaLibraryListComponent {
     return !hit ? null : isFolderRow(hit) ? { folder: hit.folder } : { file: hit };
   }
 
-  protected onContextMenu(event: MouseEvent): void {
-    const hit = this.rowTarget(event.target);
-    if (!hit) {
-      // Empty space below the rows (not the header): the open folder's menu.
-      if (event.target instanceof Element && event.target.closest('.sf-data-table__scroller') && !event.target.closest('thead')) {
-        this.folders.openFolderContextMenu(event);
-      }
-      return;
-    }
-    if (this.suppressContextMenu) {
-      this.suppressContextMenu = false;
-      event.preventDefault();
-      return;
-    }
-    if ('folder' in hit) {
-      event.preventDefault();
-      this.folders.onFolderContextMenu(hit.folder, event);
-    } else {
-      this.items.onItemContextMenu(hit.file, event);
-    }
-  }
-
-  /** Shift+F10 / the menu key open the row's menu, F2 renames, Delete deletes (the selection when the row is in it). */
+  /** F2 renames, Delete deletes (the selection when the row is in it); the menu keys are the table's. */
   protected onKeydown(event: KeyboardEvent): void {
     const rowEl = event.target instanceof HTMLElement && event.target.matches('tr.sf-data-table__row') ? event.target : null;
     const hit = rowEl ? this.rowTarget(rowEl) : null;
-    if (!rowEl || !hit) {
+    if (!hit || !this.library.canEdit()) {
       return;
     }
-    const menu = (event.key === 'F10' && event.shiftKey) || event.key === 'ContextMenu';
-    const rename = event.key === 'F2' && !event.ctrlKey && !event.metaKey && !event.altKey && this.library.canEdit();
-    if (menu) {
-      event.preventDefault();
-      this.suppressContextMenu = true;
-      setTimeout(() => (this.suppressContextMenu = false));
-    } else if (rename || (event.key === 'Delete' && 'file' in hit)) {
-      event.preventDefault();
+    const rename = event.key === 'F2' && !event.ctrlKey && !event.metaKey && !event.altKey;
+    if (!rename && event.key !== 'Delete') {
+      return;
     }
+    event.preventDefault();
     if ('folder' in hit) {
-      if (menu) {
-        this.folders.onFolderContextMenu(hit.folder, rowEl);
-      } else if (rename) {
-        void this.folders.rename(hit.folder);
-      }
-    } else if (menu) {
-      this.items.onItemContextMenu(hit.file, rowEl);
-    } else if (rename) {
-      void this.items.rename(hit.file);
-    } else if (event.key === 'Delete') {
-      void this.items.deleteFile(hit.file);
+      void (rename ? this.folders.rename(hit.folder) : this.folders.deleteFromTile(hit.folder));
+    } else {
+      void (rename ? this.items.rename(hit.file) : this.items.deleteFile(hit.file));
     }
   }
 }

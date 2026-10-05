@@ -20,6 +20,7 @@ import { FAVORITES_NODE, FavoriteTreeService, isFavoriteNode } from '../../core/
 import { FavoritesService } from '../../core/assets/favorites.service';
 import { DeveloperModeService } from '../../core/frame/developer-mode.service';
 import { EditingLocaleStore } from '../../core/project/editing-locale.store';
+import { LocalesStore } from '../../core/project/locales.store';
 import { ProjectPermissionsStore } from '../../core/project/project-permissions.store';
 import { createShortcut } from '../../core/ui/documented-shortcuts';
 import { ShortcutService } from '../../core/ui/shortcut.service';
@@ -28,6 +29,7 @@ import { UndoService, type UndoStep } from '../../core/ui/undo.service';
 import { SfCreateAssetDialogComponent, type CreateAssetFormValue } from '../../shared/components/sf-create-asset-dialog.component';
 import { SfEmptyStateComponent } from '../../shared/components/sf-empty-state.component';
 import { SfPageHeaderComponent } from '../../shared/components/layout/sf-page-header.component';
+import { SfRenameAssetDialogComponent } from '../../shared/components/sf-rename-asset-dialog.component';
 import { SfMenuComponent } from '../../shared/components/menu/sf-menu.component';
 import type { SfMenuItem } from '../../shared/components/menu/sf-menu-item';
 import { SfSplitterComponent } from '../../shared/components/splitter/sf-splitter.component';
@@ -43,14 +45,18 @@ import {
 } from '../../shared/components/sf-tree.component';
 import type { SfTreeLoader, SfTreeNode } from '../../shared/components/tree/tree-model';
 import type { ContextMenuItem } from '../../shared/services/context-menu.service';
+import { TreeClipboardService } from '../../shared/services/tree-clipboard.service';
 import { assetRoute } from '../../shared/asset-route.util';
 import { FavoritesViewComponent } from '../favorites/favorites-view.component';
 import { FolderMoveDialogComponent } from '../pages/folder-move-dialog.component';
+import { ReleaseDialogComponent } from '../release/release-dialog.component';
+import type { ReleaseChoice } from '../release/release-choice.util';
 import { ReleaseEventsStore } from '../release/release-events.store';
 import { NavEntryDrawerComponent } from './nav-entry-drawer.component';
 import { NavFolderViewComponent, type NavVisibilityRequest } from './nav-folder-view.component';
 import { NavItemDetailComponent, storedLabel } from './nav-item-detail.component';
 import { NavigationItemActions } from './navigation-item-actions.service';
+import { navReleaseChoices } from './navigation-release.util';
 import { NavigationStoreRefresh } from './navigation-store-refresh.service';
 import {
   EMPTY_NAV_INDEX,
@@ -102,10 +108,12 @@ const WIDE_QUERY = '(min-width: 1280px)';
     NavEntryDrawerComponent,
     NavFolderViewComponent,
     NavItemDetailComponent,
+    ReleaseDialogComponent,
     SfCreateAssetDialogComponent,
     SfEmptyStateComponent,
     SfMenuComponent,
     SfPageHeaderComponent,
+    SfRenameAssetDialogComponent,
     SfSplitterComponent,
     SfTreeComponent,
     TranslocoPipe,
@@ -136,6 +144,8 @@ export class NavigationComponent {
   private readonly editingLocale = inject(EditingLocaleStore);
   private readonly developerMode = inject(DeveloperModeService);
   private readonly permissions = inject(ProjectPermissionsStore);
+  private readonly locales = inject(LocalesStore);
+  private readonly clipboard = inject(TreeClipboardService);
 
   /** Creating, renaming, moving, reordering and deleting: editors, outside time travel and archived projects. */
   protected readonly canEdit = this.permissions.canEditContent;
@@ -144,7 +154,7 @@ export class NavigationComponent {
 
   protected readonly treeWidth =
     typeof matchMedia !== 'function' || matchMedia(WIDE_QUERY).matches ? TREE_WIDTH : TREE_WIDTH_NARROW;
-  protected readonly treeActions: readonly SfTreeAction[] = ['rename', 'delete', 'move', 'create'];
+  protected readonly treeActions: readonly SfTreeAction[] = ['rename', 'delete', 'move', 'copy', 'create'];
 
   // ── Data ───────────────────────────────────────────────────────────────────
 
@@ -235,8 +245,11 @@ export class NavigationComponent {
   protected readonly search = (query: string): readonly (readonly string[])[] => navSearchPaths(this.index(), query, this.urls());
 
   /** The *Favorites* branch is a view: nothing in it is renamed, deleted, moved, reordered or created. */
-  protected readonly allowAction = (_action: SfTreeAction, nodes: readonly SfTreeNode<NavEntry>[]): boolean =>
-    this.canEdit() && !nodes.some((node) => isFavoriteNode(node.id));
+  protected readonly allowAction = (action: SfTreeAction, nodes: readonly SfTreeNode<NavEntry>[]): boolean =>
+    this.canEdit() &&
+    !nodes.some((node) => isFavoriteNode(node.id)) &&
+    // Menu items are copied (a duplicate); a folder is only moved.
+    (action !== 'copy' || nodes.every((node) => node.data?.kind === 'item'));
 
   /** Nothing goes into a favorite, only into a real folder (the tree's own rules cover the rest). */
   protected readonly canDrop = (_dragged: readonly SfTreeNode<NavEntry>[], target: SfTreeNode<NavEntry> | null): boolean =>
@@ -261,18 +274,18 @@ export class NavigationComponent {
   /**
    * The host's entries of the one menu, between the tree's own (*New folder*, *Rename*, *Cut*, *Paste*, *Move to…*) and
    * *Delete*: *New menu item* and *Entry page…* in a folder, *Hide from menu* / *Show in menu*, *Open page* on an item,
-   * *Add to favorites*.
+   * *Add to favorites*, *Release…*. The folder table's row menu offers the same through {@link listMenu}.
    */
   protected readonly menuItems = (nodes: readonly SfTreeNode<NavEntry>[]): ContextMenuItem[] => {
-    const node = nodes.length === 1 ? nodes[0] : null;
-    const entry = node?.data;
-    if (!node || !entry || isFavoriteNode(node.id)) {
-      return [];
-    }
+    const entry = nodes.length === 1 ? nodes[0].data : null;
+    return entry && !isFavoriteNode(nodes[0].id) ? this.entryItems(entry) : [];
+  };
+
+  private entryItems(entry: NavEntry): ContextMenuItem[] {
     const t = (key: string, params?: Record<string, unknown>) => this.transloco.translate(key, params);
     const items: ContextMenuItem[] = [];
     if (this.canEdit() && entry.kind === 'folder') {
-      items.push({ label: t('navigation.tree.newMenuItem'), icon: 'add_link', action: () => this.openNewItem(node.id) });
+      items.push({ label: t('navigation.tree.newMenuItem'), icon: 'add_link', action: () => this.openNewItem(entry.uuid) });
       items.push({ label: t('navigation.folder.menu.entryPage'), icon: 'login', action: () => this.openEntryDrawer(entry) });
     }
     if (this.canEdit()) {
@@ -285,12 +298,40 @@ export class NavigationComponent {
     if (entry.kind === 'item' && entry.targetUuid) {
       items.push({ label: t('navigation.tree.openPage'), icon: 'open_in_new', action: () => this.openPage(entry.targetUuid!) });
     }
-    const on = this.favorites.isFavorite(node.id);
     items.push({
-      label: t(on ? 'shared.favorite.remove' : 'shared.favorite.add', { name: node.label }),
+      label: t(this.favorites.isFavorite(entry.uuid) ? 'shared.favorite.remove' : 'shared.favorite.add', { name: entry.label }),
       icon: 'star',
-      action: () => this.toggleFavorite(node),
+      action: () => this.toggleFavorite(entry),
     });
+    if (this.permissions.canRelease()) {
+      items.push({ label: t('navigation.folder.menu.release'), icon: 'publish', action: () => this.releaseEntries([entry]) });
+    }
+    return items;
+  }
+
+  /**
+   * The folder table's right-click menu for one row: the tree's menu for that entry (*New folder*, *Rename…* in a dialog,
+   * *Cut*, *Paste*, *Move to…*, then the host entries above) and *Delete*.
+   */
+  protected readonly listMenu = (entry: NavEntry): ContextMenuItem[] => {
+    const t = (key: string) => this.transloco.translate(key);
+    const items: ContextMenuItem[] = [];
+    if (this.canEdit()) {
+      if (entry.kind === 'folder') {
+        items.push({ label: t('shared.tree.newFolder'), icon: 'create_new_folder', action: () => void this.tree()?.startCreate(entry.uuid, 'folder') });
+      }
+      items.push({ label: t('navigation.folder.menu.renameDialog'), icon: 'edit', action: () => this.openRename(entry) });
+      items.push(
+        { label: t('shared.tree.cut'), icon: 'content_cut', action: () => this.cutEntries([entry]) },
+        ...(entry.kind === 'item' ? [{ label: t('shared.tree.copy'), icon: 'content_copy', action: () => this.copyEntries([entry]) }] : []),
+        { label: t('shared.tree.paste'), icon: 'content_paste', disabled: this.pasteTarget(entry) === undefined, action: () => this.pasteOnto(entry) },
+        { label: t('shared.tree.moveTo'), icon: 'drive_file_move', action: () => this.openMoveDialog([entry]) },
+      );
+    }
+    items.push(...this.entryItems(entry));
+    if (this.canEdit()) {
+      items.push({ label: '', separator: true }, { label: t('navigation.folder.menu.delete'), icon: 'delete', danger: true, action: () => void this.deleteEntries([entry]) });
+    }
     return items;
   };
 
@@ -329,6 +370,15 @@ export class NavigationComponent {
   /** The folder the open "New menu item" dialog creates into (`null` = the top level). */
   private createTarget: string | null = null;
   protected readonly moving = signal<readonly NavEntry[] | null>(null);
+  /** The entry whose *Rename…* dialog is open (looked up in the menu, so it follows reads); `null` = closed. */
+  private readonly renamingUuid = signal<string | null>(null);
+  protected readonly renameBusy = signal(false);
+  protected readonly renaming = computed<NavEntry | null>(() => {
+    const uuid = this.renamingUuid();
+    return uuid === null ? null : (this.index().entries.get(uuid) ?? null);
+  });
+  /** What the open *Release…* dialog offers (`null` = closed). */
+  protected readonly releasing = signal<ReleaseChoice[] | null>(null);
   /** The folder whose entry-page drawer is open (`null` = closed); looked up in the menu, so it follows reads and goes with a deleted folder. */
   private readonly entryDrawerUuid = signal<string | null>(null);
   protected readonly entryDrawerFolder = computed<NavEntry | null>(() => {
@@ -531,18 +581,14 @@ export class NavigationComponent {
 
   // ── Favorites ──────────────────────────────────────────────────────────────
 
-  private toggleFavorite(node: SfTreeNode<NavEntry>): void {
-    const entry = node.data;
-    if (!entry) {
-      return;
-    }
+  private toggleFavorite(entry: NavEntry): void {
     const on = this.favorites.toggle({
       type: entry.kind === 'folder' ? 'FOLDER' : 'PAGE_REFERENCE',
       uuid: entry.uuid,
       displayName: entry.label,
       folderPath: entryFolderPath(this.index(), entry),
     });
-    this.toasts.show(this.transloco.translate(on ? 'shared.favorite.added' : 'shared.favorite.removed', { name: node.label }), 'info');
+    this.toasts.show(this.transloco.translate(on ? 'shared.favorite.added' : 'shared.favorite.removed', { name: entry.label }), 'info');
   }
 
   // ── Create ─────────────────────────────────────────────────────────────────
@@ -620,7 +666,32 @@ export class NavigationComponent {
     void (entry.kind === 'folder' ? this.renameFolder(entry, request.name) : this.renameItem(entry, request.name));
   }
 
-  private async renameFolder(entry: NavEntry, name: string): Promise<void> {
+  /** *Rename…* in the folder table's row menu: a dialog (a folder's name, an item's label in the editing language). */
+  protected openRename(entry: NavEntry): void {
+    if (this.canEdit() && !entry.protectedFolder) {
+      this.renamingUuid.set(entry.uuid);
+    }
+  }
+
+  protected closeRename(): void {
+    this.renamingUuid.set(null);
+  }
+
+  /** The dialog's Save: closes on success, stays open on a failure so the name can be fixed. */
+  protected async submitRename(name: string): Promise<void> {
+    const entry = this.renaming();
+    if (!entry || !this.canEdit()) {
+      return;
+    }
+    this.renameBusy.set(true);
+    const done = await (entry.kind === 'folder' ? this.renameFolder(entry, name) : this.renameItem(entry, name));
+    this.renameBusy.set(false);
+    if (done) {
+      this.closeRename();
+    }
+  }
+
+  private async renameFolder(entry: NavEntry, name: string): Promise<boolean> {
     const key = this.projectKey();
     const from = entry.label;
     const rename = (to: string, revision: number | null | undefined) =>
@@ -632,13 +703,15 @@ export class NavigationComponent {
         rename(from, renamed.revision).then(() => this.changed()),
       );
       this.changed();
+      return true;
     } catch {
       this.toasts.show(this.transloco.translate('navigation.tree.toast.renameFailed', { name: from }), 'error');
       this.changed();
+      return false;
     }
   }
 
-  private async renameItem(entry: NavEntry, name: string): Promise<void> {
+  private async renameItem(entry: NavEntry, name: string): Promise<boolean> {
     const key = this.projectKey();
     const locale = this.editingLocale.locale();
     const from = entry.label;
@@ -666,9 +739,11 @@ export class NavigationComponent {
         write(before, updated.revision).then(() => this.changed()),
       );
       this.changed();
+      return true;
     } catch {
       this.toasts.show(this.transloco.translate('navigation.tree.toast.renameFailed', { name: from }), 'error');
       this.changed();
+      return false;
     }
   }
 
@@ -726,7 +801,8 @@ export class NavigationComponent {
   /** Drag and drop into a folder, and cut + paste in the tree. */
   protected onMove(request: SfTreeMoveRequest<NavEntry>): void {
     const entries = request.nodes.flatMap((node) => (node.data ? [node.data] : []));
-    void this.transfer(entries, request.target?.id ?? null, (steps) => request.completed(steps ? () => void this.actions.runUndo(steps) : undefined));
+    const done = (steps?: UndoStep[]) => request.completed(steps ? () => void this.actions.runUndo(steps) : undefined);
+    void (request.copy ? this.copyInto(entries, request.target?.id ?? null, done) : this.transfer(entries, request.target?.id ?? null, done));
   }
 
   /** The tree's *Move to…*, the table's bulk *Move…* and the ⋮ menus' *Move…*: a picker for the destination. */
@@ -751,14 +827,99 @@ export class NavigationComponent {
       return;
     }
     const to = target === this.index().rootUuid ? null : target;
-    void this.transfer(entries, to, (steps) => {
-      const message = this.transloco.translate('shared.tree.moved', { count: entries.length, name: entries[0]?.label ?? '' });
-      if (steps) {
-        this.undo.offerGroup(message, steps);
-      } else {
-        this.toasts.show(message, 'success');
-      }
-    });
+    void this.transfer(entries, to, (steps) => this.announceMoved(entries, steps));
+  }
+
+  private announceMoved(entries: readonly NavEntry[], steps?: UndoStep[], key = 'shared.tree.moved'): void {
+    const message = this.transloco.translate(key, { count: entries.length, name: entries[0]?.label ?? '' });
+    if (steps) {
+      this.undo.offerGroup(message, steps);
+    } else {
+      this.toasts.show(message, 'success');
+    }
+  }
+
+  // ── Cut and paste from the folder table (the tree's own clipboard) ─────────
+
+  private clipboardScope(): string {
+    return `${this.projectKey()}:navigation`;
+  }
+
+  /** *Cut* in a table row: the same clipboard the tree's *Cut* and *Paste* use. */
+  private cutEntries(entries: readonly NavEntry[]): void {
+    if (this.canEdit() && entries.length > 0) {
+      this.clipboard.cutNodes(
+        this.clipboardScope(),
+        entries.map((entry) => ({ id: entry.uuid, label: entry.label, data: entry })),
+      );
+    }
+  }
+
+  /** *Copy* in a table row or the bulk bar: the items go to the same clipboard as the tree's *Copy*; folders are ignored. */
+  protected copyEntries(entries: readonly NavEntry[]): void {
+    const items = entries.filter((entry) => entry.kind === 'item');
+    if (this.canEdit() && items.length > 0) {
+      this.clipboard.copyNodes(
+        this.clipboardScope(),
+        items.map((entry) => ({ id: entry.uuid, label: entry.label, data: entry })),
+      );
+    }
+  }
+
+  /**
+   * Where a paste onto `entry` goes: into it when it is a folder, else next to it (its own folder). `undefined` = nothing
+   * to paste, or not here (into itself or something inside it, or where everything already is); `null` = the top level.
+   */
+  private pasteTarget(entry: NavEntry): string | null | undefined {
+    const clip = this.clipboard.nodes();
+    if (!clip || clip.scope !== this.clipboardScope()) {
+      return undefined;
+    }
+    const index = this.index();
+    const target = entry.kind === 'folder' ? entry.uuid : (index.parentOf.get(entry.uuid) ?? null);
+    if (clip.mode === 'copy') {
+      return target;
+    }
+    const moved = (clip.nodes as readonly { id: string }[]).map((node) => node.id);
+    const inside = target !== null && navIdPath(index, target).some((id) => moved.includes(id));
+    const unchanged = moved.every((id) => (index.parentOf.get(id) ?? null) === target);
+    return inside || unchanged ? undefined : target;
+  }
+
+  /** *Paste* onto a table row: the same move the tree makes. */
+  private pasteOnto(entry: NavEntry): void {
+    const target = this.pasteTarget(entry);
+    const clip = this.clipboard.nodes();
+    if (target === undefined || !clip || !this.canEdit()) {
+      return;
+    }
+    const entries = (clip.nodes as readonly SfTreeNode<NavEntry>[]).flatMap((node) => (node.data ? [node.data] : []));
+    if (clip.mode === 'copy') {
+      void this.copyInto(entries, target, (steps) => this.announceMoved(entries, steps, 'shared.tree.copied'));
+      return;
+    }
+    this.clipboard.clear();
+    void this.transfer(entries, target, (steps) => this.announceMoved(entries, steps));
+  }
+
+  // ── Release ────────────────────────────────────────────────────────────────
+
+  /** *Release…* (tree menu, row menu and bulk bar): the entries and, for a folder, everything inside it. */
+  protected releaseEntries(entries: readonly NavEntry[]): void {
+    if (!this.permissions.canRelease() || entries.length === 0) {
+      return;
+    }
+    const choices = navReleaseChoices(this.index(), entries, this.editingLocale.locale(), (code) => this.locales.labelOf(code));
+    if (choices.length === 0) {
+      this.toasts.show(this.transloco.translate('navigation.tree.toast.nothingToRelease'), 'info');
+      return;
+    }
+    this.releasing.set(choices);
+  }
+
+  protected releaseDone(): void {
+    this.releasing.set(null);
+    this.changed();
   }
 
   /**
@@ -771,6 +932,23 @@ export class NavigationComponent {
     this.changed();
     if (change.failed) {
       this.toasts.show(this.transloco.translate('navigation.tree.toast.moveFailed', { name: entries[change.done.length]?.label ?? '' }), 'error');
+      if (change.done.length === 0) {
+        return;
+      }
+    }
+    completed(change.done.length > 0 ? this.withRefresh(change.steps) : undefined);
+  }
+
+  /**
+   * Duplicates the items among `entries` into the folder `target` (`null` = the top level): one Undo deletes all copies.
+   * Stops at the first failure; the copies made up to there stay and are announced.
+   */
+  private async copyInto(entries: readonly NavEntry[], target: string | null, completed: (undo?: UndoStep[]) => void): Promise<void> {
+    const items = entries.filter((entry) => entry.kind === 'item');
+    const change = await this.actions.copy(this.projectKey(), items, target);
+    this.changed();
+    if (change.failed) {
+      this.toasts.show(this.transloco.translate('navigation.tree.toast.copyFailed', { name: items[change.done.length]?.label ?? '' }), 'error');
       if (change.done.length === 0) {
         return;
       }

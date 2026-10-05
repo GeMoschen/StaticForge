@@ -15,6 +15,8 @@ import { ConfirmService } from '../../../shared/components/dialog/confirm.servic
 import { DialogService } from '../../../shared/components/dialog/dialog.service';
 import { ContextMenuService } from '../../../shared/services/context-menu.service';
 import { MediaItemActions } from './media-item-actions';
+import { MediaReleaseActions } from './media-release.actions';
+import { MediaSelectionActions } from './media-selection.actions';
 import { MediaLibraryStore } from './media-library.store';
 import { productFiles, projectStub } from './media-library.testing';
 import { MediaMover } from './media-mover';
@@ -26,13 +28,14 @@ function setup(options: { readOnly?: boolean; viewer?: boolean; renamed?: string
     renameAsset: vi.fn().mockReturnValue(of({ revision: 8 })),
     deleteAsset: vi.fn().mockReturnValue(of(undefined)),
     restoreAsset: vi.fn().mockReturnValue(of({})),
+    duplicateAsset: vi.fn().mockImplementation((_key: string, uuid: string) => of({ uuid: `copy-of-${uuid}` })),
     mediaBinaryBlob: vi.fn().mockReturnValue(of(new Blob(['x']))),
     downloadMediaZip: vi.fn().mockReturnValue(of(new Blob(['zip']))),
   };
   const dialogs = { open: vi.fn().mockReturnValue({ result: Promise.resolve(options.renamed) }) };
   const confirm = { confirm: vi.fn().mockResolvedValue(true) };
   const favorites = { isFavorite: vi.fn().mockReturnValue(options.favorite ?? false), toggle: vi.fn().mockReturnValue(true), list: signal([]) };
-  const mover = { moveFiles: vi.fn().mockResolvedValue(undefined) };
+  const mover = { moveFiles: vi.fn().mockResolvedValue(undefined), moveTo: vi.fn().mockResolvedValue(undefined) };
   TestBed.configureTestingModule({
     providers: [
       provideHttpClient(),
@@ -40,12 +43,14 @@ function setup(options: { readOnly?: boolean; viewer?: boolean; renamed?: string
       provideRouter([]),
       MediaLibraryStore,
       MediaItemActions,
+      MediaReleaseActions,
+      MediaSelectionActions,
       { provide: ApiClient, useValue: api },
       { provide: DialogService, useValue: dialogs },
       { provide: ConfirmService, useValue: confirm },
       { provide: FavoritesService, useValue: favorites },
       { provide: MediaMover, useValue: mover },
-      { provide: ProjectPermissionsStore, useValue: { canEditContent: signal(!options.viewer) } },
+      { provide: ProjectPermissionsStore, useValue: { canEditContent: signal(!options.viewer), canRelease: signal(!options.viewer) } },
       { provide: ProjectContextStore, useValue: projectStub() },
       { provide: EditingLocaleStore, useValue: { locale: signal(null) } },
     ],
@@ -76,25 +81,28 @@ describe('MediaItemActions', () => {
   });
 
   describe('the file menu (decision 92)', () => {
-    it('is Open, Rename…, Move…, Download, Copy link, the favorite entry and Delete… after a separator', () => {
+    it('is Rename…, Move…, Download, Copy link, the favorite entry and Delete… after a separator', () => {
       const { actions } = setup();
 
       const items = actions.menuItems(YIRGACHEFFE);
 
-      expect(items.map((item) => item.id)).toEqual(['open', 'rename', 'move', 'download', 'copyLink', 'favorite', 'delete']);
+      expect(items.map((item) => item.id)).toEqual(['rename', 'move', 'cut', 'copy', 'duplicate', 'download', 'copyLink', 'favorite', 'release', 'delete']);
       expect(labels(items)).toEqual([
-        'Open',
         'Rename…',
         'Move…',
+        'Cut',
+        'Copy',
+        'Duplicate',
         'Download',
         'Copy link',
         'Add “yirgacheffe.jpg” to favorites',
+        'Release…',
         'Delete…',
       ]);
       const remove = items.at(-1)!;
       expect(remove).toMatchObject({ danger: true, separatorBefore: true, shortcut: 'Delete' });
       expect(items.find((item) => item.id === 'rename')?.shortcut).toBe('F2');
-      expect(items.find((item) => item.id === 'open')?.shortcut).toBe('Enter');
+      expect(items.find((item) => item.id === 'open')).toBeUndefined();
     });
 
     it('offers Remove from favorites for a favorite', () => {
@@ -107,7 +115,15 @@ describe('MediaItemActions', () => {
       const { actions, library } = setup();
       library.setSelection([YIRGACHEFFE.uuid!, LATTE.uuid!]);
 
-      expect(labels(actions.menuItems(LATTE))).toEqual(['Move 2 files…', 'Download 2 files as ZIP', 'Delete 2 files…']);
+      expect(labels(actions.menuItems(LATTE))).toEqual([
+        'Move 2 files…',
+        'Cut 2 files',
+        'Copy 2 files',
+        'Duplicate 2 files',
+        'Download 2 files as ZIP',
+        'Release 2 items…',
+        'Delete 2 files…',
+      ]);
       // In the order the library shows them (by name).
       expect(actions.menuTargets(LATTE).map((file) => file.uuid)).toEqual([LATTE.uuid, YIRGACHEFFE.uuid]);
     });
@@ -118,7 +134,7 @@ describe('MediaItemActions', () => {
       expect(actions.menuTargets(LOGO).map((file) => file.uuid)).toEqual([LOGO.uuid]);
 
       library.setSelection([LATTE.uuid!]);
-      expect(actions.menuItems(LATTE).map((item) => item.id)).toContain('open');
+      expect(actions.menuItems(LATTE).map((item) => item.id)).toContain('release');
     });
 
     it.each([
@@ -127,7 +143,7 @@ describe('MediaItemActions', () => {
     ])('keeps only what reads for %s', (_who, options) => {
       const { actions, library } = setup(options);
 
-      expect(actions.menuItems(YIRGACHEFFE).map((item) => item.id)).toEqual(['open', 'download', 'copyLink', 'favorite']);
+      expect(actions.menuItems(YIRGACHEFFE).map((item) => item.id)).toEqual(['download', 'copyLink', 'favorite']);
 
       library.setSelection([YIRGACHEFFE.uuid!, LATTE.uuid!]);
       expect(labels(actions.menuItems(LATTE))).toEqual(['Download 2 files as ZIP']);
@@ -146,21 +162,87 @@ describe('MediaItemActions', () => {
       element.remove();
     });
 
-    it('runs the entries: Open goes to the drawer, Move… asks the mover, Copy link copies the library link', async () => {
+    it('runs the entries: Release… opens the dialog, Move… asks the mover, Copy link copies the library link', async () => {
       const { actions, library, mover, last } = setup();
-      library.openAsset = vi.fn();
       const writeText = vi.fn().mockResolvedValue(undefined);
       Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
-      const items = actions.menuItems(YIRGACHEFFE);
+      const items = actions.menuItems(LATTE);
 
-      items.find((item) => item.id === 'open')!.action!();
+      items.find((item) => item.id === 'release')!.action!();
       items.find((item) => item.id === 'move')!.action!();
       items.find((item) => item.id === 'copyLink')!.action!();
 
-      expect(library.openAsset).toHaveBeenCalledWith(YIRGACHEFFE.uuid);
-      expect(mover.moveFiles).toHaveBeenCalledWith([YIRGACHEFFE]);
-      await vi.waitFor(() => expect(writeText).toHaveBeenCalledWith(`${window.location.origin}/p/proj/media?asset=${YIRGACHEFFE.uuid}`));
+      expect(TestBed.inject(MediaReleaseActions).choices()?.map((choice) => choice.assetUuid)).toEqual([LATTE.uuid]);
+      expect(mover.moveFiles).toHaveBeenCalledWith([LATTE]);
+      await vi.waitFor(() => expect(writeText).toHaveBeenCalledWith(`${window.location.origin}/p/proj/media?asset=${LATTE.uuid}`));
       await vi.waitFor(() => expect(last().message).toBe('Link copied.'));
+    });
+  });
+
+  describe('duplicate, copy and paste', () => {
+    it('duplicates the files in place, reloads and offers one Undo that deletes the copies', async () => {
+      const { actions, api, library, last } = setup();
+
+      await actions.duplicate([YIRGACHEFFE, LATTE]);
+
+      expect(api.duplicateAsset).toHaveBeenCalledWith('proj', YIRGACHEFFE.uuid, undefined);
+      expect(api.duplicateAsset).toHaveBeenCalledWith('proj', LATTE.uuid, undefined);
+      expect(library.reloadMedia).toHaveBeenCalledTimes(1);
+      expect(last().message).toBe('Duplicated 2 files');
+      last().action!.run();
+      await vi.waitFor(() => expect(api.deleteAsset).toHaveBeenCalledTimes(2));
+      expect(api.deleteAsset).toHaveBeenCalledWith('proj', `copy-of-${YIRGACHEFFE.uuid}`);
+    });
+
+    it('copies onto the clipboard and pastes a copy into a folder, keeping the clipboard', async () => {
+      const { actions, api, last } = setup();
+
+      actions.copyFiles([YIRGACHEFFE]);
+      expect(actions.canPasteFiles('team-uuid')).toBe(true);
+      expect(actions.canPasteFiles('products-uuid')).toBe(true);
+      await actions.pasteFiles('team-uuid');
+
+      expect(api.duplicateAsset).toHaveBeenCalledWith('proj', YIRGACHEFFE.uuid, 'team-uuid');
+      expect(last().message).toContain('Copied “yirgacheffe.jpg” to Team');
+      expect(actions.clipboardFiles()).not.toBeNull();
+    });
+
+    it('cuts files and moves them on paste, but not into the folder they are in', async () => {
+      const { actions, mover } = setup();
+
+      actions.cutFiles([YIRGACHEFFE, LATTE]);
+      expect(actions.canPasteFiles('products-uuid')).toBe(false);
+      expect(actions.canPasteFiles('team-uuid')).toBe(true);
+      await actions.pasteFiles('team-uuid');
+
+      expect(mover.moveTo).toHaveBeenCalledWith([YIRGACHEFFE.uuid, LATTE.uuid], 'team-uuid', 'file');
+      expect(actions.clipboardFiles()).toBeNull();
+    });
+
+    it('cannot paste an empty clipboard', async () => {
+      const { actions, api } = setup();
+
+      expect(actions.canPasteFiles(null)).toBe(false);
+      await actions.pasteFiles(null);
+      expect(api.duplicateAsset).not.toHaveBeenCalled();
+    });
+
+    it('puts nothing on the clipboard in a read-only project', () => {
+      const { actions } = setup({ readOnly: true });
+
+      actions.copyFiles([YIRGACHEFFE]);
+
+      expect(actions.clipboardFiles()).toBeNull();
+    });
+
+    it('counts a refused copy and still offers Undo for the others', async () => {
+      const { actions, api, toasts } = setup();
+      api.duplicateAsset.mockReturnValueOnce(throwError(() => new Error('422')));
+
+      await actions.duplicate([YIRGACHEFFE, LATTE]);
+
+      expect(toasts.toasts().map((toast) => toast.message)).toContain('Could not copy 1 of 2 files.');
+      expect(toasts.toasts().at(-1)?.message).toBe('Duplicated “latte-art.jpg”');
     });
   });
 

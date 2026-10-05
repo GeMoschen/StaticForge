@@ -170,6 +170,14 @@ export class MediaLibraryStore {
     const ids = new Set(this.selected());
     return this.visible().filter((item) => !!item.uuid && ids.has(item.uuid));
   });
+  /** The folders ticked in the grid or the list (beside the files of {@link selected}); only those shown count. */
+  readonly selectedFolderUuids = signal<string[]>([]);
+  readonly selectedFolders = computed<FolderView[]>(() => {
+    const ids = new Set(this.selectedFolderUuids());
+    return this.subfolders().filter((folder) => !!folder.uuid && ids.has(folder.uuid));
+  });
+  /** Files and folders in the selection. */
+  readonly selectionCount = computed(() => this.selectedItems().length + this.selectedFolders().length);
   readonly selectedMedia = signal<MediaView | null>(null);
   /** The URL names a file that is not in the library (any more): the screen drops the parameter. */
   readonly assetGone = signal(false);
@@ -292,6 +300,7 @@ export class MediaLibraryStore {
     if (folder !== this.folderUuid()) {
       this.folderUuid.set(folder);
       this.selected.set([]);
+      this.selectedFolderUuids.set([]);
       this.renderLimit.set(GRID_CHUNK);
     }
     this.assetUuid.set(params.asset || null);
@@ -536,6 +545,16 @@ export class MediaLibraryStore {
     this.selected.update((list) => (list.includes(uuid) ? list.filter((x) => x !== uuid) : [...list, uuid]));
   }
 
+  isFolderSelected(uuid?: string): boolean {
+    return uuid != null && this.selectedFolderUuids().includes(uuid);
+  }
+
+  toggleFolder(uuid?: string): void {
+    if (uuid) {
+      this.selectedFolderUuids.update((list) => (list.includes(uuid) ? list.filter((x) => x !== uuid) : [...list, uuid]));
+    }
+  }
+
   /** Selects the files between `fromUuid` and `toUuid` (inclusive) of the visible list, keeping the rest. */
   selectRange(fromUuid: string, toUuid: string): void {
     const ids = this.visible().map((item) => item.uuid ?? '');
@@ -547,8 +566,9 @@ export class MediaLibraryStore {
     this.selected.update((list) => [...new Set([...list, ...range])]);
   }
 
-  /** Selects every visible file (Ctrl/⌘+A). */
+  /** Selects every visible file and folder (Ctrl/⌘+A). */
   selectAll(): void {
+    this.selectedFolderUuids.set(this.subfolders().flatMap((folder) => (folder.uuid ? [folder.uuid] : [])));
     this.selected.set(this.visible().flatMap((item) => (item.uuid ? [item.uuid] : [])));
   }
 
@@ -556,12 +576,22 @@ export class MediaLibraryStore {
     this.selected.set([...uuids]);
   }
 
+  setFolderSelection(uuids: readonly string[]): void {
+    this.selectedFolderUuids.set([...uuids]);
+  }
+
   clearSelection(): void {
     this.selected.set([]);
+    this.selectedFolderUuids.set([]);
   }
 
   /** What is selected but no longer in the visible list (filtered out, deleted, moved away) leaves the selection. */
   private pruneSelection(): void {
+    const shownFolders = new Set(this.subfolders().map((folder) => folder.uuid));
+    const folders = this.selectedFolderUuids();
+    if (folders.some((uuid) => !shownFolders.has(uuid))) {
+      this.selectedFolderUuids.set(folders.filter((uuid) => shownFolders.has(uuid)));
+    }
     const selected = this.selected();
     if (selected.length === 0) {
       return;

@@ -22,6 +22,7 @@ import { FAVORITES_NODE, FavoriteTreeService, isFavoriteNode } from '../../core/
 import { FavoritesService } from '../../core/assets/favorites.service';
 import { DeveloperModeService } from '../../core/frame/developer-mode.service';
 import { EditingLocaleStore } from '../../core/project/editing-locale.store';
+import { LocalesStore } from '../../core/project/locales.store';
 import { ProjectContextStore } from '../../core/project/project-context.store';
 import { ProjectPermissionsStore } from '../../core/project/project-permissions.store';
 import { createShortcut } from '../../core/ui/documented-shortcuts';
@@ -30,6 +31,7 @@ import { ToastService } from '../../core/ui/toast.service';
 import { UndoService, type UndoStep } from '../../core/ui/undo.service';
 import { SfCreateAssetDialogComponent, type CreateAssetFormValue } from '../../shared/components/sf-create-asset-dialog.component';
 import { SfEmptyStateComponent } from '../../shared/components/sf-empty-state.component';
+import { SfRenameAssetDialogComponent } from '../../shared/components/sf-rename-asset-dialog.component';
 import { SfMenuComponent } from '../../shared/components/menu/sf-menu.component';
 import type { SfMenuItem } from '../../shared/components/menu/sf-menu-item';
 import { SfSplitterComponent } from '../../shared/components/splitter/sf-splitter.component';
@@ -46,10 +48,13 @@ import type { SfTreeLoader, SfTreeNode } from '../../shared/components/tree/tree
 import type { ContextMenuItem } from '../../shared/services/context-menu.service';
 import { FavoritesViewComponent } from '../favorites/favorites-view.component';
 import { FolderMoveDialogComponent } from '../pages/folder-move-dialog.component';
+import type { ReleaseChoice } from '../release/release-choice.util';
+import { ReleaseDialogComponent } from '../release/release-dialog.component';
 import { ReleaseEventsStore, withObservedRelease } from '../release/release-events.store';
 import { ContentFolderViewComponent } from './content-folder-view.component';
 import { ContentItemActions } from './content-item-actions.service';
 import { ContentStoreRefresh } from './content-store-refresh.service';
+import { releaseChoicesOf } from './content-release.util';
 import {
   type ContentEntry,
   type ContentNodeOptions,
@@ -101,10 +106,12 @@ const WIDE_QUERY = '(min-width: 1280px)';
     ContentFolderViewComponent,
     FavoritesViewComponent,
     FolderMoveDialogComponent,
+    ReleaseDialogComponent,
     RouterOutlet,
     SfCreateAssetDialogComponent,
     SfEmptyStateComponent,
     SfMenuComponent,
+    SfRenameAssetDialogComponent,
     SfSplitterComponent,
     SfTreeComponent,
     TranslocoPipe,
@@ -136,6 +143,7 @@ export class ContentComponent {
   private readonly editingLocale = inject(EditingLocaleStore);
   private readonly developerMode = inject(DeveloperModeService);
   private readonly permissions = inject(ProjectPermissionsStore);
+  private readonly locales = inject(LocalesStore);
 
   /** Creating, renaming, moving and deleting: editors, outside time travel and archived projects. */
   protected readonly canEdit = this.permissions.canEditContent;
@@ -145,8 +153,8 @@ export class ContentComponent {
 
   protected readonly treeWidth =
     typeof matchMedia !== 'function' || matchMedia(WIDE_QUERY).matches ? TREE_WIDTH : TREE_WIDTH_NARROW;
-  /** Sets are not copied (a record set is its own thing), only moved. */
-  protected readonly treeActions: readonly SfTreeAction[] = ['rename', 'delete', 'move', 'create'];
+  /** Record sets are copied (a new set on the same dataset and query, without records); folders are only moved. */
+  protected readonly treeActions: readonly SfTreeAction[] = ['rename', 'delete', 'move', 'copy', 'create'];
 
   // ── Data ───────────────────────────────────────────────────────────────────
 
@@ -249,8 +257,10 @@ export class ContentComponent {
   protected readonly search = (query: string): readonly (readonly string[])[] => searchPaths(this.index(), query);
 
   /** The *Favorites* branch is a view: nothing in it is renamed, deleted, moved or created. */
-  protected readonly allowAction = (_action: SfTreeAction, nodes: readonly SfTreeNode<ContentEntry>[]): boolean =>
-    this.canEdit() && !nodes.some((node) => isFavoriteNode(node.id));
+  protected readonly allowAction = (action: SfTreeAction, nodes: readonly SfTreeNode<ContentEntry>[]): boolean =>
+    this.canEdit() &&
+    !nodes.some((node) => isFavoriteNode(node.id)) &&
+    (action !== 'copy' || nodes.every((node) => node.data?.kind === 'set'));
 
   /** Nothing goes into a favorite, only into a real folder (the tree's own rules cover the rest). */
   protected readonly canDrop = (_dragged: readonly SfTreeNode<ContentEntry>[], target: SfTreeNode<ContentEntry> | null): boolean =>
@@ -276,13 +286,21 @@ export class ContentComponent {
    * *Delete*: *New record set* in a folder; *New record*, *History* and *Used by* on a record set; *Add to favorites*.
    */
   protected readonly menuItems = (nodes: readonly SfTreeNode<ContentEntry>[]): ContextMenuItem[] => {
-    const node = nodes.length === 1 ? nodes[0] : null;
-    const entry = node?.data;
-    if (!node || !entry || isFavoriteNode(node.id)) {
+    if (nodes.length === 0 || nodes.some((node) => !node.data || isFavoriteNode(node.id))) {
       return [];
     }
     const t = (key: string, params?: Record<string, unknown>) => this.transloco.translate(key, params);
     const items: ContextMenuItem[] = [];
+    const release: ContextMenuItem = {
+      label: t('content.tree.release'),
+      icon: 'publish',
+      action: () => this.releaseEntries(nodes.flatMap((node) => (node.data ? [node.data] : []))),
+    };
+    const node = nodes.length === 1 ? nodes[0] : null;
+    const entry = node?.data;
+    if (!node || !entry) {
+      return this.permissions.canRelease() ? [release] : [];
+    }
     if (this.canEdit() && entry.kind === 'folder') {
       items.push({
         label: t('content.tree.newRecordSet'),
@@ -306,6 +324,9 @@ export class ContentComponent {
       icon: 'star',
       action: () => this.toggleFavorite(node),
     });
+    if (this.permissions.canRelease()) {
+      items.push(release);
+    }
     return items;
   };
 
@@ -347,6 +368,9 @@ export class ContentComponent {
   /** The folder the open "New …" dialog creates into (`null` = the store root). */
   private createTarget: string | null = null;
   protected readonly moving = signal<readonly ContentEntry[] | null>(null);
+  protected readonly renaming = signal<ContentEntry | null>(null);
+  protected readonly renameBusy = signal(false);
+  protected readonly releaseChoices = signal<ReleaseChoice[] | null>(null);
 
   constructor() {
     // The store again whenever something changed: a create, move, delete or undo, a record added in the set view, a release.
@@ -576,6 +600,14 @@ export class ContentComponent {
     }
   }
 
+  /** A folder table row's *New folder*: creates inside that folder. */
+  protected openNewFolderIn(folderUuid: string): void {
+    if (this.canEdit()) {
+      this.createTarget = folderUuid;
+      this.newFolderOpen.set(true);
+    }
+  }
+
   /** The folder view's *New record set* creates in the folder it shows. */
   protected openNewSetHere(): void {
     this.openNewSet(this.shownFolder());
@@ -615,24 +647,65 @@ export class ContentComponent {
 
   protected onRename(request: SfTreeRenameRequest<ContentEntry>): void {
     const entry = request.node.data;
-    if (!entry || !this.canEdit()) {
+    if (entry) {
+      this.rename(entry, request.name);
+    }
+  }
+
+  private rename(entry: ContentEntry, name: string, done?: () => void): void {
+    if (!this.canEdit()) {
       return;
     }
     const key = this.projectKey();
     const from = entry.name;
-    const rename = (name: string, etag?: number): Observable<{ revision?: number }> =>
+    const call = (displayName: string, etag?: number): Observable<{ revision?: number }> =>
       entry.kind === 'folder'
-        ? this.api.renameFolder(key, entry.uuid, { displayName: name }, etag)
-        : this.api.renameAsset(key, entry.uuid, { displayName: name }, etag);
-    rename(request.name).subscribe({
+        ? this.api.renameFolder(key, entry.uuid, { displayName }, etag)
+        : this.api.renameAsset(key, entry.uuid, { displayName }, etag);
+    call(name).subscribe({
       next: (renamed) => {
-        const message = this.transloco.translate('content.tree.toast.renamed', { from, to: request.name });
+        const message = this.transloco.translate('content.tree.toast.renamed', { from, to: name });
         // Undo renames back; the etag is the revision the rename produced.
-        this.undo.offer(message, () => rename(from, renamed.revision).pipe(tap(() => this.changed())));
+        this.undo.offer(message, () => call(from, renamed.revision).pipe(tap(() => this.changed())));
         this.changed();
+        done?.();
       },
-      error: () => this.toasts.show(this.transloco.translate('content.tree.toast.renameFailed', { name: from }), 'error'),
+      error: () => {
+        this.renameBusy.set(false);
+        this.toasts.show(this.transloco.translate('content.tree.toast.renameFailed', { name: from }), 'error');
+      },
     });
+  }
+
+  /** A folder table row's *Rename…*: the shared rename dialog. */
+  protected openRenameDialog(entry: ContentEntry): void {
+    if (this.canEdit()) {
+      this.renaming.set(entry);
+    }
+  }
+
+  protected renameDisplayName(name: string): void {
+    const entry = this.renaming();
+    if (!entry) {
+      return;
+    }
+    this.renameBusy.set(true);
+    this.rename(entry, name, () => {
+      this.renameBusy.set(false);
+      this.renaming.set(null);
+    });
+  }
+
+  // ── Release ────────────────────────────────────────────────────────────────
+
+  /** *Release…* on tree or table entries: a folder with everything inside it; nothing to release only says so. */
+  protected releaseEntries(entries: readonly ContentEntry[]): void {
+    const choices = releaseChoicesOf(this.index(), entries, this.editingLocale.locale(), (code) => this.locales.labelOf(code));
+    if (choices.length === 0) {
+      this.toasts.show(this.transloco.translate('content.tree.nothingToRelease'), 'info');
+      return;
+    }
+    this.releaseChoices.set(choices);
   }
 
   // ── Delete ─────────────────────────────────────────────────────────────────
@@ -671,6 +744,10 @@ export class ContentComponent {
   /** Drag and drop and cut + paste in the tree. */
   protected onMove(request: SfTreeMoveRequest<ContentEntry>): void {
     const entries = request.nodes.flatMap((node) => (node.data ? [node.data] : []));
+    if (request.copy) {
+      void this.copyEntries(entries, request.target?.id ?? null, (steps) => request.completed(steps ? () => void this.actions.runUndo(steps) : undefined));
+      return;
+    }
     void this.transfer(entries, request.target?.id ?? null, (steps) => request.completed(steps ? () => void this.actions.runUndo(steps) : undefined));
   }
 
@@ -715,6 +792,16 @@ export class ContentComponent {
       }
     }
     completed(change.done.length > 0 ? this.withRefresh(change.steps) : undefined);
+  }
+
+  /** Copy + paste in the tree: the record sets are duplicated into `target`; Undo deletes the copies. */
+  private async copyEntries(entries: readonly ContentEntry[], target: string | null, completed: (undo?: UndoStep[]) => void): Promise<void> {
+    const change = await this.actions.copy(this.projectKey(), entries, target);
+    this.changed();
+    if (change.failed) {
+      this.toasts.show(this.transloco.translate('content.tree.toast.copyFailed', { name: entries[change.done.length]?.name ?? '' }), 'error');
+    }
+    completed(change.steps.length > 0 ? this.withRefresh(change.steps) : undefined);
   }
 
   /** After an Undo the tree and the table read the store again: the first step is the one that runs last. */

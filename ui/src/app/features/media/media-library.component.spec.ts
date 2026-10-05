@@ -103,7 +103,7 @@ async function setup(options: SetupOptions = {}) {
       // An editor: may upload unless the project is read-only.
       { provide: ProjectPermissionsStore, useFactory: () => {
           const access = inject(ProjectAccessStore);
-          return { canEditContent: computed(() => !access.readOnly()) };
+          return { canEditContent: computed(() => !access.readOnly()), canRelease: computed(() => !access.readOnly()) };
         },
       },
     ],
@@ -139,6 +139,12 @@ async function setup(options: SetupOptions = {}) {
 const grid = () => screen.getByRole('grid', { name: /^Files in/ });
 const cards = () => within(grid()).getAllByRole('gridcell').filter((c) => !c.classList.contains('card--folder'));
 const folderCards = () => within(grid()).getAllByRole('gridcell').filter((c) => c.classList.contains('card--folder'));
+const allCards = () => within(grid()).getAllByRole('gridcell');
+const folderCard = (name: string) => folderCards().find((c) => c.getAttribute('aria-label') === name)!;
+const selectedNames = () =>
+  allCards()
+    .filter((c) => c.getAttribute('aria-selected') === 'true')
+    .map((c) => c.getAttribute('aria-label')!.split(',')[0]);
 const card = (name: string) => cards().find((c) => c.getAttribute('aria-label')?.startsWith(name + ','))!;
 const cardNames = () => cards().map((c) => c.getAttribute('aria-label')!.split(',')[0]);
 const lastQuery = (navigate: { mock: { lastCall?: unknown[] } }) =>
@@ -226,7 +232,7 @@ describe('MediaLibraryComponent', () => {
       const menu = TestBed.inject(ContextMenuService);
 
       fireEvent.contextMenu(grid().parentElement!);
-      expect(menu.state()?.items.map((i) => i.label).filter(Boolean)).toEqual(['Upload', 'New folder']);
+      expect(menu.state()?.items.map((i) => i.label).filter(Boolean)).toEqual(['Upload', 'New folder', 'Paste']);
 
       menu.close();
       fireEvent.contextMenu(card('yirgacheffe.jpg'));
@@ -290,9 +296,12 @@ describe('MediaLibraryComponent', () => {
       it('has one tab stop and moves it with the arrow keys, Home and End', async () => {
         await setup({ inputs: { folder: 'products-uuid' } });
         await screen.findAllByRole('gridcell');
-        const [first, second] = cards();
+        // Folders and files are one list: the sub-folder comes first and holds the only tab stop.
+        const [first, second] = allCards();
+        expect(first).toHaveClass('card--folder');
         expect(first).toHaveAttribute('tabindex', '0');
         expect(second).toHaveAttribute('tabindex', '-1');
+        expect(allCards().filter((c) => c.getAttribute('tabindex') === '0')).toHaveLength(1);
 
         first.focus();
         fireEvent.keyDown(first, { key: 'ArrowRight' });
@@ -303,9 +312,51 @@ describe('MediaLibraryComponent', () => {
         fireEvent.keyDown(second, { key: 'ArrowLeft' });
         expect(document.activeElement).toBe(first);
         fireEvent.keyDown(first, { key: 'End' });
-        expect(document.activeElement).toBe(cards().at(-1));
-        fireEvent.keyDown(cards().at(-1)!, { key: 'Home' });
-        expect(document.activeElement).toBe(cards()[0]);
+        expect(document.activeElement).toBe(allCards().at(-1));
+        fireEvent.keyDown(allCards().at(-1)!, { key: 'Home' });
+        expect(document.activeElement).toBe(allCards()[0]);
+      });
+
+      it('selects only the new card with an arrow key, extends the range with Shift and only moves the focus with Ctrl', async () => {
+        await setup({ inputs: { folder: 'products-uuid' } });
+        await screen.findAllByRole('gridcell');
+        const [folder, brand, latte, logoMark] = allCards();
+        folder.focus();
+
+        fireEvent.keyDown(folder, { key: 'ArrowRight' });
+        await waitFor(() => expect(selectedNames()).toEqual(['brand.css']));
+        expect(document.activeElement).toBe(brand);
+
+        fireEvent.keyDown(brand, { key: 'ArrowRight', shiftKey: true });
+        fireEvent.keyDown(latte, { key: 'ArrowRight', shiftKey: true });
+        await waitFor(() => expect(selectedNames()).toEqual(['brand.css', 'latte-art.jpg', 'logo-mark.png']));
+
+        // Back across the anchor: the range follows it, from brand.css to the folder.
+        fireEvent.keyDown(logoMark, { key: 'Home', shiftKey: true });
+        await waitFor(() => expect(selectedNames()).toEqual(['Roastery', 'brand.css']));
+        expect(folder).toHaveAttribute('aria-selected', 'true');
+
+        fireEvent.keyDown(folder, { key: 'ArrowRight', ctrlKey: true });
+        expect(document.activeElement).toBe(brand);
+        expect(selectedNames()).toEqual(['Roastery', 'brand.css']);
+        fireEvent.keyDown(brand, { key: 'ArrowRight', metaKey: true });
+        fireEvent.keyDown(latte, { key: ' ' });
+        await waitFor(() => expect(selectedNames()).toEqual(['Roastery', 'brand.css', 'latte-art.jpg']));
+      });
+
+      it('clears the selection with Escape and opens a folder or file with Enter', async () => {
+        const { navigate } = await setup({ inputs: { folder: 'products-uuid' } });
+        await screen.findAllByRole('gridcell');
+        const [folder, brand] = allCards();
+        folder.focus();
+        fireEvent.keyDown(folder, { key: 'ArrowRight' });
+        await waitFor(() => expect(selectedNames()).toEqual(['brand.css']));
+
+        fireEvent.keyDown(brand, { key: 'Escape' });
+        await waitFor(() => expect(selectedNames()).toEqual([]));
+
+        fireEvent.keyDown(folder, { key: 'Enter' });
+        expect(lastQuery(navigate)).toEqual({ folder: 'roastery-uuid', asset: null });
       });
 
       it('selects with Space, everything with Ctrl+A, and shows the count', async () => {
@@ -321,7 +372,7 @@ describe('MediaLibraryComponent', () => {
 
         fireEvent.keyDown(second, { key: 'a', ctrlKey: true });
         await waitFor(() => expect(cards().every((c) => c.getAttribute('aria-selected') === 'true')).toBe(true));
-        expect(screen.getByRole('group', { name: 'Bulk actions' })).toHaveTextContent('6 selected');
+        expect(screen.getByRole('group', { name: 'Bulk actions' })).toHaveTextContent('7 selected');
       });
 
       it('opens the file with Enter, through the router', async () => {
@@ -364,29 +415,116 @@ describe('MediaLibraryComponent', () => {
     });
 
     describe('selection with the pointer', () => {
-      it('opens the file on a click, toggles with Ctrl or ⌘ and selects a range with Shift', async () => {
+      it('selects only the card on a click without opening it, toggles with Ctrl or ⌘ and selects a range with Shift', async () => {
         const { navigate } = await setup({ inputs: { folder: 'products-uuid' } });
         await screen.findAllByRole('gridcell');
+        const opened = navigate.mock.calls.length;
 
         fireEvent.click(card('logo.svg'));
-        expect(lastQuery(navigate)).toEqual({ asset: 'uuid-logo-svg' });
+        await waitFor(() => expect(selectedNames()).toEqual(['logo.svg']));
+        fireEvent.click(card('brand.css'));
+        await waitFor(() => expect(selectedNames()).toEqual(['brand.css']));
+        expect(navigate.mock.calls).toHaveLength(opened);
 
         fireEvent.click(card('latte-art.jpg'), { ctrlKey: true });
         fireEvent.click(card('logo-mark.png'), { metaKey: true });
-        await waitFor(() => expect(screen.getByRole('group', { name: 'Bulk actions' })).toHaveTextContent('2 selected'));
+        await waitFor(() => expect(screen.getByRole('group', { name: 'Bulk actions' })).toHaveTextContent('3 selected'));
 
         fireEvent.click(card('logo-mark.png'), { metaKey: true });
-        fireEvent.click(card('brand.css'), { ctrlKey: true });
+        fireEvent.click(card('latte-art.jpg'), { ctrlKey: true });
+        fireEvent.click(card('brand.css'));
         fireEvent.click(card('price-list.pdf'), { shiftKey: true });
-        await waitFor(() =>
-          expect(cards().filter((c) => c.getAttribute('aria-selected') === 'true').map((c) => c.getAttribute('aria-label')!.split(',')[0])).toEqual([
-            'brand.css',
-            'latte-art.jpg',
-            'logo-mark.png',
-            'logo.svg',
-            'price-list.pdf',
-          ]),
+        await waitFor(() => expect(selectedNames()).toEqual(['brand.css', 'latte-art.jpg', 'logo-mark.png', 'logo.svg', 'price-list.pdf']));
+
+        // Ctrl+Shift adds a range to what is selected; a plain Shift range replaces it. The range spans the folders too.
+        fireEvent.click(folderCard('Roastery'));
+        fireEvent.click(card('logo.svg'), { shiftKey: true, ctrlKey: true });
+        await waitFor(() => expect(selectedNames()).toEqual(['Roastery', 'brand.css', 'latte-art.jpg', 'logo-mark.png', 'logo.svg']));
+        fireEvent.click(card('price-list.pdf'), { shiftKey: true });
+        await waitFor(() => expect(selectedNames()).toEqual(['Roastery', 'brand.css', 'latte-art.jpg', 'logo-mark.png', 'logo.svg', 'price-list.pdf']));
+        fireEvent.click(card('brand.css'));
+        fireEvent.click(card('latte-art.jpg'), { shiftKey: true });
+        await waitFor(() => expect(selectedNames()).toEqual(['brand.css', 'latte-art.jpg']));
+      });
+
+      it('opens a file with a double click and enters a folder with a double click', async () => {
+        const { navigate } = await setup({ inputs: { folder: 'products-uuid' } });
+        await screen.findAllByRole('gridcell');
+
+        fireEvent.dblClick(card('logo.svg'));
+        expect(lastQuery(navigate)).toEqual({ asset: 'uuid-logo-svg' });
+
+        fireEvent.dblClick(folderCard('Roastery'));
+        expect(lastQuery(navigate)).toEqual({ folder: 'roastery-uuid', asset: null });
+      });
+
+      it('selects an unselected card on a right click before its menu opens, but keeps a selection it is part of', async () => {
+        await setup({ inputs: { folder: 'products-uuid' } });
+        await screen.findAllByRole('gridcell');
+        const menu = TestBed.inject(ContextMenuService);
+        fireEvent.click(card('brand.css'));
+        fireEvent.click(card('latte-art.jpg'), { ctrlKey: true });
+        await waitFor(() => expect(selectedNames()).toEqual(['brand.css', 'latte-art.jpg']));
+
+        fireEvent.contextMenu(card('latte-art.jpg'));
+        expect(selectedNames()).toEqual(['brand.css', 'latte-art.jpg']);
+        expect(menu.state()?.items.some((i) => i.label.includes('2'))).toBe(true);
+
+        menu.close();
+        fireEvent.contextMenu(card('logo.svg'));
+        await waitFor(() => expect(selectedNames()).toEqual(['logo.svg']));
+        expect(menu.state()?.items.map((i) => i.label)).toContain('Rename…');
+
+        menu.close();
+        fireEvent.contextMenu(folderCard('Roastery'));
+        await waitFor(() => expect(selectedNames()).toEqual(['Roastery']));
+        expect(menu.state()).not.toBeNull();
+      });
+
+      it('clears the selection with a click on empty space, a right click there leaves it alone', async () => {
+        await setup({ inputs: { folder: 'products-uuid' } });
+        await screen.findAllByRole('gridcell');
+        const space = grid().parentElement!;
+        fireEvent.click(card('brand.css'));
+        await waitFor(() => expect(selectedNames()).toEqual(['brand.css']));
+
+        fireEvent.contextMenu(space);
+        expect(selectedNames()).toEqual(['brand.css']);
+
+        fireEvent.mouseDown(space, { clientX: 5, clientY: 5 });
+        fireEvent.mouseUp(document, { clientX: 5, clientY: 5 });
+        await waitFor(() => expect(selectedNames()).toEqual([]));
+      });
+
+      it('selects the cards a rubber band touches, folders and files, and keeps the selection with Ctrl', async () => {
+        await setup({ inputs: { folder: 'products-uuid' } });
+        await screen.findAllByRole('gridcell');
+        const space = grid().parentElement!;
+        // jsdom has no layout: lay the cards out as a row of 100px boxes, 0..100, 110..210, ...
+        allCards().forEach((c, i) =>
+          vi.spyOn(c, 'getBoundingClientRect').mockReturnValue(new DOMRect(i * 110, 0, 100, 80)),
         );
+        const names = allCards().map((c) => c.getAttribute('aria-label')!.split(',')[0]);
+
+        fireEvent.mouseDown(space, { clientX: 150, clientY: 200 });
+        // Fewer than 4px away is still a click.
+        fireEvent.mouseMove(document, { clientX: 152, clientY: 198 });
+        expect(document.querySelector('.grid__marquee')).toBeNull();
+        fireEvent.mouseMove(document, { clientX: 340, clientY: 40 });
+        await waitFor(() => expect(selectedNames()).toEqual(names.slice(1, 4)));
+        expect(document.querySelector('.grid__marquee')).not.toBeNull();
+
+        fireEvent.mouseMove(document, { clientX: 250, clientY: 40 });
+        await waitFor(() => expect(selectedNames()).toEqual(names.slice(1, 3)));
+        fireEvent.mouseUp(document, { clientX: 250, clientY: 40 });
+        await waitFor(() => expect(document.querySelector('.grid__marquee')).toBeNull());
+        expect(selectedNames()).toEqual(names.slice(1, 3));
+
+        // Ctrl keeps what was selected and adds what the band touches.
+        fireEvent.mouseDown(space, { clientX: 5 * 110 + 10, clientY: 200, ctrlKey: true });
+        fireEvent.mouseMove(document, { clientX: 6 * 110 + 50, clientY: 40, ctrlKey: true });
+        await waitFor(() => expect(selectedNames()).toEqual([names[1], names[2], names[5], names[6]]));
+        fireEvent.mouseUp(document, { clientX: 6 * 110 + 50, clientY: 40 });
       });
 
       it('labels each card’s checkbox with the file name and keeps it out of the tab order', async () => {
@@ -416,6 +554,8 @@ describe('MediaLibraryComponent', () => {
         const { confirm, api } = await setup({ files: many, inputs: { folder: 'products-uuid' } });
         await screen.findAllByRole('gridcell');
         fireEvent.keyDown(cards()[0], { key: 'a', ctrlKey: true });
+        // Ctrl+A also ticks the sub-folder; this test is about the files.
+        fireEvent.click(await screen.findByRole('checkbox', { name: 'Select Roastery' }));
         const bar = await screen.findByRole('group', { name: 'Bulk actions' });
 
         fireEvent.click(within(bar).getByRole('button', { name: 'Delete' }));

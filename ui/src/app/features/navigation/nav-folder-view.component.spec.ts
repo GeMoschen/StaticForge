@@ -54,7 +54,7 @@ const URLS = new Map([
   ['p-team', '/about-us/team/'],
 ]);
 
-async function open(options: { canEdit?: boolean; dev?: boolean; folder?: 'n-company' | 'n-sub' | 'root'; failed?: boolean } = {}) {
+async function open(options: { canEdit?: boolean; canRelease?: boolean; entryMenu?: unknown; dev?: boolean; folder?: 'n-company' | 'n-sub' | 'root'; failed?: boolean } = {}) {
   const index = buildNavIndex(TREE);
   const folder = options.folder === 'root' ? index.root! : index.entries.get(options.folder ?? 'n-company')!;
   const view = await render(NavFolderViewComponent, {
@@ -64,6 +64,7 @@ async function open(options: { canEdit?: boolean; dev?: boolean; folder?: 'n-com
       index,
       urls: URLS,
       failed: options.failed ?? false,
+      ...(options.entryMenu ? { entryMenu: options.entryMenu } : {}),
     },
     providers: [
       provideRouter([]),
@@ -73,7 +74,10 @@ async function open(options: { canEdit?: boolean; dev?: boolean; folder?: 'n-com
       { provide: NavigationService, useValue: {} },
       { provide: FrameContextStore, useValue: { setItem: vi.fn() } },
       { provide: DeveloperModeService, useValue: { enabled: signal(options.dev ?? false) } },
-      { provide: ProjectPermissionsStore, useValue: { canEditContent: signal(options.canEdit ?? true) } },
+      {
+        provide: ProjectPermissionsStore,
+        useValue: { canEditContent: signal(options.canEdit ?? true), canRelease: signal(options.canRelease ?? true) },
+      },
     ],
   });
   const component = view.fixture.componentInstance as unknown as Record<string, { subscribe(fn: unknown): void }>;
@@ -82,10 +86,12 @@ async function open(options: { canEdit?: boolean; dev?: boolean; folder?: 'n-com
     newItem: vi.fn(),
     rename: vi.fn(),
     moveEntries: vi.fn(),
+    copyEntries: vi.fn(),
     deleteEntries: vi.fn(),
     retry: vi.fn(),
     changeEntry: vi.fn(),
     setVisible: vi.fn(),
+    releaseEntries: vi.fn(),
   };
   for (const [name, spy] of Object.entries(outputs)) {
     component[name].subscribe(spy);
@@ -154,6 +160,56 @@ describe('the menu folder view', () => {
     fireEvent.click(within(rows[2]).getByRole('checkbox'));
     fireEvent.click(await screen.findByRole('button', { name: 'Delete' }));
     expect(outputs.deleteEntries.mock.calls[0][0].map((e: { uuid: string }) => e.uuid)).toEqual(['n-team']);
+  });
+
+  describe('Release… and the context menu', () => {
+    it('has bulk Release… with Move, Show, Hide and Delete, for the selected rows', async () => {
+      const { outputs } = await open();
+      const rows = await screen.findAllByRole('row');
+      fireEvent.click(within(rows[1]).getByRole('checkbox'));
+      fireEvent.click(within(rows[4]).getByRole('checkbox'));
+      for (const name of ['Move…', 'Show in menu', 'Hide from menu', 'Delete']) {
+        expect(await screen.findByRole('button', { name })).toBeTruthy();
+      }
+      fireEvent.click(screen.getByRole('button', { name: 'Release…' }));
+      expect(outputs.releaseEntries.mock.calls[0][0].map((e: { uuid: string }) => e.uuid)).toEqual(['n-about', 'n-sub']);
+    });
+
+    it('has no bulk Release… without the release right', async () => {
+      await open({ canRelease: false });
+      const rows = await screen.findAllByRole('row');
+      fireEvent.click(within(rows[1]).getByRole('checkbox'));
+      expect(await screen.findByRole('button', { name: 'Delete' })).toBeTruthy();
+      expect(screen.queryByRole('button', { name: 'Release…' })).toBeNull();
+    });
+
+    const menuOf = async (rows: string[], entryMenu?: unknown) => {
+      const { view, outputs } = await open({ entryMenu });
+      const component = view.fixture.componentInstance as unknown as {
+        rows(): { entry: { uuid: string } }[];
+        rowMenu(rows: unknown[]): { label: string; action?: () => void }[];
+      };
+      const picked = component.rows().filter((row) => rows.includes(row.entry.uuid));
+      return { items: component.rowMenu(picked), outputs };
+    };
+
+    it('shows the area\'s entry menu after Open for one row', async () => {
+      const entryMenu = vi.fn().mockReturnValue([{ label: 'Rename…' }, { label: 'Release…' }]);
+      const { items } = await menuOf(['n-team'], entryMenu);
+      expect(items.map((i) => i.label).filter(Boolean)).toEqual(['Open', 'Rename…', 'Release…']);
+      expect(entryMenu).toHaveBeenCalledWith(expect.objectContaining({ uuid: 'n-team' }));
+    });
+
+    it('shows the matching bulk entries, Release… included, for several rows', async () => {
+      const entryMenu = vi.fn();
+      const { items, outputs } = await menuOf(['n-about', 'n-team'], entryMenu);
+      expect(items.map((i) => i.label).filter(Boolean)).toEqual(['Move…', 'Copy', 'Release…', 'Show in menu', 'Hide from menu', 'Delete']);
+      expect(entryMenu).not.toHaveBeenCalled();
+      items.find((i) => i.label === 'Copy')!.action!();
+      expect(outputs.copyEntries.mock.calls[0][0].map((e: { uuid: string }) => e.uuid)).toEqual(['n-about', 'n-team']);
+      items.find((i) => i.label === 'Release…')!.action!();
+      expect(outputs.releaseEntries.mock.calls[0][0].map((e: { uuid: string }) => e.uuid)).toEqual(['n-about', 'n-team']);
+    });
   });
 
   describe('the entry page', () => {
