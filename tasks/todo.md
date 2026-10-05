@@ -1153,3 +1153,19 @@ did nothing and explained nothing. Now `[disabled]="submitting()"`, matching `sf
 - `npx vitest run` → **48 files / 327 tests, all passing**.
 - `npx ng build` → green, only the pre-existing NG8102 and SCSS-budget warnings.
 - No e2e run.
+
+## M35.22 follow-up 3 — row context menus = tree menus, Release/Duplicate, bulk bars (2026-10-05)
+
+User decisions (Q&A): list-row menus use each store's own left-tree menu entries (New…, Rename… as a **dialog**, Cut/Copy/Paste via the shared
+`TreeClipboardService`, Move to…, favorites, Delete) **plus Release** (all stores) and **Duplicate** (pages only; folders are not duplicated);
+no "Open" in pages/media menus; the tree menus get Release (+ Duplicate for pages) too. Release on a folder = the folder + everything inside,
+recursively (items with something to release, ticked), through the existing release dialog. Records grid: context menu Release, Move, Delete,
+Duplicate — Duplicate needs a **new backend endpoint**. Every list with multi-select shows the bar above the list with the same context-specific
+actions; a right click on a multi-selection shows the same entries. Templates store stays out of the empty-space work (rows unchanged).
+
+- [ ] Pages: tree + list row menu (no Open), Release, Duplicate, bulk bar parity
+- [ ] Content: tree + folder list row menu, Release (release dialog as in the record view), bulk bar parity
+- [ ] Record grid: row context menu (Release, Move, Delete, Duplicate) + backend duplicate endpoint + client + Undo
+- [ ] Navigation: tree + list row menu, Release (missing today), bulk bar parity
+- [ ] Media: tree + folder rows (no Open, + Release) and file rows (no Open, + Release), grid + list, bulk bar parity
+- [ ] Verification: ngc, vitest per area, lint; browser check; commit per store
