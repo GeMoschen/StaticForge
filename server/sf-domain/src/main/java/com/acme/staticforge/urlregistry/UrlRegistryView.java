@@ -46,6 +46,7 @@ public final class UrlRegistryView {
     private final Map<UrlKey, Key> holders = new HashMap<>();
     private final Map<Key, String> claims = new LinkedHashMap<>();
     private final List<Collision> collisions = new ArrayList<>();
+    private Map<Key, String> seeds = Map.of();
 
     private UrlRegistryView() {}
 
@@ -67,8 +68,27 @@ public final class UrlRegistryView {
     }
 
     /**
-     * The URL of {@code target}: its registered one, else the one this build claimed for it, else {@code computed}'s,
-     * which is claimed. {@code null} when there is none and {@code computed} has none either.
+     * The registry holding {@code rows} with {@code seeds}: URLs a target without a row takes on its first assignment
+     * instead of the computed one (a page's preview URL, M32). A seed only counts for a first page ({@link
+     * UrlTargetType#PAGE}, page number 1) and a non-blank URL; it is used when no other target holds it.
+     */
+    public static UrlRegistryView of(Collection<UrlRegistryEntry> rows, Map<Key, String> seeds) {
+        UrlRegistryView view = of(rows);
+        Map<Key, String> valid = new HashMap<>();
+        seeds.forEach((key, url) -> {
+            if (url != null && !url.isBlank() && key.target().type() == UrlTargetType.PAGE
+                    && key.target().pageNumber() <= 1) {
+                valid.put(key, url);
+            }
+        });
+        view.seeds = valid;
+        return view;
+    }
+
+    /**
+     * The URL of {@code target}: its registered one, else the one this build claimed for it, else its seed (claimed,
+     * unless another target holds that URL), else {@code computed}'s, which is claimed. {@code null} when there is none
+     * and {@code computed} has none either.
      */
     public synchronized String url(UrlTarget target, String channel, String localeKey, Supplier<String> computed) {
         Key key = new Key(target, channel, localeKey);
@@ -79,6 +99,16 @@ public final class UrlRegistryView {
         url = claims.get(key);
         if (url != null) {
             return url;
+        }
+        String seed = seeds.get(key);
+        if (seed != null) {
+            UrlKey seedKey = new UrlKey(key.channelKey(), key.localeKey(), seed);
+            Key holder = holders.get(seedKey);
+            if (holder == null || holder.equals(key)) {
+                holders.put(seedKey, key);
+                claims.put(key, seed);
+                return seed;
+            }
         }
         url = computed.get();
         if (url == null) {

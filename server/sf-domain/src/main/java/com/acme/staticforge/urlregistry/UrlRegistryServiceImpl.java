@@ -285,7 +285,19 @@ public class UrlRegistryServiceImpl implements UrlRegistryService {
     @Override
     @Transactional(readOnly = true)
     public UrlRegistryView view(long projectId, UrlArea area) {
-        return UrlRegistryView.of(repository.findByProjectIdAndArea(projectId, area));
+        List<UrlRegistryEntry> rows = repository.findByProjectIdAndArea(projectId, area);
+        if (area != UrlArea.GENERATED) {
+            return UrlRegistryView.of(rows);
+        }
+        // A page's first live URL is its preview URL: the preview rows of first pages seed the GENERATED view.
+        Map<UrlRegistryView.Key, String> seeds = new HashMap<>();
+        for (UrlRegistryEntry row : repository.findByProjectIdAndArea(projectId, UrlArea.PREVIEW)) {
+            UrlTarget target = row.target();
+            if (target.type() == UrlTargetType.PAGE && target.pageNumber() <= 1 && row.getUrl() != null) {
+                seeds.put(new UrlRegistryView.Key(target, row.getChannelKey(), row.getLocaleKey()), row.getUrl());
+            }
+        }
+        return UrlRegistryView.of(rows, seeds);
     }
 
     @Override

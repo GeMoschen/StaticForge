@@ -339,6 +339,41 @@ class UrlRegistryGenerationIntegrationTest {
                 .containsExactlyInAnyOrder(1, 2);
     }
 
+    @Test
+    @DisplayName("a page's first live URL is its preview URL, even when the computed path has changed since")
+    void theFirstBuildReusesThePreviewUrl() {
+        Site site = site("ugseed");
+        pageRenderService.renderPage(site.fx().projectId(), site.about(), null, "html", false);
+        assertThat(urlRegistryService.all(site.fx().projectId(), UrlArea.PREVIEW))
+                .extracting(UrlRegistryEntry::getTargetUuid, UrlRegistryEntry::getUrl)
+                .contains(tuple(site.about(), "docs/about.html"));
+        UUID guides = folderService.create(null, "guides", FolderScope.PAGES, site.fx().ctx()).uuid();
+        assetService.move(site.about(), guides, site.fx().ctx());
+
+        GenerationRun run = build.succeeded(generate(site, GenerationMode.FULL));
+
+        assertThat(build.files(site.fx(), site.target(), run)).containsKey("docs/about.html").doesNotContainKey("guides/about.html");
+        assertThat(rows(site))
+                .filteredOn(e -> e.getTargetUuid().equals(site.about()))
+                .extracting(UrlRegistryEntry::getUrl, UrlRegistryEntry::isOverridden)
+                .containsExactly(tuple("docs/about.html", false));
+        // home was never previewed: it is computed.
+        assertThat(url(site.fx(), site.home())).isEqualTo("home.html");
+    }
+
+    @Test
+    @DisplayName("without a preview row the first build computes the URL as before")
+    void withoutAPreviewRowTheUrlIsComputed() {
+        Site site = site("ugnoseed");
+        UUID guides = folderService.create(null, "guides", FolderScope.PAGES, site.fx().ctx()).uuid();
+        assetService.move(site.about(), guides, site.fx().ctx());
+
+        GenerationRun run = build.succeeded(generate(site, GenerationMode.FULL));
+
+        assertThat(build.files(site.fx(), site.target(), run)).containsKey("guides/about.html").doesNotContainKey("docs/about.html");
+        assertThat(url(site.fx(), site.about())).isEqualTo("guides/about.html");
+    }
+
     // ------------------------------------------------------------------
     // Export and import
     // ------------------------------------------------------------------
