@@ -19,6 +19,7 @@ import { SfPageHeaderComponent } from '../../shared/components/layout/sf-page-he
 import { SfSaveStatusComponent } from '../../shared/components/layout/sf-save-status.component';
 import { SfButtonComponent } from '../../shared/components/sf-button.component';
 import { TimeTravelStore } from '../revisions/time-travel.store';
+import { PageUrlService } from './page-url.service';
 import { FolderTrailService } from './folder-trail.service';
 import { PageDeleteDialogComponent } from './page-delete-dialog.component';
 import { PageEditorComponent } from './page-editor.component';
@@ -93,6 +94,7 @@ export async function renderPageEditorShell(options: PageEditorHarnessOptions = 
       { provide: LocalesStore, useValue: { locales: signal([]) } },
       { provide: DeveloperModeService, useValue: { enabled: signal(options.developerMode ?? false) } },
       { provide: FolderTrailService, useValue: { trailFor: () => of([]) } },
+      { provide: PageUrlService, useValue: { registered: () => of(new Map<string, string>()) } },
       {
         provide: ProjectContextStore,
         useValue: {

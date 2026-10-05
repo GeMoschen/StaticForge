@@ -19,6 +19,8 @@ export type UrlArea = 'PREVIEW' | 'GENERATED';
 export type UrlTargetType = 'PAGE' | 'MEDIA' | 'FOLDER';
 
 export interface UrlRegistryListParams {
+  /** A failed read shows no global error toast (the caller has its own fallback). */
+  quiet?: boolean;
   channelKey?: string;
   area?: UrlArea;
   targetType?: UrlTargetType;
@@ -61,6 +63,7 @@ export class UrlRegistryService {
     return this.http.get<PageUrlRegistryEntryView>(`${BASE}/projects/${projectKey}/url-registry`, {
       withCredentials: true,
       params: query,
+      ...(params.quiet ? { context: new HttpContext().set(SKIP_ERROR_TOAST, true) } : {}),
     });
   }
 

@@ -23,7 +23,11 @@ import { FolderSettingsDrawerComponent } from './folder-settings-drawer.componen
 import { FolderViewComponent } from './folder-view.component';
 import { folderRows, pageUrl } from './folder-view.util';
 import { TreeClipboardService } from '../../shared/services/tree-clipboard.service';
+import { PageUrlService } from './page-url.service';
 import { PagesTreeRefresh } from './pages-tree-refresh.service';
+import type { UrlRegistryEntryView } from '../settings/url-registry.service';
+import { UrlRegistryService } from '../settings/url-registry.service';
+import { ChannelsService } from '../channels/channels.service';
 
 /** The folder view (M35.18): the table, the folder's actions, the bulk actions and their Undo. */
 
@@ -73,8 +77,9 @@ describe('folder view', () => {
     });
   });
 
-  async function open(api: ReturnType<typeof apiStub>, options: { confirm?: ReturnType<typeof vi.fn>; folderUuid?: string | null } = {}) {
+  async function open(api: ReturnType<typeof apiStub>, options: { confirm?: ReturnType<typeof vi.fn>; folderUuid?: string | null; developer?: boolean; registry?: UrlRegistryEntryView[] } = {}) {
     const confirm = options.confirm ?? vi.fn().mockResolvedValue(true);
+    const registryList = vi.fn().mockReturnValue(of({ content: options.registry ?? [], last: true, number: 0 }));
     const view = await render(FolderViewComponent, {
       componentInputs: { projectKey: 'proj', folderUuid: options.folderUuid === undefined ? 'folder-a' : options.folderUuid },
       providers: [
@@ -89,14 +94,16 @@ describe('folder view', () => {
         },
         { provide: ProjectPermissionsStore, useValue: { canRelease: signal(true), canRedirectOldUrls: signal(false) } },
         { provide: ProjectAccessStore, useValue: { readOnly: signal(false) } },
-        { provide: DeveloperModeService, useValue: { enabled: signal(false) } },
+        { provide: DeveloperModeService, useValue: { enabled: signal(options.developer ?? false) } },
+        { provide: ChannelsService, useValue: { list: vi.fn().mockReturnValue(of([{ key: 'web', isDefault: true, enabled: true }])) } },
+        { provide: UrlRegistryService, useValue: { list: registryList } },
         { provide: TimeTravelStore, useValue: { activeRevision: signal(null) } },
         { provide: ReleaseEventsStore, useValue: { version: signal(0) } },
         { provide: LocalesStore, useValue: { labelOf: (code: string) => code } },
         { provide: EditingLocaleStore, useValue: { locale: signal(null) } },
       ],
     });
-    return { view, confirm, toasts: TestBed.inject(ToastService) };
+    return { view, confirm, registryList, toasts: TestBed.inject(ToastService) };
   }
 
   const openMenuItem = async (name: string) => {
@@ -113,6 +120,43 @@ describe('folder view', () => {
     expect(within(rows[1]).getByText('Sub')).toBeTruthy();
     expect(within(rows[2]).getByText('Page 1')).toBeTruthy();
     expect(within(rows[2]).getByText('Article')).toBeTruthy();
+  });
+
+  describe('URL column (developer mode)', () => {
+    const entry = (area: string, url: string, extra: Partial<UrlRegistryEntryView> = {}): UrlRegistryEntryView => ({
+      targetUuid: 'page-1',
+      targetType: 'PAGE',
+      area,
+      url,
+      pageNumber: 1,
+      ...extra,
+    });
+
+    it('shows the registered GENERATED URL, read in one request for the folder', async () => {
+      const { registryList } = await open(apiStub({ listPages: vi.fn().mockReturnValue(of([page(1), page(2)])) }), {
+        developer: true,
+        registry: [entry('PREVIEW', 'preview/one/'), entry('GENERATED', 'products/hammer/'), entry('GENERATED', 'products/hammer/page-2/', { pageNumber: 2 })],
+      });
+
+      expect(await screen.findByText('/products/hammer/')).toBeTruthy();
+      expect(registryList).toHaveBeenCalledTimes(1);
+      expect(registryList).toHaveBeenCalledWith('proj', expect.objectContaining({ channelKey: 'web', targetType: 'PAGE', size: 500 }));
+    });
+
+    it('falls back to the PREVIEW URL, and shows the root as a slash', async () => {
+      await open(apiStub(), { developer: true, registry: [entry('PREVIEW', './')] });
+
+      const code = await screen.findByText('/', { selector: 'code' });
+      expect(code.classList.contains('cell-url--computed')).toBe(false);
+    });
+
+    it('marks the computed URL as not assigned yet when nothing is registered', async () => {
+      await open(apiStub(), { developer: true, registry: [] });
+
+      const code = await screen.findByText('/a/page-1', { selector: 'code' });
+      expect(code.classList.contains('cell-url--computed')).toBe(true);
+      expect(code.getAttribute('title')).toBe('Not assigned yet');
+    });
   });
 
   it('opens a row through the outputs', async () => {

@@ -75,6 +75,11 @@
   font-family: var(--sf-font-mono);
 }
 
+.settings__computed {
+  font-style: italic;
+  opacity: 0.75;
+}
+
 .settings__footer {
   display: flex;
   align-items: center;

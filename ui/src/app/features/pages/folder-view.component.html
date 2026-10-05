@@ -76,7 +76,15 @@
     }
   </ng-template>
   <ng-template sfDataTableCell="path" [sfDataTableCellRows]="rows()" let-row>
-    <code class="cell-url">{{ urlOf(row) }}</code>
+    @if (addressOf(row); as address) {
+      @if (address.registered) {
+        <code class="cell-url">{{ address.url }}</code>
+      } @else {
+        <code class="cell-url cell-url--computed" [attr.title]="'pages.settings.facts.addressNotAssigned' | transloco" [attr.aria-label]="address.url + ' (' + ('pages.settings.facts.addressNotAssigned' | transloco) + ')'">{{ address.url }}</code>
+      }
+    } @else {
+      <code class="cell-url">{{ row.path }}</code>
+    }
   </ng-template>
 </sf-data-table>
 

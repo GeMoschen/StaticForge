@@ -16,6 +16,8 @@ import { SfFieldComponent } from '../../shared/components/sf-field.component';
 import { SfUidRenameComponent } from '../../shared/components/sf-uid-rename.component';
 import { PageNav, PageNavSettingsComponent } from './page-nav-settings.component';
 import { PageEditorStore } from './page-editor.store';
+import { type PageAddress, PageUrlService, pageAddress } from './page-url.service';
+import { ReleaseEventsStore } from '../release/release-events.store';
 
 type PageView = components['schemas']['PageView'];
 
@@ -106,7 +108,9 @@ type PageView = components['schemas']['PageView'];
             <dt>{{ 'pages.settings.facts.template' | transloco }}</dt>
             <dd>{{ p.template?.displayName ?? p.template?.uid }}</dd>
             <dt>{{ 'pages.settings.facts.address' | transloco }}</dt>
-            <dd class="settings__mono">{{ p.folderPath }}</dd>
+            @if (address(); as a) {
+              <dd class="settings__mono" [class.settings__computed]="!a.registered" [attr.title]="a.registered ? null : ('pages.settings.facts.addressNotAssigned' | transloco)">{{ a.url }}</dd>
+            }
             <dt>{{ 'pages.settings.facts.changed' | transloco }}</dt>
             <dd>{{ p.revision }}</dd>
           </dl>
@@ -124,6 +128,8 @@ export class PageSettingsComponent {
   private readonly toast = inject(ToastService);
   private readonly undo = inject(UndoService);
   private readonly transloco = inject(TranslocoService);
+  private readonly pageUrls = inject(PageUrlService);
+  private readonly releaseEvents = inject(ReleaseEventsStore);
   protected readonly editor = inject(PageEditorStore);
   protected readonly developerMode = inject(DeveloperModeService).enabled;
 
@@ -134,6 +140,16 @@ export class PageSettingsComponent {
   protected readonly status = computed(() => autosaveStatus(this.editor.autosave));
   protected readonly savedAt = computed(() => this.editor.autosave.lastSavedAt());
 
+  /** The registered URLs of this page (uuid → URL), read again after a release. */
+  private readonly registered = signal<ReadonlyMap<string, string>>(new Map());
+
+  /** The page's address: registered, or computed from its folder and UID while nothing is registered yet. */
+  protected readonly address = computed<PageAddress | null>(() => {
+    const page = this.editor.page();
+    const uuid = this.editor.uuid();
+    return page && uuid ? pageAddress(this.registered(), uuid, page.folderPath ?? '', page.uid ?? '') : null;
+  });
+
   protected readonly nameFindings = computed(() =>
     this.draft().trim() === '' ? [{ level: 'error' as const, message: this.transloco.translate('pages.settings.name.required') }] : [],
   );
@@ -142,6 +158,16 @@ export class PageSettingsComponent {
   private shownFor: string | null = null;
 
   constructor() {
+    effect((onCleanup) => {
+      const key = this.editor.projectKey();
+      const uuid = this.editor.uuid();
+      this.releaseEvents.version();
+      if (!key || !uuid) {
+        return;
+      }
+      const sub = this.pageUrls.registered(key, uuid).subscribe((urls) => this.registered.set(urls));
+      onCleanup(() => sub.unsubscribe());
+    });
     effect(() => {
       const uuid = this.editor.uuid();
       if (uuid && uuid !== this.shownFor) {

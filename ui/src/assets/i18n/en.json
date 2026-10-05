@@ -5377,7 +5377,8 @@
       "facts": {
         "heading": "Details",
         "template": "Template",
-        "address": "Folder",
+        "address": "Address",
+        "addressNotAssigned": "Not assigned yet",
         "changed": "Revision"
       },
       "readOnly": "This page is read-only."

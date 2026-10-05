@@ -12,6 +12,16 @@
   gap: var(--sf-space-2);
 }
 
+// The icon and the spinner are inline by default: their line box (the button's line-height) adds space above or below
+// the glyph and throws off the centring. As flex boxes with a line-height of 1 they are exactly as tall as the glyph.
+.build__icon,
+sf-spinner {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
 .build__icon {
   font-size: var(--sf-fs-16);
 }
@@ -30,8 +40,12 @@
 }
 
 .build__text {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sf-space-1);
   color: var(--sf-chrome-text-muted);
   font-weight: var(--sf-weight-regular);
+  line-height: 1;
   white-space: nowrap;
 }
 

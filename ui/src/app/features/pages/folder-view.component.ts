@@ -53,7 +53,8 @@ import { deleteQuestion, isOnline, localeStatuses, localeTag, statusLabel } from
 import { TimeTravelStore } from '../revisions/time-travel.store';
 import { FolderMoveDialogComponent } from './folder-move-dialog.component';
 import { FolderSettingsDrawerComponent } from './folder-settings-drawer.component';
-import { type FolderRow, folderChain, folderRows, folderTrail, pageUrl, releaseTone } from './folder-view.util';
+import { type FolderRow, folderChain, folderRows, folderTrail, releaseTone } from './folder-view.util';
+import { type PageAddress, PageUrlService, pageAddress } from './page-url.service';
 import { PagesItemActions } from './pages-item-actions';
 import { PagesTreeRefresh } from './pages-tree-refresh.service';
 
@@ -107,6 +108,7 @@ export class FolderViewComponent {
   private readonly timeTravel = inject(TimeTravelStore);
   private readonly transloco = inject(TranslocoService);
   private readonly actions = inject(PagesItemActions);
+  private readonly pageUrls = inject(PageUrlService);
   protected readonly favorites = inject(FavoritesService);
   protected readonly developerMode = inject(DeveloperModeService);
   protected readonly permissions = inject(ProjectPermissionsStore);
@@ -137,6 +139,9 @@ export class FolderViewComponent {
   protected readonly loading = signal(true);
   protected readonly failed = signal(false);
   private pagesRead: Subscription | null = null;
+  /** The registered URL of each page (uuid → URL), read from the URL registry in developer mode. */
+  private readonly registeredUrls = signal<ReadonlyMap<string, string>>(new Map());
+  private urlsRead: Subscription | null = null;
 
   protected readonly title = computed(() => (this.isRoot() ? this.transloco.translate('pages.folder.root') : (this.folder()?.displayName ?? this.folder()?.uid ?? '')));
   protected readonly rows = computed<FolderRow[]>(() => folderRows(this.folder()?.children ?? [], this.pages()));
@@ -305,6 +310,23 @@ export class FolderViewComponent {
       untracked(() => this.read(key, folder, revision));
     });
 
+    // The registered page URLs for the URL column: one request per load of the folder, only while the column is shown.
+    effect(() => {
+      const key = this.projectKey();
+      const folder = this.listUuid();
+      const shown = this.developerMode.enabled();
+      this.releaseEvents.version();
+      this.treeRefresh.version();
+      this.timeTravel.activeRevision();
+      if (!key || folder === null || !shown) {
+        return;
+      }
+      untracked(() => {
+        this.urlsRead?.unsubscribe();
+        this.urlsRead = this.pageUrls.registered(key).subscribe((urls) => this.registeredUrls.set(urls));
+      });
+    });
+
     inject(ShortcutService).use([
       {
         id: 'folder.rename',
@@ -352,8 +374,13 @@ export class FolderViewComponent {
     return this.trail()[index]?.queryParams?.['folder'] ?? null;
   }
 
+  /** A page's address: its registered URL, else the computed one (`registered: false`); a folder has none. */
+  protected addressOf(row: FolderRow): PageAddress | null {
+    return row.kind === 'page' ? pageAddress(this.registeredUrls(), row.uuid, row.path, row.uid) : null;
+  }
+
   protected urlOf(row: FolderRow): string {
-    return row.kind === 'page' ? pageUrl(row.path, row.uid) : row.path;
+    return this.addressOf(row)?.url ?? row.path;
   }
 
   protected statuses(row: FolderRow) {
