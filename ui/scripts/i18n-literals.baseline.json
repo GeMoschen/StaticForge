@@ -17,8 +17,6 @@
   "src/app/features/revisions/visual-diff/body-diff.component.html": 3,
   "src/app/features/revisions/visual-diff/field-diff.component.html": 4,
   "src/app/features/revisions/visual-diff/visual-diff.component.html": 6,
-  "src/app/features/schedules/schedule-history.component.html": 25,
-  "src/app/features/schedules/schedules.component.html": 36,
   "src/app/features/search/search-page.component.html": 35,
   "src/app/features/settings/export-options.component.html": 5,
   "src/app/features/settings/export-tree-section.component.html": 7,

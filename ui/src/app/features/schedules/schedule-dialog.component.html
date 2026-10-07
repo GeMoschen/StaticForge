@@ -5,7 +5,17 @@
     </sf-field>
   }
 
-  @if (releaseState()) {
+  @if (releaseState() && pickItems() && !editing()) {
+    <sf-field class="sd__pick" [label]="'release.schedule.items' | transloco" required>
+      <sf-combobox
+        multiple
+        [options]="pickOptions()"
+        [value]="pickedKeys()"
+        [placeholder]="(type() === 'RELEASE' ? 'release.schedule.pickRelease' : 'release.schedule.pickUnpublish') | transloco"
+        (valueChange)="setPicked($event)"
+      />
+    </sf-field>
+  } @else if (releaseState()) {
     <section class="rd__part" aria-labelledby="sd-items">
       <h3 class="rd__heading" id="sd-items">{{ 'release.schedule.items' | transloco }}</h3>
       @if (editing()) {

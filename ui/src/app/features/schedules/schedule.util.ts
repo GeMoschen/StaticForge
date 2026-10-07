@@ -1,6 +1,6 @@
 import type { components } from '../../core/api/generated/schema.d.ts';
 import { localeTag } from '../release/release-status.util';
-import { describeCron } from './cron-presets.util';
+import { describeCron, describeCronText } from './cron-presets.util';
 import { zonedToUtc } from './zoned-time.util';
 
 type ScheduleView = components['schemas']['ScheduleView'];
@@ -81,6 +81,34 @@ export function scheduleWhat(schedule: ScheduleView): string {
   const channels = params.channels && params.channels.length > 0 ? params.channels.join(', ') : 'all channels';
   const build = `${mode} build · ${channels}`;
   return isRecurring(schedule.type) ? `${describeCron(schedule.cron)} · ${build}` : build;
+}
+
+/** A translator (`TranslocoService#translate`) the screen's text helpers take, so this file needs no injection. */
+export type Translate = (key: string, params?: Record<string, unknown>) => string;
+
+/** The `schedules.statuses.*` key of a row: a failed recurring schedule reads as paused. */
+export function scheduleStatusKey(schedule: Pick<ScheduleView, 'status' | 'type'>): string {
+  return schedule.status === 'FAILED' && isRecurring(schedule.type) ? 'PAUSED' : (schedule.status ?? '');
+}
+
+/**
+ * What a schedule does, in one translated line, by name: "Home (EN)", "3 items", "Every day at 09:00 · Full build · all
+ * channels". An item without a name shows its UID in developer mode only, else "Untitled" — never a UUID.
+ */
+export function scheduleWhatText(schedule: ScheduleView, t: Translate, dev: boolean): string {
+  if (isReleaseState(schedule.type)) {
+    const items = schedule.items ?? [];
+    if (items.length === 1) {
+      const item = items[0];
+      const name = item.displayName || (dev ? item.uid : '') || t('schedules.page.untitled');
+      return item.locale ? `${name} (${localeTag(item.locale)})` : name;
+    }
+    return t('schedules.page.itemCount', { count: schedule.itemCount ?? items.length });
+  }
+  const params = (schedule.params ?? {}) as GenerationParams;
+  const channels = params.channels && params.channels.length > 0 ? params.channels.join(', ') : t('schedules.page.allChannels');
+  const build = t('schedules.page.build', { mode: t(`schedules.mode.${params.mode === 'INCREMENTAL' ? 'INCREMENTAL' : 'FULL'}`), channels });
+  return isRecurring(schedule.type) ? `${describeCronText(schedule.cron, t)} · ${build}` : build;
 }
 
 /** Whether the list/row actions apply (the server decides in the end; these only hide what it would refuse). */

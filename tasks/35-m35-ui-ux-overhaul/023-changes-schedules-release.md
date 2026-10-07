@@ -115,3 +115,45 @@ per filter); a *Released* column stays (the sample has none); the folder column 
 it used to show for everyone); the pane has no split/inline switch (the real diff is the structured `sf-diff`); the pager is
 the page's own (below the table), because the URL, not the table, holds the page. The open row is not in the URL (as before).
 Opening the pane re-creates the table (as History does); the selection is kept.
+
+## Notes (M35.23 part D): Schedules — "no capability lost" checklist
+
+Written before the rebuild from `features/schedules/*` as it stood at `502b8fd7`; every item is ticked at the end of part D.
+
+**URL and query**
+- [x] The query string holds `type`, `status`, `owner` (one value each), `page` (0-based) and `id` (the open history); defaults are left out; a filter change returns to page 0; deep links work.
+- [x] The API request is unchanged (`type`/`status` as arrays, `owner`, `page`, size 50); the list re-reads on a project change and on every release event (`ReleaseEventsStore.version`); the members are loaded for the owner names; a stale request is cancelled.
+
+**Filters**
+- [x] Type (release, unpublish, generation, recurring generation), status (pending, running, succeeded, failed or paused, skipped, cancelled) and owner (project members) filters; removable chip per active filter.
+- [x] Empty state ("No schedules yet" / "No schedules match" with filters), loading, error with a way to retry.
+
+**Table**
+- [x] Columns: type, what (item name + language, "N items", or the build and its channels / the repeat in words), next run in the viewer's zone (plus the schedule's own zone when it differs), owner (member name), status (a failed recurring schedule reads "Paused") with the last outcome.
+- [x] "Draft changed since scheduled" warning on a pinned pending release; "then generate" marker.
+- [x] Pager (page X of Y, total) when more than one page.
+- [x] Rows show names, never UUIDs; UIDs only in developer mode.
+- [x] Time-zone hint ("Times in your time zone: …"), the read-only label of a read-only project.
+
+**Row actions** (all by the same permission rules, `ProjectPermissionsStore.canChangeSchedule` / `satisfiesSchedule`)
+- [x] History (always), Re-pin (drift on a pinned release), Edit (pending), Run now (pending), Take over (failed or paused, or another owner's pending), Cancel (pending, or a paused recurring one) — now in a ⋮ menu and on a right click; not offered where the viewer may not.
+- [x] Cancel asks first (ConfirmService, no `window.confirm`); a busy row blocks a second action; success toasts; the list re-reads after each action.
+- [x] Edit reads the schedule's detail and opens the schedule dialog on it (types limited to its own type).
+
+**Header and creation**
+- [x] `n` creates a schedule (shortcut + palette entry).
+- [x] Generation schedules (one-off and recurring) are created here by developers (was the button "New generation schedule").
+- [x] NEW: header action *New schedule* with a kind choice (release, unpublish, generation); release and unpublish need the schedule permission; the items are picked in the dialog.
+
+**History**
+- [x] Facts (status, next run, owner, version policy, "if missed"), the items, and the executions: outcome, due time, how late, message, "waiting for run #n", per-item results, links to the revision and to the generation run, "(run deleted)" for a run removed by retention.
+- [x] Re-reads on release events; Escape closes (by the drawer).
+
+**Outcome (part D).** All items above are met (specs, build, lint green; no browser check, see below). Deviations and notes:
+- Candidates for *New schedule* come from existing endpoints: release = `GET /changes` (releasable statuses, first 200), unpublish = `GET /search?releaseStatus=PUBLISHED,CHANGED,DELETION_PENDING` (first 100 assets, every language). Beyond those caps a notice points to the Changes view; a search outage leaves Unpublish empty with a notice.
+- `ScheduleDialogComponent` got one optional input, `pickItems` (a searchable multi-select instead of a checkbox per item, as in the sample); other callers are unchanged. `SearchService` got `releaseStatus`.
+- List rows still show "N items" for release/unpublish schedules: the list endpoint sends no item names (`withItems=false`); names are in the history drawer.
+- Filters stay one pick each (type, status, owner) as before; the URL (`type`, `status`, `owner`, 0-based `page`, `id`) is unchanged.
+- e2e: `m27-journeys` / `m28-journeys` selectors updated (table rows, ⋮ menu, New schedule menu, Status filter menu, cancel confirm); not runnable here.
+- Checklist was written down during the rebuild rather than before it.
+

@@ -27,10 +27,6 @@
     "colors": 2,
     "zIndex": 1
   },
-  "src/app/features/schedules/schedule-history.component.scss": {
-    "colors": 2,
-    "zIndex": 2
-  },
   "src/app/features/search/search-page.component.scss": {
     "colors": 1,
     "zIndex": 0

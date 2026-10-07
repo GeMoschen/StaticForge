@@ -516,7 +516,7 @@ test.describe('M27 release and scheduling journey', () => {
     await expect(bar(page).locator('.ra__pending')).toContainText('Release scheduled for');
     await setHeadline(page, 'Alpha EN v4');
     await rail(page, 'Schedules');
-    const releaseRow = page.locator('tbody tr', { hasText: 'Release' });
+    const releaseRow = page.locator('sf-schedules .sf-data-table__row', { hasText: 'Release' });
     await expect(releaseRow).toContainText('Draft changed since scheduled');
     await snap(page, '06-drift');
     const scheduleId = ((await api.get('/schedules?type=RELEASE')) as Json)['rows'][0]['id'] as number;
@@ -529,7 +529,8 @@ test.describe('M27 release and scheduling journey', () => {
     expect(await api.statuses(pageA.uuid)).toEqual({ de: 'PUBLISHED', en: 'CHANGED' });
     await rail(page, 'Pages');
     await rail(page, 'Schedules');
-    await page.locator('tbody tr', { hasText: 'Release' }).getByRole('button', { name: 'History' }).click();
+    await page.locator('sf-schedules .sf-data-table__row', { hasText: 'Release' }).getByRole('button', { name: /^Actions for/ }).click();
+    await page.getByRole('menuitem', { name: 'History' }).click();
     const history = page.getByRole('dialog', { name: /^History/ });
     await expect(history.getByRole('link', { name: /^Revision r\d+/ })).toBeVisible();
     await expect(history.getByRole('link', { name: /^Generation run #\d+/ })).toBeVisible();
@@ -537,7 +538,8 @@ test.describe('M27 release and scheduling journey', () => {
     await history.getByRole('button', { name: 'Close' }).click();
 
     // ── 7. A recurring generation every minute: next runs shown, one execution, cancelled ──
-    await page.getByRole('button', { name: 'New generation schedule' }).click();
+    await page.getByRole('button', { name: 'New schedule' }).click();
+    await page.getByRole('menuitem', { name: /^Generation/ }).click();
     const recurring = page.getByRole('dialog', { name: /^Schedule/ });
     await recurring.getByRole('radio', { name: 'Recurring generation' }).check();
     await recurring.getByRole('radio', { name: 'Advanced (cron)' }).check();
@@ -554,8 +556,10 @@ test.describe('M27 release and scheduling journey', () => {
       .toBeGreaterThanOrEqual(1);
     await rail(page, 'Pages');
     await rail(page, 'Schedules');
-    const recurringRow = page.locator('tbody tr', { hasText: 'Recurring generation' });
-    await recurringRow.getByRole('button', { name: 'Cancel' }).click();
+    const recurringRow = page.locator('sf-schedules .sf-data-table__row', { hasText: 'Recurring generation' });
+    await recurringRow.getByRole('button', { name: /^Actions for/ }).click();
+    await page.getByRole('menuitem', { name: 'Cancel schedule…' }).click();
+    await page.getByRole('dialog', { name: 'Cancel this recurring generation schedule?' }).getByRole('button', { name: 'Cancel schedule' }).click();
     await expect(recurringRow).toContainText('Cancelled');
 
     // ── 8. Deleting a published page: Deletion pending, online until the deletion is released ──
@@ -618,7 +622,7 @@ test.describe('M27 release and scheduling journey', () => {
     await expect(editor.locator('sf-changes-list .sf-data-table__row', { hasText: 'Alpha' })).toHaveCount(1);
     await expect(editor.getByRole('checkbox', { name: 'Select all on this page' })).toHaveCount(0);
     await rail(editor, 'Schedules');
-    await expect(editor.getByRole('button', { name: 'New generation schedule' })).toHaveCount(0);
+    await expect(editor.getByRole('button', { name: 'New schedule' })).toHaveCount(0);
     await snap(editor, '10-editor');
     await editor.context().close();
 

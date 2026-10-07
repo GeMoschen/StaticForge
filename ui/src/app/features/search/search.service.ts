@@ -29,6 +29,8 @@ export interface SearchRequest {
   size?: number;
   /** Search one content language (M24.4.1); omitted searches every language. */
   locale?: string;
+  /** Only assets with one of these release statuses in some language (M35.23: the unpublish picker). */
+  releaseStatus?: string[];
 }
 
 /** What the palette types into: the project it searches (`null` outside a project) and the input. */
@@ -73,6 +75,9 @@ export class SearchService {
       // Search the language the editor is working in (M24.4.1): a German query stems German and
       // does not answer with a value that exists only in English.
       params = params.set('locale', request.locale);
+    }
+    for (const status of request.releaseStatus ?? []) {
+      params = params.append('releaseStatus', status);
     }
     return this.http.get<SearchResultView>(`${BASE}/projects/${encodeURIComponent(projectKey)}/search`, {
       params,

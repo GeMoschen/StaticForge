@@ -33,7 +33,7 @@ import { SfFieldComponent } from '../../shared/components/sf-field.component';
 import { SfSpinnerComponent } from '../../shared/components/sf-spinner.component';
 import { GenerationOptionsComponent } from '../generation/generation-options.component';
 import { ReleaseEventsStore } from '../release/release-events.store';
-import { type ReleaseChoice, itemsOf } from '../release/release-choice.util';
+import { type ReleaseChoice, itemKey, itemsOf } from '../release/release-choice.util';
 import { ReleasePlanComponent, type ReleasePlanState } from '../release/release-plan.component';
 import { localeTag } from '../release/release-status.util';
 import {
@@ -119,6 +119,11 @@ export class ScheduleDialogComponent implements OnDestroy {
   readonly choices = input<ReleaseChoice[]>([]);
   /** Unpublish: the pairs offered when the type is switched to Unpublish (released ones differ from releasable ones). */
   readonly unpublishChoices = input<ReleaseChoice[]>([]);
+  /**
+   * Release/unpublish: the offered items are many and none is ticked yet (the Schedules page), so they are picked from
+   * a searchable list instead of a checkbox per item.
+   */
+  readonly pickItems = input(false);
   /** Editing an existing schedule; `null` creates one. */
   readonly schedule = input<ScheduleView | null>(null);
 
@@ -206,6 +211,13 @@ export class ScheduleDialogComponent implements OnDestroy {
     zoneIds(this.zone(), viewerZone()).map((zone) => ({ value: zone, label: zone })),
   );
   protected readonly items = computed(() => itemsOf(this.selection()));
+  /** The picker's options (one per offered choice) and the keys of the ticked ones. */
+  protected readonly pickOptions = computed<SfComboboxOption<string>[]>(() =>
+    this.selection().map((choice) => ({ value: itemKey(choice.assetUuid, choice.locale), label: choice.label })),
+  );
+  protected readonly pickedKeys = computed(() =>
+    this.selection().filter((choice) => choice.checked).map((choice) => itemKey(choice.assetUuid, choice.locale)),
+  );
   protected readonly cron = computed(() =>
     this.cronMode() === 'preset'
       ? presetCron({ kind: this.presetKind(), time: this.presetTime(), weekday: this.presetWeekday() })
@@ -322,6 +334,12 @@ export class ScheduleDialogComponent implements OnDestroy {
 
   protected toggleItem(index: number, checked: boolean): void {
     this.selection.update((list) => list.map((choice, i) => (i === index ? { ...choice, checked } : choice)));
+  }
+
+  /** The picker's value: tick exactly the choices whose keys it holds. */
+  protected setPicked(value: string | string[] | null): void {
+    const keys = new Set(Array.isArray(value) ? value : value ? [value] : []);
+    this.selection.update((list) => list.map((choice) => ({ ...choice, checked: keys.has(itemKey(choice.assetUuid, choice.locale)) })));
   }
 
   protected setLateness(value: number | null): void {

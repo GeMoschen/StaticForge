@@ -115,3 +115,22 @@ export function describeCron(cron: string | null | undefined): string {
       return `Every ${WEEKDAYS.find((day) => day.value === preset.weekday)?.label ?? 'week'} at ${preset.time}`;
   }
 }
+
+/** {@link describeCron} in the viewer's language (`schedules.cron.*`, `release.schedule.weekdays.*`). */
+export function describeCronText(cron: string | null | undefined, t: (key: string, params?: Record<string, unknown>) => string): string {
+  const preset = parsePresetCron(cron);
+  if (!preset) {
+    return cron ? t('schedules.cron.custom', { cron }) : '';
+  }
+  const { minute } = timeParts(preset.time);
+  switch (preset.kind) {
+    case 'hourly':
+      return t('schedules.cron.hourly', { minute: String(minute).padStart(2, '0') });
+    case 'daily':
+      return t('schedules.cron.daily', { time: preset.time });
+    case 'weekdays':
+      return t('schedules.cron.weekdays', { time: preset.time });
+    case 'weekly':
+      return t('schedules.cron.weekly', { day: t(`release.schedule.weekdays.${preset.weekday}`), time: preset.time });
+  }
+}

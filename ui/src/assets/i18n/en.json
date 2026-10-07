@@ -4692,6 +4692,154 @@
       }
     }
   },
+  "schedules": {
+    "page": {
+      "title": "Schedules",
+      "subtitle": "Times in your time zone: {zone}.",
+      "table": "Schedules, next due first",
+      "untitled": "Untitled",
+      "itemCount": "{count, plural, one {# item} other {# items}}",
+      "allChannels": "all channels",
+      "build": "{mode} · {channels}",
+      "empty": "No schedules yet",
+      "emptyHint": "Schedule a release from an editor or the Changes view, or create one here.",
+      "emptyFiltered": "No schedules match",
+      "emptyFilteredHint": "Change or clear the filters.",
+      "loadFailed": "Could not load the schedules — try again in a moment.",
+      "drift": "Draft changed since scheduled",
+      "thenGenerate": "then generate",
+      "lastOutcome": "Last: {outcome}"
+    },
+    "mode": {
+      "FULL": "Full build",
+      "INCREMENTAL": "Incremental build"
+    },
+    "cron": {
+      "custom": "Cron {cron}",
+      "hourly": "Every hour at :{minute}",
+      "daily": "Every day at {time}",
+      "weekdays": "Every weekday at {time}",
+      "weekly": "Every {day} at {time}"
+    },
+    "new": {
+      "label": "New schedule",
+      "release": "Release",
+      "releaseHint": "Put pages, records or files online at a set time",
+      "unpublish": "Unpublish",
+      "unpublishHint": "Take content offline at a set time",
+      "generation": "Generation",
+      "generationHint": "Build the site once or on a repeating schedule",
+      "loadFailed": "Could not load the content to schedule — try again in a moment.",
+      "unpublishFailed": "The list of published content is unavailable right now, so Unpublish offers nothing.",
+      "truncated": "Only the first {count} items are offered here. Schedule the rest from the Changes view or an editor."
+    },
+    "filters": {
+      "bar": "Schedule filters",
+      "type": "Type",
+      "status": "Status",
+      "owner": "Owner",
+      "any": {
+        "type": "All types",
+        "status": "All statuses",
+        "owner": "Anyone"
+      },
+      "picked": "{filter}: {value}",
+      "active": "Active filters",
+      "clear": "Clear all",
+      "statusFailed": "Failed or paused"
+    },
+    "columns": {
+      "kind": "Kind",
+      "what": "What",
+      "when": "Next run",
+      "owner": "Owner",
+      "status": "Status",
+      "actions": "Actions"
+    },
+    "statuses": {
+      "PENDING": "Pending",
+      "RUNNING": "Running",
+      "SUCCEEDED": "Succeeded",
+      "FAILED": "Failed",
+      "PAUSED": "Paused",
+      "SKIPPED": "Skipped",
+      "CANCELLED": "Cancelled"
+    },
+    "outcomes": {
+      "SUCCEEDED": "Succeeded",
+      "PARTIAL": "Partly done",
+      "FAILED": "Failed",
+      "SKIPPED": "Skipped"
+    },
+    "actions": {
+      "label": "Actions for “{what}”",
+      "history": "History",
+      "repin": "Re-pin to current drafts",
+      "edit": "Edit…",
+      "runNow": "Run now",
+      "takeOver": "Take over",
+      "cancel": "Cancel schedule…"
+    },
+    "toast": {
+      "cancelled": "Schedule cancelled.",
+      "takeOver": "You own this schedule now.",
+      "runNow": "Runs within the next minute.",
+      "repin": "Pinned to the current drafts.",
+      "openFailed": "Could not open the schedule."
+    },
+    "cancel": {
+      "title": "Cancel this {kind} schedule?",
+      "message": {
+        "RELEASE": "Nothing is released at that time. The changes stay unreleased.",
+        "UNPUBLISH": "The content stays online.",
+        "GENERATION": "No build runs from this schedule.",
+        "RECURRING_GENERATION": "No more builds run from this schedule."
+      },
+      "confirm": "Cancel schedule",
+      "keep": "Keep it"
+    },
+    "pager": {
+      "label": "Schedule pages",
+      "previous": "Previous page",
+      "next": "Next page",
+      "pageOf": "Page {page} of {pages} · {count, plural, one {# schedule} other {# schedules}}"
+    },
+    "history": {
+      "title": "History: {kind} “{what}”",
+      "status": "Status",
+      "nextRun": "Next run",
+      "owner": "Owner",
+      "version": "Version",
+      "ifMissed": "If missed",
+      "pinned": "Pinned when scheduled",
+      "latest": "Whatever is saved at that time",
+      "skipAfter": "Skip if later than {late}",
+      "runLate": "Run as soon as possible",
+      "items": "Items",
+      "executions": "Executions",
+      "none": "Not executed yet.",
+      "loadFailed": "Could not load the schedule.",
+      "retry": "Retry",
+      "inProgress": "In progress",
+      "due": "Due {time}",
+      "late": "started {late} late",
+      "waiting": "Waiting for run #{run} to finish.",
+      "revision": "Revision r{n}",
+      "run": "Generation run #{n}",
+      "runDeleted": "Generation run #{n} (run deleted)",
+      "results": {
+        "APPLIED": "Done",
+        "UNCHANGED": "Nothing to do",
+        "SKIPPED": "Skipped"
+      },
+      "driftNote": "Draft changed since scheduled",
+      "titlePending": "Schedule history"
+    },
+    "duration": {
+      "minutes": "{count, plural, one {# minute} other {# minutes}}",
+      "hours": "{count, plural, one {# hour} other {# hours}}"
+    }
+  },
   "auth": {
     "login": {
       "title": "Sign in",
@@ -7379,7 +7527,9 @@
         "scheduledAt": "{kind} scheduled for {when}.",
         "rescheduled": "{kind} rescheduled.",
         "rescheduledAt": "{kind} rescheduled for {when}."
-      }
+      },
+      "pickRelease": "Pick the changes to release",
+      "pickUnpublish": "Pick the content to take offline"
     },
     "generationOptions": {
       "target": "Target",

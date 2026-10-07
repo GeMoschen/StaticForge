@@ -1,104 +1,111 @@
-<div class="history-scrim" (click)="closed.emit()"></div>
-<aside class="history" role="dialog" aria-modal="true" [attr.aria-label]="'History of ' + title()">
-  <header class="history__header">
-    <h2 class="history__title">{{ title() }}</h2>
-    <button type="button" class="history__close" aria-label="Close" (click)="closed.emit()">
-      <sf-icon name="close" />
-    </button>
-  </header>
+<sf-drawer [title]="title()" [width]="520" (closed)="closed.emit()">
+  @if (error(); as message) {
+    <div class="history__error" role="alert">
+      <p>{{ message }}</p>
+      <sf-button variant="secondary" size="sm" icon="refresh" (click)="reload()">{{ t('history.retry') }}</sf-button>
+    </div>
+  } @else if (loading() && !schedule()) {
+    <sf-skeleton shape="form" [rows]="5" />
+  }
 
-  <div class="history__body">
-    @if (error(); as message) {
-      <p class="history__error" role="alert">{{ message }}</p>
-    }
-    @if (schedule(); as s) {
-      <dl class="history__facts">
-        <dt>Status</dt>
-        <dd>{{ statusLabel(s) }}</dd>
-        <dt>Next run</dt>
+  @if (schedule(); as s) {
+    <dl class="facts">
+      <div class="facts__row">
+        <dt>{{ t('history.status') }}</dt>
+        <dd><sf-status size="sm" [tone]="tone(s)" [label]="statusName(s)" /></dd>
+      </div>
+      <div class="facts__row">
+        <dt>{{ t('history.nextRun') }}</dt>
         <dd>{{ nextRun(s) }}</dd>
-        <dt>Owner</dt>
+      </div>
+      <div class="facts__row">
+        <dt>{{ t('history.owner') }}</dt>
         <dd>{{ members.nameOf(s.ownerUserId) }}</dd>
-        @if (s.pinPolicy) {
-          <dt>Version</dt>
-          <dd>{{ s.pinPolicy === 'LATEST' ? 'Whatever is saved at that time' : 'Pinned when scheduled' }}</dd>
-        }
-        <dt>If missed</dt>
-        <dd>{{ s.missedPolicy === 'SKIP_IF_LATER_THAN' ? 'Skip if later than ' + s.maxLateness : 'Run as soon as possible' }}</dd>
-      </dl>
-      @if ((s.items ?? []).length > 0) {
-        <h3 class="history__subtitle">Items</h3>
-        <ul class="history__items">
-          @for (item of s.items ?? []; track $index) {
-            <li>
-              {{ item.displayName || item.uid }}
-              @if (item.locale) {
-                <span class="history__tag">{{ item.locale.toUpperCase() }}</span>
-              }
-              @if (item.draftChangedSinceScheduled && s.status === 'PENDING') {
-                <span class="history__drift">Draft changed since scheduled</span>
-              }
-            </li>
-          }
-        </ul>
+      </div>
+      @if (s.pinPolicy) {
+        <div class="facts__row">
+          <dt>{{ t('history.version') }}</dt>
+          <dd>{{ version(s) }}</dd>
+        </div>
       }
-    }
+      <div class="facts__row">
+        <dt>{{ t('history.ifMissed') }}</dt>
+        <dd>{{ ifMissed(s) }}</dd>
+      </div>
+    </dl>
 
-    <h3 class="history__subtitle">Executions</h3>
-    @if (loading() && rows().length === 0) {
-      <sf-spinner label="Loading executions…" />
-    } @else {
-      <ol class="history__list">
-        @for (row of rows(); track row.execution.id) {
-          <li class="history__execution">
-            <div class="history__line">
-              <span class="history__outcome" [class]="'history__outcome history__outcome--' + (row.execution.outcome ?? 'running').toLowerCase()">
-                {{ row.execution.outcome ? outcomeLabel(row.execution.outcome) : 'In progress' }}
-              </span>
-              <span>Due {{ formatInstant(row.execution.scheduledFor) }}</span>
-              @if (formatDuration(row.execution.lateByMs); as late) {
-                <span class="history__muted">· started {{ late }} late</span>
-              }
-            </div>
-            @if (row.execution.message) {
-              <p class="history__message">{{ row.execution.message }}</p>
+    @if ((s.items ?? []).length > 0) {
+      <h3 class="history__heading">{{ t('history.items') }}</h3>
+      <ul class="history__items">
+        @for (item of s.items ?? []; track $index) {
+          <li>
+            <span>{{ itemName(item) }}</span>
+            @if (item.locale) {
+              <span class="history__tag">{{ item.locale.toUpperCase() }}</span>
             }
-            @if (row.waitingForRun !== null) {
-              <p class="history__muted">Waiting for run #{{ row.waitingForRun }} to finish.</p>
+            @if (item.draftChangedSinceScheduled && s.status === 'PENDING') {
+              <sf-badge tone="warning" icon="warning" [label]="t('history.driftNote')" />
             }
-            @if (row.items.length > 0) {
-              <ul class="history__results">
-                @for (item of row.items; track $index) {
-                  <li>
-                    {{ item.name }}
-                    @if (item.locale) {
-                      <span class="history__tag">{{ item.locale }}</span>
-                    }
-                    — {{ item.result }}
-                    @if (item.reason) {
-                      <span class="history__muted">({{ item.reason }})</span>
-                    }
-                  </li>
-                }
-              </ul>
-            }
-            <div class="history__links">
-              @if (row.execution.revisionId) {
-                <a [routerLink]="['/p', projectKey(), 'history', row.execution.revisionId]">Revision r{{ row.execution.revisionId }}</a>
-              }
-              @if (row.execution.generationRunId) {
-                <a [routerLink]="['/p', projectKey(), 'publishing', 'runs']" [queryParams]="{ run: row.execution.generationRunId }">
-                  Generation run #{{ row.execution.generationRunId }}
-                </a>
-              } @else if (row.deletedRun !== null) {
-                <span class="history__muted">Generation run #{{ row.deletedRun }} (run deleted)</span>
-              }
-            </div>
           </li>
-        } @empty {
-          <li class="history__muted">Not executed yet.</li>
         }
-      </ol>
+      </ul>
     }
-  </div>
-</aside>
+  }
+
+  <h3 class="history__heading">{{ t('history.executions') }}</h3>
+  @if (loading() && rows().length === 0 && !error()) {
+    <sf-skeleton shape="row" [rows]="3" />
+  } @else {
+    <ol class="history__list">
+      @for (row of rows(); track row.execution.id) {
+        <li class="history__execution">
+          <div class="history__line">
+            <sf-status size="sm" [tone]="outcomeTone(row.execution.outcome)" [label]="outcomeName(row.execution.outcome)" />
+            <span>{{ t('history.due', { time: formatInstant(row.execution.scheduledFor) }) }}</span>
+            @if (late(row.execution.lateByMs); as lateBy) {
+              <span class="history__muted">· {{ t('history.late', { late: lateBy }) }}</span>
+            }
+          </div>
+          @if (row.execution.message) {
+            <p class="history__message">{{ row.execution.message }}</p>
+          }
+          @if (row.waitingForRun !== null) {
+            <p class="history__muted">{{ t('history.waiting', { run: row.waitingForRun }) }}</p>
+          }
+          @if (row.items.length > 0) {
+            <ul class="history__results">
+              @for (item of row.items; track $index) {
+                <li>
+                  {{ item.name }}
+                  @if (item.locale) {
+                    <span class="history__tag">{{ item.locale }}</span>
+                  }
+                  — {{ item.result }}
+                  @if (item.reason) {
+                    <span class="history__muted">({{ item.reason }})</span>
+                  }
+                </li>
+              }
+            </ul>
+          }
+          <div class="history__links">
+            @if (row.execution.revisionId) {
+              <a [routerLink]="['/p', projectKey(), 'history', row.execution.revisionId]">{{ t('history.revision', { n: row.execution.revisionId }) }}</a>
+            }
+            @if (row.execution.generationRunId) {
+              <a [routerLink]="['/p', projectKey(), 'publishing', 'runs']" [queryParams]="{ run: row.execution.generationRunId }">
+                {{ t('history.run', { n: row.execution.generationRunId }) }}
+              </a>
+            } @else if (row.deletedRun !== null) {
+              <span class="history__muted">{{ t('history.runDeleted', { n: row.deletedRun }) }}</span>
+            }
+          </div>
+        </li>
+      } @empty {
+        @if (!error()) {
+          <li class="history__muted">{{ t('history.none') }}</li>
+        }
+      }
+    </ol>
+  }
+</sf-drawer>

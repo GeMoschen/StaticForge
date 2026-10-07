@@ -406,15 +406,18 @@ test.describe('M28 editor publishing journey', () => {
       .poll(async () => (await api.get(`/schedules/${secondSchedule}`))['status'], { timeout: 4 * 60_000, intervals: [2_000] })
       .toBe('FAILED');
     await rail(page, 'Schedules');
-    await page.getByRole('combobox', { name: 'Status' }).selectOption({ label: 'Failed' }).catch(() => undefined);
-    const failedRow = page.locator('tbody tr', { hasText: EDITOR_NAME }).filter({ hasText: /Failed/ });
+    await page.getByRole('button', { name: 'Status' }).click();
+    await page.getByRole('menuitem', { name: 'Failed or paused' }).click();
+    const failedRow = page.locator('sf-schedules .sf-data-table__row', { hasText: EDITOR_NAME }).filter({ hasText: /Failed/ });
     await expect(failedRow.first()).toBeVisible();
-    await failedRow.first().getByRole('button', { name: 'History' }).click();
+    await failedRow.first().getByRole('button', { name: /^Actions for/ }).click();
+    await page.getByRole('menuitem', { name: 'History' }).click();
     const history = page.getByRole('dialog', { name: /^History/ });
     await expect(history).toContainText('Owner no longer permitted');
     await snap(page, '05-failed-history');
     await history.getByRole('button', { name: 'Close' }).click();
-    await failedRow.first().getByRole('button', { name: 'Take over' }).click();
+    await failedRow.first().getByRole('button', { name: /^Actions for/ }).click();
+    await page.getByRole('menuitem', { name: 'Take over' }).click();
     await expect
       .poll(async () => (await api.get(`/schedules/${secondSchedule}`))['status'], { timeout: 60_000, intervals: [1_000] })
       .toBe('SUCCEEDED');
