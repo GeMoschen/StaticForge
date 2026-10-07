@@ -1,6 +1,6 @@
 import { HttpClient, HttpContext, HttpEventType, HttpParams, HttpResponse } from '@angular/common/http';
 import { Injectable } from '@angular/core';
-import { Observable, filter, map } from 'rxjs';
+import { Observable, filter, map, switchMap } from 'rxjs';
 import { SKIP_ERROR_TOAST } from './error.interceptor';
 import type { components } from './generated/schema.d.ts';
 
@@ -438,17 +438,18 @@ export class ApiClient {
     );
   }
 
+  /** Renames a folder; like {@link renameAsset}, reads the current revision for `If-Match` when none is given. */
   renameFolder(
     projectKey: string,
     uuid: string,
     body: S['RenameFolderRequest'],
     etag?: number,
   ): Observable<S['FolderView']> {
-    return this.http.put<S['FolderView']>(
-      `${BASE}/projects/${projectKey}/folders/${uuid}`,
-      body,
-      this.mutationOptions(etag),
-    );
+    const rename = (revision?: number) =>
+      this.http.put<S['FolderView']>(`${BASE}/projects/${projectKey}/folders/${uuid}`, body, this.mutationOptions(revision));
+    return etag !== undefined
+      ? rename(etag)
+      : this.assetDetail(projectKey, uuid).pipe(switchMap((current) => rename(current.revision ?? undefined)));
   }
 
   moveFolder(
@@ -1119,17 +1120,25 @@ export class ApiClient {
     );
   }
 
+  /**
+   * Renames an asset. The endpoint requires `If-Match`: without an `etag` the current revision is read first, so callers
+   * that only know the item's name (tree and list rows, set views) can rename without tracking revisions.
+   */
   renameAsset(
     projectKey: string,
     uuid: string,
     body: S['RenameAssetRequest'],
     etag?: number,
   ): Observable<S['AssetDetailView']> {
-    return this.http.patch<S['AssetDetailView']>(
-      `${BASE}/projects/${projectKey}/assets/${uuid}/display-name`,
-      body,
-      this.mutationOptions(etag),
-    );
+    const rename = (revision?: number) =>
+      this.http.patch<S['AssetDetailView']>(
+        `${BASE}/projects/${projectKey}/assets/${uuid}/display-name`,
+        body,
+        this.mutationOptions(revision),
+      );
+    return etag !== undefined
+      ? rename(etag)
+      : this.assetDetail(projectKey, uuid).pipe(switchMap((current) => rename(current.revision ?? undefined)));
   }
 
   // ── Releases (M27.1.3) ──────────────────────────────────────────────────
