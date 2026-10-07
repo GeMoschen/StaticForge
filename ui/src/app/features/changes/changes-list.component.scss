@@ -1,118 +1,109 @@
+// The table fills the frame (M35.1 item 11): it takes the height the page gives it, the pager sits under it.
 :host {
-  display: contents;
-}
-
-.changes__list {
   display: flex;
+  flex: 1 1 auto;
   flex-direction: column;
-  gap: var(--sf-2);
-  flex: 1 1 0;
+  gap: var(--sf-space-2);
   min-width: 0;
   min-height: 0;
 }
 
-.changes__table-wrap {
-  /* The rows' screen-reader-only (`.sf-sr-only`) labels are absolutely positioned. Unless this box is their containing block they escape
-     its clipping and stretch the whole document to where the unscrolled table would end. */
-  position: relative;
-  flex: 1;
+.list__table {
+  flex: 1 1 auto;
+  min-width: 0;
   min-height: 0;
-  overflow: auto;
-  border: 1px solid var(--sf-line);
-  border-radius: var(--sf-radius-md);
-  background: var(--sf-surface);
 }
 
-.changes__table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: var(--sf-text-sm);
-}
-
-.changes__table th {
-  position: sticky;
-  top: 0;
-  z-index: 1;
-  padding: var(--sf-2);
-  border-bottom: 1px solid var(--sf-line);
-  background: var(--sf-surface);
-  color: var(--sf-slate);
-  font-size: var(--sf-text-xs);
-  font-weight: 600;
-  text-align: left;
-  white-space: nowrap;
-}
-
-.changes__table td {
-  padding: var(--sf-1) var(--sf-2);
-  border-bottom: 1px solid var(--sf-line);
-  vertical-align: middle;
-}
-
-.changes__row {
-  cursor: pointer;
-}
-
-.changes__row:hover {
-  background: var(--sf-paper);
-}
-
-.changes__row:focus-visible {
-  outline: 2px solid var(--sf-signal);
-  outline-offset: -2px;
-}
-
-.changes__row--selected {
-  background: color-mix(in srgb, var(--sf-signal) 6%, transparent);
-}
-
-.changes__row--focused {
-  box-shadow: inset 3px 0 0 var(--sf-signal);
-}
-
-.changes__check {
-  width: 2rem;
-}
-
-.changes__name {
-  max-width: 22rem;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.changes__type {
-  margin-right: var(--sf-1);
-  color: var(--sf-slate);
-  vertical-align: middle;
-}
-
-.changes__label {
-  font-weight: 500;
-}
-
-.changes__uid {
-  margin-left: var(--sf-2);
-  font-family: var(--sf-font-mono);
-  font-size: var(--sf-text-xs);
-  color: var(--sf-slate);
-}
-
-.changes__by {
-  display: block;
-}
-
-.changes__pager {
+.list__pager {
   display: flex;
+  flex: 0 0 auto;
   align-items: center;
   justify-content: center;
-  gap: var(--sf-3);
-  font-size: var(--sf-text-sm);
+  gap: var(--sf-space-2);
 }
 
-.changes__muted,
-.changes__summary {
-  margin: 0;
-  font-size: var(--sf-text-xs);
-  color: var(--sf-slate);
+.list__page {
+  color: var(--sf-text-muted);
+  font-size: var(--sf-fs-13);
+  line-height: var(--sf-lh-13);
+}
+
+.cell-name {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sf-space-2);
+  min-width: 0;
+
+  &.is-open .cell-name__text {
+    color: var(--sf-accent);
+  }
+}
+
+.cell-name__icon {
+  flex-shrink: 0;
+  color: var(--sf-text-subtle);
+  font-size: var(--sf-fs-18);
+}
+
+.cell-name__text {
+  overflow: hidden;
+  color: var(--sf-text);
+  font-weight: var(--sf-weight-medium);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cell-uid {
+  min-width: 0;
+  color: var(--sf-text-subtle);
+  font-size: var(--sf-fs-12);
+}
+
+.cell-muted {
+  overflow: hidden;
+  color: var(--sf-text-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cell-lang {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sf-space-2);
+}
+
+.cell-lang__code {
+  padding: 0 var(--sf-space-1);
+  border: 1px solid var(--sf-border);
+  border-radius: var(--sf-radius-sm);
+  color: var(--sf-text);
+  font-size: var(--sf-fs-12);
+  line-height: var(--sf-lh-12);
+  font-weight: var(--sf-weight-medium);
+  text-decoration: none;
+}
+
+.cell-status {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sf-space-2);
+}
+
+.cell-status__clock {
+  color: var(--sf-text-muted);
+  font-size: var(--sf-fs-16);
+}
+
+.cell-changed {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sf-space-2);
+  min-width: 0;
+}
+
+.cell-changed__text {
+  overflow: hidden;
+  color: var(--sf-text-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }

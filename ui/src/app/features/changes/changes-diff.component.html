@@ -1,39 +1,32 @@
-@if (store.focusedRow(); as row) {
-  <aside class="changes__diff" aria-label="Diff">
-    <header class="changes__diff-header">
-      <div class="changes__diff-title">
-        <h2>{{ name(row) }}</h2>
-        <span class="changes__muted">
-          {{ typeInfo(row.type).label }}
-          @if (row.locale) {
-            · {{ store.locales.labelOf(row.locale) }}
-          }
-          · {{ statusLabel(row.status) }}
-        </span>
-      </div>
-      <a class="changes__open" [routerLink]="editorRoute(row).commands" [queryParams]="editorRoute(row).queryParams">
-        Open in editor
-      </a>
-      <button type="button" class="changes__close" aria-label="Close diff" (click)="store.closeDiff()">
-        <sf-icon name="close" />
-      </button>
-    </header>
-    <div class="changes__diff-body">
-      @if (store.diffLoading() && !store.diff()) {
-        <sf-spinner label="Loading diff…" />
-      } @else if (store.diffError()) {
-        <p class="changes__error" role="alert">{{ store.diffError() }}</p>
-      } @else if (store.diff()) {
-        <p class="changes__muted changes__diff-legend">Left: released · right: draft</p>
-        @if (row.status === 'NEW') {
-          <p class="changes__muted">Never released — everything is new.</p>
-        } @else if (row.status === 'DELETION_PENDING') {
-          <p class="changes__muted">Deleted in the draft; the released version stays online until the deletion is released.</p>
-        } @else if (row.status === 'UNPUBLISHED') {
-          <p class="changes__muted">Taken offline; releasing puts the draft online again.</p>
-        }
-        <sf-diff [changes]="store.diff()?.changes ?? []" [localeLabels]="store.localeLabels()" />
+@if (row(); as r) {
+  <header class="diff__head">
+    <div class="diff__title-row">
+      <sf-icon class="diff__type" [name]="typeIcon(r.type)" />
+      <h2 class="diff__title" id="changes-diff-title">{{ title() }}</h2>
+      <sf-button variant="ghost" size="sm" icon="close" [label]="t('diff.close')" (click)="store.closeDiff()" />
+    </div>
+    <div class="diff__meta">
+      <span>{{ meta() }}</span>
+      <sf-status size="sm" [tone]="toneOf(r.status)" [icon]="statusIcon(r.status)" [label]="statusText()" />
+    </div>
+    <div class="diff__tools">
+      <span class="diff__legend">{{ t('diff.legend') }}</span>
+      @if (route(); as target) {
+        <sf-button variant="secondary" size="sm" icon="open_in_new" [link]="target.commands" [queryParams]="target.queryParams">{{ t('diff.open') }}</sf-button>
       }
     </div>
-  </aside>
+  </header>
+
+  <div class="diff__body" [attr.aria-busy]="store.diffLoading()">
+    @if (store.diffLoading() && !store.diff()) {
+      <sf-spinner [label]="t('diff.loading')" />
+    } @else if (store.diffError()) {
+      <p class="diff__error" role="alert">{{ store.diffError() }}</p>
+    } @else if (store.diff()) {
+      @if (note(); as text) {
+        <p class="diff__note">{{ text }}</p>
+      }
+      <sf-diff [changes]="store.diff()?.changes ?? []" [localeLabels]="store.localeLabels()" />
+    }
+  </div>
 }

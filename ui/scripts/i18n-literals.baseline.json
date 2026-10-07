@@ -1,8 +1,4 @@
 {
-  "src/app/features/changes/changes-diff.component.html": 8,
-  "src/app/features/changes/changes-filters.component.html": 13,
-  "src/app/features/changes/changes-list.component.html": 20,
-  "src/app/features/changes/changes.component.html": 7,
   "src/app/features/channels/channels.component.html": 58,
   "src/app/features/content/move-target-dialog.component.ts": 5,
   "src/app/features/dashboard/archived-banner.component.ts": 3,

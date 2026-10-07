@@ -73,3 +73,45 @@ and list + detail panes are bordered cards with the splitter handle centred in a
   (changed languages pre-ticked, warnings needing explicit confirmation, a blocking error with an Open link); the
   schedules list (⋮ row actions, New schedule: release / unpublish / generation); the schedule dialog (explicit title,
   kind switch).
+
+## Notes (M35.23 part C): Changes — "no capability lost" checklist
+
+Written before the rebuild from `features/changes/*` as it stood at `69191aae`; every item is ticked at the end of part C.
+
+**URL and query**
+- [x] The query string holds `type` (repeatable), `status` (repeatable), `locale` (repeatable, `""` = every language), `changedBy`, `folder`, `q`, `sort`, `page` (0-based); defaults are left out; unknown or malformed values fall back; a filter change returns to page 0; deep links work and back/forward re-reads the list.
+- [x] The API request is unchanged (`queryFromState`: page size 50, `folderUuid`, shared locale key as an empty parameter).
+- [x] The list re-reads on a project change, on every release event (`ReleaseEventsStore.version`) and after Release / Discard / Schedule; the members are loaded for the "changed by" names; a stale request is cancelled.
+
+**Filter bar and chips**
+- [x] Search by name or UID (debounced 300 ms, the typed text is not overwritten while typing).
+- [x] Type filter (all seven releasable types, each with its icon), status filter (New, Changed, Deletion pending, Unpublished), language filter (only in a localized project), changed by (project members), folder (folders of all five stores as "Pages › About"), sort (newest, oldest, name A–Z, Z–A). Several types, statuses and languages can be picked at once.
+- [x] Removable chip per picked value (type, status, language incl. "All languages", changed by, folder, search text) and "Clear all"; chips only while a filter is set.
+
+**Table**
+- [x] One row per (asset, language); the default language is listed first within its asset.
+- [x] Columns: name with type icon (type name for screen readers) and UID (developer mode only, copyable), folder, language ("All languages" for the shared key; only in a localized project), status with a clock when a release is scheduled, changed (relative time + "by <member name>"), released (relative time or "—").
+- [x] Rows show names, never UUIDs; the changed-by column shows the member name.
+- [x] Selection checkboxes only for people who may release; select all on this page (indeterminate), Space toggles; the selection clears on a new page, filter or finished action.
+- [x] Row keyboard: ↑/↓ move, Space selects, Enter opens the diff, one tab stop.
+- [x] Pager (page X of Y) and the total count; the table fills the frame.
+- [x] Loading skeleton, empty state ("Everything is published" / "No changes match" with filters), error state with Retry.
+
+**Selection actions**
+- [x] Bulk bar with the selected count: Release…, Discard changes… (only the rows that have a released version; a hint when none do), Schedule release… (only with the schedule permission); not offered to people who may not release.
+- [x] Alt+Shift+R releases the selection (listed in the `?` sheet and the palette).
+- [x] The three dialogs get the selected rows as choices (asset, language, label with status, type, name, folder).
+
+**Diff pane**
+- [x] A row opens its released-to-draft diff beside the table (the open row is highlighted); the pane shows name, type, language, status, "Open in editor", close; the legend (left released, right draft); the per-status notes (never released, deletion pending, unpublished); loading and error states; the field diff with language labels.
+- [x] The diff follows its row after a re-read and closes when the row is gone.
+
+**Page**
+- [x] Heading and hint, the read-only label for a read-only project.
+
+**Outcome (part C).** All items above are met. Deviations from the sample, all kept capabilities of the old screen:
+the type, status and language filters take several picks (the URL holds them as repeated parameters; the sample has one pick
+per filter); a *Released* column stays (the sample has none); the folder column is developer-mode only (as in the sample,
+it used to show for everyone); the pane has no split/inline switch (the real diff is the structured `sf-diff`); the pager is
+the page's own (below the table), because the URL, not the table, holds the page. The open row is not in the URL (as before).
+Opening the pane re-creates the table (as History does); the selection is kept.

@@ -1,85 +1,26 @@
-<section class="changes__filters" aria-label="Filters">
-  <div class="changes__filter-row">
-    <label class="changes__search">
-      <sf-icon name="search" />
-      <span class="sf-sr-only">Search by name or UID</span>
-      <input type="search" placeholder="Search by name or UID…" [value]="store.searchDraft()" (input)="store.onSearch($event)" />
-    </label>
-    <label class="changes__select">
-      <span>Changed by</span>
-      <select [value]="store.state().changedBy ?? ''" (change)="store.onSelectFilter('changedBy', $event)">
-        <option value="">Anyone</option>
-        @for (member of members.members(); track member.userId) {
-          <option [value]="member.userId">{{ member.displayName || member.username }}</option>
-        }
-      </select>
-    </label>
-    <label class="changes__select">
-      <span>Folder</span>
-      <select [value]="store.state().folder ?? ''" (change)="store.onSelectFilter('folder', $event)">
-        <option value="">Everywhere</option>
-        @for (option of folderOptions(); track option.uuid) {
-          <option [value]="option.uuid">{{ option.label }}</option>
-        }
-      </select>
-    </label>
-    <label class="changes__select">
-      <span>Sort</span>
-      <select [value]="store.state().sort" (change)="store.onSelectFilter('sort', $event)">
-        @for (option of sortOptions; track option.value) {
-          <option [value]="option.value">{{ option.label }}</option>
-        }
-      </select>
-    </label>
-  </div>
-  <div class="changes__filter-row" role="group" aria-label="Type">
-    @for (option of typeOptions; track option.value) {
-      <button
-        type="button"
-        class="changes__toggle"
-        [class.changes__toggle--on]="isIn(store.state().type, option.value)"
-        [attr.aria-pressed]="isIn(store.state().type, option.value)"
-        (click)="store.toggleIn('type', option.value)"
-      >
-        <sf-icon [name]="option.icon" /> {{ option.label }}
-      </button>
-    }
-  </div>
-  <div class="changes__filter-row" role="group" aria-label="Status and language">
-    @for (status of statusOptions; track status) {
-      <button
-        type="button"
-        class="changes__toggle"
-        [class.changes__toggle--on]="isIn(store.state().status, status)"
-        [attr.aria-pressed]="isIn(store.state().status, status)"
-        (click)="store.toggleIn('status', status)"
-      >
-        {{ statusLabel(status) }}
-      </button>
-    }
-    @if (store.localeOptions().length > 0) {
-      <span class="changes__divider" aria-hidden="true"></span>
-      @for (option of store.localeOptions(); track option.value) {
-        <button
-          type="button"
-          class="changes__toggle"
-          [class.changes__toggle--on]="isIn(store.state().locale, option.value)"
-          [attr.aria-pressed]="isIn(store.state().locale, option.value)"
-          (click)="store.toggleIn('locale', option.value)"
-        >
-          {{ option.label }}
-        </button>
-      }
-    }
-  </div>
-  @if (chips().length > 0) {
-    <div class="changes__chips" aria-label="Active filters">
-      @for (chip of chips(); track chip.key) {
-        <button type="button" class="changes__chip" [attr.aria-label]="'Remove filter ' + chip.label" (click)="chip.remove()">
-          {{ chip.label }} <sf-icon name="close" />
-        </button>
-      }
-      <button type="button" class="changes__clear" (click)="store.clearAll()">Clear all</button>
-    </div>
+<div class="bar" role="search" [attr.aria-label]="t('filters.bar')">
+  <sf-search-input
+    class="bar__search"
+    [value]="store.searchDraft()"
+    [placeholder]="t('filters.placeholder')"
+    [aria-label]="t('filters.placeholder')"
+    (valueChange)="store.onSearch($event)"
+  />
+  @for (menu of menus(); track menu.id) {
+    <sf-menu variant="secondary" size="md" align="start" [text]="menu.text" [label]="menu.name" [items]="menu.items" />
   }
-</section>
+  <span class="bar__end">
+    <sf-menu variant="ghost" size="md" [text]="sortText()" [label]="t('sort.label')" [items]="sortItems()" />
+  </span>
+</div>
+
+@if (chips().length) {
+  <ul class="chips" [attr.aria-label]="t('filters.active')">
+    @for (chip of chips(); track chip.key) {
+      <li><sf-tag removable [label]="chip.label" (removed)="chip.remove()" /></li>
+    }
+    <li>
+      <sf-button variant="ghost" size="md" (click)="store.clearAll()">{{ t('filters.clear') }}</sf-button>
+    </li>
+  </ul>
+}

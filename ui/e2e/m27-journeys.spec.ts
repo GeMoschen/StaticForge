@@ -425,18 +425,18 @@ test.describe('M27 release and scheduling journey', () => {
 
     // ── 3. The Changes view lists the edit with a headline-only diff; releasing it there updates EN only ──
     await rail(page, 'Changes');
-    const row = page.locator('.changes__row', { hasText: 'Alpha' }).filter({ hasText: 'EN' });
+    const row = page.locator('sf-changes-list .sf-data-table__row', { hasText: 'Alpha' }).filter({ hasText: 'EN' });
     await expect(row).toHaveCount(1);
     await row.click();
-    const diff = page.locator('.changes__diff');
+    const diff = page.locator('sf-changes-diff');
     await expect(diff.locator('.sf-diff__field')).toHaveCount(1);
     await expect(diff.locator('.sf-diff__path')).toHaveText('content.headline');
     await snap(page, '03-changes-diff');
     await row.getByRole('checkbox').check();
-    await page.locator('.changes__actions').getByRole('button', { name: 'Release…', exact: true }).click();
+    await page.locator('sf-changes-list .sf-data-table__bulk').getByRole('button', { name: 'Release…', exact: true }).click();
     const changesDialog = page.getByRole('dialog', { name: /^Release/ });
     await changesDialog.locator('.dialog__actions').getByRole('button', { name: 'Release', exact: true }).click();
-    await expect(page.locator('.changes__row', { hasText: 'Alpha' })).toHaveCount(0);
+    await expect(page.locator('sf-changes-list .sf-data-table__row', { hasText: 'Alpha' })).toHaveCount(0);
     await build(page, api);
     expect(read(target.id, 'en/alpha.html')).toContain('Alpha EN v2');
     expect(read(target.id, 'alpha.html')).toContain('Alpha DE');
@@ -572,12 +572,13 @@ test.describe('M27 release and scheduling journey', () => {
     expect(read(target.id, 'beta.html')).toContain('Beta DE');
     expect(read(target.id, 'en/beta_new.html')).toContain('Beta EN');
     await rail(page, 'Changes');
-    await page.getByRole('button', { name: 'Deletion pending', exact: true }).click();
-    await expect(page.locator('.changes__row')).toHaveCount(2);
+    await page.getByRole('button', { name: 'Status', exact: true }).click();
+    await page.getByRole('menuitem', { name: /^Deletion pending/ }).click();
+    await expect(page.locator('sf-changes-list .sf-data-table__row')).toHaveCount(2);
     await page.getByRole('checkbox', { name: 'Select all on this page' }).check();
-    await page.locator('.changes__actions').getByRole('button', { name: 'Release…', exact: true }).click();
+    await page.locator('sf-changes-list .sf-data-table__bulk').getByRole('button', { name: 'Release…', exact: true }).click();
     await page.getByRole('dialog', { name: /^Release/ }).locator('.dialog__actions').getByRole('button', { name: 'Release', exact: true }).click();
-    await expect(page.locator('.changes__row')).toHaveCount(0);
+    await expect(page.locator('sf-changes-list .sf-data-table__row')).toHaveCount(0);
     await build(page, api);
     expect(read(target.id, 'beta.html')).toBeNull();
     expect(read(target.id, 'en/beta_new.html')).toBeNull();
@@ -614,7 +615,7 @@ test.describe('M27 release and scheduling journey', () => {
     await expect(bar(editor).locator('sf-release-badge .badge')).toBeVisible();
     await expect(bar(editor).getByRole('button', { name: /Release…|Schedule…|Unpublish…|Discard changes…/ })).toHaveCount(0);
     await rail(editor, 'Changes');
-    await expect(editor.locator('.changes__row', { hasText: 'Alpha' })).toHaveCount(1);
+    await expect(editor.locator('sf-changes-list .sf-data-table__row', { hasText: 'Alpha' })).toHaveCount(1);
     await expect(editor.getByRole('checkbox', { name: 'Select all on this page' })).toHaveCount(0);
     await rail(editor, 'Schedules');
     await expect(editor.getByRole('button', { name: 'New generation schedule' })).toHaveCount(0);

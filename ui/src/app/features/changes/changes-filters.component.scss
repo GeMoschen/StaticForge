@@ -1,113 +1,33 @@
+// One row: search grows, the filter pills keep their size, the sort sits at the end. Wraps only as a last resort.
 :host {
-  display: contents;
-}
-
-.changes__filters {
   display: flex;
   flex-direction: column;
-  gap: var(--sf-2);
+  gap: var(--sf-space-2);
 }
 
-.changes__filter-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  gap: var(--sf-2);
-  min-width: 0;
-}
-
-.changes__search {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--sf-1);
-  flex: 1 1 14rem;
-  min-width: 0;
-  padding: var(--sf-1) var(--sf-2);
-  border: 1px solid var(--sf-line);
-  border-radius: var(--sf-radius-md);
-  background: var(--sf-surface);
-  color: var(--sf-slate);
-}
-
-.changes__search input {
-  flex: 1;
-  min-width: 0;
-  border: none;
-  background: transparent;
-  color: var(--sf-ink);
-  font-size: var(--sf-text-sm);
-  outline: none;
-}
-
-.changes__select {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-  font-size: var(--sf-text-xs);
-  color: var(--sf-slate);
-}
-
-.changes__select select {
-  max-width: 16rem;
-  padding: var(--sf-1) var(--sf-2);
-  border: 1px solid var(--sf-line);
-  border-radius: var(--sf-radius-md);
-  background: var(--sf-surface);
-  color: var(--sf-ink);
-  font-size: var(--sf-text-sm);
-}
-
-.changes__toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  padding: 2px var(--sf-2);
-  border: 1px solid var(--sf-line);
-  border-radius: 999px;
-  background: var(--sf-surface);
-  color: var(--sf-ink);
-  font-size: var(--sf-text-xs);
-  cursor: pointer;
-}
-
-.changes__toggle--on {
-  border-color: var(--sf-signal);
-  background: color-mix(in srgb, var(--sf-signal) 12%, transparent);
-  color: var(--sf-signal);
-  font-weight: 600;
-}
-
-.changes__divider {
-  width: 1px;
-  align-self: stretch;
-  background: var(--sf-line);
-}
-
-.changes__chips {
+.bar {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--sf-1);
+  gap: var(--sf-space-2);
 }
 
-.changes__chip {
-  display: inline-flex;
+.bar__search {
+  flex: 1 1 10rem;
+  min-width: 8rem;
+  max-width: 20rem;
+}
+
+.bar__end {
+  margin-inline-start: auto;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 2px;
-  padding: 2px var(--sf-2);
-  border: none;
-  border-radius: 999px;
-  background: var(--sf-paper);
-  color: var(--sf-ink);
-  font-size: var(--sf-text-xs);
-  cursor: pointer;
-}
-
-.changes__clear {
-  border: none;
-  background: none;
-  color: var(--sf-signal);
-  font-size: var(--sf-text-xs);
-  cursor: pointer;
+  gap: var(--sf-space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }

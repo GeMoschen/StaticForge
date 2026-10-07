@@ -1,77 +1,35 @@
+// The page fills the main region (no page scroll): header, filter bar and chips at the top, the table takes the rest.
 :host {
-  display: block;
-  height: 100%;
-  min-height: 0;
-}
-
-.changes {
   display: flex;
   flex-direction: column;
-  gap: var(--sf-3);
+  gap: var(--sf-space-4);
   height: 100%;
   min-height: 0;
-  padding: var(--sf-4);
-  box-sizing: border-box;
+  padding: var(--sf-space-4) var(--sf-space-6);
+  overflow: hidden;
 }
 
-.changes__title {
-  margin: 0;
-  font-family: var(--sf-font-display);
-  font-size: var(--sf-text-xl);
-  color: var(--sf-ink);
-}
-
-.changes__hint {
-  margin: 0;
-  font-size: var(--sf-text-xs);
-  color: var(--sf-slate);
-}
-
-.changes__readonly {
-  margin: 0;
-  padding: var(--sf-2) var(--sf-3);
-  border-radius: var(--sf-radius-md);
-  background: var(--sf-paper);
-  font-size: var(--sf-text-sm);
-  color: var(--sf-slate);
-}
-
-.changes__actions {
+.area__body {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--sf-2);
-  padding: var(--sf-2) var(--sf-3);
-  border: 1px solid var(--sf-line);
-  border-radius: var(--sf-radius-md);
-  background: var(--sf-surface);
-}
-
-.changes__selected {
-  font-size: var(--sf-text-sm);
-  font-weight: 600;
-}
-
-.changes__error {
-  margin: 0;
-  padding: var(--sf-2) var(--sf-3);
-  border-radius: var(--sf-radius-md);
-  background: color-mix(in srgb, var(--sf-rust) 12%, transparent);
-  color: var(--sf-rust);
-  font-size: var(--sf-text-sm);
-}
-
-.changes__main {
-  display: flex;
-  gap: var(--sf-3);
-  flex: 1;
+  flex: 1 1 auto;
   min-height: 0;
+}
+
+.area__split {
+  flex: 1 1 auto;
+  min-width: 0;
+  // Both panes are bordered cards: no hairline between them, and the handle sits centred in the gap (it still shows on
+  // hover and focus).
+  --sf-splitter-handle: transparent;
+  --sf-splitter-gap: var(--sf-space-2);
+}
+
+.area__pane {
+  display: flex;
+  height: 100%;
   min-width: 0;
 }
 
-// mirrors --sf-bp-lg: below it the diff stacks under the list
-@media (max-width: 1100px) {
-  .changes__main--split {
-    flex-direction: column;
-  }
+.area__diff {
+  height: 100%;
 }

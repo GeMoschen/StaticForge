@@ -1,5 +1,6 @@
 import { Injectable, OnDestroy, Signal, computed, inject, signal } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
+import { TranslocoService } from '@jsverse/transloco';
 import type { Subscription } from 'rxjs';
 import { ApiClient } from '../../core/api/api.client';
 import type { components } from '../../core/api/generated/schema.d.ts';
@@ -24,6 +25,7 @@ export class ChangesStore implements OnDestroy {
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
   private readonly members = inject(ProjectMembersStore);
+  private readonly transloco = inject(TranslocoService);
   readonly locales = inject(LocalesStore);
 
   private projectKey!: Signal<string>;
@@ -35,11 +37,14 @@ export class ChangesStore implements OnDestroy {
   readonly totalPages = signal(0);
   readonly loading = signal(false);
   readonly error = signal<string | null>(null);
-  /** Selected rows by `uuid|locale`; only rows of the current page. */
-  readonly selected = signal<ReadonlySet<string>>(new Set());
-  /** The row whose diff is shown, and the row the keyboard is on. */
+  /**
+   * The selection as the table reports it: keys (`uuid|locale`) and the selected rows of the current page. A new page,
+   * filter or finished action empties it, and the table follows (it is set to these keys).
+   */
+  readonly selectedKeys = signal<readonly string[]>([]);
+  readonly selectedRows = signal<readonly ChangeRowView[]>([]);
+  /** The row whose diff is shown (the table's current row). */
   readonly focusedKey = signal<string | null>(null);
-  readonly activeIndex = signal(0);
   readonly diff = signal<ChangeDiffView | null>(null);
   readonly diffLoading = signal(false);
   readonly diffError = signal<string | null>(null);
@@ -63,9 +68,34 @@ export class ChangesStore implements OnDestroy {
     return s.type.length + s.status.length + s.locale.length > 0 || s.changedBy != null || !!s.folder || !!s.q;
   });
 
-  readonly selectedRows = computed(() => this.rows().filter((row) => this.selected().has(this.keyOf(row))));
-  readonly allSelected = computed(() => this.rows().length > 0 && this.selectedRows().length === this.rows().length);
-  readonly someSelected = computed(() => this.selectedRows().length > 0 && !this.allSelected());
+  /**
+   * The rows as listed: one row per language, an asset's languages together with the default language first (decision
+   * 20). The server's order between assets is kept (the first row of an asset places the asset); only a page's rows
+   * move, so an asset split by a page boundary keeps its languages on both pages.
+   */
+  readonly listed = computed<ChangeRowView[]>(() => {
+    const rows = this.rows();
+    const defaultLocale = this.locales.defaultLocale();
+    const order = this.locales.locales().map((l) => l.code ?? '');
+    const rank = (row: ChangeRowView) => {
+      const locale = row.locale ?? '';
+      if (locale === (defaultLocale ?? '')) {
+        return -1;
+      }
+      const index = order.indexOf(locale);
+      return index < 0 ? order.length : index;
+    };
+    const groups = new Map<string, ChangeRowView[]>();
+    for (const row of rows) {
+      const group = groups.get(row.uuid ?? '');
+      if (group) {
+        group.push(row);
+      } else {
+        groups.set(row.uuid ?? '', [row]);
+      }
+    }
+    return [...groups.values()].flatMap((group) => [...group].sort((a, b) => rank(a) - rank(b)));
+  });
   readonly discardable = computed(() => this.selectedRows().filter((row) => eligible('discard', row.status)));
   readonly focusedRow = computed(() => this.rows().find((row) => this.keyOf(row) === this.focusedKey()) ?? null);
 
@@ -95,6 +125,11 @@ export class ChangesStore implements OnDestroy {
     this.load(key, state);
   }
 
+  /** Reads the page again (the table's Retry). */
+  retry(): void {
+    this.reload(this.projectKey(), this.state());
+  }
+
   // ── Filters ────────────────────────────────────────────────────────────
 
   toggleIn(key: 'type' | 'status' | 'locale', value: string): void {
@@ -103,19 +138,7 @@ export class ChangesStore implements OnDestroy {
     this.update({ [key]: next });
   }
 
-  onSelectFilter(key: 'changedBy' | 'folder' | 'sort', event: Event): void {
-    const value = (event.target as HTMLSelectElement).value;
-    if (key === 'changedBy') {
-      this.update({ changedBy: value ? Number(value) : null });
-    } else if (key === 'folder') {
-      this.update({ folder: value || null });
-    } else {
-      this.update({ sort: value as ChangesState['sort'] });
-    }
-  }
-
-  onSearch(event: Event): void {
-    const value = (event.target as HTMLInputElement).value;
+  onSearch(value: string): void {
     this.searchDraft.set(value);
     if (this.searchTimer) {
       clearTimeout(this.searchTimer);
@@ -142,29 +165,16 @@ export class ChangesStore implements OnDestroy {
 
   // ── Selection and diff ─────────────────────────────────────────────────
 
-  isSelected(row: ChangeRowView): boolean {
-    return this.selected().has(this.keyOf(row));
+  setSelection(keys: readonly string[], rows: readonly ChangeRowView[]): void {
+    this.selectedKeys.set(keys);
+    this.selectedRows.set(rows);
   }
 
-  toggleRow(row: ChangeRowView): void {
-    const key = this.keyOf(row);
-    this.selected.update((current) => {
-      const next = new Set(current);
-      if (next.has(key)) {
-        next.delete(key);
-      } else {
-        next.add(key);
-      }
-      return next;
-    });
+  clearSelection(): void {
+    this.setSelection([], []);
   }
 
-  toggleAll(): void {
-    this.selected.set(this.allSelected() ? new Set() : new Set(this.rows().map((row) => this.keyOf(row))));
-  }
-
-  openDiff(row: ChangeRowView, index: number): void {
-    this.activeIndex.set(index);
+  openDiff(row: ChangeRowView): void {
     const key = this.keyOf(row);
     if (this.focusedKey() === key && this.diff()) {
       return;
@@ -193,8 +203,7 @@ export class ChangesStore implements OnDestroy {
         this.total.set(page.totalElements ?? 0);
         this.totalPages.set(page.totalPages ?? 0);
         // A new page, filter or a finished action: nothing stays selected, the diff follows its row if still listed.
-        this.selected.set(new Set());
-        this.activeIndex.set(0);
+        this.clearSelection();
         const focused = rows.find((row) => this.keyOf(row) === this.focusedKey());
         if (focused) {
           this.loadDiff(focused);
@@ -205,7 +214,7 @@ export class ChangesStore implements OnDestroy {
       error: (err: unknown) => {
         this.loading.set(false);
         this.rows.set([]);
-        this.error.set(problemOf(err, 'Could not load the changes — try again in a moment.').detail);
+        this.error.set(problemOf(err, this.transloco.translate('changes.page.loadFailed')).detail);
       },
     });
   }
@@ -225,7 +234,7 @@ export class ChangesStore implements OnDestroy {
       error: (err: unknown) => {
         this.diffLoading.set(false);
         this.diff.set(null);
-        this.diffError.set(problemOf(err, 'Could not load the diff.').detail);
+        this.diffError.set(problemOf(err, this.transloco.translate('changes.diff.loadFailed')).detail);
       },
     });
   }

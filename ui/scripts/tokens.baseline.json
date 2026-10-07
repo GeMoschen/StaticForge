@@ -1,8 +1,4 @@
 {
-  "src/app/features/changes/changes-list.component.scss": {
-    "colors": 0,
-    "zIndex": 1
-  },
   "src/app/features/channels/channels.component.scss": {
     "colors": 2,
     "zIndex": 2

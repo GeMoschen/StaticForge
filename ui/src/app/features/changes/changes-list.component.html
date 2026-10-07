@@ -1,104 +1,84 @@
-<div class="changes__list">
-  @if (store.loading() && store.rows().length === 0) {
-    <sf-spinner label="Loading changes…" />
-  } @else if (store.rows().length === 0) {
-    <sf-empty-state
-      [title]="store.filtered() ? 'No changes match' : 'Everything is published'"
-      [description]="store.filtered() ? 'Change or clear the filters.' : 'Every page, record and file is online as it is saved.'"
-      icon="task_alt"
-    />
-  } @else {
-    <div class="changes__table-wrap">
-      <table class="changes__table" [attr.aria-busy]="store.loading()" [attr.aria-rowcount]="store.total()">
-        <caption class="sf-sr-only">
-          Unreleased changes — arrow keys move between rows, Space selects, Enter shows the diff
-        </caption>
-        <thead>
-          <tr>
-            <th scope="col" class="changes__check">
-              @if (permissions.canRelease()) {
-                <input
-                  type="checkbox"
-                  aria-label="Select all on this page"
-                  [checked]="store.allSelected()"
-                  [indeterminate]="store.someSelected()"
-                  (change)="store.toggleAll()"
-                />
-              }
-            </th>
-            <th scope="col">Name</th>
-            <th scope="col">Folder</th>
-            @if (store.localeOptions().length > 0) {
-              <th scope="col">Language</th>
-            }
-            <th scope="col">Status</th>
-            <th scope="col">Changed</th>
-            <th scope="col">Released</th>
-          </tr>
-        </thead>
-        <tbody>
-          @for (row of store.rows(); track store.keyOf(row); let rowIndex = $index) {
-            <tr
-              #row
-              class="changes__row"
-              [class.changes__row--focused]="store.focusedKey() === store.keyOf(row)"
-              [class.changes__row--selected]="store.isSelected(row)"
-              [attr.tabindex]="rowIndex === store.activeIndex() ? 0 : -1"
-              [attr.aria-selected]="store.isSelected(row)"
-              (click)="store.openDiff(row, rowIndex)"
-              (keydown)="onRowKeydown($event, row, rowIndex)"
-              (focus)="store.activeIndex.set(rowIndex)"
-            >
-              <td class="changes__check" (click)="$event.stopPropagation()">
-                @if (permissions.canRelease()) {
-                  <input
-                    type="checkbox"
-                    tabindex="-1"
-                    [attr.aria-label]="'Select ' + name(row)"
-                    [checked]="store.isSelected(row)"
-                    (change)="store.toggleRow(row)"
-                  />
-                }
-              </td>
-              <td class="changes__name">
-                <sf-icon class="changes__type" [name]="typeInfo(row.type).icon" [attr.title]="typeInfo(row.type).label" />
-                <span class="sf-sr-only">{{ typeInfo(row.type).label }}:</span>
-                <span class="changes__label">{{ name(row) }}</span>
-                <code class="changes__uid">{{ row.uid }}</code>
-              </td>
-              <td class="changes__muted">{{ folderText(row) }}</td>
-              @if (store.localeOptions().length > 0) {
-                <td>{{ row.locale ? localeTag(row.locale) : 'All' }}</td>
-              }
-              <td>
-                <sf-release-badge [release]="releaseOf(row)" [scheduled]="row.scheduled" [locale]="row.locale ?? ''" />
-              </td>
-              <td class="changes__muted">
-                {{ row.changedAt | sfRelativeTime }}
-                @if (row.changedBy != null) {
-                  <span class="changes__by">by {{ members.nameOf(row.changedBy) }}</span>
-                }
-              </td>
-              <td class="changes__muted">
-                @if (row.releasedAt) {
-                  {{ row.releasedAt | sfRelativeTime }}
-                } @else {
-                  —
-                }
-              </td>
-            </tr>
-          }
-        </tbody>
-      </table>
-    </div>
-    @if (store.totalPages() > 1) {
-      <nav class="changes__pager" aria-label="Change pages">
-        <sf-button variant="ghost" [disabled]="store.state().page === 0" (click)="store.goToPage(store.state().page - 1)">Previous</sf-button>
-        <span aria-live="polite">Page {{ store.state().page + 1 }} of {{ store.totalPages() }} · {{ store.total() }} changes</span>
-        <sf-button variant="ghost" [disabled]="store.state().page + 1 >= store.totalPages()" (click)="store.goToPage(store.state().page + 1)">Next</sf-button>
-      </nav>
+<sf-data-table
+  class="list__table"
+  mode="server"
+  paging="none"
+  [selectable]="permissions.canRelease()"
+  [columnChooser]="false"
+  [columns]="columns()"
+  [rows]="store.listed()"
+  [total]="store.total()"
+  [loading]="store.loading()"
+  [error]="store.error()"
+  [rowKey]="rowKey"
+  [rowLabel]="rowLabel"
+  [currentKey]="store.focusedKey()"
+  [bulkActions]="bulkActions()"
+  [label]="t('page.table')"
+  [emptyTitle]="t(store.filtered() ? 'page.emptyFiltered' : 'page.empty')"
+  [emptyDescription]="t(store.filtered() ? 'page.emptyFilteredHint' : 'page.emptyHint')"
+  (rowOpen)="store.openDiff($event)"
+  (selectionChange)="onSelection($event)"
+  (retry)="store.retry()"
+>
+  <ng-template sfDataTableCell="name" [sfDataTableCellRows]="store.listed()" let-row>
+    <span class="cell-name" [class.is-open]="store.keyOf(row) === store.focusedKey()">
+      <sf-icon class="cell-name__icon" [name]="typeIcon(row.type)" [sfTooltip]="typeName(row.type)" />
+      <span class="sf-sr-only">{{ typeName(row.type) }}:</span>
+      <span class="cell-name__text">{{ name(row) }}</span>
+      @if (dev() && row.uid) {
+        <sf-copyable class="cell-uid" [value]="row.uid" [label]="t('page.uid')" />
+      }
+    </span>
+  </ng-template>
+  <ng-template sfDataTableCell="lang" [sfDataTableCellRows]="store.listed()" let-row>
+    @if (row.locale) {
+      <span class="cell-lang">
+        <abbr class="cell-lang__code" [attr.title]="langName(row.locale)">{{ row.locale.toUpperCase() }}</abbr>
+        @if (isDefault(row.locale)) {
+          <span class="cell-muted">{{ t('page.defaultLang') }}</span>
+        }
+      </span>
     } @else {
-      <p class="changes__summary" aria-live="polite">{{ store.total() }} {{ store.total() === 1 ? 'change' : 'changes' }}</p>
+      <span class="cell-muted">{{ t('page.allLanguages') }}</span>
     }
-  }
-</div>
+  </ng-template>
+  <ng-template sfDataTableCell="status" [sfDataTableCellRows]="store.listed()" let-row>
+    <span class="cell-status">
+      <sf-status size="sm" [tone]="toneOf(row.status)" [icon]="statusIcon(row.status)" [label]="statusText(row.status)" />
+      @if (scheduledText(row); as scheduled) {
+        <sf-icon class="cell-status__clock" name="schedule" [sfTooltip]="scheduled" />
+        <span class="sf-sr-only">{{ scheduled }}</span>
+      }
+    </span>
+  </ng-template>
+  <ng-template sfDataTableCell="changed" [sfDataTableCellRows]="store.listed()" let-row>
+    <span class="cell-changed">
+      @if (row.changedBy != null) {
+        <sf-avatar size="sm" [name]="members.nameOf(row.changedBy)" />
+        <span class="cell-changed__text">{{ members.nameOf(row.changedBy) }} · <sf-relative-time [value]="row.changedAt" /></span>
+      } @else {
+        <span class="cell-changed__text"><sf-relative-time [value]="row.changedAt" /></span>
+      }
+    </span>
+  </ng-template>
+  <ng-template sfDataTableCell="released" [sfDataTableCellRows]="store.listed()" let-row>
+    <span class="cell-muted">
+      @if (row.releasedAt) {
+        <sf-relative-time [value]="row.releasedAt" />
+      } @else {
+        —
+      }
+    </span>
+  </ng-template>
+  <ng-template sfDataTableCell="folder" [sfDataTableCellRows]="store.listed()" let-row>
+    <span class="cell-muted">{{ folderText(row) }}</span>
+  </ng-template>
+</sf-data-table>
+
+@if (store.totalPages() > 1) {
+  <nav class="list__pager" [attr.aria-label]="t('page.pages')">
+    <sf-button variant="ghost" size="sm" icon="chevron_left" [label]="t('page.previousPage')" [disabled]="store.state().page === 0" (click)="store.goToPage(store.state().page - 1)" />
+    <span class="list__page" aria-live="polite">{{ t('page.pageOf', { page: store.state().page + 1, pages: store.totalPages() }) }}</span>
+    <sf-button variant="ghost" size="sm" icon="chevron_right" [label]="t('page.nextPage')" [disabled]="store.state().page + 1 >= store.totalPages()" (click)="store.goToPage(store.state().page + 1)" />
+  </nav>
+}

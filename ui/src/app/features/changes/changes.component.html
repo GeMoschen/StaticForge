@@ -5,43 +5,38 @@
   <sf-schedule-dialog [projectKey]="projectKey()" [types]="['RELEASE']" [choices]="choices" (closed)="scheduling.set(null)" />
 }
 
-<div class="changes">
-  <header class="changes__header">
-    <div>
-      <h1 class="changes__title">Changes</h1>
-      <p class="changes__hint">
-        Everything not published as it is now. Releasing makes it go online with the next build.
-      </p>
-    </div>
-  </header>
+<sf-page-header class="area__header" [title]="'changes.page.title' | transloco" [subtitle]="'changes.page.subtitle' | transloco">
+  <sf-badge sfPageHeaderStatus [label]="'changes.page.count' | transloco: { count: store.total() }" />
+</sf-page-header>
 
-  @if (access.readOnlyLabel()) {
-    <p class="changes__readonly" role="status">{{ access.readOnlyLabel() }}</p>
+@if (access.readOnlyLabel(); as label) {
+  <sf-banner tone="info">{{ label }}</sf-banner>
+}
+
+<sf-changes-filters />
+
+<div class="area__body">
+  @if (store.focusedRow()) {
+    <sf-splitter
+      class="area__split"
+      sized="end"
+      paneId="changes-diff"
+      [defaultSize]="420"
+      [min]="320"
+      [max]="640"
+      [minOther]="360"
+      [label]="'changes.diff.resize' | transloco"
+    >
+      <div sfSplitterStart class="area__pane">
+        <ng-container *ngTemplateOutlet="listTpl" />
+      </div>
+      <sf-changes-diff sfSplitterEnd class="area__diff" [projectKey]="projectKey()" />
+    </sf-splitter>
+  } @else {
+    <ng-container *ngTemplateOutlet="listTpl" />
   }
-
-  <sf-changes-filters />
-
-  @if (permissions.canRelease() && store.selectedRows().length > 0) {
-    <div class="changes__actions" role="toolbar" aria-label="Selection">
-      <span class="changes__selected" aria-live="polite">{{ store.selectedRows().length }} selected</span>
-      <sf-button variant="primary" (click)="releaseSelected()">Release…</sf-button>
-      <sf-button variant="secondary" [disabled]="store.discardable().length === 0" (click)="discardSelected()">
-        Discard changes…
-      </sf-button>
-      @if (permissions.canScheduleRelease()) {
-        <sf-button variant="secondary" (click)="scheduleSelected()">Schedule release…</sf-button>
-      }
-    </div>
-  }
-
-  @if (store.error(); as message) {
-    <p class="changes__error" role="alert">{{ message }}</p>
-  }
-
-  <div class="changes__main" [class.changes__main--split]="store.focusedKey() !== null">
-    <sf-changes-list />
-    @if (store.focusedRow()) {
-      <sf-changes-diff [projectKey]="projectKey()" />
-    }
-  </div>
 </div>
+
+<ng-template #listTpl>
+  <sf-changes-list (release)="releaseSelected($event)" (schedule)="scheduleSelected($event)" (discard)="discardSelected($event)" />
+</ng-template>

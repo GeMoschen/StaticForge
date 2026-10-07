@@ -14,22 +14,26 @@ export interface ChangesState {
 
 export type ChangesSort = 'changedAt,desc' | 'changedAt,asc' | 'displayName,asc' | 'displayName,desc';
 
-export const SORTS: readonly { value: ChangesSort; label: string }[] = [
-  { value: 'changedAt,desc', label: 'Newest change first' },
-  { value: 'changedAt,asc', label: 'Oldest change first' },
-  { value: 'displayName,asc', label: 'Name A–Z' },
-  { value: 'displayName,desc', label: 'Name Z–A' },
-];
+/** The sorts, as the sort menu offers them. */
+export const SORTS: readonly ChangesSort[] = ['changedAt,desc', 'changedAt,asc', 'displayName,asc', 'displayName,desc'];
 
-/** The releasable types (epic decision 1), as the type filter offers them. */
-export const CHANGE_TYPES: readonly { value: string; label: string; icon: string }[] = [
-  { value: 'PAGE', label: 'Page', icon: 'description' },
-  { value: 'RECORD', label: 'Record', icon: 'table_rows' },
-  { value: 'RECORD_SET', label: 'Record set', icon: 'dataset' },
-  { value: 'GLOBAL_SET', label: 'Global set', icon: 'tune' },
-  { value: 'MEDIA', label: 'Media', icon: 'image' },
-  { value: 'PAGE_REFERENCE', label: 'Navigation reference', icon: 'link' },
-  { value: 'FOLDER', label: 'Folder', icon: 'folder' },
+/** The translation key of a sort (`changes.sort.<key>`). */
+export const SORT_KEYS: Readonly<Record<ChangesSort, string>> = {
+  'changedAt,desc': 'newest',
+  'changedAt,asc': 'oldest',
+  'displayName,asc': 'az',
+  'displayName,desc': 'za',
+};
+
+/** The releasable types (epic decision 1), as the type filter offers them (their names are `enum.assetType.<value>`). */
+export const CHANGE_TYPES: readonly { value: string; icon: string }[] = [
+  { value: 'PAGE', icon: 'description' },
+  { value: 'RECORD', icon: 'table_rows' },
+  { value: 'RECORD_SET', icon: 'dataset' },
+  { value: 'GLOBAL_SET', icon: 'tune' },
+  { value: 'MEDIA', icon: 'image' },
+  { value: 'PAGE_REFERENCE', icon: 'link' },
+  { value: 'FOLDER', icon: 'folder' },
 ];
 
 /** The statuses a pending change can have (everything but `PUBLISHED`). */
@@ -48,7 +52,7 @@ export function asList(value: QueryValue): string[] {
 }
 
 function isSort(value: string | undefined): value is ChangesSort {
-  return SORTS.some((sort) => sort.value === value);
+  return SORTS.some((sort) => sort === value);
 }
 
 /** The state of the URL's query parameters; unknown or malformed values fall back to the defaults. */
@@ -106,8 +110,9 @@ export function queryFromState(state: ChangesState): ChangesQuery {
   };
 }
 
-export function typeInfo(type: string | null | undefined): { label: string; icon: string } {
-  return CHANGE_TYPES.find((t) => t.value === type) ?? { label: type ?? 'Asset', icon: 'draft' };
+/** The icon of a type (a generic one for a type the list does not know). */
+export function typeIcon(type: string | null | undefined): string {
+  return CHANGE_TYPES.find((t) => t.value === type)?.icon ?? 'draft';
 }
 
 /** What the nav rail counts: everything that isn't live as it is — new, changed, pending deletion (M27.6.2). */

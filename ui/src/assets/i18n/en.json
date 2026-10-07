@@ -4613,6 +4613,85 @@
       "rollbackFailed": "Could not roll the project back — try again in a moment."
     }
   },
+  "changes": {
+    "page": {
+      "title": "Changes",
+      "subtitle": "Everything not published as it is now. Releasing makes it go online with the next build.",
+      "count": "{count, plural, one {# change} other {# changes}}",
+      "table": "Unreleased changes",
+      "empty": "Everything is published",
+      "emptyHint": "Every page, record and file is online as it is saved.",
+      "emptyFiltered": "No changes match",
+      "emptyFilteredHint": "Change or clear the filters.",
+      "loadFailed": "Could not load the changes — try again in a moment.",
+      "untitled": "Untitled",
+      "uid": "UID",
+      "defaultLang": "default",
+      "allLanguages": "All languages",
+      "pages": "Change pages",
+      "previousPage": "Previous page",
+      "nextPage": "Next page",
+      "pageOf": "Page {page} of {pages}",
+      "scheduledFor": "{kind} scheduled for {time}",
+      "discardNothing": "Nothing to discard: new and unpublished items have no released version to go back to."
+    },
+    "columns": {
+      "name": "Name",
+      "lang": "Language",
+      "status": "Status",
+      "changed": "Changed",
+      "released": "Released",
+      "folder": "Folder"
+    },
+    "filters": {
+      "type": "Type",
+      "status": "Status",
+      "lang": "Language",
+      "by": "Changed by",
+      "folder": "Folder",
+      "picked": "{filter}: {value}",
+      "count": "{count} selected",
+      "selected": "Selected",
+      "search": "“{text}”",
+      "any": {
+        "type": "All types",
+        "status": "All statuses",
+        "lang": "All languages",
+        "by": "Anyone",
+        "folder": "Everywhere"
+      },
+      "bar": "Filter changes",
+      "placeholder": "Search by name or UID…",
+      "active": "Active filters",
+      "clear": "Clear all"
+    },
+    "sort": {
+      "label": "Sort changes",
+      "pill": "Sort: {sort}",
+      "newest": "Newest change first",
+      "oldest": "Oldest change first",
+      "az": "Name A–Z",
+      "za": "Name Z–A"
+    },
+    "bulk": {
+      "release": "Release…",
+      "schedule": "Schedule…",
+      "discard": "Discard…"
+    },
+    "diff": {
+      "resize": "Resize the diff pane",
+      "close": "Close the diff",
+      "legend": "Left: released · right: draft",
+      "open": "Open in editor",
+      "loading": "Loading diff…",
+      "loadFailed": "Could not load the diff.",
+      "notes": {
+        "NEW": "Never released — everything is new.",
+        "DELETION_PENDING": "Deleted in the draft; the released version stays online until the deletion is released.",
+        "UNPUBLISHED": "Taken offline; releasing puts the draft online again."
+      }
+    }
+  },
   "auth": {
     "login": {
       "title": "Sign in",

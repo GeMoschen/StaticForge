@@ -1,12 +1,17 @@
+import { NgTemplateOutlet } from '@angular/common';
 import { ChangeDetectionStrategy, Component, computed, effect, inject, input, signal, untracked } from '@angular/core';
+import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
 import { ProjectAccessStore } from '../../core/project/project-access.store';
 import { ProjectPermissionsStore } from '../../core/project/project-permissions.store';
 import { ShortcutService } from '../../core/ui/shortcut.service';
-import { SfButtonComponent } from '../../shared/components/sf-button.component';
+import { SfBadgeComponent } from '../../shared/components/display/sf-badge.component';
+import { SfBannerComponent } from '../../shared/components/layout/sf-banner.component';
+import { SfPageHeaderComponent } from '../../shared/components/layout/sf-page-header.component';
+import { SfSplitterComponent } from '../../shared/components/splitter/sf-splitter.component';
 import { ReleaseDialogComponent } from '../release/release-dialog.component';
 import { ReleaseEventsStore } from '../release/release-events.store';
-import { type ReleaseChoice, type ReleaseMode, assetName } from '../release/release-choice.util';
-import { type ReleaseStatus, localeTag, statusLabel } from '../release/release-status.util';
+import { type ReleaseChoice, type ReleaseMode, eligible } from '../release/release-choice.util';
+import type { ReleaseStatus } from '../release/release-status.util';
 import { ScheduleDialogComponent } from '../schedules/schedule-dialog.component';
 import { ChangesDiffComponent } from './changes-diff.component';
 import { ChangesFiltersComponent } from './changes-filters.component';
@@ -15,10 +20,10 @@ import { type ChangesState, type QueryValue, stateFromParams } from './changes-q
 import { type ChangeRowView, ChangesStore } from './changes.store';
 
 /**
- * The Changes view (M27.6.2): every unreleased (asset, locale) of the project, server-paged, filtered through the URL,
- * with the released-to-draft diff of the focused row and — for whoever may release — multi-select Release,
- * Discard and Schedule on the current page. One action is one revision; afterwards the list re-reads and the
- * selection clears.
+ * The Changes view (M27.6.2, rebuilt on `sf-data-table` in M35.23): every unreleased (asset, language) of the project,
+ * server-paged, filtered through the URL, with the released-to-draft diff of the open row in an `sf-splitter` pane and
+ * — for whoever may release — multi-select Release, Discard and Schedule on the current page. One action is one
+ * revision; afterwards the list re-reads and the selection clears.
  *
  * <p>This component owns the router-bound query, the load effect and the release / discard / schedule actions; the
  * filter bar, the table and the diff are sub-components sharing the feature-scoped {@link ChangesStore}.
@@ -28,7 +33,12 @@ import { type ChangeRowView, ChangesStore } from './changes.store';
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
-    SfButtonComponent,
+    NgTemplateOutlet,
+    SfBadgeComponent,
+    SfBannerComponent,
+    SfPageHeaderComponent,
+    SfSplitterComponent,
+    TranslocoPipe,
     ReleaseDialogComponent,
     ScheduleDialogComponent,
     ChangesFiltersComponent,
@@ -41,6 +51,7 @@ import { type ChangeRowView, ChangesStore } from './changes.store';
 })
 export class ChangesComponent {
   private readonly events = inject(ReleaseEventsStore);
+  private readonly transloco = inject(TranslocoService);
   protected readonly store = inject(ChangesStore);
   protected readonly permissions = inject(ProjectPermissionsStore);
   protected readonly access = inject(ProjectAccessStore);
@@ -96,28 +107,32 @@ export class ChangesComponent {
     });
   }
 
-  private choicesOf(rows: ChangeRowView[]): ReleaseChoice[] {
-    return rows.map((row) => ({
-      assetUuid: row.uuid ?? '',
-      locale: row.locale ?? '',
-      label: `${assetName(row)}${row.locale ? ` · ${localeTag(row.locale)}` : ''} — ${statusLabel(row.status)}`,
-      status: (row.status as ReleaseStatus) ?? null,
-      checked: true,
-      assetType: row.type,
-      assetName: assetName(row),
-      folderPath: row.folderPath,
-    }));
+  private choicesOf(rows: readonly ChangeRowView[]): ReleaseChoice[] {
+    return rows.map((row) => {
+      const name = row.displayName || row.uid || this.transloco.translate('changes.page.untitled');
+      const status = this.transloco.translate(`enum.releaseStatus.${row.status}`);
+      return {
+        assetUuid: row.uuid ?? '',
+        locale: row.locale ?? '',
+        label: `${name}${row.locale ? ` · ${row.locale.toUpperCase()}` : ''} — ${status}`,
+        status: (row.status as ReleaseStatus) ?? null,
+        checked: true,
+        assetType: row.type,
+        assetName: name,
+        folderPath: row.folderPath,
+      };
+    });
   }
 
-  protected releaseSelected(): void {
-    this.dialog.set({ mode: 'release', choices: this.choicesOf(this.store.selectedRows()) });
+  protected releaseSelected(rows: readonly ChangeRowView[] = this.store.selectedRows()): void {
+    this.dialog.set({ mode: 'release', choices: this.choicesOf(rows) });
   }
 
-  protected discardSelected(): void {
-    this.dialog.set({ mode: 'discard', choices: this.choicesOf(this.store.discardable()) });
+  protected discardSelected(rows: readonly ChangeRowView[] = this.store.selectedRows()): void {
+    this.dialog.set({ mode: 'discard', choices: this.choicesOf(rows.filter((row) => eligible('discard', row.status))) });
   }
 
-  protected scheduleSelected(): void {
-    this.scheduling.set(this.choicesOf(this.store.selectedRows()));
+  protected scheduleSelected(rows: readonly ChangeRowView[] = this.store.selectedRows()): void {
+    this.scheduling.set(this.choicesOf(rows));
   }
 }

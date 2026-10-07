@@ -316,8 +316,8 @@ test.describe('M28 editor publishing journey', () => {
     await expect(bar(editor).locator('sf-release-badge .badge')).toContainText('New');
     await expect(bar(editor).getByRole('button', { name: /Release…|Schedule…|Unpublish…|Discard changes…/ })).toHaveCount(0);
     await rail(editor, 'Changes');
-    await editor.locator('.changes__row', { hasText: 'Story' }).getByRole('checkbox').check().catch(() => undefined);
-    await expect(editor.locator('.changes__actions')).toHaveCount(0);
+    await editor.locator('sf-changes-list .sf-data-table__row', { hasText: 'Story' }).getByRole('checkbox').check().catch(() => undefined);
+    await expect(editor.locator('sf-changes-list .sf-data-table__bulk')).toHaveCount(0);
     await generationTab(editor);
     await expect(editor.getByText('Builds are started by developers in this project.')).toBeVisible();
     await expect(editor.getByRole('button', { name: 'New generation' })).toHaveCount(0);
@@ -330,14 +330,14 @@ test.describe('M28 editor publishing journey', () => {
     await setPolicy(page, ['RELEASE']);
     await snap(page, '02-admin-release-on');
     await rail(editor, 'Changes');
-    const storyRow = editor.locator('.changes__row', { hasText: 'Story' });
+    const storyRow = editor.locator('sf-changes-list .sf-data-table__row', { hasText: 'Story' });
     await storyRow.getByRole('checkbox').check();
-    await editor.locator('.changes__actions').getByRole('button', { name: 'Release…', exact: true }).click();
+    await editor.locator('sf-changes-list .sf-data-table__bulk').getByRole('button', { name: 'Release…', exact: true }).click();
     await confirmRelease(editor);
-    await expect(editor.locator('.changes__row', { hasText: 'Story' })).toHaveCount(0);
+    await expect(editor.locator('sf-changes-list .sf-data-table__row', { hasText: 'Story' })).toHaveCount(0);
     await expect(editor.locator('sf-toast-host .toast--success').first()).toBeVisible();
     await expect(editor.locator('sf-toast-host').getByRole('button', { name: 'Build now' })).toHaveCount(0);
-    await expect(editor.locator('.changes__actions').getByRole('button', { name: 'Schedule release…' })).toHaveCount(0);
+    await expect(editor.locator('sf-changes-list .sf-data-table__bulk').getByRole('button', { name: 'Schedule…' })).toHaveCount(0);
 
     // ── 3. Incremental builds on: Build now after a release; the run is the editor's; the dialog is restricted ──
     await setPolicy(page, ['RELEASE', 'INCREMENTAL_BUILD']);
