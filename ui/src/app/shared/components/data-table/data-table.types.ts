@@ -85,6 +85,9 @@ export interface SfDataTableBulkAction<T> {
   label: string;
   icon?: string;
   variant?: SfButtonVariant;
+  /** Greyed out; with `disabledReason` it stays focusable and the reason is its tooltip. */
+  disabled?: boolean;
+  disabledReason?: string | null;
   /** Run when the button is clicked (`bulkAction` is emitted too). */
   action?: (selection: SfDataTableSelection<T>) => void;
 }

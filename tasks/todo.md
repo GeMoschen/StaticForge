@@ -116,7 +116,7 @@ every screen. Screen migration starts only after the style guide (M35.9) is sign
   - Sample extended (gate round 13, decisions 153-167, screenshots in `35-m35-ui-ux-overhaul/round13-shots/`); signed off 2026-10-04; building the app.
 - [x] M35.22 navigation and globals
   - Built (navigation + sibling-order backend, globals); 336 test files / 3,680 tests, build + lint + backend tests green. **Signed off by the user 2026-10-07** (sample deviations approved, see `35-m35-ui-ux-overhaul/022-navigation-globals.md`). **Open:** no Chrome check; e2e m8 journeys need the new UI (M35.31).
-- [ ] M35.23 changes, schedules, release dialogs
+- [x] M35.23 changes, schedules, release dialogs
 - [ ] M35.24 publishing, quality, redirects, URL registry
 - [ ] M35.25 settings sub-pages, members, import/export
 - [ ] M35.26 search page
@@ -1191,3 +1191,20 @@ empty-space menu (not templates); templates unchanged. Then: round 15 in `009-st
 - [x] Media (folders inline grid+list, Explorer grid, shared menus, Upload/Paste, selection menu, tree menus)
 - [x] Banner / build status centring in the sample topbar
 - [x] Gate round 15 + specs + ngc/vitest/lint; stop for sign-off
+
+## M35.23 changes, schedules, release dialogs (2026-10-07) — PLAN, awaiting check-in
+
+Reference: `023-changes-schedules-release.md`, gate decisions 26/34/41-46/173, sample `features/styleguide/sample/changes/*`. Nothing implemented yet.
+Pattern to copy: `features/history/history-page.*` (sf-data-table server + sf-splitter + currentKey).
+
+- [ ] 1. Changes capability checklist (URL filters, chips, bulk Release/Discard/Schedule, row keyboard, pager, diff pane) written into the task notes
+- [ ] 2. `sf-release-actions` (features/release): per-language status pills, Release…, Schedule…, ⋮ (Unpublish, Discard via ConfirmService), divider (dec. 34); + stub twin for specs
+- [ ] 3. Swap `sf-release-bar` for `sf-release-actions` in page/record/record-set/nav-item/global-set headers and the media drawer; delete release-bar
+- [ ] 4. Release dialog: one heading hierarchy, changed languages pre-ticked, "All changed languages" not error-styled, warnings need explicit confirm, blocking errors with Open links, `sfDialogFooter`
+- [ ] 5. Schedule dialog: explicit title ("Schedule release"/"Schedule unpublish") + kind switch
+- [ ] 6. Changes: sf-data-table (server, one row per language, default language first, names not UUIDs, UID only in dev mode), compact one-row filter bar + chips, sf-splitter diff pane, table fills the frame
+- [ ] 7. Schedules: sf-data-table, ⋮ row menu, Cancel with confirm, New schedule (release/unpublish/generation), history sf-drawer with full title
+- [ ] 8. Transloco keys (en.json) for all three features; remove sr-only position workarounds
+- [ ] 9. Specs updated; `npx vitest run`, `npx ng build`, lint; browser check light/dark at 1440/1024
+
+Review (M35.23): `sf-release-actions` replaces the release bar in all editors; release/schedule dialogs on sf-dialog (explicit titles, kind switch, time zone combobox); Changes and Schedules on `sf-data-table`. Commits 07f8df67…a7ed2097 plus the Discard follow-up. Bulk Discard is disabled with a reason when nothing is discardable (new `disabled`/`disabledReason` on data-table bulk actions). Full UI suite green (343 files / 3,931 tests, 2 known unrelated page-settings NG0600 errors), `ng build` and lint clean. Open: no Chrome walkthrough (Changes only checked in headless Playwright; Schedules, media drawer header and the dialogs not seen); e2e journeys m27/m28 selectors updated but not run; Schedules list shows "N items" (no names from the list endpoint); not signed off by the user.

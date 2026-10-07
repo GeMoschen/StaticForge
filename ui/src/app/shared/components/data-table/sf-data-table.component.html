@@ -69,7 +69,8 @@
       }
       <span class="sf-data-table__bulk-actions">
         @for (action of bulkActions(); track action.id) {
-          <sf-button size="sm" [variant]="action.variant ?? 'secondary'" [icon]="action.icon ?? null" (click)="runBulkAction(action)">{{
+          <sf-button size="sm" [variant]="action.variant ?? 'secondary'" [icon]="action.icon ?? null"
+            [disabled]="!!action.disabled" [disabledReason]="action.disabledReason ?? null" (click)="runBulkAction(action)">{{
             action.label
           }}</sf-button>
         }

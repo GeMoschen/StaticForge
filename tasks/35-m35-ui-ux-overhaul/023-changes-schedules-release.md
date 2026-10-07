@@ -1,6 +1,6 @@
 ---
 id: M35.23
-status: todo
+status: done
 depends: [M35.11, M35.12, M35.13, M35.14, M35.15]
 epic: m35-ui-ux-overhaul
 feature: screens

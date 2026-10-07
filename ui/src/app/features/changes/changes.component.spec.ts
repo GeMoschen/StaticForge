@@ -10,7 +10,6 @@ import { AuthStore } from '../../core/auth/auth.store';
 import { LocalesStore } from '../../core/project/locales.store';
 import { ProjectContextStore } from '../../core/project/project-context.store';
 import { ALL_PUBLISH_PERMISSIONS, projectDetail } from '../../core/project/testing/project-detail.fixture';
-import { ToastService } from '../../core/ui/toast.service';
 import { ReleaseEventsStore } from '../release/release-events.store';
 import { ChangesComponent } from './changes.component';
 import { SORT_KEYS, paramsFromState, pendingCount, queryFromState, stateFromParams } from './changes-query.util';
@@ -293,12 +292,12 @@ describe('ChangesComponent', () => {
     expect(await screen.findByRole('dialog', { name: 'Schedule release' })).toBeInTheDocument();
   });
 
-  it('says so when none of the selected rows has a released version to discard', async () => {
+  it('disables Discard, with the reason, when none of the selected rows has a released version', async () => {
     await setup();
-    const toast = vi.spyOn(TestBed.inject(ToastService), 'show');
     fireEvent.click(await screen.findByRole('checkbox', { name: 'Select Hero' }));
-    fireEvent.click(within(await screen.findByRole('group', { name: 'Bulk actions' })).getByRole('button', { name: 'Discard…' }));
-    expect(toast).toHaveBeenCalledWith(expect.stringContaining('Nothing to discard'), 'info');
+    const discard = within(await screen.findByRole('group', { name: 'Bulk actions' })).getByRole('button', { name: 'Discard…' });
+    expect(discard).toHaveAttribute('aria-disabled', 'true');
+    fireEvent.click(discard);
     expect(screen.queryByRole('dialog')).toBeNull();
   });
 

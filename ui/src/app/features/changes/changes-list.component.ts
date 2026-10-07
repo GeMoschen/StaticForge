@@ -2,7 +2,6 @@ import { ChangeDetectionStrategy, Component, computed, effect, inject, output, u
 import { TranslocoService } from '@jsverse/transloco';
 import { DeveloperModeService } from '../../core/frame/developer-mode.service';
 import { ProjectPermissionsStore } from '../../core/project/project-permissions.store';
-import { ToastService } from '../../core/ui/toast.service';
 import { SfDataTableBulkAction, SfDataTableColumn, SfDataTableSelection } from '../../shared/components/data-table/data-table.types';
 import { SfDataTableCellDirective } from '../../shared/components/data-table/sf-data-table-templates.directive';
 import { SfDataTableComponent } from '../../shared/components/data-table/sf-data-table.component';
@@ -58,7 +57,6 @@ export class ChangesListComponent {
   protected readonly permissions = inject(ProjectPermissionsStore);
   protected readonly dev = inject(DeveloperModeService).enabled;
   private readonly transloco = inject(TranslocoService);
-  private readonly toast = inject(ToastService);
 
   /** The selected rows to release, schedule or discard (the page opens the dialogs). */
   readonly release = output<readonly ChangeRowView[]>();
@@ -98,7 +96,16 @@ export class ChangesListComponent {
     if (this.permissions.canScheduleRelease()) {
       actions.push({ id: 'schedule', label: this.t('bulk.schedule'), icon: 'schedule', action: (s) => this.schedule.emit(s.rows) });
     }
-    actions.push({ id: 'discard', label: this.t('bulk.discard'), icon: 'undo', variant: 'danger-ghost', action: (s) => this.discardOf(s) });
+    const nothingToDiscard = this.store.discardable().length === 0;
+    actions.push({
+      id: 'discard',
+      label: this.t('bulk.discard'),
+      icon: 'undo',
+      variant: 'danger-ghost',
+      disabled: nothingToDiscard,
+      disabledReason: nothingToDiscard ? this.t('page.discardNothing') : null,
+      action: (s) => this.discard.emit(s.rows),
+    });
     return actions;
   });
 
@@ -160,13 +167,5 @@ export class ChangesListComponent {
 
   protected t(key: string, params?: Record<string, unknown>): string {
     return this.transloco.translate(`changes.${key}`, params);
-  }
-
-  private discardOf(selection: SfDataTableSelection<ChangeRowView>): void {
-    if (this.store.discardable().length === 0) {
-      this.toast.show(this.t('page.discardNothing'), 'info');
-      return;
-    }
-    this.discard.emit(selection.rows);
   }
 }
