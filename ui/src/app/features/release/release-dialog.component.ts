@@ -10,7 +10,7 @@ import {
   untracked,
   viewChild,
 } from '@angular/core';
-import { ShortcutService } from '../../core/ui/shortcut.service';
+import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
 import { forkJoin, of, catchError, map } from 'rxjs';
 import { ApiClient } from '../../core/api/api.client';
 import type { components } from '../../core/api/generated/schema.d.ts';
@@ -20,7 +20,12 @@ import { ProjectPermissionsStore } from '../../core/project/project-permissions.
 import { ToastService } from '../../core/ui/toast.service';
 import { BuildNowService } from '../generation/build-now.service';
 import { SfAssetPickerDialogComponent, type AssetPicked } from '../../shared/components/sf-asset-picker-dialog.component';
+import { SfDialogComponent, SfDialogFooterDirective } from '../../shared/components/dialog/sf-dialog.component';
+import { SfBadgeComponent } from '../../shared/components/display/sf-badge.component';
+import { SfCheckboxComponent } from '../../shared/components/forms/sf-checkbox.component';
+import { SfTextareaComponent } from '../../shared/components/forms/sf-textarea.component';
 import { SfButtonComponent } from '../../shared/components/sf-button.component';
+import { SfFieldComponent } from '../../shared/components/sf-field.component';
 import { formatDiffPath } from '../../shared/components/sf-diff.component';
 import { SfSpinnerComponent } from '../../shared/components/sf-spinner.component';
 import { ReleaseEventsStore } from './release-events.store';
@@ -29,7 +34,7 @@ import { RedirectOptionComponent } from './redirect-option.component';
 import { type RedirectIntent, type RedirectSource, NO_REDIRECT, intentReady } from './redirect-option.util';
 import { type ReleaseChoice, type ReleaseMode, assetName, itemsOf } from './release-choice.util';
 import { ReleasePlanComponent, type ReleasePlanState } from './release-plan.component';
-import { localeTag, statusLabel } from './release-status.util';
+import { localeTag } from './release-status.util';
 
 type ReleaseResultView = components['schemas']['ReleaseResultView'];
 type ReleaseTargetView = components['schemas']['ReleaseTargetView'];
@@ -38,10 +43,11 @@ type FieldChange = components['schemas']['FieldChange'];
 /** How many items a discard confirmation loads diffs for; a larger selection lists the items only. */
 const MAX_DIFFS = 10;
 
-const TITLES: Record<ReleaseMode, string> = {
-  release: 'Release',
-  unpublish: 'Unpublish',
-  discard: 'Discard changes',
+/** The button of each mode: its icon, and whether it is destructive. */
+const MODES: Record<ReleaseMode, { icon: string; danger: boolean }> = {
+  release: { icon: 'publish', danger: false },
+  unpublish: { icon: 'cloud_off', danger: true },
+  discard: { icon: 'undo', danger: true },
 };
 
 interface DiffSummary {
@@ -51,16 +57,31 @@ interface DiffSummary {
 }
 
 /**
- * Release, unpublish or discard a selection (M27.6.1): from an editor's release bar (the asset's locales, the
- * editing locale ticked) or from the Changes view (the picked rows). Release shows the dependency plan and blocks on
- * incomplete content; discard shows what would be thrown away; each is one revision. Afterwards the release events
- * fire, so every status on screen re-reads from the server.
+ * Release, unpublish or discard a selection (M27.6.1, restyled in M35.23): from an editor's release actions (the
+ * asset's languages) or from a list (the picked rows). One heading hierarchy: the dialog's `h2`, then an `h3` per part.
+ * The choices come ticked by the caller (a release ticks every changed language); "All changed languages" is a plain
+ * checkbox. Release shows the dependency plan, blocks on incomplete content (each with an *Open* link) and needs the
+ * explicit confirmation of rule warnings (M33); discard shows what would be thrown away; each is one revision.
+ * Afterwards the release events fire, so every status on screen re-reads from the server.
  */
 @Component({
   selector: 'sf-release-dialog',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [SfAssetPickerDialogComponent, SfButtonComponent, SfSpinnerComponent, ReleasePlanComponent, RedirectOptionComponent],
+  imports: [
+    SfAssetPickerDialogComponent,
+    SfBadgeComponent,
+    SfButtonComponent,
+    SfCheckboxComponent,
+    SfDialogComponent,
+    SfDialogFooterDirective,
+    SfFieldComponent,
+    SfSpinnerComponent,
+    SfTextareaComponent,
+    ReleasePlanComponent,
+    RedirectOptionComponent,
+    TranslocoPipe,
+  ],
   templateUrl: './release-dialog.component.html',
   styleUrl: './release-dialog.component.scss',
 })
@@ -70,6 +91,8 @@ export class ReleaseDialogComponent {
   private readonly buildNow = inject(BuildNowService);
   private readonly events = inject(ReleaseEventsStore);
   private readonly locales = inject(LocalesStore);
+  private readonly transloco = inject(TranslocoService);
+  protected readonly defaultLocale = this.locales.defaultLocale;
   private readonly permissions = inject(ProjectPermissionsStore);
   private readonly redirectAfter = inject(RedirectAfterService);
 
@@ -122,17 +145,25 @@ export class ReleaseDialogComponent {
 
   protected readonly title = computed(() => {
     const name = this.subjectName();
-    return name ? `${TITLES[this.mode()]} “${name}”` : TITLES[this.mode()];
+    const mode = this.mode();
+    return name
+      ? this.transloco.translate(`release.dialog.titleNamed.${mode}`, { name })
+      : this.transloco.translate(`release.dialog.title.${mode}`);
   });
-  protected readonly actionLabel = computed(() => TITLES[this.mode()]);
+  protected readonly actionLabel = computed(() => this.transloco.translate(`release.dialog.title.${this.mode()}`));
+  protected readonly actionIcon = computed(() => MODES[this.mode()].icon);
+  protected readonly danger = computed(() => MODES[this.mode()].danger);
   protected readonly items = computed(() => itemsOf(this.selection()));
   protected readonly checkedCount = computed(() => this.selection().filter((choice) => choice.checked).length);
   protected readonly multiple = computed(() => this.selection().length > 1);
+  /** Several assets in the selection: its parts are items, not the languages of one asset. */
+  protected readonly manyAssets = computed(() => new Set(this.selection().map((choice) => choice.assetUuid)).size > 1);
   /** "Language(s)" for one asset's locales, "Items" for a selection of several assets. */
-  protected readonly legend = computed(() => {
-    const assets = new Set(this.selection().map((choice) => choice.assetUuid));
-    return assets.size > 1 ? 'Items' : this.multiple() ? 'Languages' : 'Language';
-  });
+  protected readonly legend = computed(() =>
+    this.transloco.translate(`release.dialog.${this.manyAssets() ? 'items' : this.multiple() ? 'languages' : 'language'}`),
+  );
+  protected readonly allTicked = computed(() => this.selection().length > 0 && this.checkedCount() === this.selection().length);
+  protected readonly someTicked = computed(() => this.checkedCount() > 0 && !this.allTicked());
   protected readonly canSubmit = computed(() => {
     if (this.submitting() || this.checkedCount() === 0) {
       return false;
@@ -145,6 +176,30 @@ export class ReleaseDialogComponent {
     }
     const state = this.planState();
     return !!state && state.ready && !state.blocked;
+  });
+  /** Why the button is disabled, or `null` when it may go (`submitting` is no reason: the button shows busy). */
+  protected readonly blockedReason = computed<string | null>(() => {
+    if (this.submitting()) {
+      return null;
+    }
+    const t = (key: string, params?: Record<string, unknown>) => this.transloco.translate(`release.dialog.reason.${key}`, params);
+    if (this.checkedCount() === 0) {
+      return t(this.manyAssets() ? 'nothingItems' : 'nothing');
+    }
+    if (this.offersRedirect() && !intentReady(this.redirectIntent())) {
+      return t('redirect');
+    }
+    if (this.mode() !== 'release') {
+      return null;
+    }
+    const state = this.planState();
+    if (!state?.ready) {
+      return t('checking');
+    }
+    if (state.errors > 0) {
+      return t('errors', { count: state.errors });
+    }
+    return state.warningsUnconfirmed ? t('warnings') : null;
   });
 
   constructor() {
@@ -162,34 +217,18 @@ export class ReleaseDialogComponent {
     });
   }
 
-  /** Escape goes through the shortcut registry, which orders it among the open layers (M35.14). */
-  private readonly escapeShortcut = inject(ShortcutService).useEscape(() => this.onEscape());
-
-  protected onEscape(): void {
-    if (this.pickingRedirect()) {
-      this.pickingRedirect.set(false);
-      return;
-    }
-    this.close();
-  }
-
   protected onRedirectPicked(picked: AssetPicked): void {
     this.pickingRedirect.set(false);
     this.redirectOption()?.choose(picked);
   }
 
-  protected toggle(index: number, event: Event): void {
-    const checked = (event.target as HTMLInputElement).checked;
+  protected toggle(index: number, checked: boolean): void {
     this.selection.update((list) => list.map((choice, i) => (i === index ? { ...choice, checked } : choice)));
   }
 
-  /** "All changed languages": every offered choice. */
-  protected selectAll(): void {
-    this.selection.update((list) => list.map((choice) => ({ ...choice, checked: true })));
-  }
-
-  protected onComment(event: Event): void {
-    this.comment.set((event.target as HTMLTextAreaElement).value);
+  /** "All changed languages" (or "Select all"): ticks every offered choice, or unticks them. */
+  protected tickAll(checked: boolean): void {
+    this.selection.update((list) => list.map((choice) => ({ ...choice, checked })));
   }
 
   protected close(): void {
@@ -243,7 +282,7 @@ export class ReleaseDialogComponent {
       },
       error: (err: unknown) => {
         this.submitting.set(false);
-        const problem = problemOf(err, `Could not ${TITLES[mode].toLowerCase()} — try again.`);
+        const problem = problemOf(err, this.transloco.translate('release.dialog.failed', { action: this.actionLabel().toLowerCase() }));
         this.error.set(problem.detail);
         if (problem.code === 'SF-DOM-0150') {
           this.plan()?.refresh();
@@ -253,19 +292,10 @@ export class ReleaseDialogComponent {
   }
 
   private successMessage(mode: ReleaseMode, result: ReleaseResultView): string {
-    const skipped = result.skipped?.length ?? 0;
-    const skippedNote = skipped > 0 ? ` ${skipped} skipped: nothing to do.` : '';
     if (result.revision == null) {
-      return mode === 'release' ? 'Nothing to release — already published.' : 'Nothing changed.';
+      return this.transloco.translate(mode === 'release' ? 'release.dialog.toast.nothingToRelease' : 'release.dialog.toast.nothingChanged');
     }
-    switch (mode) {
-      case 'release':
-        return `Released in r${result.revision} — goes online with the next build.${skippedNote}`;
-      case 'unpublish':
-        return `Unpublished in r${result.revision} — goes offline with the next build.${skippedNote}`;
-      case 'discard':
-        return `Changes discarded in r${result.revision}.${skippedNote}`;
-    }
+    return this.transloco.translate(`release.dialog.toast.${mode}`, { revision: result.revision, skipped: result.skipped?.length ?? 0 });
   }
 
   private targetLabel(target: ReleaseTargetView): string {
@@ -289,7 +319,6 @@ export class ReleaseDialogComponent {
     ).subscribe((summaries) => this.diffs.set(summaries));
   }
 
-  protected readonly statusLabel = statusLabel;
 }
 
 function paths(changes: FieldChange[], labels: Record<string, string>): string[] {

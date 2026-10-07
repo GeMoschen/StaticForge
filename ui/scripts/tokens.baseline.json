@@ -31,10 +31,6 @@
     "colors": 2,
     "zIndex": 1
   },
-  "src/app/features/release/release-plan.component.scss": {
-    "colors": 1,
-    "zIndex": 0
-  },
   "src/app/features/schedules/schedule-history.component.scss": {
     "colors": 2,
     "zIndex": 2

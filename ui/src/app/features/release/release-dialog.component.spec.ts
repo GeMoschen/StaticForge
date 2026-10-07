@@ -1,10 +1,13 @@
 import '@angular/compiler';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
+import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { screen } from '@testing-library/angular';
 import { provideRouter } from '@angular/router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { components } from '../../core/api/generated/schema.d.ts';
+import { DeveloperModeService } from '../../core/frame/developer-mode.service';
 import { ReleaseDialogComponent } from './release-dialog.component';
 import { ReleaseEventsStore } from './release-events.store';
 import type { ReleaseChoice } from './release-choice.util';
@@ -48,7 +51,13 @@ describe('ReleaseDialogComponent', () => {
     vi.useFakeTimers();
     TestBed.configureTestingModule({
       imports: [ReleaseDialogComponent],
-      providers: [provideHttpClient(), provideHttpClientTesting(), provideRouter([])],
+      providers: [
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        provideRouter([]),
+        // Field paths are developer details.
+        { provide: DeveloperModeService, useValue: { enabled: signal(true) } },
+      ],
     });
     http = TestBed.inject(HttpTestingController);
   });
@@ -76,28 +85,31 @@ describe('ReleaseDialogComponent', () => {
     fixture.detectChanges();
   }
 
+  /** The dialog moves itself into `<body>`, so queries run there. */
+  const page = () => document.body;
+
   function button(label: string): HTMLButtonElement {
-    const buttons = Array.from(fixture.nativeElement.querySelectorAll('button')) as HTMLButtonElement[];
-    const found = buttons.find((b) => b.textContent?.trim() === label);
-    if (!found) {
-      throw new Error(`No button "${label}"`);
-    }
-    return found;
+    return screen.getByRole('button', { name: label }) as HTMLButtonElement;
+  }
+
+  /** A button with a reason stays focusable: `aria-disabled` instead of the native attribute. */
+  function isDisabled(element: HTMLElement): boolean {
+    return (element as HTMLButtonElement).disabled || element.getAttribute('aria-disabled') === 'true';
   }
 
   it('releases the selection with the ticked dependencies, not the unticked ones', () => {
     open('release');
     flushPlan();
 
-    const boxes = Array.from(fixture.nativeElement.querySelectorAll('.plan__dependency input')) as HTMLInputElement[];
+    const boxes = Array.from(page().querySelectorAll('.plan__group input[type="checkbox"]')) as HTMLInputElement[];
     expect(boxes.map((box) => box.checked)).toEqual([true, true]);
-    expect(fixture.nativeElement.textContent).toContain('via Home');
+    expect(page().textContent).toContain('via Home');
 
     boxes[1].click();
     fixture.detectChanges();
 
     const release = button('Release');
-    expect(release.disabled).toBe(false);
+    expect(isDisabled(release)).toBe(false);
     release.click();
     const request = http.expectOne('/api/v1/projects/proj/releases');
     expect(request.request.body).toEqual({
@@ -124,9 +136,13 @@ describe('ReleaseDialogComponent', () => {
       ],
     });
 
-    expect(fixture.nativeElement.textContent).toContain('Title is required.');
-    expect(fixture.nativeElement.textContent).toContain('content.title');
-    expect(button('Release').disabled).toBe(true);
+    expect(page().textContent).toContain('1 blocking error');
+    expect(page().textContent).toContain('Title is required.');
+    expect(page().textContent).toContain('content.title');
+    // Each blocking error names where to fix it.
+    expect(screen.getByRole('link', { name: 'Open' }).getAttribute('href')).toContain('page-1');
+    expect(isDisabled(button('Release'))).toBe(true);
+    expect(button('Release').getAttribute('aria-disabled')).toBe('true');
   });
 
   it('needs "Release with warnings" for rule warnings, lists notes and fills, and sends acceptWarnings', () => {
@@ -152,18 +168,19 @@ describe('ReleaseDialogComponent', () => {
     // The plan reports its state through an output: one pass for the plan, one for the dialog.
     fixture.detectChanges();
 
-    const text = fixture.nativeElement.textContent as string;
+    const text = page().textContent as string;
     expect(text).toContain('Long headline');
     expect(text).toContain('No note');
     expect(text).toContain('content.stamp');
     expect(text).toContain('released');
-    expect(button('Release').disabled).toBe(true);
+    expect(isDisabled(button('Release'))).toBe(true);
 
-    (fixture.nativeElement.querySelector('.plan__accept input') as HTMLInputElement).click();
+    // The warnings need an explicit confirmation (M33).
+    (page().querySelector('.plan__ack input') as HTMLInputElement).click();
     fixture.detectChanges();
     fixture.detectChanges();
     const release = button('Release');
-    expect(release.disabled).toBe(false);
+    expect(isDisabled(release)).toBe(false);
     release.click();
     const request = http.expectOne('/api/v1/projects/proj/releases');
     expect(request.request.body.acceptWarnings).toBe(true);
@@ -173,12 +190,12 @@ describe('ReleaseDialogComponent', () => {
   it('re-plans when another locale is ticked', () => {
     open('release');
     flushPlan();
-    const boxes = Array.from(fixture.nativeElement.querySelectorAll('.release__choice input')) as HTMLInputElement[];
+    const boxes = Array.from(page().querySelectorAll('.rd__list input[type="checkbox"]')) as HTMLInputElement[];
     boxes[1].click();
     // The plan reports its state through an output: one pass for the plan, one for the dialog.
     fixture.detectChanges();
     fixture.detectChanges();
-    expect(button('Release').disabled).toBe(true);
+    expect(isDisabled(button('Release'))).toBe(true);
     vi.advanceTimersByTime(300);
     const request = http.expectOne(PLAN_URL);
     expect(request.request.body.items).toEqual([
@@ -195,7 +212,7 @@ describe('ReleaseDialogComponent', () => {
       .expectOne((req) => req.url === '/api/v1/projects/proj/changes/page-1/diff')
       .flush({ uuid: 'page-1', locale: 'en', status: 'CHANGED', changes: [{ path: 'content.title.values.en', before: 'Old', after: 'New' }] });
     fixture.detectChanges();
-    expect(fixture.nativeElement.textContent).toContain('content.title (en)');
+    expect(page().textContent).toContain('content.title (en)');
 
     button('Discard changes').click();
     http.expectOne('/api/v1/projects/proj/releases/discard').flush({
@@ -206,7 +223,47 @@ describe('ReleaseDialogComponent', () => {
     } satisfies ReleaseResultView);
     fixture.detectChanges();
 
-    expect(fixture.nativeElement.textContent).toContain('The shared fields (not per language) were kept');
-    expect(fixture.nativeElement.textContent).toContain('Home (EN)');
+    expect(page().textContent).toContain('The shared fields (not per language) were kept');
+    expect(page().textContent).toContain('Home (EN)');
+  });
+
+  it('pre-ticks every changed language and offers "All changed languages" as a plain checkbox', () => {
+    open('release', [
+      { ...CHOICES[0], checked: true },
+      { ...CHOICES[1], checked: true },
+    ]);
+    vi.advanceTimersByTime(300);
+    http.expectOne(PLAN_URL).flush(PLAN);
+    fixture.detectChanges();
+
+    const all = screen.getByRole('checkbox', { name: 'All changed languages' }) as HTMLInputElement;
+    expect(all.checked).toBe(true);
+    const languages = Array.from(page().querySelectorAll('.rd__list input[type="checkbox"]')) as HTMLInputElement[];
+    expect(languages.map((box) => box.checked)).toEqual([true, true]);
+
+    // Unticking the master unticks every language and disables Release with the reason.
+    all.click();
+    fixture.detectChanges();
+    expect(languages.map((box) => box.checked)).toEqual([false, false]);
+    expect(isDisabled(button('Release'))).toBe(true);
+  });
+
+  it('keeps one heading hierarchy: the dialog title is the h2 and every part an h3', () => {
+    open('release');
+    flushPlan();
+    expect(Array.from(page().querySelectorAll('h2')).map((h) => h.textContent?.trim())).toEqual(['Release “Home”']);
+    expect(page().querySelector('h1')).toBeNull();
+    expect(page().querySelector('h4')).toBeNull();
+    expect(Array.from(page().querySelectorAll('h3')).map((h) => h.textContent?.trim())).toEqual(['Languages', 'Also release (2)']);
+  });
+
+  it('puts its buttons in the dialog footer', () => {
+    open('release');
+    flushPlan();
+    const footer = page().querySelector('.sf-dialog__footer') as HTMLElement;
+    expect(Array.from(footer.querySelectorAll('button')).map((b) => b.textContent?.replace(/\s+/g, ' ').trim())).toEqual([
+      'Cancel',
+      'publishRelease',
+    ]);
   });
 });

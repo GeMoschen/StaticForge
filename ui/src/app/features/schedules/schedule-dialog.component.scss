@@ -1,125 +1,108 @@
-@use '../../design/dialog-shell';
-
 :host {
   display: contents;
 }
 
-.dialog--wide {
-  width: min(40rem, 94vw);
-  max-height: 90vh;
+// Parts under h3 headings, as in the release dialog (M35.23).
+.sd__kind,
+.rd__part,
+.rd__row,
+sf-release-plan,
+.sd__comment {
+  display: block;
+  margin-block: 0 var(--sf-space-4);
 }
 
-.sched__group {
+.rd__part {
   display: flex;
   flex-direction: column;
-  gap: var(--sf-1);
+  gap: var(--sf-space-2);
+}
+
+.rd__heading {
   margin: 0;
-  padding: 0;
-  border: none;
-  min-width: 0;
+  color: var(--sf-text);
+  font-size: var(--sf-fs-14);
+  line-height: var(--sf-lh-14);
+  font-weight: var(--sf-weight-semibold);
 }
 
-.sched__legend,
-.sr-label {
-  padding: 0;
-  font-size: var(--sf-text-xs);
-  font-weight: 600;
-  color: var(--sf-slate);
+.rd__note {
+  margin: 0;
+  color: var(--sf-text-muted);
+  font-size: var(--sf-fs-12);
+  line-height: var(--sf-lh-12);
 }
 
-.sched__legend {
-  margin-bottom: var(--sf-1);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-
-.sched__row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--sf-2) var(--sf-3);
-}
-
-.sched__choice {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--sf-1);
-  font-size: var(--sf-text-sm);
-  color: var(--sf-ink);
-  cursor: pointer;
-}
-
-.sched__field {
+.rd__list {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-}
-
-.sched__field--wide {
-  width: 100%;
-}
-
-.sched__input {
-  padding: var(--sf-1) var(--sf-2);
-  border: 1px solid var(--sf-line);
-  border-radius: var(--sf-radius-md);
-  background: var(--sf-surface);
-  color: var(--sf-ink);
-  font-family: var(--sf-font-ui);
-  font-size: var(--sf-text-sm);
-  box-sizing: border-box;
-}
-
-.sched__input--short {
-  width: 5rem;
-}
-
-.sched__mono {
-  font-family: var(--sf-font-mono);
-}
-
-textarea.sched__input {
-  resize: vertical;
-}
-
-.sched__items {
+  gap: var(--sf-space-1);
   margin: 0;
-  padding-left: var(--sf-4);
-  font-size: var(--sf-text-sm);
+  padding: 0;
+  list-style: none;
 }
 
-.sched__tag {
-  margin-left: var(--sf-1);
-  padding: 0 var(--sf-1);
-  border: 1px solid var(--sf-line);
+.rd__row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  gap: var(--sf-space-3);
+  margin: 0;
+}
+
+.sd__item {
+  color: var(--sf-text);
+  font-size: var(--sf-fs-14);
+  line-height: var(--sf-lh-14);
+}
+
+.sd__tag {
+  margin-inline-start: var(--sf-space-1);
+  padding: 0 var(--sf-space-1);
+  border: 1px solid var(--sf-border);
   border-radius: var(--sf-radius-sm);
-  font-size: var(--sf-text-xs);
-  color: var(--sf-slate);
+  color: var(--sf-text-muted);
+  font-size: var(--sf-fs-12);
+  line-height: var(--sf-lh-12);
 }
 
-.sched__drift {
-  margin-left: var(--sf-2);
-  font-size: var(--sf-text-xs);
-  color: var(--sf-amber);
+.sd__drift {
+  margin-inline-start: var(--sf-space-2);
+  color: var(--sf-warning-text);
+  font-size: var(--sf-fs-12);
 }
 
-.sched__note {
-  margin: 0;
-  font-size: var(--sf-text-xs);
-  color: var(--sf-slate);
-}
-
-.sched__preview ol {
-  margin: 0;
-  padding-left: var(--sf-4);
-  font-size: var(--sf-text-sm);
-}
-
-.sched__error {
-  margin: 0;
-  padding: var(--sf-2) var(--sf-3);
+.sd__preview {
+  padding: var(--sf-space-3);
   border-radius: var(--sf-radius-md);
-  background: color-mix(in srgb, var(--sf-rust) 12%, transparent);
-  color: var(--sf-rust);
-  font-size: var(--sf-text-sm);
+  background: var(--sf-surface-sunken);
+}
+
+.sd__preview-title {
+  margin: 0 0 var(--sf-space-1);
+  color: var(--sf-text);
+  font-size: var(--sf-fs-13);
+  line-height: var(--sf-lh-13);
+  font-weight: var(--sf-weight-medium);
+}
+
+.sd__runs {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sf-space-1);
+  margin: 0;
+  padding-inline-start: var(--sf-space-5);
+  color: var(--sf-text);
+  font-size: var(--sf-fs-13);
+  line-height: var(--sf-lh-13);
+  font-variant-numeric: tabular-nums;
+}
+
+.sd__error {
+  margin: 0;
+  padding: var(--sf-space-2) var(--sf-space-3);
+  border-radius: var(--sf-radius-md);
+  background: var(--sf-danger-subtle);
+  color: var(--sf-danger-text);
+  font-size: var(--sf-fs-13);
+  line-height: var(--sf-lh-13);
 }

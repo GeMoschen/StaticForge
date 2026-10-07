@@ -1,7 +1,10 @@
 import { ChangeDetectionStrategy, Component, computed, effect, inject, input, model, output, signal, untracked } from '@angular/core';
+import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
 import { catchError, forkJoin, of } from 'rxjs';
 import { ApiClient } from '../../core/api/api.client';
 import type { AssetPicked } from '../../shared/components/sf-asset-picker-dialog.component';
+import { SfCheckboxComponent } from '../../shared/components/forms/sf-checkbox.component';
+import { SfButtonComponent } from '../../shared/components/sf-button.component';
 import { ChannelsService } from '../channels/channels.service';
 import { indexUidOf } from '../settings/redirect.util';
 import { type RedirectIntent, type RedirectSource, NO_REDIRECT, commonIndexPage } from './redirect-option.util';
@@ -19,97 +22,14 @@ import { type RedirectIntent, type RedirectSource, NO_REDIRECT, commonIndexPage 
   selector: 'sf-redirect-option',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  template: `
-    <div class="option">
-      <label class="option__toggle">
-        <input type="checkbox" [checked]="intent().wanted" (change)="toggle($event)" />
-        <span>{{ sources().length > 1 ? 'Redirect the old URLs to…' : 'Redirect old URL to…' }}</span>
-      </label>
-      @if (intent().wanted) {
-        <div class="option__target">
-          @if (loading()) {
-            <span class="option__muted">Looking for the nearest folder page…</span>
-          } @else {
-            <span class="option__page" [class.option__muted]="!intent().page">
-              {{ intent().page?.name ?? 'No page chosen' }}
-            </span>
-          }
-          <button type="button" class="option__pick" (click)="pickRequested.emit()">
-            {{ intent().page ? 'Change page…' : 'Choose page…' }}
-          </button>
-        </div>
-        @if (pickError(); as message) {
-          <p class="option__error" role="alert">{{ message }}</p>
-        }
-        <p class="option__hint">
-          Requests for the page’s current URLs are sent to this page once a build no longer contains
-          {{ sources().length > 1 ? 'them' : 'it' }}.
-        </p>
-      }
-    </div>
-  `,
-  styles: `
-    .option {
-      display: flex;
-      flex-direction: column;
-      gap: var(--sf-1);
-      padding: var(--sf-2) var(--sf-3);
-      border: 1px solid var(--sf-line);
-      border-radius: var(--sf-radius-md);
-    }
-    .option__toggle {
-      display: flex;
-      align-items: center;
-      gap: var(--sf-2);
-      font-size: var(--sf-text-sm);
-      color: var(--sf-ink);
-      cursor: pointer;
-    }
-    .option__target {
-      display: flex;
-      align-items: center;
-      gap: var(--sf-2);
-      min-width: 0;
-      padding-left: var(--sf-4);
-    }
-    .option__page {
-      flex: 1 1 auto;
-      min-width: 0;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-      font-size: var(--sf-text-sm);
-      color: var(--sf-ink);
-    }
-    .option__pick {
-      padding: 2px var(--sf-2);
-      border: 1px solid var(--sf-line);
-      border-radius: var(--sf-radius-md);
-      background: var(--sf-surface);
-      color: var(--sf-ink);
-      font-size: var(--sf-text-xs);
-      cursor: pointer;
-    }
-    .option__hint,
-    .option__muted {
-      margin: 0;
-      font-size: var(--sf-text-xs);
-      color: var(--sf-slate);
-    }
-    .option__hint,
-    .option__error {
-      padding-left: var(--sf-4);
-    }
-    .option__error {
-      margin: 0;
-      font-size: var(--sf-text-xs);
-      color: var(--sf-rust);
-    }
-  `,
+  imports: [SfButtonComponent, SfCheckboxComponent, TranslocoPipe],
+  templateUrl: './redirect-option.component.html',
+  styleUrl: './redirect-option.component.scss',
 })
 export class RedirectOptionComponent {
   private readonly api = inject(ApiClient);
   private readonly channelsApi = inject(ChannelsService);
+  private readonly transloco = inject(TranslocoService);
 
   readonly projectKey = input.required<string>();
   /** The pages going offline. */
@@ -136,15 +56,14 @@ export class RedirectOptionComponent {
     });
   }
 
-  protected toggle(event: Event): void {
-    const wanted = (event.target as HTMLInputElement).checked;
+  protected toggle(wanted: boolean): void {
     this.intent.update((intent) => ({ ...intent, wanted }));
   }
 
   /** The page the user picked; a page that goes offline itself is refused. */
   choose(picked: AssetPicked): void {
     if (this.sources().some((source) => source.uuid === picked.uuid)) {
-      this.pickError.set(`“${picked.label}” is going offline itself — choose another page.`);
+      this.pickError.set(this.transloco.translate('release.redirect.offlineItself', { name: picked.label }));
       return;
     }
     this.pickError.set(null);
@@ -170,7 +89,7 @@ export class RedirectOptionComponent {
       const hit = commonIndexPage(sources, pages ?? [], indexUids);
       this.intent.update((intent) => ({
         ...intent,
-        page: hit?.uuid ? { uuid: hit.uuid, name: hit.displayName || hit.uid || 'Untitled' } : null,
+        page: hit?.uuid ? { uuid: hit.uuid, name: hit.displayName || hit.uid || this.transloco.translate('release.redirect.untitled') } : null,
       }));
     });
   }

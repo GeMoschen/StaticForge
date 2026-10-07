@@ -2,6 +2,7 @@ import '@angular/compiler';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { screen } from '@testing-library/angular';
 import { provideRouter } from '@angular/router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { components } from '../../core/api/generated/schema.d.ts';
@@ -59,10 +60,17 @@ describe('ScheduleDialogComponent', () => {
     return fixture.componentInstance as unknown as Form;
   }
 
+  /** The dialog moves itself into `<body>`, so queries run there. */
+  const page = () => document.body;
+
+  /** The primary button in the footer: "Schedule release", "Schedule generation", … or "Save" when editing. */
   function scheduleButton(): HTMLButtonElement {
-    return Array.from(fixture.nativeElement.querySelectorAll('button') as NodeListOf<HTMLButtonElement>).find(
-      (b) => b.textContent?.trim() === 'Schedule' || b.textContent?.trim() === 'Save',
-    )!;
+    return Array.from(page().querySelectorAll('.sf-dialog__footer button')).at(-1) as HTMLButtonElement;
+  }
+
+  /** A button with a reason stays focusable: `aria-disabled` instead of the native attribute. */
+  function isDisabled(element: HTMLElement): boolean {
+    return (element as HTMLButtonElement).disabled || element.getAttribute('aria-disabled') === 'true';
   }
 
   it('sends a Berlin wall-clock time across the autumn DST switch as the right UTC instant', () => {
@@ -71,7 +79,7 @@ describe('ScheduleDialogComponent', () => {
     form.date.set('2026-10-25');
     form.time.set('03:30');
     fixture.detectChanges();
-    expect(fixture.nativeElement.textContent).toContain('Europe/Berlin (CET)');
+    expect(page().textContent).toContain('Europe/Berlin (CET)');
 
     vi.advanceTimersByTime(300);
     http.expectOne(`${BASE}/releases/plan`).flush({ items: [], dependencies: [], incomplete: [], warnings: [] });
@@ -96,8 +104,8 @@ describe('ScheduleDialogComponent', () => {
     form.time.set('09:00');
     form.zone.set('UTC');
     fixture.detectChanges();
-    expect(fixture.nativeElement.textContent).toContain('Pick a time in the future.');
-    expect(scheduleButton().disabled).toBe(true);
+    expect(page().textContent).toContain('Pick a time in the future.');
+    expect(isDisabled(scheduleButton())).toBe(true);
   });
 
   it('shows the server’s SF-DOM-0165 message for an invalid cron and blocks saving', () => {
@@ -107,7 +115,7 @@ describe('ScheduleDialogComponent', () => {
     expect(first.request.body).toMatchObject({ cron: '0 9 * * *', count: 5 });
     first.flush({ cron: '0 0 9 * * *', zoneId: 'UTC', times: ['2026-09-27T09:00:00Z', '2026-09-28T09:00:00Z'] });
     fixture.detectChanges();
-    expect(fixture.nativeElement.querySelectorAll('.sched__preview li').length).toBe(2);
+    expect(page().querySelectorAll('.sd__runs li').length).toBe(2);
 
     form.cronMode.set('advanced');
     form.advancedCron.set('61 * * * *');
@@ -120,10 +128,8 @@ describe('ScheduleDialogComponent', () => {
         { status: 422, statusText: 'Unprocessable Entity' },
       );
     fixture.detectChanges();
-    expect(fixture.nativeElement.querySelector('[role="alert"]')?.textContent).toContain(
-      "Invalid cron expression '61 * * * *'",
-    );
-    expect(scheduleButton().disabled).toBe(true);
+    expect(page().querySelector('[role="alert"]')?.textContent).toContain("Invalid cron expression '61 * * * *'");
+    expect(isDisabled(scheduleButton())).toBe(true);
   });
 
   it('edits a recurring schedule in its own zone and sends If-Match', () => {
@@ -137,7 +143,7 @@ describe('ScheduleDialogComponent', () => {
       params: { mode: 'INCREMENTAL', targetId: null, channels: [] } as unknown as ScheduleView['params'],
       version: 4,
     });
-    expect(fixture.nativeElement.textContent).toContain('America/New_York');
+    expect(page().textContent).toContain('America/New_York');
     vi.advanceTimersByTime(500);
     http
       .expectOne(`${BASE}/schedules/preview-times`)
@@ -154,6 +160,69 @@ describe('ScheduleDialogComponent', () => {
       params: { mode: 'INCREMENTAL', targetId: null },
     });
     request.flush({ id: 9, type: 'RECURRING_GENERATION', status: 'PENDING', nextRunAt: '2026-09-28T11:00:00Z' } satisfies ScheduleView);
+  });
+});
+
+describe('ScheduleDialogComponent title and kind switch (M35.23)', () => {
+  let fixture: ComponentFixture<ScheduleDialogComponent>;
+  let http: HttpTestingController;
+
+  afterEach(() => {
+    vi.useRealTimers();
+    http.verify();
+  });
+
+  const UNPUBLISH_CHOICES: ReleaseChoice[] = [
+    { assetUuid: 'page-1', locale: 'de', label: 'Deutsch (DE) — Published', status: 'PUBLISHED', checked: true },
+  ];
+
+  function open(types: string[], schedule: ScheduleView | null = null): void {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-09-26T10:00:00Z'));
+    TestBed.configureTestingModule({
+      imports: [ScheduleDialogComponent],
+      providers: [provideHttpClient(), provideHttpClientTesting(), provideRouter([])],
+    });
+    http = TestBed.inject(HttpTestingController);
+    fixture = TestBed.createComponent(ScheduleDialogComponent);
+    fixture.componentRef.setInput('projectKey', 'proj');
+    fixture.componentRef.setInput('types', types);
+    fixture.componentRef.setInput('choices', CHOICES);
+    fixture.componentRef.setInput('unpublishChoices', UNPUBLISH_CHOICES);
+    fixture.componentRef.setInput('schedule', schedule);
+    fixture.detectChanges();
+    fixture.detectChanges();
+    for (const request of http.match((r) => r.url.endsWith('/targets') || r.url.endsWith('/channels'))) {
+      request.flush([]);
+    }
+  }
+
+  it('names what it schedules in the title and switches between release and unpublish', () => {
+    open(['RELEASE', 'UNPUBLISH']);
+    expect(document.body.querySelector('h2')?.textContent?.trim()).toBe('Schedule release');
+    expect(screen.getByRole('radio', { name: 'Release' }).getAttribute('aria-checked')).toBe('true');
+    expect(screen.getByRole('checkbox', { name: 'English (EN) — Changed' })).toBeTruthy();
+
+    (screen.getByRole('radio', { name: 'Unpublish' }) as HTMLElement).click();
+    fixture.detectChanges();
+    expect(document.body.querySelector('h2')?.textContent?.trim()).toBe('Schedule unpublish');
+    // The items follow the kind: the released languages are offered, not the changed ones.
+    expect(screen.getByRole('checkbox', { name: 'Deutsch (DE) — Published' })).toBeTruthy();
+    expect(screen.queryByRole('checkbox', { name: 'English (EN) — Changed' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Schedule unpublish' })).toBeTruthy();
+  });
+
+  it('offers no switch when only one kind is allowed, and still names it', () => {
+    open(['RELEASE']);
+    expect(document.body.querySelector('h2')?.textContent?.trim()).toBe('Schedule release');
+    expect(screen.queryByRole('radiogroup', { name: 'What to schedule' })).toBeNull();
+  });
+
+  it('puts its actions in the dialog footer and keeps one h2', () => {
+    open(['RELEASE']);
+    expect(document.body.querySelectorAll('h2')).toHaveLength(1);
+    expect(document.body.querySelectorAll('.sf-dialog__footer button')).toHaveLength(2);
+    expect(document.body.querySelector('h1')).toBeNull();
   });
 });
 
@@ -191,13 +260,12 @@ describe('ScheduleDialogComponent "then generate" for an editor (M28.3.3)', () =
     fixture.componentRef.setInput('choices', CHOICES);
     fixture.detectChanges();
     fixture.detectChanges();
-    return fixture.nativeElement as HTMLElement;
+    return document.body;
   }
 
-  /** Ticks "Generate right after" and answers the generation options' loads. */
+  /** Switches "Generate right after" on and answers the generation options' loads. */
   function tickThenGenerate(el: HTMLElement): void {
-    const box = Array.from(el.querySelectorAll('label.sched__choice')).find((l) => l.textContent?.includes('Generate right after'))!
-      .querySelector('input') as HTMLInputElement;
+    const box = screen.getByRole('switch', { name: /Generate right after/ }) as HTMLInputElement;
     box.click();
     fixture.detectChanges();
     fixture.detectChanges();
@@ -222,9 +290,7 @@ describe('ScheduleDialogComponent "then generate" for an editor (M28.3.3)', () =
     http.expectOne(`${BASE}/releases/plan`).flush({ items: [], dependencies: [], incomplete: [], warnings: [] });
     fixture.detectChanges();
     fixture.detectChanges();
-    const schedule = Array.from(el.querySelectorAll('button') as NodeListOf<HTMLButtonElement>).find(
-      (b) => b.textContent?.trim() === 'Schedule',
-    )!;
+    const schedule = screen.getByRole('button', { name: 'Schedule release' });
     schedule.click();
     const request = http.expectOne((r) => r.method === 'POST' && r.url === `${BASE}/schedules`);
     expect(request.request.body).toMatchObject({ type: 'RELEASE', thenGenerate: { targetId: null } });

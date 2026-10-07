@@ -60,9 +60,10 @@ export function itemKey(assetUuid: string | undefined, locale: string | null | u
 }
 
 /**
- * The locales of one asset a dialog offers for `mode`, the editing locale's ticked (explicitly — lessons: a default
- * is modelled, never left to the control). When the editing locale has nothing to do, a lone choice is ticked; with
- * several, nothing is, and the dialog's button stays disabled until the user picks.
+ * The locales of one asset a dialog offers for `mode`. A release ticks every one (each is unreleased: M35.23 "changed
+ * languages pre-ticked"); unpublish and discard tick the editing locale's (explicitly — lessons: a default is modelled,
+ * never left to the control). When the editing locale has nothing to do, a lone choice is ticked; with several,
+ * nothing is, and the dialog's button stays disabled until the user picks.
  */
 export function choicesFor(
   subject: ReleaseSubject,
@@ -78,7 +79,7 @@ export function choicesFor(
       locale: entry.key,
       label: `${entry.key ? `${labelOf(entry.key)} (${localeTag(entry.key)})` : 'All languages'} — ${statusLabel(entry.status)}`,
       status: entry.status,
-      checked: entry.key === editingKey,
+      checked: mode === 'release' || entry.key === editingKey,
       assetType: subject.type,
       assetName: assetName(subject),
       folderPath: subject.folderPath,

@@ -10,11 +10,15 @@ import {
   signal,
   untracked,
 } from '@angular/core';
-import { RouterLink } from '@angular/router';
+import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
 import type { Subscription } from 'rxjs';
 import { ApiClient } from '../../core/api/api.client';
 import type { components } from '../../core/api/generated/schema.d.ts';
 import { problemOf } from '../../core/api/problem.util';
+import { DeveloperModeService } from '../../core/frame/developer-mode.service';
+import { SfCheckboxComponent } from '../../shared/components/forms/sf-checkbox.component';
+import { SfButtonComponent } from '../../shared/components/sf-button.component';
+import { SfIconComponent } from '../../shared/components/sf-icon.component';
 import { SfSpinnerComponent } from '../../shared/components/sf-spinner.component';
 import { assetRoute } from '../../shared/asset-route.util';
 import { assetName, itemKey, toItem } from './release-choice.util';
@@ -29,11 +33,11 @@ type ReleaseTargetView = components['schemas']['ReleaseTargetView'];
 const PLAN_DEBOUNCE_MS = 250;
 
 /** The groups of the dependency list, in display order (epic decision 9). */
-const REASONS: readonly { reason: string; label: string }[] = [
-  { reason: 'REFERENCE', label: 'Referenced by the selection' },
-  { reason: 'CONTAINER', label: 'Folders and sets it sits in' },
-  { reason: 'SET_MEMBER', label: 'Records of the selected sets' },
-  { reason: 'DESCENDANT', label: 'Descendants of a changed folder' },
+const REASONS: readonly { reason: string; labelKey: string }[] = [
+  { reason: 'REFERENCE', labelKey: 'release.plan.reasons.reference' },
+  { reason: 'CONTAINER', labelKey: 'release.plan.reasons.container' },
+  { reason: 'SET_MEMBER', labelKey: 'release.plan.reasons.setMember' },
+  { reason: 'DESCENDANT', labelKey: 'release.plan.reasons.descendant' },
 ];
 
 /** What the dialog around the plan needs to decide its button. */
@@ -47,6 +51,10 @@ export interface ReleasePlanState {
    * hasn't confirmed (`SF-DOM-0156`, M33.8).
    */
   blocked: boolean;
+  /** How many items or ticked dependencies are incomplete (blocking errors). */
+  errors: number;
+  /** Rule warnings wait for the user's confirmation (the release dialog only). */
+  warningsUnconfirmed: boolean;
   /** The user confirmed releasing with rule warnings (sent as `acceptWarnings`). */
   acceptWarnings: boolean;
 }
@@ -67,12 +75,15 @@ interface DependencyRow {
   selector: 'sf-release-plan',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterLink, SfSpinnerComponent],
+  imports: [SfButtonComponent, SfCheckboxComponent, SfIconComponent, SfSpinnerComponent, TranslocoPipe],
   templateUrl: './release-plan.component.html',
   styleUrl: './release-plan.component.scss',
 })
 export class ReleasePlanComponent implements OnDestroy {
   private readonly api = inject(ApiClient);
+  private readonly transloco = inject(TranslocoService);
+  /** Field paths are developer details (epic decision 19). */
+  protected readonly developerMode = inject(DeveloperModeService).enabled;
 
   readonly projectKey = input.required<string>();
   readonly items = input.required<Item[]>();
@@ -119,9 +130,9 @@ export class ReleasePlanComponent implements OnDestroy {
   protected readonly groups = computed(() => {
     const dependencies = this.plan()?.dependencies ?? [];
     const targets = this.targets();
-    return REASONS.map(({ reason, label }) => ({
+    return REASONS.map(({ reason, labelKey }) => ({
       reason,
-      label,
+      label: this.transloco.translate(labelKey),
       rows: dependencies
         .filter((dependency) => dependency.reason === reason)
         .map<DependencyRow>((dependency) => ({
@@ -198,22 +209,20 @@ export class ReleasePlanComponent implements OnDestroy {
     this.ruleWarnings().reduce((sum, row) => sum + (row.entry.issues?.length ?? 0), 0),
   );
 
-  protected onAccept(event: Event): void {
-    this.accepted.set((event.target as HTMLInputElement).checked);
-  }
-
   protected readonly state = computed<ReleasePlanState>(() => {
     const plan = this.plan();
     const ready = plan !== null && !this.loading() && this.error() === null && this.planKey() === this.itemsKey();
     const ticked = this.tickedKeys();
+    const errors = this.incomplete().filter((row) => row.blocking).length;
+    const warningsUnconfirmed = this.confirmWarnings() && this.warningCount() > 0 && !this.accepted();
     return {
       ready,
       includeDependencies: (plan?.dependencies ?? [])
         .filter((dependency) => ticked.has(itemKey(dependency.target?.uuid, dependency.target?.locale)))
         .map((dependency) => toItem(dependency.target?.uuid, dependency.target?.locale)),
-      blocked:
-        this.incomplete().some((row) => row.blocking) ||
-        (this.confirmWarnings() && this.warningCount() > 0 && !this.accepted()),
+      blocked: errors > 0 || warningsUnconfirmed,
+      errors,
+      warningsUnconfirmed,
       acceptWarnings: this.accepted() || !this.confirmWarnings(),
     };
   });
@@ -241,8 +250,7 @@ export class ReleasePlanComponent implements OnDestroy {
     return this.tickedKeys().has(row.key);
   }
 
-  protected toggle(row: DependencyRow, event: Event): void {
-    const checked = (event.target as HTMLInputElement).checked;
+  protected toggle(row: DependencyRow, checked: boolean): void {
     this.overrides.update((current) => new Map(current).set(row.key, checked));
   }
 
@@ -280,7 +288,7 @@ export class ReleasePlanComponent implements OnDestroy {
         },
         error: (err: unknown) => {
           this.loading.set(false);
-          this.error.set(problemOf(err, 'Could not compute what the release takes along.').detail);
+          this.error.set(problemOf(err, this.transloco.translate('release.plan.failed')).detail);
         },
       });
     }, delay);

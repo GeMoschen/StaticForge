@@ -1,106 +1,90 @@
-@use '../../design/dialog-shell';
-
 :host {
   display: contents;
 }
 
-.dialog--wide {
-  width: min(40rem, 94vw);
+// The body is a stack of parts, each under its own h3 (the dialog's title is the h2).
+.rd__intro,
+.rd__part,
+sf-release-plan,
+sf-redirect-option,
+sf-field {
+  margin-block: 0 var(--sf-space-4);
 }
 
-.release__choices {
+.rd__intro {
+  color: var(--sf-text-muted);
+  font-size: var(--sf-fs-13);
+  line-height: var(--sf-lh-13);
+}
+
+.rd__part {
   display: flex;
   flex-direction: column;
-  gap: var(--sf-1);
+  gap: var(--sf-space-2);
+}
+
+.rd__heading {
   margin: 0;
-  padding: 0;
-  border: none;
-  min-width: 0;
+  color: var(--sf-text);
+  font-size: var(--sf-fs-14);
+  line-height: var(--sf-lh-14);
+  font-weight: var(--sf-weight-semibold);
 }
 
-.release__legend {
-  padding: 0;
-  margin-bottom: var(--sf-1);
-  font-size: var(--sf-text-xs);
-  font-weight: 600;
-  color: var(--sf-slate);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-
-.release__choice {
-  display: flex;
-  align-items: center;
-  gap: var(--sf-2);
-  font-size: var(--sf-text-sm);
-  color: var(--sf-ink);
-  cursor: pointer;
-}
-
-.release__single {
-  margin: 0;
-  font-size: var(--sf-text-sm);
-  color: var(--sf-ink);
-}
-
-.release__all {
-  align-self: flex-start;
-  padding: 0;
-  border: none;
-  background: none;
-  color: var(--sf-signal);
-  font-size: var(--sf-text-xs);
-  cursor: pointer;
-}
-
-.release__note,
-.release__muted {
-  margin: 0;
-  font-size: var(--sf-text-sm);
-  color: var(--sf-slate);
-}
-
-.release__diffs {
+.rd__list {
   display: flex;
   flex-direction: column;
-  gap: var(--sf-2);
+  gap: var(--sf-space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+
+  &--indent {
+    padding-inline-start: var(--sf-space-6);
+  }
 }
 
-.release__diff-label {
-  margin: 0;
-  font-size: var(--sf-text-sm);
-  font-weight: 600;
+.rd__badge {
+  margin-inline-start: var(--sf-space-1);
 }
 
-.release__paths {
+.rd__single {
   margin: 0;
-  padding-left: var(--sf-4);
-  font-size: var(--sf-text-xs);
+  color: var(--sf-text);
+  font-size: var(--sf-fs-14);
+  line-height: var(--sf-lh-14);
+}
+
+.rd__note {
+  margin: 0;
+  color: var(--sf-text-muted);
+  font-size: var(--sf-fs-13);
+  line-height: var(--sf-lh-13);
+}
+
+.rd__diff-label {
+  margin: 0;
+  color: var(--sf-text);
+  font-size: var(--sf-fs-13);
+  line-height: var(--sf-lh-13);
+  font-weight: var(--sf-weight-medium);
+}
+
+.rd__paths {
   max-height: 10rem;
+  margin: 0;
+  padding-inline-start: var(--sf-space-4);
+  font-size: var(--sf-fs-12);
+  line-height: var(--sf-lh-12);
   overflow: auto;
 }
 
-.release__comment {
-  display: flex;
-  flex-direction: column;
-}
-
-.release__textarea {
-  padding: var(--sf-2) var(--sf-3);
-  border: 1px solid var(--sf-line);
-  border-radius: var(--sf-radius-md);
-  background: var(--sf-surface);
-  color: var(--sf-ink);
-  font-family: var(--sf-font-ui);
-  font-size: var(--sf-text-sm);
-  resize: vertical;
-}
-
-.release__error {
+.rd__error {
   margin: 0;
-  padding: var(--sf-2) var(--sf-3);
+  padding: var(--sf-space-2) var(--sf-space-3);
   border-radius: var(--sf-radius-md);
-  background: color-mix(in srgb, var(--sf-rust) 12%, transparent);
-  color: var(--sf-rust);
-  font-size: var(--sf-text-sm);
+  background: var(--sf-danger-subtle);
+  color: var(--sf-danger-text);
+  font-size: var(--sf-fs-13);
+  line-height: var(--sf-lh-13);
 }

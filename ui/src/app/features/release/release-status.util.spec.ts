@@ -44,18 +44,21 @@ describe('release status util', () => {
     );
   });
 
-  it('offers the locales a mode applies to, with the editing locale ticked', () => {
+  it('offers the locales a mode applies to: a release ticks every changed one, the others the editing locale', () => {
     const subject = { uuid: 'page-1', displayName: 'Home', release: LOCALIZED };
     const release = choicesFor(subject, 'release', 'en', (code) => ({ de: 'Deutsch', en: 'English', fr: 'Français' })[code] ?? code);
     expect(release.map((choice) => [choice.locale, choice.checked])).toEqual([
       ['en', true],
-      ['fr', false],
+      ['fr', true],
     ]);
     expect(release[0].label).toBe('English (EN) — Changed');
     // What "Redirect old URL to…" needs to know about the page (M30.6.3).
     const page = choicesFor({ ...subject, type: 'PAGE', folderPath: '/about/' }, 'unpublish', 'de')[0];
     expect([page.assetType, page.assetName, page.folderPath]).toEqual(['PAGE', 'Home', '/about/']);
-    expect(itemsOf(release)).toEqual([{ assetUuid: 'page-1', locale: 'en' }]);
+    expect(itemsOf(release)).toEqual([
+      { assetUuid: 'page-1', locale: 'en' },
+      { assetUuid: 'page-1', locale: 'fr' },
+    ]);
 
     // The editing locale has nothing to unpublish: nothing is preselected among several.
     const unpublish = choicesFor(subject, 'unpublish', 'fr');

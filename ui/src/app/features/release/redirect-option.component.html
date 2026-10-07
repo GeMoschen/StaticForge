@@ -1,0 +1,23 @@
+<div class="option">
+  <sf-checkbox [value]="intent().wanted" (valueChange)="toggle($event)">{{
+    (sources().length > 1 ? 'release.redirect.wantedMany' : 'release.redirect.wanted') | transloco
+  }}</sf-checkbox>
+  @if (intent().wanted) {
+    <div class="option__target">
+      @if (loading()) {
+        <span class="option__muted">{{ 'release.redirect.looking' | transloco }}</span>
+      } @else {
+        <span class="option__page" [class.option__muted]="!intent().page">
+          {{ intent().page?.name ?? ('release.redirect.noPage' | transloco) }}
+        </span>
+      }
+      <sf-button variant="secondary" size="sm" (click)="pickRequested.emit()">{{
+        (intent().page ? 'release.redirect.change' : 'release.redirect.choose') | transloco
+      }}</sf-button>
+    </div>
+    @if (pickError(); as message) {
+      <p class="option__error" role="alert">{{ message }}</p>
+    }
+    <p class="option__hint">{{ (sources().length > 1 ? 'release.redirect.hintMany' : 'release.redirect.hint') | transloco }}</p>
+  }
+</div>

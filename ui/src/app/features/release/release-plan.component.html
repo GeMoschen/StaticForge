@@ -1,100 +1,109 @@
-<section class="plan" aria-live="polite" [attr.aria-busy]="loading()">
+<div class="plan" aria-live="polite" [attr.aria-busy]="loading()">
   @if (loading() && !plan()) {
-    <sf-spinner label="Checking dependencies…" />
+    <sf-spinner [label]="'release.plan.checking' | transloco" />
   } @else if (error()) {
     <p class="plan__error" role="alert">{{ error() }}</p>
   } @else if (plan()) {
     @if (incomplete().length > 0) {
-      <div class="plan__incomplete" role="alert">
-        <h3 class="plan__title">Incomplete content</h3>
-        <p class="plan__note">Fill in the required fields before releasing — or untick the dependency.</p>
-        <ul class="plan__list">
+      <section class="plan__part plan__part--error" aria-labelledby="plan-errors" role="alert">
+        <h3 class="plan__heading" id="plan-errors">
+          <sf-icon class="plan__tone-icon plan__tone-icon--danger" name="error" />
+          {{ 'release.plan.errors' | transloco: { count: incomplete().length } }}
+        </h3>
+        <p class="plan__note">{{ 'release.plan.errorsNote' | transloco }}</p>
+        <ul class="plan__checks">
           @for (row of incomplete(); track $index) {
-            <li class="plan__incomplete-row" [class.plan__incomplete-row--muted]="!row.blocking">
-              <span class="plan__name">
-                {{ row.name }}
-                @if (row.entry.locale) {
-                  <span class="plan__locale">{{ localeTag(row.entry.locale) }}</span>
-                }
-                @if (!row.blocking) {
-                  <span class="plan__muted">(not included)</span>
-                }
-              </span>
-              <a
-                class="plan__open"
-                [routerLink]="row.route.commands"
-                [queryParams]="row.route.queryParams"
-                (click)="navigated.emit()"
-                >Open</a
-              >
-              <ul class="plan__issues">
+            <li class="plan__check" [class.plan__check--muted]="!row.blocking">
+              <div class="plan__check-text">
+                <span class="plan__check-item">
+                  {{ row.name }}
+                  @if (row.entry.locale) {
+                    <span class="plan__locale">{{ localeTag(row.entry.locale) }}</span>
+                  }
+                  @if (!row.blocking) {
+                    <span class="plan__muted">{{ 'release.plan.notIncluded' | transloco }}</span>
+                  }
+                </span>
                 @for (issue of row.entry.issues ?? []; track $index) {
-                  <li>
-                    @if (issue.path) {
+                  <span class="plan__check-message">
+                    @if (issue.path && developerMode()) {
                       <code class="plan__path">{{ issue.path }}</code>
                     }
                     {{ issue.message }}
-                  </li>
+                  </span>
                 }
-              </ul>
+              </div>
+              <sf-button
+                variant="secondary"
+                size="sm"
+                icon="open_in_new"
+                [link]="row.route.commands"
+                [queryParams]="row.route.queryParams"
+                (click)="navigated.emit()"
+                >{{ 'release.plan.open' | transloco }}</sf-button
+              >
             </li>
           }
         </ul>
-      </div>
+      </section>
     }
 
     @if (ruleWarnings().length > 0) {
-      <div class="plan__rule-warnings">
-        <h3 class="plan__title">Warnings ({{ warningCount() }})</h3>
-        <ul class="plan__list">
+      <section class="plan__part" aria-labelledby="plan-warnings">
+        <h3 class="plan__heading" id="plan-warnings">
+          <sf-icon class="plan__tone-icon plan__tone-icon--warning" name="warning" />
+          {{ 'release.plan.warnings' | transloco: { count: warningCount() } }}
+        </h3>
+        <ul class="plan__checks">
           @for (row of ruleWarnings(); track $index) {
-            <li class="plan__incomplete-row">
-              <span class="plan__name">
-                {{ row.name }}
-                @if (row.entry.locale) {
-                  <span class="plan__locale">{{ localeTag(row.entry.locale) }}</span>
-                }
-              </span>
-              <a
-                class="plan__open"
-                [routerLink]="row.route.commands"
-                [queryParams]="row.route.queryParams"
-                (click)="navigated.emit()"
-                >Open</a
-              >
-              <ul class="plan__issues">
+            <li class="plan__check">
+              <div class="plan__check-text">
+                <span class="plan__check-item">
+                  {{ row.name }}
+                  @if (row.entry.locale) {
+                    <span class="plan__locale">{{ localeTag(row.entry.locale) }}</span>
+                  }
+                </span>
                 @for (issue of row.entry.issues ?? []; track $index) {
-                  <li>
-                    @if (issue.path) {
+                  <span class="plan__check-message">
+                    @if (issue.path && developerMode()) {
                       <code class="plan__path">{{ issue.path }}</code>
                     }
                     {{ issue.message }}
-                  </li>
+                  </span>
                 }
-              </ul>
+              </div>
+              <sf-button
+                variant="secondary"
+                size="sm"
+                icon="open_in_new"
+                [link]="row.route.commands"
+                [queryParams]="row.route.queryParams"
+                (click)="navigated.emit()"
+                >{{ 'release.plan.open' | transloco }}</sf-button
+              >
             </li>
           }
         </ul>
         @if (confirmWarnings()) {
-          <label class="plan__accept">
-            <input type="checkbox" [checked]="accepted()" (change)="onAccept($event)" />
-            Release with warnings
-          </label>
+          <sf-checkbox class="plan__ack" [value]="accepted()" (valueChange)="accepted.set($event)">{{
+            'release.plan.acknowledge' | transloco
+          }}</sf-checkbox>
         } @else {
-          <p class="plan__note">The scheduled release goes ahead and records these warnings with its run.</p>
+          <p class="plan__note">{{ 'release.plan.scheduledWarnings' | transloco }}</p>
         }
-      </div>
+      </section>
     }
 
     @if (ruleInfos().length > 0) {
       <details class="plan__infos">
-        <summary class="plan__note">Notes ({{ ruleInfos().length }})</summary>
-        <ul class="plan__issues">
+        <summary class="plan__note">{{ 'release.plan.notes' | transloco: { count: ruleInfos().length } }}</summary>
+        <ul class="plan__checks">
           @for (row of ruleInfos(); track $index) {
             @for (issue of row.entry.issues ?? []; track $index) {
-              <li>
-                <span class="plan__name">{{ row.name }}</span>
-                @if (issue.path) {
+              <li class="plan__check-message">
+                <span class="plan__check-item">{{ row.name }}</span>
+                @if (issue.path && developerMode()) {
                   <code class="plan__path">{{ issue.path }}</code>
                 }
                 {{ issue.message }}
@@ -106,13 +115,15 @@
     }
 
     @if (fills().length > 0) {
-      <div class="plan__fills">
-        <h3 class="plan__title">Filled in on release</h3>
-        <ul class="plan__issues">
+      <section class="plan__part" aria-labelledby="plan-fills">
+        <h3 class="plan__heading" id="plan-fills">{{ 'release.plan.fills' | transloco }}</h3>
+        <ul class="plan__checks">
           @for (row of fills(); track $index) {
-            <li>
-              <span class="plan__name">{{ row.name }}</span>
-              <code class="plan__path">{{ row.fill.path }}</code>
+            <li class="plan__check-message">
+              <span class="plan__check-item">{{ row.name }}</span>
+              @if (developerMode()) {
+                <code class="plan__path">{{ row.fill.path }}</code>
+              }
               @if (row.fill.locale) {
                 <span class="plan__locale">{{ localeTag(row.fill.locale) }}</span>
               }
@@ -120,45 +131,50 @@
             </li>
           }
         </ul>
-      </div>
+      </section>
     }
 
     @if (dependencyCount() > 0) {
-      <div class="plan__dependencies">
-        <h3 class="plan__title">Also release ({{ dependencyCount() }})</h3>
-        <p class="plan__note">Unreleased assets the selection needs. Anything you untick renders empty until released.</p>
+      <section class="plan__part" aria-labelledby="plan-dependencies">
+        <h3 class="plan__heading" id="plan-dependencies">{{ 'release.plan.dependencies' | transloco: { count: dependencyCount() } }}</h3>
+        <p class="plan__note">{{ 'release.plan.dependenciesNote' | transloco }}</p>
         @for (group of groups(); track group.reason) {
           <fieldset class="plan__group">
             <legend class="plan__legend">{{ group.label }}</legend>
-            @for (row of group.rows; track row.key) {
-              <label class="plan__dependency">
-                <input type="checkbox" [checked]="isTicked(row)" (change)="toggle(row, $event)" />
-                <span class="plan__name">{{ row.name }}</span>
-                @if (row.dependency.target?.locale) {
-                  <span class="plan__locale">{{ localeTag(row.dependency.target?.locale) }}</span>
-                }
-                <span class="plan__status">{{ statusLabel(row.dependency.target?.status) }}</span>
-                @if (row.via) {
-                  <span class="plan__muted">via {{ row.via }}</span>
-                }
-              </label>
-            }
+            <ul class="plan__list">
+              @for (row of group.rows; track row.key) {
+                <li>
+                  <sf-checkbox [value]="isTicked(row)" (valueChange)="toggle(row, $event)">
+                    <span class="plan__dependency">
+                      <span class="plan__name">{{ row.name }}</span>
+                      @if (row.dependency.target?.locale) {
+                        <span class="plan__locale">{{ localeTag(row.dependency.target?.locale) }}</span>
+                      }
+                      <span class="plan__muted">{{ statusLabel(row.dependency.target?.status) }}</span>
+                      @if (row.via) {
+                        <span class="plan__muted">{{ 'release.plan.via' | transloco: { name: row.via } }}</span>
+                      }
+                    </span>
+                  </sf-checkbox>
+                </li>
+              }
+            </ul>
           </fieldset>
         }
-      </div>
+      </section>
     } @else if (!loading()) {
-      <p class="plan__note">No unreleased dependencies.</p>
+      <p class="plan__note">{{ 'release.plan.noDependencies' | transloco }}</p>
     }
 
     @if (warnings().length > 0) {
-      <ul class="plan__warnings">
+      <ul class="plan__server-warnings">
         @for (warning of warnings(); track $index) {
           <li>{{ warning }}</li>
         }
       </ul>
     }
     @if (loading()) {
-      <p class="plan__note">Updating…</p>
+      <p class="plan__note">{{ 'release.plan.updating' | transloco }}</p>
     }
   }
-</section>
+</div>

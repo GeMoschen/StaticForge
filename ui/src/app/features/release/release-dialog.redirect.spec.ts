@@ -2,9 +2,11 @@ import '@angular/compiler';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { screen } from '@testing-library/angular';
 import { Router, provideRouter } from '@angular/router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { components } from '../../core/api/generated/schema.d.ts';
+import { provideTranslocoTesting } from '../../core/i18n/transloco-testing';
 import { provideProjectPermissions } from '../../core/project/testing/project-permissions.testing';
 import { ToastService } from '../../core/ui/toast.service';
 import { ReleaseDialogComponent } from './release-dialog.component';
@@ -87,6 +89,8 @@ describe('ReleaseDialogComponent — "Redirect old URL to…"', () => {
         provideHttpClient(),
         provideHttpClientTesting(),
         provideRouter([]),
+        // The spec resets the module between its cases, which drops the global Transloco providers.
+        ...provideTranslocoTesting(),
         provideProjectPermissions({ role: () => rights.role, permissions: () => rights.permissions, readOnly: () => false }),
       ],
     });
@@ -100,16 +104,18 @@ describe('ReleaseDialogComponent — "Redirect old URL to…"', () => {
     fixture.detectChanges();
   }
 
+  /** The dialog moves itself into `<body>`, so queries run there. */
   function el(): HTMLElement {
-    return fixture.nativeElement as HTMLElement;
+    return document.body;
   }
 
   function button(label: string): HTMLButtonElement {
-    const found = Array.from(el().querySelectorAll('button')).find((b) => b.textContent?.trim() === label);
-    if (!found) {
-      throw new Error(`No button "${label}"`);
-    }
-    return found;
+    return screen.getByRole('button', { name: label }) as HTMLButtonElement;
+  }
+
+  /** A button with a reason stays focusable: `aria-disabled` instead of the native attribute. */
+  function isDisabled(element: HTMLElement): boolean {
+    return (element as HTMLButtonElement).disabled || element.getAttribute('aria-disabled') === 'true';
   }
 
   function flushPreselection(pages: AssetSummaryView[] = PAGES): void {
@@ -174,10 +180,10 @@ describe('ReleaseDialogComponent — "Redirect old URL to…"', () => {
   it('needs a page once the option is ticked; nothing preselected when no folder above has an online index', () => {
     open('unpublish', [HAMMER_CHOICE]);
     flushPreselection(PAGES.filter((page) => page.uid !== 'index'));
-    expect(button('Unpublish').disabled).toBe(false);
+    expect(isDisabled(button('Unpublish'))).toBe(false);
     tickRedirect();
     expect(el().querySelector('sf-redirect-option')?.textContent).toContain('No page chosen');
-    expect(button('Unpublish').disabled).toBe(true);
+    expect(isDisabled(button('Unpublish'))).toBe(true);
     // Unticked again, the unpublish goes ahead without a redirect.
     tickRedirect();
     button('Unpublish').click();
