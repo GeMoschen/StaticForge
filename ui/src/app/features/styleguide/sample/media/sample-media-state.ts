@@ -6,8 +6,6 @@ import { ConfirmService } from '../../../../shared/components/dialog/confirm.ser
 import { typeToConfirmFor } from '../../../../shared/components/dialog/delete-confirm';
 import { DialogService } from '../../../../shared/components/dialog/dialog.service';
 import { UnsavedChangesService } from '../../../../shared/components/dialog/unsaved-changes.service';
-import { SfMenuItem } from '../../../../shared/components/menu/sf-menu-item';
-import { ContextMenuItem, ContextMenuService, ContextMenuTarget } from '../../../../shared/services/context-menu.service';
 import { LANGUAGE_NAMES, SampleLang } from '../sample-data';
 import { SampleState } from '../sample-state';
 import {
@@ -159,7 +157,6 @@ export class SampleMediaState {
   private readonly toasts = inject(ToastService);
   private readonly dialogs = inject(DialogService);
   private readonly unsaved = inject(UnsavedChangesService);
-  private readonly contextMenu = inject(ContextMenuService);
   private readonly injector = inject(Injector);
 
   /** Live data, or one of the review states of the library and the tree (`state=loading|error|empty`). */
@@ -179,6 +176,15 @@ export class SampleMediaState {
   readonly direction = signal<SampleSortDirection>('asc');
   /** Selected file ids (the grid's and the list's). */
   readonly selection = signal<readonly string[]>([]);
+  /** Selected folder ids (the folders of the open folder, shown inline before the files). */
+  readonly folderSelection = signal<readonly string[]>([]);
+  /** A read-only project (`readonly=1`): menus keep what only reads; nothing is renamed, moved, uploaded, released or deleted. */
+  readonly readOnly = signal(false);
+  readonly canEdit = computed(() => !this.readOnly());
+  /** The parent of the folder the tree is asked to create inline (`undefined`: the open folder). */
+  readonly folderRequestParent = signal<string | null | undefined>(undefined);
+  /** The library's file picker (registered by the library); `Upload` entries of the menus open it for a folder. */
+  private picker: ((folderId: string) => void) | null = null;
 
   readonly assetId = signal<string | null>(null);
   readonly tab = signal<SampleMediaTab>('details');
@@ -230,8 +236,21 @@ export class SampleMediaState {
       .filter((f) => f.folderId === this.folderId() && matchesType(f, type) && (!query || f.name.toLowerCase().includes(query)))
       .sort((a, b) => sign * compare(a, b));
   });
+  /** The open folder's folders (shown before the files), by name; the search filters them as it does the files. */
+  readonly subfolders = computed<readonly SampleMediaFolder[]>(() => {
+    if (this.review() !== 'live') {
+      return [];
+    }
+    const query = this.search().trim().toLowerCase();
+    return mediaFolderChildren(this.folderId())
+      .filter((f) => !query || f.name.toLowerCase().includes(query))
+      .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+  });
   readonly folderCount = computed(() => (this.review() === 'empty' ? 0 : this.files().filter((f) => f.folderId === this.folderId()).length));
   readonly selectedFiles = computed(() => this.visible().filter((f) => this.selection().includes(f.id)));
+  readonly selectedFolders = computed(() => this.subfolders().filter((f) => this.folderSelection().includes(f.id)));
+  /** Files and folders in the selection. */
+  readonly selectionCount = computed(() => this.selectedFiles().length + this.selectedFolders().length);
 
   readonly asset = computed(() => mediaFile(this.files(), this.assetId()));
   readonly assetProcessed = computed(() => {
@@ -377,6 +396,7 @@ export class SampleMediaState {
   openFolder(id: string): void {
     if (id !== this.folderId()) {
       this.selection.set([]);
+      this.folderSelection.set([]);
       // A file of another folder can't be stepped to from here: the drawer closes with the folder.
       this.openAsset(null);
     }
@@ -466,6 +486,32 @@ export class SampleMediaState {
     }
     const range = ids.slice(a, b + 1);
     this.selection.update((s) => [...new Set([...s, ...range])]);
+  }
+
+  isFolderSelected(id: string): boolean {
+    return this.folderSelection().includes(id);
+  }
+
+  toggleFolder(id: string): void {
+    this.folderSelection.update((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
+  }
+
+  /** Replaces the selection (files and folders). */
+  setSelection(files: readonly string[], folders: readonly string[] = []): void {
+    this.selection.set([...files]);
+    this.folderSelection.set([...folders]);
+  }
+
+  clearSelection(): void {
+    this.setSelection([]);
+  }
+
+  /** Ctrl/⌘+A: every folder and file shown. */
+  selectAll(): void {
+    this.setSelection(
+      this.visible().map((f) => f.id),
+      this.subfolders().map((f) => f.id),
+    );
   }
 
   // ── Edits ──────────────────────────────────────────────────────────────────
@@ -561,61 +607,6 @@ export class SampleMediaState {
 
   // ── Per-file actions (decision 92) ─────────────────────────────────────────
 
-  /** What a menu of `file` acts on: the whole selection when the file is part of a multi-file selection, else the file. */
-  menuTargets(file: SampleMediaFile): readonly SampleMediaFile[] {
-    const selected = this.selectedFiles();
-    return selected.length > 1 && selected.some((f) => f.id === file.id) ? selected : [file];
-  }
-
-  /**
-   * The entries of a file's menu (card, list row): Open, Rename…, Move…, Download, Copy link, Delete…; for a
-   * multi-file selection only the bulk actions (Move…, Download, Delete…) with the count.
-   */
-  fileMenu(file: SampleMediaFile): SfMenuItem[] {
-    const targets = this.menuTargets(file);
-    const count = targets.length;
-    if (count > 1) {
-      return [
-        { id: 'move', label: this.t('menu.moveMany', { count }), icon: 'drive_file_move', action: () => void this.moveFiles(targets) },
-        { id: 'download', label: this.t('menu.downloadMany', { count }), icon: 'download', action: () => this.download(targets) },
-        {
-          id: 'delete',
-          label: this.t('menu.deleteMany', { count }),
-          icon: 'delete',
-          danger: true,
-          separatorBefore: true,
-          shortcut: 'Delete',
-          action: () => void this.confirmDelete(targets),
-        },
-      ];
-    }
-    return [
-      { id: 'open', label: this.t('menu.open'), icon: 'open_in_new', shortcut: 'Enter', action: () => void this.requestOpenAsset(file.id) },
-      { id: 'rename', label: this.t('menu.rename'), icon: 'edit', shortcut: 'F2', action: () => void this.renameFile(file) },
-      { id: 'move', label: this.t('menu.move'), icon: 'drive_file_move', action: () => void this.moveFiles([file]) },
-      { id: 'download', label: this.t('menu.download'), icon: 'download', action: () => this.download([file]) },
-      { id: 'copyLink', label: this.t('menu.copyLink'), icon: 'link', action: () => this.copyLink(file) },
-      {
-        id: 'delete',
-        label: this.t('menu.delete'),
-        icon: 'delete',
-        danger: true,
-        separatorBefore: true,
-        shortcut: 'Delete',
-        action: () => void this.confirmDelete([file]),
-      },
-    ];
-  }
-
-  /** Opens the file's context menu: at the pointer for a right click, below the element for Shift+F10. */
-  openFileMenu(target: ContextMenuTarget, file: SampleMediaFile): void {
-    const items: ContextMenuItem[] = this.fileMenu(file).flatMap((item) => [
-      ...(item.separatorBefore ? [{ label: '', separator: true }] : []),
-      { label: item.label, icon: item.icon, danger: item.danger, shortcut: item.shortcut, action: item.action },
-    ]);
-    this.contextMenu.open(target, items);
-  }
-
   /** The Rename dialog (name field, validation, Apply), then an Undo toast. */
   async renameFile(file: SampleMediaFile): Promise<void> {
     const taken = this.files()
@@ -682,9 +673,8 @@ export class SampleMediaState {
     }
   }
 
-  /** The Move dialog for the open folder (page header menu); the folder and what lies inside it can't be the target. */
-  async moveFolder(): Promise<void> {
-    const folder = this.folder();
+  /** The Move dialog for a folder (the open one from the page header menu, else a tile's or the tree's); the folder and what lies inside it can't be the target. */
+  async moveFolder(folder: SampleMediaFolder | null = this.folder()): Promise<void> {
     if (!folder) {
       return;
     }
@@ -765,8 +755,7 @@ export class SampleMediaState {
    * Starts fake uploads of chosen or dropped files into the open folder. A file that is refused — not an accepted type,
    * over the size limit, a name that is taken — shows up as a failed row with the reason (decision 98).
    */
-  upload(files: readonly { readonly name: string; readonly size: number }[]): void {
-    const folderId = this.folderId();
+  upload(files: readonly { readonly name: string; readonly size: number }[], folderId: string = this.folderId()): void {
     const rows = files.map<SampleUpload>((f) => {
       const base: SampleUpload = { id: `up-${this.nextUpload++}`, name: f.name, sizeBytes: f.size, progress: 0, state: 'uploading', folderId };
       const refused = this.refusal(f.name, f.size, folderId);
@@ -774,6 +763,21 @@ export class SampleMediaState {
     });
     this.uploads.update((list) => [...list, ...rows]);
     this.startTimer();
+  }
+
+  /** The library registers its file picker; the returned function unregisters it. */
+  registerPicker(picker: (folderId: string) => void): () => void {
+    this.picker = picker;
+    return () => {
+      if (this.picker === picker) {
+        this.picker = null;
+      }
+    };
+  }
+
+  /** Opens the file picker for uploads into `folderId` (the menus' *Upload* entries; the open folder without one). */
+  pickFiles(folderId: string = this.folderId()): void {
+    this.picker?.(folderId);
   }
 
   /** Why a file can't go into a folder, if it can't. */

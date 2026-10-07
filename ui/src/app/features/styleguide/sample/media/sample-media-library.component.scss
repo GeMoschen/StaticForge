@@ -132,6 +132,11 @@
   font-size: var(--sf-fs-18);
 }
 
+// A folder row's icon is the accent colour, as the folder cards' are.
+.list-thumb__icon--folder {
+  color: var(--sf-accent);
+}
+
 .list-name {
   display: inline-flex;
   align-items: center;

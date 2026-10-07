@@ -36,12 +36,19 @@
       [selection]="treeSelection()"
       [multiselect]="false"
       [actions]="treeActions"
+      [createKinds]="createKinds"
+      [allowAction]="allowAction"
+      [clipboardScope]="clipboardScope"
       [menuItems]="treeMenu"
+      [emptyMenuItems]="rootMenuItems"
       [expandActions]="false"
+      (emptyClick)="openRoot()"
       (open)="onOpen($event)"
       (reorder)="onReorder($event)"
       (move)="onMove($event)"
       (rename)="onRename($event)"
+      (create)="onCreate($event)"
+      (moveTo)="moveTo()"
       (delete)="onDelete($event)"
     />
     <p class="area__hint">{{ 'styleguide.sample.navigation.reorderHint' | transloco }}</p>
@@ -94,13 +101,16 @@
             selectable
             [columnChooser]="false"
             [bulkActions]="bulkActions()"
+            [rowMenu]="rowMenu"
+            [emptyMenu]="emptyMenu"
+            emptyClickClears
             [label]="'styleguide.sample.navigation.table' | transloco: { name: entry.label }"
             [emptyTitle]="'styleguide.sample.navigation.tableEmpty' | transloco"
             (rowOpen)="openRow($event)"
           >
             <ng-template sfDataTableCell="label" [sfDataTableCellRows]="rows()" let-row>
               <span class="cell-label">
-                <sf-icon class="cell-label__icon" [name]="row.entry.kind === 'folder' ? 'folder' : 'link'" />
+                <sf-icon class="cell-label__icon" [class.is-folder]="row.entry.kind === 'folder'" [name]="row.entry.kind === 'folder' ? 'folder' : 'link'" />
                 <span class="cell-label__text" [class.cell-label__text--muted]="!row.entry.visible">{{ row.entry.label }}</span>
                 @if (row.isEntryPage) {
                   <sf-badge tone="accent" icon="login" [label]="'styleguide.sample.navigation.entryPage' | transloco" />

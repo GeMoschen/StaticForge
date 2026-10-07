@@ -17,7 +17,7 @@ import { PICKER_PAGES, PickerItem } from '../forms/picker-data';
 import { SampleAssetPickerComponent } from '../forms/sample-asset-picker.component';
 import { LANGUAGE_NAMES, childrenOf, pathTo } from '../sample-data';
 import { SampleState } from '../sample-state';
-import { FOLDER_NAV, PAGE_NAV, SampleNavSettings } from './pages-data';
+import { FOLDER_NAV, PAGE_NAV, SampleNavSettings, UNASSIGNED_URL_PAGES } from './pages-data';
 import { SampleAssetUrl, SampleAssetUrlsComponent } from './sample-asset-urls.component';
 import { SamplePagesReview } from './sample-pages-review';
 
@@ -168,7 +168,11 @@ const SAVE_MS = 700;
             <dt>{{ t('settings.facts.template') }}</dt>
             <dd>{{ template() }}</dd>
             <dt>{{ t('settings.facts.address') }}</dt>
-            <dd class="settings__mono">{{ url() }}</dd>
+            <dd
+              class="settings__mono"
+              [class.settings__computed]="!urlAssigned()"
+              [attr.title]="urlAssigned() ? null : t('settings.facts.addressNotAssigned')"
+            >{{ url() }}</dd>
           }
           <dt>{{ t('settings.facts.changed') }}</dt>
           <dd>{{ modifiedBy() }} · <sf-relative-time [value]="changedAt()" /></dd>
@@ -215,6 +219,8 @@ export class SamplePageSettingsComponent {
 
   protected readonly template = computed(() => this.state.page().template ?? '');
   protected readonly url = computed(() => this.state.page().url);
+  /** The URL registry has the page's address; otherwise it is the computed one (muted, "Not assigned yet"). */
+  protected readonly urlAssigned = computed(() => !UNASSIGNED_URL_PAGES.has(this.state.pageId()));
   protected readonly path = computed(() => `/${pathTo(this.state.folderId()).map((e) => e.uid).join('/')}/`.replace('//', '/'));
   /** The folder's registered URLs: the build's output per language and the preview's. */
   protected readonly urls = computed<SampleAssetUrl[]>(() => {

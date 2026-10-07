@@ -1402,8 +1402,7 @@
           "emptyTitle": "No folders yet",
           "emptyHint": "Create a folder, then upload files into it.",
           "noMatch": "No folder matches “{query}”",
-          "clearFilter": "Clear filter",
-          "renameDialog": "Rename…"
+          "clearFilter": "Clear filter"
         },
         "toolbar": {
           "label": "Library tools",
@@ -1457,8 +1456,7 @@
             "dimensions": "Dimensions",
             "size": "Size",
             "modified": "Modified",
-            "usages": "Used by",
-            "actions": "Actions"
+            "usages": "Used by"
           }
         },
         "empty": {
@@ -1471,7 +1469,11 @@
         "bulk": {
           "move": "Move",
           "download": "Download",
-          "delete": "Delete"
+          "delete": "Delete",
+          "cut": "Cut",
+          "copy": "Copy",
+          "duplicate": "Duplicate",
+          "release": "Release…"
         },
         "delete": {
           "title": "{count, plural, one {Delete “{name}”?} other {Delete # files?}}",
@@ -1669,7 +1671,22 @@
           "delete": "Delete…",
           "moveMany": "Move {count} files…",
           "downloadMany": "Download {count} files as ZIP",
-          "deleteMany": "Delete {count} files…"
+          "deleteMany": "Delete {count} files…",
+          "cut": "Cut",
+          "copy": "Copy",
+          "duplicate": "Duplicate",
+          "paste": "Paste",
+          "moveTo": "Move to…",
+          "release": "Release…",
+          "favoriteAdd": "Add “{name}” to favorites",
+          "favoriteRemove": "Remove “{name}” from favorites",
+          "moveItems": "Move {count} items…",
+          "releaseItems": "Release {count} items…",
+          "deleteItems": "Delete {count} items…",
+          "cutMany": "{count, plural, one {Cut # file} other {Cut # files}}",
+          "copyMany": "{count, plural, one {Copy # file} other {Copy # files}}",
+          "duplicateMany": "{count, plural, one {Duplicate # file} other {Duplicate # files}}",
+          "pasteMany": "{count, plural, one {Paste # file} other {Paste # files}}"
         },
         "rename": {
           "title": "Rename “{name}”",
@@ -1716,6 +1733,23 @@
           "folderDone": "Moved the folder “{name}” into {folder} (prototype — the sample’s folder tree stays as it is).",
           "rootDone": "{count, plural, one {Moved “{name}” to the top level} other {Moved # files to the top level}} (prototype — the sample has no files at the top level, so they stay where they are).",
           "undone": "Move undone."
+        },
+        "copy": {
+          "duplicated": "{count, plural, one {Duplicated “{name}”} other {Duplicated # files}}",
+          "pasted": "{count, plural, one {Copied “{name}” to {folder}} other {Copied # files to {folder}}}",
+          "undone": "Copies removed."
+        },
+        "release": {
+          "nothing": "Nothing here is waiting to be released.",
+          "announce": "{count, plural, one {Releasing # file} other {Releasing # files}} (prototype — nothing is released)."
+        },
+        "favorite": {
+          "added": "“{name}” added to your favorites.",
+          "removed": "“{name}” removed from your favorites."
+        },
+        "kind": "Folder",
+        "upload": {
+          "topLevel": "The sample has no files at the top level: uploading into {folder}."
         }
       },
       "title": "Sample screen",
@@ -2548,7 +2582,14 @@
         "deleteMessage": "Deleted items can be restored from the history.",
         "deleteConfirm": "{count, plural, one {Delete} other {Delete # items}}",
         "deleted": "{count, plural, one {Deleted “{name}”} other {Deleted # items}}",
-        "restored": "Restored (prototype — nothing was deleted)."
+        "restored": "Restored (prototype — nothing was deleted).",
+        "menu": {
+          "rename": "Rename…",
+          "cut": "Cut",
+          "copy": "Copy",
+          "paste": "Paste",
+          "moveTo": "Move to…"
+        }
       },
       "editor": {
         "favorite": "Favorite",
@@ -3964,6 +4005,7 @@
             "containsValue": "{pages, plural, one {# page} other {# pages}}, {folders, plural, one {# folder} other {# folders}}",
             "template": "Template",
             "address": "Address",
+            "addressNotAssigned": "Not assigned yet",
             "changed": "Last change"
           }
         },
@@ -4353,6 +4395,31 @@
         "deleteInUse": "In use by {pages, plural, one {# page} other {# pages}}{others, plural, =0 {} one { and # other template or record set} other { and # other templates or record sets}}. They keep their content but may break on the next build.",
         "deleteRestore": "Deleted templates can be restored from the history.",
         "deleted": "{count, plural, one {Deleted “{name}”} other {Deleted # items}} (prototype — nothing was deleted)."
+      },
+      "menus": {
+        "open": "Open",
+        "newFolder": "New folder",
+        "newRecordSet": "New record set",
+        "newRecord": "New record",
+        "newMenuItem": "New menu item",
+        "renameDialog": "Rename…",
+        "cut": "Cut",
+        "copy": "Copy",
+        "paste": "Paste",
+        "moveTo": "Move to…",
+        "release": "Release…",
+        "openPage": "Open the page",
+        "entryPage": "Entry page…",
+        "delete": "Delete",
+        "deleteMore": "Delete…",
+        "duplicate": "Duplicate",
+        "released": "{count, plural, one {Released “{name}”} other {Released # entries}} (prototype — nothing was published).",
+        "releasedBack": "Release undone (prototype — nothing was changed).",
+        "copied": "{count, plural, one {Copied “{name}”} other {Copied # items}} (prototype — nothing was copied).",
+        "copiedBack": "Copy removed (prototype — nothing was changed).",
+        "duplicated": "{count, plural, one {Duplicated “{name}”} other {Duplicated # records}} (prototype — nothing was copied).",
+        "duplicatedBack": "Duplicate removed (prototype — nothing was changed).",
+        "deleted": "{count, plural, one {Deleted “{name}”} other {Deleted # entries}}"
       }
     },
     "forms": {

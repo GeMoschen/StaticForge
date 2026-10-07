@@ -6,19 +6,53 @@
   (keydown)="onKeydown($event)"
 >
   <div class="grid__row" role="row">
+    @for (folder of state.subfolders(); track folder.id) {
+      <div
+        class="card card--folder"
+        role="gridcell"
+        [class.is-selected]="state.isFolderSelected(folder.id)"
+        [attr.tabindex]="tabStop() === folderKey(folder) ? 0 : -1"
+        [attr.aria-selected]="state.isFolderSelected(folder.id)"
+        [attr.aria-label]="folder.name"
+        [attr.data-folder]="folder.id"
+        (focus)="onFocus(folderKey(folder))"
+        (click)="onCardClick(folderKey(folder), $event)"
+        (dblclick)="onCardDblClick(folderKey(folder), $event)"
+        (contextmenu)="onFolderContextMenu($event, folder)"
+      >
+        <div class="card__thumb">
+          <sf-icon class="card__folder-icon" name="folder" />
+        </div>
+        <sf-checkbox
+          class="card__check"
+          [value]="state.isFolderSelected(folder.id)"
+          [controlTabindex]="-1"
+          [aria-label]="'styleguide.sample.media.grid.select' | transloco: { name: folder.name }"
+          (valueChange)="onCheck(folderKey(folder))"
+        />
+        <span class="card__more" (click)="$event.stopPropagation()">
+          <sf-menu size="sm" [items]="actions.folderMenu(folder)" [label]="'styleguide.sample.media.menu.label' | transloco: { name: folder.name }" />
+        </span>
+        <div class="card__text">
+          <span class="card__name">{{ folder.name }}</span>
+          <span class="card__meta">{{ 'styleguide.sample.media.kind' | transloco }}</span>
+        </div>
+      </div>
+    }
     @for (file of state.visible(); track file.id) {
       <div
         class="card"
         role="gridcell"
         [class.is-selected]="state.isSelected(file.id)"
         [class.is-open]="state.assetId() === file.id"
-        [attr.tabindex]="tabStop() === file.id ? 0 : -1"
+        [attr.tabindex]="tabStop() === fileKey(file) ? 0 : -1"
         [attr.aria-selected]="state.isSelected(file.id)"
         [attr.aria-label]="cardLabel(file)"
         [attr.data-file]="file.id"
-        draggable="true"
-        (focus)="onFocus(file)"
-        (click)="onClick(file, $event)"
+        [attr.draggable]="state.canEdit() ? 'true' : null"
+        (focus)="onFocus(fileKey(file))"
+        (click)="onCardClick(fileKey(file), $event)"
+        (dblclick)="onCardDblClick(fileKey(file), $event)"
         (contextmenu)="onContextMenu($event, file)"
         (dragstart)="onDragStart($event, file)"
         (dragend)="onDragEnd()"
@@ -35,10 +69,10 @@
           [value]="state.isSelected(file.id)"
           [controlTabindex]="-1"
           [aria-label]="'styleguide.sample.media.grid.select' | transloco: { name: file.name }"
-          (valueChange)="onCheck(file)"
+          (valueChange)="onCheck(fileKey(file))"
         />
         <span class="card__more" (click)="$event.stopPropagation()">
-          <sf-menu size="sm" [items]="menuItems(file)" [label]="'styleguide.sample.media.menu.label' | transloco: { name: file.name }" />
+          <sf-menu size="sm" [items]="actions.fileMenu(file)" [label]="'styleguide.sample.media.menu.label' | transloco: { name: file.name }" />
         </span>
         @if (file.status !== 'released') {
           <sf-status
@@ -60,3 +94,13 @@
     }
   </div>
 </div>
+@if (marquee(); as band) {
+  <div
+    class="grid__marquee"
+    aria-hidden="true"
+    [style.left.px]="band.left"
+    [style.top.px]="band.top"
+    [style.width.px]="band.width"
+    [style.height.px]="band.height"
+  ></div>
+}

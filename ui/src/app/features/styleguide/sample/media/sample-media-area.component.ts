@@ -7,6 +7,7 @@ import {
   computed,
   effect,
   inject,
+  signal,
   untracked,
   viewChild,
 } from '@angular/core';
@@ -21,6 +22,7 @@ import {
   SfTreeComponent,
   SfTreeCreateKind,
   SfTreeDeleteRequest,
+  SfTreeMoveRequest,
 } from '../../../../shared/components/sf-tree.component';
 import { SfSplitterComponent } from '../../../../shared/components/splitter/sf-splitter.component';
 import type { ContextMenuItem } from '../../../../shared/services/context-menu.service';
@@ -38,6 +40,7 @@ import {
   mediaFolderMatches,
 } from './sample-media-data';
 import { SampleMediaDetailComponent } from './sample-media-detail.component';
+import { MEDIA_TREE_SCOPE, SampleMediaItemActions } from './sample-media-item-actions';
 import { SampleMediaLibraryComponent } from './sample-media-library.component';
 import {
   MEDIA_DIALOGS,
@@ -74,6 +77,7 @@ const OWN_PARAMS = [
   'highlight',
   'lang',
   'complete',
+  'readonly',
 ] as const;
 /** `highlight=` values: Auto (the type's override is removed) or a format (the type is highlighted as it). */
 const HIGHLIGHT_PARAMS: Readonly<Record<string, CodeFormat | null>> = {
@@ -114,7 +118,8 @@ function oneOf<T extends string>(value: string | null, allowed: readonly T[]): T
  * - `upload=1` (the panel mid-upload) or `upload=errors` (every kind of refusal);
  * - review shortcuts, applied once on load: `dirty=1` (the open file has unsaved edits, so stepping, switching folder
  *   or closing asks), `dialog=rename|rename-folder|move|folder-move|delete` (that dialog opens), `menu=<fileId>` (that file's menu),
- *   `urls=error` (the Used by tab's URL registry is unavailable);
+ *   `urls=error` (the Used by tab's URL registry is unavailable), `readonly=1` (a read-only project: the menus keep what
+ *   only reads — no rename, move, cut, copy, duplicate, upload, release or delete, no tree editing);
  * - the Source tab of a text file (`asset=a-brand-css&mtab=source`, or `a-logo` for SVG), applied once on load:
  *   `banner=large|utf8|eol` (too large to edit / not valid UTF-8 / mixed line endings), `highlight=auto|css|javascript|
  *   json|xml|markdown|plain` (the project's highlight override for the open file's type), `lang=de|en` (the file has one
@@ -134,13 +139,14 @@ function oneOf<T extends string>(value: string | null, allowed: readonly T[]): T
     SfTreeComponent,
     TranslocoPipe,
   ],
-  providers: [SampleMediaState],
+  providers: [SampleMediaState, SampleMediaItemActions],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './sample-media-area.component.html',
   styleUrls: ['../sample-tree-pane.scss', './sample-media-area.component.scss'],
 })
 export class SampleMediaAreaComponent {
   protected readonly state = inject(SampleMediaState);
+  protected readonly actions = inject(SampleMediaItemActions);
   private readonly location = inject(Location);
   private readonly document = inject(DOCUMENT);
   private readonly tree = viewChild.required<SfTreeComponent<SampleMediaFolder>>(SfTreeComponent);
@@ -149,13 +155,15 @@ export class SampleMediaAreaComponent {
 
   protected readonly treeWidth =
     typeof matchMedia !== 'function' || matchMedia(WIDE_QUERY).matches ? TREE_WIDTH : TREE_WIDTH_NARROW;
-  protected readonly treeActions: readonly SfTreeAction[] = ['rename', 'delete', 'create'];
+  /** The tree's editing: rename inline, cut / paste / *Move to…*, new folder, delete (none in a read-only project). */
+  protected readonly treeActions = computed<readonly SfTreeAction[]>(() => (this.state.canEdit() ? ['rename', 'delete', 'move', 'create'] : []));
   protected readonly createKinds: readonly SfTreeCreateKind[] = ['folder'];
-  /** *Rename…* opens the dialog (name and, in developer mode, UID); the menu's own *Rename* and F2 edit the name in place. */
-  protected readonly menuItems = (nodes: readonly SfTreeNode<SampleMediaFolder>[]): ContextMenuItem[] => {
-    const folder = nodes.length === 1 ? nodes[0].data : null;
-    return folder ? [{ label: this.state.t('folders.renameDialog'), icon: 'edit', action: () => void this.state.renameFolder(folder) }] : [];
-  };
+  protected readonly clipboardScope = MEDIA_TREE_SCOPE;
+  /** The host entries of a folder's menu after the tree's own: *Paste N files*, *Upload*, the favorite and *Release…*. */
+  protected readonly menuItems = (nodes: readonly SfTreeNode<SampleMediaFolder>[]): ContextMenuItem[] => this.actions.treeMenu(nodes);
+  /** A right click on empty space acts as one on the top level: *Paste N files*, *Upload* and *New folder*. */
+  protected readonly rootMenuItems = (): ContextMenuItem[] =>
+    this.actions.treeRootMenu(() => void this.tree().startCreate(null, 'folder'));
 
   /** The filter, lower case and trimmed. */
   private readonly query = computed(() => this.state.treeFilter().trim().toLowerCase());
@@ -209,7 +217,8 @@ export class SampleMediaAreaComponent {
     return nodes;
   });
 
-  protected readonly treeSelection = computed(() => [this.state.folderId()]);
+  /** Two-way with the tree, which selects a node on click: put back when the click did not navigate (see {@link onOpen}). */
+  protected readonly treeSelection = signal<string[]>([]);
 
   constructor() {
     const params = inject(ActivatedRoute).snapshot.queryParamMap;
@@ -239,17 +248,28 @@ export class SampleMediaAreaComponent {
       { allowSignalWrites: true },
     );
 
-    // The folder menu's Rename folder / the empty library's New folder: the tree's own inline editing.
+    // The tree's selection follows the open folder.
+    effect(
+      () => {
+        const id = this.state.folderId();
+        untracked(() => this.treeSelection.set([id]));
+      },
+      { allowSignalWrites: true },
+    );
+
+    // The folder menus' New folder / Rename folder and the empty library's New folder: the tree's own inline editing.
     effect(
       () => {
         const request = this.state.folderRequest();
         if (request) {
           untracked(() => {
+            const parent = this.state.folderRequestParent();
             this.state.folderRequest.set(null);
+            this.state.folderRequestParent.set(undefined);
             if (request === 'rename') {
               this.tree().startRename(this.state.folderId());
             } else {
-              void this.tree().startCreate(this.state.review() === 'empty' ? null : this.state.folderId(), 'folder');
+              void this.tree().startCreate(parent !== undefined ? parent : this.state.review() === 'empty' ? null : this.state.folderId(), 'folder');
             }
           });
         }
@@ -293,8 +313,28 @@ export class SampleMediaAreaComponent {
     });
   }
 
-  protected onOpen(node: SfTreeNode<SampleMediaFolder>): void {
-    void this.state.requestOpenFolder(node.id);
+  protected async onOpen(node: SfTreeNode<SampleMediaFolder>): Promise<void> {
+    await this.state.requestOpenFolder(node.id);
+    if (this.state.folderId() !== node.id) {
+      // The leave guard kept the open file's edits: the selection goes back to the open folder.
+      this.treeSelection.set([this.state.folderId()]);
+    }
+  }
+
+  /** A left click on empty space opens the top level (the sample has no top-level view: the area's first folder, as the breadcrumb's root). */
+  protected onOpenRoot(): void {
+    void this.onOpen({ id: this.state.folderPath()[0]?.id ?? this.state.folderId() } as SfTreeNode<SampleMediaFolder>);
+  }
+
+  /** A paste or drop of folders in the tree: announced and undoable, the sample's folder tree stays as it is. */
+  protected onMove(request: SfTreeMoveRequest<SampleMediaFolder>): void {
+    request.completed(() => undefined);
+  }
+
+  protected onMoveTo(nodes: SfTreeNode<SampleMediaFolder>[]): void {
+    if (nodes[0]?.data) {
+      void this.state.moveFolder(nodes[0].data);
+    }
   }
 
   protected onDelete(request: SfTreeDeleteRequest<SampleMediaFolder>): void {
@@ -302,7 +342,7 @@ export class SampleMediaAreaComponent {
   }
 
   protected newFolder(): void {
-    this.state.folderRequest.set('create');
+    this.actions.createFolderIn(this.state.review() === 'empty' ? null : this.state.folderId());
   }
 
   protected clearTreeFilter(): void {
@@ -382,7 +422,7 @@ export class SampleMediaAreaComponent {
     const file: SampleMediaFile | undefined = this.state.files().find((f) => f.id === id);
     const element = this.document.querySelector<HTMLElement>(`[data-file="${id}"]`);
     if (file && element) {
-      this.state.openFileMenu(element, file);
+      this.actions.openFileMenu(element, file);
     }
   }
 
@@ -393,6 +433,7 @@ export class SampleMediaAreaComponent {
     if (view) {
       this.state.view.set(view);
     }
+    this.state.readOnly.set(params.get('readonly') === '1');
     const folder = params.get('folder');
     if (folder && mediaFolder(folder)) {
       this.state.folderId.set(folder);

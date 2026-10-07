@@ -79,7 +79,7 @@ import { SampleNavigationAreaComponent } from './navigation/sample-navigation-ar
 import { SamplePagesEmptyComponent } from './pages/sample-pages-empty.component';
 import { SampleIssuesDrawerComponent } from './pages/sample-issues-drawer.component';
 import { SamplePagesMoveDialogComponent } from './pages/sample-pages-move-dialog.component';
-import { SamplePagesReview } from './pages/sample-pages-review';
+import { SAMPLE_PAGES_CLIPBOARD, SamplePagesReview } from './pages/sample-pages-review';
 import { SamplePageSettingsComponent } from './pages/sample-page-settings.component';
 import { SampleAccountAreaComponent } from './account/sample-account-area.component';
 import { SampleAdminAreaComponent } from './admin/sample-admin-area.component';
@@ -181,6 +181,8 @@ export class SampleScreenComponent {
   protected readonly treeWidth =
     typeof matchMedia !== 'function' || matchMedia(WIDE_QUERY).matches ? TREE_WIDTH : TREE_WIDTH_NARROW;
   protected readonly treeActions: readonly SfTreeAction[] = ['rename', 'delete', 'move', 'copy', 'create'];
+  /** The tree and the folder table share one clipboard. */
+  protected readonly clipboardScope = SAMPLE_PAGES_CLIPBOARD;
   /** The *Favorites* branch is a view: nothing in it is renamed, deleted or created. */
   protected readonly allowAction = (_action: SfTreeAction, nodes: readonly SfTreeNode<SampleEntry>[]): boolean =>
     !this.review.readOnly() && !nodes.some((node) => isFavoriteNode(node.id));
@@ -332,21 +334,28 @@ export class SampleScreenComponent {
     });
   }
 
-  /** The context menu's *Add to favorites* / *Remove from favorites* for a page or folder (M35.15). */
+  /**
+   * What the app adds to the tree's own Rename, Cut, Copy, Paste, Move to… and Delete (M35.15, M35.22): New page here (folder)
+   * or Duplicate (page), Release, and *Add to favorites* / *Remove from favorites*. A selection only gets Release.
+   */
   protected readonly treeMenuItems = (nodes: readonly SfTreeNode<SampleEntry>[]): ContextMenuItem[] => {
-    const node = nodes.length === 1 ? nodes[0] : null;
-    if (!node || isFavoriteNode(node.id) || !node.data) {
+    const entries = nodes.flatMap((node) => (node.data && !isFavoriteNode(node.id) ? [node.data] : []));
+    if (entries.length === 0 || entries.length !== nodes.length) {
       return [];
     }
-    const entry = node.data;
+    const release: ContextMenuItem = { label: this.state.t('folder.bulk.release'), icon: 'publish', action: () => this.review.release(entries) };
+    if (entries.length > 1) {
+      return this.review.readOnly() ? [] : [release];
+    }
+    const entry = entries[0];
     const on = this.state.isFavorite(entry.id);
     const items: ContextMenuItem[] = [];
     if (!this.review.readOnly()) {
-      // What the app adds to the tree's own cut / copy / paste / move: a page in this folder, a copy of this page.
       items.push(
         entry.kind === 'folder'
           ? { label: this.state.t('tree.newPageHere'), icon: 'note_add', action: () => this.state.notice('folder.newPageNotice') }
           : { label: this.state.t('tree.duplicate'), icon: 'content_copy', action: () => this.state.notice('pages.tree.duplicated', { name: entry.name }) },
+        release,
       );
     }
     items.push({
@@ -356,6 +365,22 @@ export class SampleScreenComponent {
     });
     return items;
   };
+
+  /** A right click on empty space acts as one on the root: only the *New …* options. */
+  protected readonly rootMenuItems = (): ContextMenuItem[] =>
+    this.review.readOnly()
+      ? []
+      : [
+          { label: this.state.t('tree.newPage'), icon: 'note_add', action: () => void this.tree()?.startCreate(null, 'item') },
+          { label: this.state.t('tree.newFolder'), icon: 'create_new_folder', action: () => void this.tree()?.startCreate(null, 'folder') },
+        ];
+
+  /** A left click on empty space opens the root folder. */
+  protected async openRoot(): Promise<void> {
+    if (await this.state.canLeave()) {
+      this.state.openFolder(null);
+    }
+  }
 
   /** *Move to…* in the tree's context menu: the folder picker. */
   protected moveTo(nodes: readonly SfTreeNode<SampleEntry>[]): void {

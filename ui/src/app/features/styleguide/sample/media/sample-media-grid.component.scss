@@ -1,5 +1,6 @@
 :host {
   display: block;
+  position: relative; // the rubber band is placed in the grid's own, scroll-aware coordinates
   overflow: auto;
   padding-bottom: var(--sf-space-6);
   // The row's padding keeps the focus ring and selection shadow from being clipped; the negative margin takes it back
@@ -12,6 +13,21 @@
   grid-template-columns: repeat(auto-fill, minmax(10.5rem, 1fr));
   gap: var(--sf-space-4);
   padding: var(--sf-space-1);
+}
+
+// The selection rubber band: a translucent accent rectangle that does not take pointer events.
+.grid__marquee {
+  position: absolute;
+  z-index: var(--sf-z-sticky);
+  pointer-events: none;
+  border: 1px solid var(--sf-accent);
+  border-radius: var(--sf-radius-sm);
+  background: color-mix(in srgb, var(--sf-accent) 18%, transparent);
+}
+
+.card__folder-icon {
+  color: var(--sf-accent);
+  font-size: var(--sf-fs-30);
 }
 
 // ── Card ─────────────────────────────────────────────────────────────────────

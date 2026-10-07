@@ -138,3 +138,11 @@ export const REDIRECT_TARGETS: readonly { readonly id: string; readonly name: st
   { id: 'p-single-origins', name: 'Single origins', url: '/shop/single-origins' },
   { id: 'p-home', name: 'Home', url: '/' },
 ];
+
+// ── Page URLs (M35.22 follow-up 4) ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Pages that have no URL in the URL registry yet (never previewed or built): the app shows their computed address muted,
+ * with "Not assigned yet". Every other page shows its registered URL plain.
+ */
+export const UNASSIGNED_URL_PAGES: ReadonlySet<string> = new Set(['p-barista-championship', 'p-munich']);

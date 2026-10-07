@@ -88,6 +88,12 @@
   font-size: var(--sf-fs-12);
 }
 
+// A page without a registered URL: its computed address, muted.
+.cell-url--computed {
+  font-style: italic;
+  opacity: 0.75;
+}
+
 // The UID beside a template's name in the Templates folder table (developer mode).
 .cell-uid {
   overflow: hidden;

@@ -136,7 +136,7 @@ describe('media sample: states, file actions, uploads, guards', () => {
       expect(screen.queryByRole('grid', { name: /^Files in/ })).toBeNull();
 
       fireEvent.click(screen.getAllByRole('button', { name: 'Retry' })[0]);
-      await waitFor(() => expect(cards().length).toBe(8));
+      await waitFor(() => expect(cards().length).toBe(9));
       expect(await screen.findAllByRole('treeitem')).not.toHaveLength(0);
       expect(screen.queryByText('Couldn’t load the files of Products.')).toBeNull();
       await waitFor(() => expect(query()).not.toContain('state='));
@@ -147,7 +147,7 @@ describe('media sample: states, file actions, uploads, guards', () => {
       await screen.findByText('Couldn’t load this tree');
       const treeRetry = screen.getAllByRole('button', { name: 'Retry' }).find((b) => !!b.closest('sf-tree'))!;
       fireEvent.click(treeRetry);
-      await waitFor(() => expect(cards().length).toBe(8));
+      await waitFor(() => expect(cards().length).toBe(9));
       expect(await screen.findAllByRole('treeitem')).not.toHaveLength(0);
     });
 
@@ -173,13 +173,24 @@ describe('media sample: states, file actions, uploads, guards', () => {
   });
 
   describe('per-file menu', () => {
-    it('opens on a right click with Open, Rename, Move, Download, Copy link and Delete', async () => {
+    it('opens on a right click with the app’s entries: Rename, Move, Cut, Copy, Duplicate, Download, Copy link, favorite, Release, Delete', async () => {
       await setup();
       await tree();
 
       fireEvent.contextMenu(card('latte-art-rosetta.jpg'), { clientX: 40, clientY: 40 });
 
-      expect(menuLabels()).toEqual(['Open', 'Rename…', 'Move…', 'Download', 'Copy link', 'Delete…']);
+      expect(menuLabels()).toEqual([
+        'Rename…',
+        'Move…',
+        'Cut',
+        'Copy',
+        'Duplicate',
+        'Download',
+        'Copy link',
+        'Add “latte-art-rosetta.jpg” to favorites',
+        'Release…',
+        'Delete…',
+      ]);
       expect(TestBed.inject(ContextMenuService).state()?.anchor.kind).toBe('point');
     });
 
@@ -208,17 +219,37 @@ describe('media sample: states, file actions, uploads, guards', () => {
 
       fireEvent.contextMenu(selected, { clientX: 40, clientY: 40 });
 
-      expect(menuLabels()).toEqual(['Move 3 files…', 'Download 3 files as ZIP', 'Delete 3 files…']);
+      expect(menuLabels()).toEqual([
+        'Move 3 files…',
+        'Cut 3 files',
+        'Copy 3 files',
+        'Duplicate 3 files',
+        'Download 3 files as ZIP',
+        'Release 3 items…',
+        'Delete 3 files…',
+      ]);
     });
 
-    it('has a ⋮ column and a context menu in the list', async () => {
+    it('has no Actions column in the list, but the file menu on a right click', async () => {
       await setup({ media: 'list' });
       await tree();
       const row = (await screen.findByText('latte-art-rosetta.jpg')).closest('tr')!;
-      expect(within(row).getByRole('button', { name: 'Actions for latte-art-rosetta.jpg' })).toBeInTheDocument();
+      expect(within(row).queryByRole('button', { name: 'Actions for latte-art-rosetta.jpg' })).toBeNull();
+      expect(screen.queryByRole('columnheader', { name: 'Actions' })).toBeNull();
 
       fireEvent.contextMenu(row, { clientX: 40, clientY: 40 });
-      expect(menuLabels()).toEqual(['Open', 'Rename…', 'Move…', 'Download', 'Copy link', 'Delete…']);
+      expect(menuLabels()).toEqual([
+        'Rename…',
+        'Move…',
+        'Cut',
+        'Copy',
+        'Duplicate',
+        'Download',
+        'Copy link',
+        'Add “latte-art-rosetta.jpg” to favorites',
+        'Release…',
+        'Delete…',
+      ]);
     });
 
     it('renames with F2 and deletes with the Delete key', async () => {

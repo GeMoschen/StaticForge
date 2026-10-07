@@ -1175,3 +1175,19 @@ folder; page/record endpoints are deprecated delegates; move unchanged). UI: row
 pages, content, navigation, media; record grid menu; Explorer-style media grid; shared `toContextItems`; data-table `rowMenu`/`emptyMenu`/
 `emptyClickClears`. Full UI suite green (3,809), `ngc` clean. Open: `NavigationApiIntegrationTest.visibleInMenuDefaultsToTrue…` fails with 412
 (unrelated, not run on a clean tree); not checked in a browser. `bootRunDemo` now uses an on-disk H2 file (`build/db/staticforge-demo`).
+
+## M35.22 sample catch-up for follow-ups 1–4 — gate round 15 (2026-10-07)
+
+User decisions (Q&A, 2026-10-07): sample picks up row + empty-space menus, bulk bars (incl. multi-selection right click), media grid/list
+(folders inline, Explorer-style grid, one rename, accent folder icons), record-grid menu, page URL from the registry (registered plain, computed
+muted + "Not assigned", column stays developer-mode only), centred banner/build status. **Announce only** (menus have the app's exact entries and
+enabled/disabled states; actions toast, Undo where the app has it); sample trees become multiselect like the app; Release with nothing pending =
+enabled + info toast; media empty-space menu = Upload, New folder, Paste; trees: left click on empty space opens the root, right click opens the
+empty-space menu (not templates); templates unchanged. Then: round 15 in `009-style-guide-gate.md` (decisions 172+) and stop for sign-off.
+
+- [x] Pages (tree multiselect + empty menu, folder table rowMenu/emptyMenu, URL column + settings "Not assigned")
+- [x] Content + record grid (tree, folder table, record grid row/empty menu, Duplicate)
+- [x] Navigation (tree, folder table row/empty menu, Release, Copy, accent folder icons)
+- [x] Media (folders inline grid+list, Explorer grid, shared menus, Upload/Paste, selection menu, tree menus)
+- [x] Banner / build status centring in the sample topbar
+- [x] Gate round 15 + specs + ngc/vitest/lint; stop for sign-off

@@ -17,7 +17,7 @@
   >
     <div class="pane__head">
       <span class="pane__title" id="sample-media-folders-title">{{ 'styleguide.sample.media.folders.title' | transloco }}</span>
-      <sf-button variant="secondary" size="sm" icon="create_new_folder" (click)="newFolder()">{{
+      <sf-button variant="secondary" size="sm" icon="create_new_folder" [disabled]="!state.canEdit()" (click)="newFolder()">{{
         'styleguide.sample.media.folders.new' | transloco
       }}</sf-button>
     </div>
@@ -56,16 +56,21 @@
       class="pane__tree"
       [label]="'styleguide.sample.media.folders.title' | transloco"
       [loadChildren]="loader()"
-      [selection]="treeSelection()"
-      [multiselect]="false"
+      [(selection)]="treeSelection"
       [filterable]="false"
-      [actions]="treeActions"
+      [actions]="treeActions()"
       [createKinds]="createKinds"
+      [clipboardScope]="clipboardScope"
+      rootDroppable
       [menuItems]="menuItems"
+      [emptyMenuItems]="rootMenuItems"
       [expandActions]="false"
+      (emptyClick)="onOpenRoot()"
       (open)="onOpen($event)"
       (rename)="state.notice()"
       (create)="state.notice()"
+      (move)="onMove($event)"
+      (moveTo)="onMoveTo($event)"
       (delete)="onDelete($event)"
     />
   </section>

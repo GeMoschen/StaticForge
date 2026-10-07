@@ -25,6 +25,9 @@
   [label]="'styleguide.sample.folder.table' | transloco: { name: title() }"
   [searchPlaceholder]="'styleguide.sample.folder.search' | transloco"
   [bulkActions]="bulkActions()"
+  [rowMenu]="rowMenu"
+  [emptyMenu]="emptyMenu"
+  emptyClickClears
   [loading]="loading()"
   [error]="failed() ? ('styleguide.sample.folder.loadFailed' | transloco) : null"
   [emptyTitle]="'styleguide.sample.folder.empty' | transloco"
@@ -82,6 +85,15 @@
     }
   </ng-template>
   <ng-template sfDataTableCell="url" [sfDataTableCellRows]="rows()" let-row>
-    <code class="cell-url">{{ row.url }}</code>
+    @if (row.kind === 'folder' || registered(row)) {
+      <code class="cell-url">{{ row.url }}</code>
+    } @else {
+      <code
+        class="cell-url cell-url--computed"
+        [attr.title]="'styleguide.sample.pages.settings.facts.addressNotAssigned' | transloco"
+        [attr.aria-label]="row.url + ' (' + ('styleguide.sample.pages.settings.facts.addressNotAssigned' | transloco) + ')'"
+        >{{ row.url }}</code
+      >
+    }
   </ng-template>
 </sf-data-table>

@@ -82,14 +82,29 @@
   gap: var(--sf-space-2);
 }
 
+// As in sf-build-status: the icon and the spinner are inline by default, and their line box (the button's line-height) adds
+// space above or below the glyph. As flex boxes with a line-height of 1 they are exactly as tall as the glyph.
+.topbar__build-icon,
+.topbar__build-content sf-spinner {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
 .topbar__build-icon {
   color: var(--sf-success);
   font-size: var(--sf-fs-16);
 }
 
 .topbar__build-text {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sf-space-1);
   color: var(--sf-chrome-text-muted);
   font-weight: var(--sf-weight-regular);
+  line-height: 1;
+  white-space: nowrap;
 }
 
 // Below the large breakpoint the search and build status keep their icons only (their names stay on the button).

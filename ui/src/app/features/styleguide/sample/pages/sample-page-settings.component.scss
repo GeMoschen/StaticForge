@@ -61,6 +61,11 @@
   font-size: var(--sf-fs-13);
 }
 
+.settings__computed {
+  font-style: italic;
+  opacity: 0.75;
+}
+
 .settings__card {
   display: flex;
   align-items: center;

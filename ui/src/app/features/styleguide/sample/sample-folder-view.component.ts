@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, afterNextRender, computed, inject, viewChild } from '@angular/core';
 import { TranslocoPipe } from '@jsverse/transloco';
 import { ToastService } from '../../../core/ui/toast.service';
+import { bulkActionsAsMenu } from '../../../shared/components/data-table/data-table-menu';
 import { SfDataTableCellDirective } from '../../../shared/components/data-table/sf-data-table-templates.directive';
 import {
   SfDataTableBulkAction,
@@ -15,10 +16,12 @@ import { SfRelativeTimeComponent } from '../../../shared/components/display/sf-r
 import { SfStatusComponent } from '../../../shared/components/display/sf-status.component';
 import { SfPageHeaderComponent } from '../../../shared/components/layout/sf-page-header.component';
 import { SfMenuItem } from '../../../shared/components/menu/sf-menu.component';
+import type { ContextMenuItem } from '../../../shared/services/context-menu.service';
 import { SfButtonComponent } from '../../../shared/components/sf-button.component';
 import { SfIconComponent } from '../../../shared/components/sf-icon.component';
 import { SfTooltipDirective } from '../../../shared/directives/sf-tooltip.directive';
 import { SampleBreadcrumbComponent } from './sample-breadcrumb.component';
+import { UNASSIGNED_URL_PAGES } from './pages/pages-data';
 import { SamplePagesReview } from './pages/sample-pages-review';
 import { SAMPLE_LANGS, SampleEntry, childrenOf } from './sample-data';
 import { STATUS_ICONS, STATUS_TONES, SampleState } from './sample-state';
@@ -80,10 +83,87 @@ export class SampleFolderViewComponent {
       { id: 'released', header: header('released'), value: (r) => r.releasedMinutes ?? Number.MAX_SAFE_INTEGER, sortable: true, width: 120 },
     ];
     if (this.state.devMode()) {
+      // The registered URL; a page without one shows its computed address (muted, "Not assigned yet").
       columns.push({ id: 'url', header: header('url'), value: (r) => r.url, width: 200 });
     }
     return columns;
   });
+
+  /**
+   * A right click on a row, as in the app: that item's menu (the page tree's entries) for one row, the bulk actions that fit
+   * for a selection. Nothing is changed: the entries announce what they would do.
+   */
+  protected readonly rowMenu = (rows: SampleEntry[]): ContextMenuItem[] =>
+    rows.length === 1
+      ? this.itemMenu(rows[0])
+      : bulkActionsAsMenu(
+          this.bulkActions().filter((action) => action.id !== 'duplicate' || rows.some((row) => row.kind === 'page')),
+          rows,
+          this.rowKey,
+        );
+
+  /** New page / New folder (folders only), Rename…, Cut, Copy (pages), Paste, Move to…, favorite, Duplicate (pages), Release, Delete. */
+  private itemMenu(row: SampleEntry): ContextMenuItem[] {
+    const t = (key: string) => this.state.t(key);
+    const isFolder = row.kind === 'folder';
+    const separator: ContextMenuItem = { label: '', separator: true };
+    // A paste onto a folder goes into it; onto a page, next to it (into the open folder).
+    const pasteTarget = isFolder ? row.id : this.state.folderId();
+    const items: ContextMenuItem[] = [];
+    if (!this.review.readOnly()) {
+      if (isFolder) {
+        items.push(
+          { label: t('folder.newPage'), icon: 'note_add', action: () => this.newItem('page') },
+          { label: t('folder.newFolder'), icon: 'create_new_folder', action: () => this.newItem('folder') },
+        );
+      }
+      items.push(
+        { label: t('folder.menu.rename'), icon: 'edit', action: () => void this.review.rename(row) },
+        separator,
+        { label: t('folder.menu.cut'), icon: 'content_cut', shortcut: 'Mod+X', action: () => this.review.cut([row]) },
+        ...(isFolder ? [] : [{ label: t('folder.menu.copy'), icon: 'content_copy', shortcut: 'Mod+C', action: () => this.review.copy([row]) }]),
+        {
+          label: t('folder.menu.paste'),
+          icon: 'content_paste',
+          shortcut: 'Mod+V',
+          disabled: !this.review.canPaste(pasteTarget),
+          action: () => this.review.paste(pasteTarget),
+        },
+        { label: t('folder.menu.moveTo'), icon: 'drive_file_move', action: () => this.review.openMove([row]) },
+        separator,
+      );
+    }
+    items.push({
+      label: t(this.state.isFavorite(row.id) ? 'favorites.remove' : 'favorites.add'),
+      icon: 'star',
+      action: () => this.state.toggleFavorite(row.id),
+    });
+    if (!this.review.readOnly()) {
+      if (!isFolder) {
+        items.push({ label: t('folder.bulk.duplicate'), icon: 'content_copy', action: () => this.duplicate([row]) });
+      }
+      items.push(
+        { label: t('folder.bulk.release'), icon: 'publish', action: () => this.review.release([row]) },
+        separator,
+        { label: t('folder.bulk.delete'), icon: 'delete', danger: true, shortcut: 'Del', action: () => void this.deleteEntries([row.name], undefined, isFolder) },
+      );
+    }
+    return items;
+  }
+
+  /** A right click on empty space acts as one on the open folder: only the *New …* options. */
+  protected readonly emptyMenu = (): ContextMenuItem[] =>
+    this.review.readOnly()
+      ? []
+      : [
+          { label: this.state.t('folder.newPage'), icon: 'note_add', action: () => this.newItem('page') },
+          { label: this.state.t('folder.newFolder'), icon: 'create_new_folder', action: () => this.newItem('folder') },
+        ];
+
+  /** A page's address: registered unless the page has none yet (then the computed one, marked as not assigned). */
+  protected registered(row: SampleEntry): boolean {
+    return !UNASSIGNED_URL_PAGES.has(row.id);
+  }
 
   /** Time travel and an archived project are read-only: nothing that changes something is offered. */
   protected readonly bulkActions = computed<SfDataTableBulkAction<SampleEntry>[]>(() =>
@@ -91,8 +171,8 @@ export class SampleFolderViewComponent {
       ? []
       : [
           { id: 'move', label: this.state.t('folder.bulk.move'), icon: 'drive_file_move', action: (s) => this.review.openMove(s.rows) },
-          { id: 'release', label: this.state.t('folder.bulk.release'), icon: 'publish', action: (s) => this.bulkRelease(s) },
-          { id: 'duplicate', label: this.state.t('folder.bulk.duplicate'), icon: 'content_copy', action: (s) => this.bulkDuplicate(s) },
+          { id: 'release', label: this.state.t('folder.bulk.release'), icon: 'publish', action: (s) => this.review.release(s.rows) },
+          { id: 'duplicate', label: this.state.t('folder.bulk.duplicate'), icon: 'content_copy', action: (s) => this.duplicate(s.rows) },
           { id: 'delete', label: this.state.t('folder.bulk.delete'), icon: 'delete', variant: 'danger', action: (s) => void this.delete(s) },
         ],
   );
@@ -178,20 +258,10 @@ export class SampleFolderViewComponent {
     }
   }
 
-  /** Bulk release: a selection with nothing waiting says so; otherwise the shared release dialog (M35.23) would open. */
-  private bulkRelease(selection: SfDataTableSelection<SampleEntry>): void {
-    const waiting = selection.rows.some((row) => SAMPLE_LANGS.some((lang) => row.status[lang] === 'changed' || row.status[lang] === 'draft'));
-    if (waiting) {
-      this.state.notice();
-    } else {
-      this.toasts.show(this.state.t('folder.bulk.nothingToRelease'), 'info');
-    }
-  }
-
-  /** Bulk duplicate: the copies appear next to the originals; Undo removes them. */
-  private bulkDuplicate(selection: SfDataTableSelection<SampleEntry>): void {
-    const pages = selection.rows.filter((row) => row.kind === 'page').length;
-    const skipped = selection.rows.length - pages;
+  /** Duplicate: the copies appear next to the originals; Undo removes them. */
+  private duplicate(rows: readonly SampleEntry[]): void {
+    const pages = rows.filter((row) => row.kind === 'page').length;
+    const skipped = rows.length - pages;
     if (pages === 0) {
       this.toasts.show(this.state.t('folder.bulk.foldersNotDuplicated'), 'info');
       return;

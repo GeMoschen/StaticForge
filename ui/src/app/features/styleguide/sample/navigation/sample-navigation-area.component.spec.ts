@@ -6,6 +6,8 @@ import { ActivatedRoute, convertToParamMap, provideRouter } from '@angular/route
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/angular';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ToastService } from '../../../../core/ui/toast.service';
+import { ContextMenuService } from '../../../../shared/services/context-menu.service';
+import { TreeClipboardService } from '../../../../shared/services/tree-clipboard.service';
 import { SampleNavigationAreaComponent } from './sample-navigation-area.component';
 
 const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/;
@@ -37,6 +39,22 @@ const rowNamed = (name: string, tree: HTMLElement = navTree()) => {
 };
 const h1 = () => screen.getByRole('heading', { level: 1 });
 const entryLine = () => screen.getByRole('group', { name: 'Entry page' });
+/** The open context menu's entries (a separator is a flag on the entry below it) and a way to choose one; the shared service renders it. */
+const menu = () => TestBed.inject(ContextMenuService).state()?.items ?? [];
+const menuLabels = () => menu().map((item) => item.label);
+const choose = (label: string) => {
+  const item = menu().find((entry) => entry.label === label);
+  expect(item, label).toBeDefined();
+  item!.action?.();
+};
+const tableRow = (name: string) => {
+  const label = Array.from(screen.getByRole('grid').querySelectorAll('.cell-label__text')).find((cell) => cell.textContent?.trim() === name);
+  if (!label) {
+    throw new Error(`No row labelled ${name}`);
+  }
+  return label.closest('tr')!;
+};
+const lastToast = () => TestBed.inject(ToastService).toasts().at(-1);
 
 /** The query string the area last wrote (it replaces the history entry in place). */
 function watchQuery(): () => string {
@@ -231,5 +249,200 @@ describe('SampleNavigationAreaComponent', () => {
     expect(await screen.findByRole('menuitem', { name: /^Entry page…/ })).toBeInTheDocument();
     expect(screen.queryByRole('menuitem', { name: /^Rename/ })).not.toBeInTheDocument();
     expect(screen.queryByRole('menuitem', { name: /^Hide from menu/ })).not.toBeInTheDocument();
+  });
+
+  describe('menus (the app’s, announce only)', () => {
+    afterEach(() => {
+      TestBed.inject(ContextMenuService).close();
+      TestBed.inject(TreeClipboardService).clear();
+      TestBed.inject(ToastService).clear();
+    });
+
+    it('offers the app’s entries on a folder in the tree, in its order', async () => {
+      await setup();
+      fireEvent.contextMenu(rowNamed('Coffee'), { clientX: 40, clientY: 40 });
+
+      expect(menuLabels()).toEqual([
+        'New folder',
+        'Rename',
+        'Cut',
+        'Paste',
+        'Move to…',
+        'New menu item',
+        'Entry page…',
+        'Hide from menu',
+        'Add to favorites',
+        'Release…',
+        'Delete',
+      ]);
+    });
+
+    it('offers Copy and Open the page on an item, and Show in menu on a hidden one', async () => {
+      await setup();
+      fireEvent.contextMenu(rowNamed('Contact'), { clientX: 40, clientY: 40 });
+      expect(menuLabels()).toEqual(['Rename', 'Cut', 'Copy', 'Paste', 'Move to…', 'Hide from menu', 'Open the page', 'Add to favorites', 'Release…', 'Delete']);
+
+      TestBed.inject(ContextMenuService).close();
+      fireEvent.contextMenu(rowNamed('Imprint'), { clientX: 40, clientY: 40 });
+      expect(menuLabels()).toContain('Show in menu');
+      expect(menuLabels()).not.toContain('Hide from menu');
+    });
+
+    it('toggles the favorite and says so', async () => {
+      await setup();
+      fireEvent.contextMenu(rowNamed('Contact'), { clientX: 40, clientY: 40 });
+      choose('Add to favorites');
+      expect(lastToast()?.message).toBe('“Contact” added to your favorites.');
+
+      TestBed.inject(ContextMenuService).close();
+      fireEvent.contextMenu(rowNamed('Contact'), { clientX: 40, clientY: 40 });
+      expect(menuLabels()).toContain('Remove from favorites');
+    });
+
+    it('releases what is pending with an Undo, and says so when nothing is', async () => {
+      await setup();
+      fireEvent.contextMenu(rowNamed('Contact'), { clientX: 40, clientY: 40 });
+      choose('Release…');
+      expect(lastToast()?.message).toBe('Released “Contact” (prototype — nothing was published).');
+      expect(lastToast()?.action).toBeDefined();
+
+      TestBed.inject(ContextMenuService).close();
+      fireEvent.contextMenu(rowNamed('Contact'), { clientX: 40, clientY: 40 });
+      choose('Release…');
+      expect(lastToast()?.message).toBe('Nothing here is waiting to be released.');
+
+      // Home was released from the start: the item is enabled and answers with the info toast.
+      TestBed.inject(ContextMenuService).close();
+      fireEvent.contextMenu(rowNamed('Home'), { clientX: 40, clientY: 40 });
+      expect(menu().find((item) => item.label === 'Release…')?.disabled).toBeFalsy();
+      choose('Release…');
+      expect(lastToast()?.message).toBe('Nothing here is waiting to be released.');
+    });
+
+    it('offers New menu item and New folder on empty space in the tree, and opens the top level on a click', async () => {
+      const { container } = await setup({ nav: 'n-contact' });
+      const viewport = container.querySelector<HTMLElement>('.sf-tree__viewport')!;
+
+      fireEvent.contextMenu(viewport, { clientX: 40, clientY: 400 });
+      expect(menuLabels()).toEqual(['New menu item', 'New folder']);
+
+      fireEvent.click(viewport);
+      expect(h1()).toHaveTextContent('All navigation');
+    });
+
+    it('opens the folder table’s row menu: Open, the tree’s entries and Delete…', async () => {
+      await setup({ nav: 'n-coffee' });
+      fireEvent.contextMenu(tableRow('Blends'), { clientX: 400, clientY: 300 });
+
+      expect(menuLabels()).toEqual([
+        'Open',
+        'Rename…',
+        'Cut',
+        'Copy',
+        'Paste',
+        'Move to…',
+        'Hide from menu',
+        'Open the page',
+        'Add to favorites',
+        'Release…',
+        'Delete…',
+      ]);
+      choose('Open');
+      await waitFor(() => expect(h1()).toHaveTextContent('Blends'));
+    });
+
+    it('has New folder and New menu item on a folder row, and no Copy', async () => {
+      await setup();
+      fireEvent.click(screen.getByRole('button', { name: 'Open All navigation, with the menu’s entry page' }));
+      fireEvent.contextMenu(tableRow('Roastery'), { clientX: 400, clientY: 300 });
+
+      expect(menuLabels()).toEqual([
+        'Open',
+        'New folder',
+        'Rename…',
+        'Cut',
+        'Paste',
+        'Move to…',
+        'New menu item',
+        'Entry page…',
+        'Hide from menu',
+        'Add to favorites',
+        'Release…',
+        'Delete…',
+      ]);
+    });
+
+    it('shares the clipboard with the tree: Cut in a row, Paste onto a folder row moves it, with Undo', async () => {
+      await setup({ nav: 'n-coffee' });
+      fireEvent.contextMenu(tableRow('Blends'), { clientX: 400, clientY: 300 });
+      expect(menu().find((item) => item.label === 'Paste')?.disabled).toBe(true);
+      choose('Cut');
+
+      // The tree's own Paste is enabled on a folder now.
+      TestBed.inject(ContextMenuService).close();
+      fireEvent.contextMenu(rowNamed('Roastery'), { clientX: 40, clientY: 40 });
+      expect(menu().find((item) => item.label === 'Paste')?.disabled).toBeFalsy();
+      TestBed.inject(ContextMenuService).close();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Open All navigation, with the menu’s entry page' }));
+      fireEvent.contextMenu(tableRow('Roastery'), { clientX: 400, clientY: 300 });
+      choose('Paste');
+      expect(lastToast()?.message).toContain('Moved “Blends” to Roastery');
+      fireEvent.click(rowNamed('Roastery'));
+      expect(within(screen.getByRole('grid')).getByText('Blends')).toBeInTheDocument();
+    });
+
+    it('copies an item to the clipboard and announces a paste, folders cannot be copied', async () => {
+      await setup({ nav: 'n-coffee' });
+      fireEvent.contextMenu(tableRow('Blends'), { clientX: 400, clientY: 300 });
+      choose('Copy');
+      expect(TestBed.inject(TreeClipboardService).nodes()?.mode).toBe('copy');
+
+      TestBed.inject(ContextMenuService).close();
+      fireEvent.contextMenu(tableRow('Equipment'), { clientX: 400, clientY: 300 });
+      choose('Paste');
+      expect(lastToast()?.message).toBe('Copied “Blends” (prototype — nothing was copied).');
+    });
+
+    it('offers the bulk actions on several rows, with Delete after a separator, and acts on the selection', async () => {
+      await setup({ nav: 'n-coffee' });
+      const table = screen.getByRole('grid');
+      fireEvent.click(within(tableRow('Blends')).getByRole('checkbox'));
+      fireEvent.click(within(tableRow('Equipment')).getByRole('checkbox'));
+
+      fireEvent.contextMenu(tableRow('Blends'), { clientX: 400, clientY: 300 });
+      expect(menuLabels()).toEqual(['Move', 'Copy', 'Release…', 'Show in menu', 'Hide from menu', 'Delete']);
+      choose('Hide from menu');
+      await waitFor(() => expect(within(tableRow('Equipment')).getByText('Hidden from menu')).toBeInTheDocument());
+      expect(within(tableRow('Blends')).getByText('Hidden from menu')).toBeInTheDocument();
+      expect(table).toBeInTheDocument();
+    });
+
+    it('deletes the selected rows from the bulk bar with an Undo', async () => {
+      await setup({ nav: 'n-coffee' });
+      fireEvent.click(within(tableRow('Blends')).getByRole('checkbox'));
+      fireEvent.click(within(tableRow('Equipment')).getByRole('checkbox'));
+      fireEvent.click(await screen.findByRole('button', { name: 'Delete' }));
+
+      await waitFor(() => expect(within(screen.getByRole('grid')).queryByText('Blends')).toBeNull());
+      expect(lastToast()?.message).toBe('Deleted 2 entries');
+      lastToast()!.action!.run();
+      await waitFor(() => expect(within(screen.getByRole('grid')).getByText('Blends')).toBeInTheDocument());
+    });
+
+    it('offers New menu item on empty space in the table and creates it in the open folder', async () => {
+      await setup({ nav: 'n-coffee' });
+      fireEvent.contextMenu(screen.getByRole('grid').querySelector('.sf-data-table__scroller') ?? screen.getByRole('grid'), { clientX: 400, clientY: 500 });
+      expect(menuLabels()).toEqual(['New menu item']);
+      choose('New menu item');
+      await waitFor(() => expect(h1()).toHaveTextContent('New menu item'));
+    });
+
+    it('shows folder icons in the accent colour in the table', async () => {
+      await setup();
+      fireEvent.click(screen.getByRole('button', { name: 'Open All navigation, with the menu’s entry page' }));
+      expect(tableRow('Coffee').querySelector('.cell-label__icon')).toHaveClass('is-folder');
+      expect(tableRow('Contact').querySelector('.cell-label__icon')).not.toHaveClass('is-folder');
+    });
   });
 });

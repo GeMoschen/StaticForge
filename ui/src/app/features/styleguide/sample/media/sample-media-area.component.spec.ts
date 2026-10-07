@@ -49,7 +49,9 @@ describe('SampleMediaAreaComponent', () => {
 
       expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
       expect(h1()).toHaveTextContent('Products');
-      expect(cards().length).toBe(8);
+      // The folder's folder comes first, then its eight files.
+      expect(cards().length).toBe(9);
+      expect(cards()[0]).toHaveAttribute('aria-label', 'Single origins');
       expect(card('yirgacheffe-beans-light-roast.jpg')).toHaveAttribute('aria-label', expect.stringContaining('JPG · 1.2 MB'));
       // The tree shows folders only.
       expect(screen.getByRole('treeitem', { name: /^Products/ })).toBeInTheDocument();
@@ -108,9 +110,11 @@ describe('SampleMediaAreaComponent', () => {
   });
 
   describe('grid keyboard', () => {
-    it('moves with the arrow keys, selects with Space and opens with Enter', async () => {
+    it('moves with the arrow keys (selecting), toggles with Space and opens with Enter', async () => {
       await setup();
       const [first, second] = cards();
+      // Folders come first: the folder card is the tab stop.
+      expect(first).toHaveAttribute('aria-label', 'Single origins');
       expect(first).toHaveAttribute('tabindex', '0');
       expect(second).toHaveAttribute('tabindex', '-1');
 
@@ -118,18 +122,20 @@ describe('SampleMediaAreaComponent', () => {
       fireEvent.keyDown(first, { key: 'ArrowRight' });
       expect(document.activeElement).toBe(second);
       expect(second).toHaveAttribute('tabindex', '0');
-
-      fireEvent.keyDown(second, { key: ' ' });
+      // As in the Explorer an arrow key selects the card it lands on.
       expect(second).toHaveAttribute('aria-selected', 'true');
       expect(screen.getByRole('group', { name: /bulk/i })).toHaveTextContent('1 selected');
+
+      fireEvent.keyDown(second, { key: ' ' });
+      expect(second).toHaveAttribute('aria-selected', 'false');
 
       fireEvent.keyDown(second, { key: 'ArrowLeft' });
       expect(document.activeElement).toBe(first);
       fireEvent.keyDown(first, { key: 'End' });
-      expect(document.activeElement).toBe(cards()[7]);
+      expect(document.activeElement).toBe(cards()[8]);
 
-      fireEvent.keyDown(cards()[7], { key: 'Enter' });
-      expect(await drawer(cards()[7].getAttribute('aria-label')!.split(',')[0])).toBeInTheDocument();
+      fireEvent.keyDown(cards()[8], { key: 'Enter' });
+      expect(await drawer(cards()[8].getAttribute('aria-label')!.split(',')[0])).toBeInTheDocument();
     });
 
     it('labels each card’s checkbox with the file name', async () => {

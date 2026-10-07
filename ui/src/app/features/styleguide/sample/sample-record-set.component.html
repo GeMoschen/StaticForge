@@ -41,6 +41,9 @@
   [label]="'styleguide.sample.recordSet.table' | transloco: { name: set().name }"
   [searchPlaceholder]="'styleguide.sample.recordSet.search' | transloco"
   [bulkActions]="bulkActions()"
+  [rowMenu]="rowMenu"
+  [emptyMenu]="emptyMenu"
+  emptyClickClears
   [emptyTitle]="'styleguide.sample.recordSet.empty' | transloco"
   (rowOpen)="state.openRecord($event.id)"
   (sortChange)="onSort($event)"

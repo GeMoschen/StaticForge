@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, afterNextRender, computed, effect, inject, untracked, viewChild } from '@angular/core';
 import { TranslocoPipe } from '@jsverse/transloco';
+import { ToastService } from '../../../core/ui/toast.service';
 import { SfMenuComponent, SfMenuItem } from '../../../shared/components/menu/sf-menu.component';
 import {
   SfTreeAction,
@@ -13,6 +14,7 @@ import { SampleContentEntry, contentChildren, contentParentOf, contentPath } fro
 import { FAVORITES_NODE, SampleFavorite, contentFavorite } from './sample-favorites';
 import { favoriteChildren, favoriteNodes, favoritesNode, isFavoriteNode } from './sample-favorites-nodes';
 import type { ContextMenuItem } from '../../../shared/services/context-menu.service';
+import { releaseContent } from './sample-content-release';
 import { SampleState } from './sample-state';
 
 /**
@@ -46,12 +48,14 @@ import { SampleState } from './sample-state';
         [label]="'styleguide.sample.content.title' | transloco"
         [loadChildren]="loader()"
         [selection]="selection()"
-        [multiselect]="false"
+        clipboardScope="sample:content"
         [actions]="actions"
         [createKinds]="createKinds"
         [expandActions]="false"
         [menuItems]="menuItems"
+        [emptyMenuItems]="rootMenuItems"
         [allowAction]="allowAction"
+        (emptyClick)="state.openContentFolder(null)"
         (open)="onOpen($event)"
         (rename)="state.notice()"
         (create)="state.notice()"
@@ -64,22 +68,35 @@ import { SampleState } from './sample-state';
 })
 export class SampleContentTreeComponent {
   protected readonly state = inject(SampleState);
+  private readonly toasts = inject(ToastService);
   private readonly tree = viewChild.required<SfTreeComponent<SampleContentEntry>>(SfTreeComponent);
-  protected readonly actions: readonly SfTreeAction[] = ['rename', 'delete', 'move', 'create'];
+  protected readonly actions: readonly SfTreeAction[] = ['rename', 'delete', 'move', 'copy', 'create'];
   /** Folders are created in place; a record set needs a dataset, so it has its own dialog (*New record set*). */
   protected readonly createKinds: readonly SfTreeCreateKind[] = ['folder'];
-  /** The *Favorites* branch is a view: nothing in it is renamed, deleted or created. */
-  protected readonly allowAction = (_action: SfTreeAction, nodes: readonly SfTreeNode<SampleContentEntry>[]): boolean =>
-    !nodes.some((node) => isFavoriteNode(node.id));
+  /**
+   * The *Favorites* branch is a view: nothing in it is renamed, deleted or created. Record sets are copied; folders are
+   * only moved.
+   */
+  protected readonly allowAction = (action: SfTreeAction, nodes: readonly SfTreeNode<SampleContentEntry>[]): boolean =>
+    !nodes.some((node) => isFavoriteNode(node.id)) && (action !== 'copy' || nodes.every((node) => node.data?.kind === 'recordset'));
 
   /**
    * The context menu's entries between the tree's own and *Delete*: *New record set…* (in a folder); *New record*,
-   * *History* and *Used by* (on a record set); *Add to favorites* / *Remove from favorites* (M35.15).
+   * *History* and *Used by* (on a record set); *Add to favorites* / *Remove from favorites* (M35.15); *Release…*, which
+   * is also all a selection of several entries offers here.
    */
   protected readonly menuItems = (nodes: readonly SfTreeNode<SampleContentEntry>[]): ContextMenuItem[] => {
-    const node = nodes.length === 1 ? nodes[0] : null;
-    if (!node || isFavoriteNode(node.id) || !node.data) {
+    if (nodes.length === 0 || nodes.some((node) => !node.data || isFavoriteNode(node.id))) {
       return [];
+    }
+    const release: ContextMenuItem = {
+      label: this.state.t('menus.release'),
+      icon: 'publish',
+      action: () => releaseContent(this.state, this.toasts, nodes.flatMap((node) => (node.data ? [node.data] : []))),
+    };
+    const node = nodes.length === 1 ? nodes[0] : null;
+    if (!node || !node.data) {
+      return [release];
     }
     const favorite = contentFavorite(node.data);
     const entry = node.data;
@@ -96,8 +113,15 @@ export class SampleContentTreeComponent {
         icon: 'star',
         action: () => this.state.toggleFavoriteOf(favorite),
       },
+      release,
     ];
   };
+
+  /** A right click on empty space acts as one on the top level: only the *New …* options. */
+  protected readonly rootMenuItems = (): ContextMenuItem[] => [
+    { label: this.state.t('menus.newFolder'), icon: 'create_new_folder', action: () => void this.tree().startCreate(null, 'folder') },
+    { label: this.state.t('menus.newRecordSet'), icon: 'playlist_add', action: () => void this.state.newRecordSet(null) },
+  ];
 
   protected readonly loader = computed<SfTreeLoader<SampleContentEntry>>(() => {
     const dev = this.state.devMode();
@@ -174,9 +198,9 @@ export class SampleContentTreeComponent {
     request.completed(() => this.state.notice('folder.restored'));
   }
 
-  /** Cut and paste, or a drag: only announced, with an Undo that says so. */
+  /** Cut and paste, copy and paste, or a drag: only announced, with an Undo that says so. */
   protected onMove(request: SfTreeMoveRequest<SampleContentEntry>): void {
-    request.completed(() => this.state.notice('contentMove.movedBack'));
+    request.completed(() => this.state.notice(request.copy ? 'menus.copiedBack' : 'contentMove.movedBack'));
   }
 
   /** *Move to…* opens the folder Move dialog. */

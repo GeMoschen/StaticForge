@@ -14,6 +14,7 @@ import { toSignal } from '@angular/core/rxjs-interop';
 import { ActivatedRoute } from '@angular/router';
 import { HashMap, TranslocoPipe, TranslocoService } from '@jsverse/transloco';
 import { ToastService } from '../../../../core/ui/toast.service';
+import { bulkActionsAsMenu } from '../../../../shared/components/data-table/data-table-menu';
 import { SfDataTableBulkAction, SfDataTableColumn } from '../../../../shared/components/data-table/data-table.types';
 import { SfDataTableCellDirective } from '../../../../shared/components/data-table/sf-data-table-templates.directive';
 import { SfDataTableComponent } from '../../../../shared/components/data-table/sf-data-table.component';
@@ -26,6 +27,7 @@ import { SfDrawerComponent, SfDrawerFooterDirective } from '../../../../shared/c
 import { SfSwitchComponent } from '../../../../shared/components/forms/sf-switch.component';
 import { SfPageHeaderComponent } from '../../../../shared/components/layout/sf-page-header.component';
 import { SfSectionComponent } from '../../../../shared/components/layout/sf-section.component';
+import { toContextItems } from '../../../../shared/components/menu/sf-menu-item';
 import { SfMenuComponent, SfMenuItem } from '../../../../shared/components/menu/sf-menu.component';
 import { SfButtonComponent } from '../../../../shared/components/sf-button.component';
 import { SfEmptyStateComponent } from '../../../../shared/components/sf-empty-state.component';
@@ -34,6 +36,8 @@ import { SfIconComponent } from '../../../../shared/components/sf-icon.component
 import {
   SfTreeAction,
   SfTreeComponent,
+  SfTreeCreateKind,
+  SfTreeCreateRequest,
   SfTreeDeleteRequest,
   SfTreeMoveRequest,
   SfTreeRenameRequest,
@@ -42,6 +46,7 @@ import {
 import { SfSplitterComponent } from '../../../../shared/components/splitter/sf-splitter.component';
 import { SfTreeLoader, SfTreeNode } from '../../../../shared/components/tree/tree-model';
 import type { ContextMenuItem } from '../../../../shared/services/context-menu.service';
+import { TreeClipboardService } from '../../../../shared/services/tree-clipboard.service';
 import { SampleEntry, SampleLang } from '../sample-data';
 import { STATUS_ICONS, STATUS_TONES, SampleState } from '../sample-state';
 import {
@@ -50,6 +55,7 @@ import {
   SampleNavOrder,
   initialNavEntries,
   initialNavOrder,
+  initialReleasedNav,
   pageById,
   pageUuid,
 } from './navigation-data';
@@ -66,6 +72,9 @@ interface NavRow {
 const TREE_WIDTH = 300;
 const TREE_WIDTH_NARROW = 260;
 const WIDE_QUERY = '(min-width: 1280px)';
+
+/** The tree's clipboard scope: a cut or copy in the folder table pastes in the tree and the other way round. */
+const CLIPBOARD_SCOPE = 'sample:navigation';
 
 /** Sets (or, with `null`, removes) query parameters in place, keeping the others (the screen owns those). */
 function replaceQuery(location: Location, values: Readonly<Record<string, string | null>>): void {
@@ -91,6 +100,12 @@ function replaceQuery(location: Location, values: Readonly<Record<string, string
  * Query parameters (read on load, kept in sync in place): `nav=<entry id>` selects a folder or item, `navpicker=1`
  * opens the page picker of the selected item. Developer mode is the sample's {@link SampleState} `devMode`, or the
  * `dev=1` query parameter when the area is used without the sample screen.
+ *
+ * The menus are the app's (announce only, nothing is saved): the tree's menu — *New folder*, *Rename*, *Cut*, *Copy* (items),
+ * *Paste*, *Move to…*, then *New menu item* and *Entry page…* (folders), *Show in menu* / *Hide from menu*, *Open the page*
+ * (items), the favorite toggle, *Release…* and *Delete* — is also the folder table's row menu (*Open* first, *Rename…* in a
+ * dialog); several rows offer the bulk actions (*Move*, *Copy*, *Release…*, *Show*, *Hide*, *Delete*); empty space in the
+ * tree and the table offers *New menu item* (the tree also *New folder*). A click on empty space in the tree opens the top level.
  */
 @Component({
   selector: 'sf-sample-navigation-area',
@@ -127,12 +142,18 @@ export class SampleNavigationAreaComponent {
   private readonly location = inject(Location);
   private readonly transloco = inject(TranslocoService);
   private readonly toasts = inject(ToastService);
+  private readonly clipboard = inject(TreeClipboardService);
   private readonly translation = toSignal(this.transloco.selectTranslation(), { initialValue: null });
   private readonly tree = viewChild.required<SfTreeComponent<SampleNavEntry>>(SfTreeComponent);
 
   protected readonly treeWidth =
     typeof matchMedia !== 'function' || matchMedia(WIDE_QUERY).matches ? TREE_WIDTH : TREE_WIDTH_NARROW;
-  protected readonly treeActions: readonly SfTreeAction[] = ['rename', 'delete', 'move'];
+  protected readonly treeActions: readonly SfTreeAction[] = ['rename', 'delete', 'move', 'copy', 'create'];
+  protected readonly createKinds: readonly SfTreeCreateKind[] = ['folder'];
+  protected readonly clipboardScope = CLIPBOARD_SCOPE;
+  /** Menu items are copied; a folder is only moved. */
+  protected readonly allowAction = (action: SfTreeAction, nodes: readonly SfTreeNode<SampleNavEntry>[]): boolean =>
+    action !== 'copy' || nodes.every((node) => node.data?.kind === 'item');
   protected readonly tones = STATUS_TONES;
   protected readonly icons = STATUS_ICONS;
 
@@ -147,6 +168,9 @@ export class SampleNavigationAreaComponent {
   protected readonly pickerOpen = signal(false);
   private readonly devParam: boolean;
   private created = 0;
+  /** What is already released (a folder counts with everything inside it); *Release…* on the rest says so, else it releases. */
+  private readonly released = signal<ReadonlySet<string>>(new Set(initialReleasedNav()));
+  private readonly starred = signal<ReadonlySet<string>>(new Set());
 
   protected readonly selected = computed(() => this.entryOf(this.selectedId()));
   protected readonly isRoot = computed(() => this.selectedId() === ROOT_ID);
@@ -170,23 +194,80 @@ export class SampleNavigationAreaComponent {
     return (parent) => untracked(() => this.childrenOf(parent?.id ?? null).map((entry) => this.toNode(entry, dev, hidden)));
   });
 
-  /** The tree's context menu: *Entry page…* on a folder, *Hide from menu* / *Show in menu* on any entry. */
+  /**
+   * The host's entries of the tree's one menu, between its own (*New folder*, *Rename*, *Cut*, *Copy*, *Paste*, *Move to…*)
+   * and *Delete*: *New menu item* and *Entry page…* in a folder, *Hide from menu* / *Show in menu*, *Open the page* on an
+   * item, the favorite toggle and *Release…*. The folder table's row menu offers the same through {@link listMenu}.
+   */
   protected readonly treeMenu = (nodes: readonly SfTreeNode<SampleNavEntry>[]): ContextMenuItem[] => {
     const entry = nodes.length === 1 ? nodes[0].data : null;
-    if (!entry) {
-      return [];
-    }
-    const items: ContextMenuItem[] = [];
-    if (entry.kind === 'folder') {
-      items.push({ label: this.t('actions.entry'), icon: 'login', action: () => this.openEntryDrawer(entry.id) });
-    }
-    items.push(
-      entry.visible
-        ? { label: this.t('actions.hide'), icon: 'visibility_off', action: () => this.setVisibility([entry.id], false) }
-        : { label: this.t('actions.show'), icon: 'visibility', action: () => this.setVisibility([entry.id], true) },
-    );
-    return items;
+    return entry ? this.entryItems(entry) : [];
   };
+
+  private entryItems(entry: SampleNavEntry): ContextMenuItem[] {
+    const page = entry.kind === 'item' ? pageById(entry.targetId) : null;
+    const starred = this.starred().has(entry.id);
+    const items: SfMenuItem[] = [
+      ...(entry.kind === 'folder'
+        ? [
+            { id: 'new-item', label: this.s('menus.newMenuItem'), icon: 'add_link', action: () => this.create('item', entry.id) },
+            { id: 'entry', label: this.s('menus.entryPage'), icon: 'login', action: () => this.openEntryDrawer(entry.id) },
+          ]
+        : []),
+      entry.visible
+        ? { id: 'hide', label: this.t('actions.hide'), icon: 'visibility_off', action: () => this.setVisibility([entry.id], false) }
+        : { id: 'show', label: this.t('actions.show'), icon: 'visibility', action: () => this.setVisibility([entry.id], true) },
+      ...(page ? [{ id: 'open-page', label: this.s('menus.openPage'), icon: 'open_in_new', action: () => this.openTarget(page) }] : []),
+      {
+        id: 'favorite',
+        label: this.s(starred ? 'favorites.remove' : 'favorites.add'),
+        icon: 'star',
+        action: () => this.toggleFavorite(entry),
+      },
+      { id: 'release', label: this.s('menus.release'), icon: 'publish', action: () => this.releaseEntries([entry]) },
+    ];
+    return toContextItems(items);
+  }
+
+  /**
+   * The folder table's right-click menu for one row: the tree's menu for that entry (*New folder*, *Rename…* in a dialog,
+   * *Cut*, *Copy* of items, *Paste*, *Move to…*, then the entries above) and *Delete…*.
+   */
+  protected readonly listMenu = (entry: SampleNavEntry): ContextMenuItem[] => {
+    const target = this.pasteTarget(entry);
+    return [
+      ...toContextItems([
+        ...(entry.kind === 'folder'
+          ? [{ id: 'new-folder', label: this.s('menus.newFolder'), icon: 'create_new_folder', action: () => void this.tree().startCreate(entry.id, 'folder') }]
+          : []),
+        { id: 'rename', label: this.s('menus.renameDialog'), icon: 'edit', action: () => this.toasts.show(this.t('notice'), 'info') },
+        { id: 'cut', label: this.s('menus.cut'), icon: 'content_cut', action: () => this.cutEntries([entry]) },
+        ...(entry.kind === 'item' ? [{ id: 'copy', label: this.s('menus.copy'), icon: 'content_copy', action: () => this.copyEntries([entry]) }] : []),
+        { id: 'paste', label: this.s('menus.paste'), icon: 'content_paste', disabled: target === undefined, action: () => this.pasteOnto(entry) },
+        { id: 'move-to', label: this.s('menus.moveTo'), icon: 'drive_file_move', action: () => this.moveTo() },
+      ]),
+      ...this.entryItems(entry),
+      { label: '', separator: true },
+      { label: this.s('menus.deleteMore'), icon: 'delete', danger: true, action: () => this.deleteEntries([entry]) },
+    ];
+  };
+
+  /** A right click on a row: *Open* and the tree's menu for that entry; on a selection of several rows the bulk actions. */
+  protected readonly rowMenu = (rows: NavRow[]): ContextMenuItem[] =>
+    rows.length === 1
+      ? [{ label: this.s('menus.open'), icon: 'open_in_new', shortcut: 'Enter', action: () => this.openRow(rows[0]) }, { label: '', separator: true }, ...this.listMenu(rows[0].entry)]
+      : bulkActionsAsMenu(this.bulkActions(), rows, this.rowKey);
+
+  /** A right click on empty space in the table acts as one on the open folder: only *New menu item*. */
+  protected readonly emptyMenu = (): ContextMenuItem[] => [
+    { label: this.s('menus.newMenuItem'), icon: 'add_link', action: () => this.create('item', this.selectedId()) },
+  ];
+
+  /** A right click on empty space in the tree acts as one on the top level: only the *New …* options. */
+  protected readonly rootMenuItems = (): ContextMenuItem[] => [
+    { label: this.s('menus.newMenuItem'), icon: 'add_link', action: () => this.create('item', null) },
+    { label: this.s('menus.newFolder'), icon: 'create_new_folder', action: () => void this.tree().startCreate(null, 'folder') },
+  ];
 
   protected readonly newItems = computed<SfMenuItem[]>(() => [
     { id: 'item', label: this.t('newItem'), icon: 'add_link', action: () => this.create('item') },
@@ -215,8 +296,18 @@ export class SampleNavigationAreaComponent {
   ]);
   /** The bulk actions of the table's selection (decision 168). */
   protected readonly bulkActions = computed<SfDataTableBulkAction<NavRow>[]>(() => [
+    { id: 'move', label: this.s('folder.bulk.move'), icon: 'drive_file_move', action: () => this.moveTo() },
+    { id: 'copy', label: this.s('menus.copy'), icon: 'content_copy', action: (selection) => this.copyEntries(selection.rows.map((r) => r.entry)) },
+    { id: 'release', label: this.s('menus.release'), icon: 'publish', action: (selection) => this.releaseEntries(selection.rows.map((r) => r.entry)) },
     { id: 'show', label: this.t('bulk.show'), icon: 'visibility', action: (selection) => this.setVisibility(selection.rows.map((r) => r.entry.id), true) },
     { id: 'hide', label: this.t('bulk.hide'), icon: 'visibility_off', action: (selection) => this.setVisibility(selection.rows.map((r) => r.entry.id), false) },
+    {
+      id: 'delete',
+      label: this.s('menus.delete'),
+      icon: 'delete',
+      variant: 'danger',
+      action: (selection) => this.deleteEntries(selection.rows.map((r) => r.entry)),
+    },
   ]);
   /** The folder's entry page: the line in its header and the drawer's choices (decision 169). */
   protected readonly entryPage = computed(() => {
@@ -336,6 +427,11 @@ export class SampleNavigationAreaComponent {
   }
 
   protected onMove(request: SfTreeMoveRequest<SampleNavEntry>): void {
+    if (request.copy) {
+      // A copy is only announced: the menu keeps its entries.
+      request.completed(() => this.toasts.show(this.s('menus.copiedBack'), 'info'));
+      return;
+    }
     const parentId = request.target?.id ?? null;
     const undo = this.changeOrder((order) => {
       for (const node of request.nodes) {
@@ -348,6 +444,10 @@ export class SampleNavigationAreaComponent {
 
   protected onDelete(request: SfTreeDeleteRequest<SampleNavEntry>): void {
     request.completed(this.remove(request.nodes.map((node) => node.id)));
+  }
+
+  protected onCreate(request: SfTreeCreateRequest<SampleNavEntry>): void {
+    this.create('folder', request.parent?.id ?? null, request.name);
   }
 
   protected onRename(request: SfTreeRenameRequest<SampleNavEntry>): void {
@@ -431,21 +531,111 @@ export class SampleNavigationAreaComponent {
   }
 
   /** A new item or folder in the selected folder (or next to the selected item), selected at once. */
-  protected create(kind: 'item' | 'folder', parentId: string | null = this.creationParent()): void {
+  protected create(kind: 'item' | 'folder', parentId: string | null = this.creationParent(), label?: string): void {
     const id = `n-new-${++this.created}`;
     const entry: SampleNavEntry = {
       id,
       kind,
-      label: this.t(kind === 'item' ? 'newItemName' : 'newFolderName'),
+      label: label ?? this.t(kind === 'item' ? 'newItemName' : 'newFolderName'),
       uid: `nav_new_${this.created}`,
       visible: true,
       targetId: null,
       entryId: null,
     };
     this.entries.update((all) => new Map(all).set(id, entry));
-    this.changeOrder((order) => order.set(parentId, [...(order.get(parentId) ?? []), id]));
+    const parent = parentId === ROOT_ID ? null : parentId;
+    this.changeOrder((order) => order.set(parent, [...(order.get(parent) ?? []), id]));
     this.select(id);
     void this.reveal();
+  }
+
+  // ── Menu actions (announced; the menu changes in memory only where it did before) ──
+
+  /** *Release…*: with nothing pending it says so (the item is never disabled), else it reports the release, with an Undo. */
+  protected releaseEntries(entries: readonly SampleNavEntry[]): void {
+    const scope = [...new Set(entries.flatMap((entry) => this.withDescendants(entry.id)))];
+    const pending = scope.filter((id) => !this.released().has(id));
+    if (pending.length === 0) {
+      this.toasts.show(this.s('folder.bulk.nothingToRelease'), 'info');
+      return;
+    }
+    const before = this.released();
+    this.released.set(new Set([...before, ...pending]));
+    this.toasts.undo(this.s('menus.released', { count: entries.length, name: entries[0].label }), () => this.released.set(before));
+  }
+
+  protected deleteEntries(entries: readonly SampleNavEntry[]): void {
+    const undo = this.remove(entries.map((entry) => entry.id));
+    this.toasts.undo(this.s('menus.deleted', { count: entries.length, name: entries[0].label }), undo);
+  }
+
+  /** *Move to…* (the row menu and the bulk bar) has no picker in the sample. */
+  protected moveTo(): void {
+    this.toasts.show(this.t('notice'), 'info');
+  }
+
+  private toggleFavorite(entry: SampleNavEntry): void {
+    const on = !this.starred().has(entry.id);
+    this.starred.update((all) => (on ? new Set(all).add(entry.id) : new Set([...all].filter((id) => id !== entry.id))));
+    this.toasts.show(this.s(on ? 'favorites.added' : 'favorites.removed', { name: entry.label }), 'info');
+  }
+
+  /** *Cut* in a table row: the same clipboard the tree's *Cut* and *Paste* use. */
+  private cutEntries(entries: readonly SampleNavEntry[]): void {
+    this.clipboard.cutNodes(
+      CLIPBOARD_SCOPE,
+      entries.map((entry) => ({ id: entry.id, label: entry.label, data: entry })),
+    );
+  }
+
+  /** *Copy* in a table row or the bulk bar: the items go to the tree's clipboard; folders are ignored. */
+  protected copyEntries(entries: readonly SampleNavEntry[]): void {
+    const items = entries.filter((entry) => entry.kind === 'item');
+    if (items.length > 0) {
+      this.clipboard.copyNodes(
+        CLIPBOARD_SCOPE,
+        items.map((entry) => ({ id: entry.id, label: entry.label, data: entry })),
+      );
+    }
+  }
+
+  /**
+   * Where a paste onto `entry` goes: into it when it is a folder, else next to it (its own folder). `undefined` = nothing
+   * to paste, or not here (into itself or something inside it, or where everything already is); `null` = the top level.
+   */
+  private pasteTarget(entry: SampleNavEntry): string | null | undefined {
+    const clip = this.clipboard.nodes();
+    if (!clip || clip.scope !== CLIPBOARD_SCOPE) {
+      return undefined;
+    }
+    const target = entry.kind === 'folder' ? entry.id : this.parentOf(entry.id);
+    if (clip.mode === 'copy') {
+      return target;
+    }
+    const moved = clip.nodes.map((node) => node.id);
+    const inside = target !== null && [target, ...this.ancestorsOf(target)].some((id) => moved.includes(id));
+    const unchanged = moved.every((id) => this.parentOf(id) === target);
+    return inside || unchanged ? undefined : target;
+  }
+
+  /** *Paste* onto a table row: the same move the tree makes; a copy is only announced. */
+  private pasteOnto(entry: SampleNavEntry): void {
+    const target = this.pasteTarget(entry);
+    const clip = this.clipboard.nodes();
+    if (target === undefined || !clip) {
+      return;
+    }
+    const entries = clip.nodes.flatMap((node) => (node.data ? [node.data as SampleNavEntry] : []));
+    if (clip.mode === 'copy') {
+      this.toasts.undo(this.s('menus.copied', { count: entries.length, name: entries[0].label }), () => this.toasts.show(this.s('menus.copiedBack'), 'info'));
+      return;
+    }
+    this.clipboard.clear();
+    const undo = this.changeOrder((order) => {
+      entries.forEach((moved) => detach(order, moved.id));
+      order.set(target, [...(order.get(target) ?? []), ...entries.map((moved) => moved.id)]);
+    });
+    this.toasts.undo(this.s('contentMove.moved', { count: entries.length, name: entries[0].label, target: this.entryOf(target)?.label ?? this.t('root') }), undo);
   }
 
   // ── Internals ──────────────────────────────────────────────────────────────
@@ -456,6 +646,18 @@ export class SampleNavigationAreaComponent {
 
   private childrenOf(parentId: string | null): SampleNavEntry[] {
     return (this.order().get(parentId === ROOT_ID ? null : parentId) ?? []).map((id) => this.entryOf(id)).filter((e): e is SampleNavEntry => !!e);
+  }
+
+  private withDescendants(id: string): string[] {
+    return [id, ...(this.order().get(id) ?? []).flatMap((child) => this.withDescendants(child))];
+  }
+
+  private ancestorsOf(id: string): string[] {
+    const path: string[] = [];
+    for (let current = this.parentOf(id); current !== null; current = this.parentOf(current)) {
+      path.push(current);
+    }
+    return path;
   }
 
   private parentOf(id: string): string | null {
@@ -516,6 +718,9 @@ export class SampleNavigationAreaComponent {
       return;
     }
     this.entries.update((all) => new Map(all).set(id, { ...entry, ...patch }));
+    if (this.released().has(id)) {
+      this.released.update((all) => new Set([...all].filter((other) => other !== id)));
+    }
     // Its own row, and a folder whose entry page it may be.
     const parent = this.parentOf(id);
     void this.tree().refresh(parent);
@@ -568,6 +773,12 @@ export class SampleNavigationAreaComponent {
     for (const folder of path) {
       await this.tree().expand(folder);
     }
+  }
+
+  /** Any `styleguide.sample.*` text (the shared `menus`, `favorites`, `folder` and `contentMove` ones); tracks the language file too. */
+  private s(key: string, params?: HashMap): string {
+    this.translation();
+    return this.transloco.translate(`styleguide.sample.${key}`, params);
   }
 
   /** A `styleguide.sample.navigation.*` text; inside a `computed` it tracks the language file. */

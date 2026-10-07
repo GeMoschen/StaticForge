@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, afterNextRender, computed, effect, inject, signal, untracked, viewChild } from '@angular/core';
 import { TranslocoPipe } from '@jsverse/transloco';
 import { ToastService } from '../../../core/ui/toast.service';
+import { bulkActionsAsMenu } from '../../../shared/components/data-table/data-table-menu';
 import { SfDataTableBulkAction, SfDataTableColumn, SfDataTableSelection, SfDataTableSort } from '../../../shared/components/data-table/data-table.types';
 import { SfDataTableCellDirective } from '../../../shared/components/data-table/sf-data-table-templates.directive';
 import { SfDataTableComponent } from '../../../shared/components/data-table/sf-data-table.component';
@@ -16,6 +17,7 @@ import { SfMenuItem } from '../../../shared/components/menu/sf-menu.component';
 import { SfButtonComponent } from '../../../shared/components/sf-button.component';
 import { SfIconComponent } from '../../../shared/components/sf-icon.component';
 import { SfTooltipDirective } from '../../../shared/directives/sf-tooltip.directive';
+import type { ContextMenuItem } from '../../../shared/services/context-menu.service';
 import { SampleBreadcrumbComponent } from './sample-breadcrumb.component';
 import {
   CUSTOM_EXPRESSION,
@@ -174,8 +176,20 @@ export class SampleRecordSetComponent {
   protected readonly bulkActions = computed<SfDataTableBulkAction<SampleRecord>[]>(() => [
     { id: 'release', label: this.state.t('folder.bulk.release'), icon: 'publish', action: (s) => void this.releaseRecords(s.rows) },
     { id: 'move', label: this.state.t('folder.bulk.move'), icon: 'drive_file_move', action: (s) => void this.moveRecords(s) },
+    { id: 'duplicate', label: this.state.t('menus.duplicate'), icon: 'content_copy', action: (s) => this.duplicateRecords(s.rows) },
     { id: 'delete', label: this.state.t('folder.bulk.delete'), icon: 'delete', variant: 'danger', action: (s) => void this.delete(s) },
   ]);
+
+  /**
+   * A right click on a row: *Release*, *Move*, *Duplicate*, then *Delete* — the bulk actions, acting on the right-clicked
+   * row or, when it is part of a multi-selection, on the selection.
+   */
+  protected readonly rowMenu = (rows: SampleRecord[]): ContextMenuItem[] => bulkActionsAsMenu(this.bulkActions(), rows, this.rowKey);
+
+  /** A right click on empty space acts as one on the set: only *New record*. */
+  protected readonly emptyMenu = (): ContextMenuItem[] => [
+    { label: this.state.t('menus.newRecord'), icon: 'add', action: () => this.newRecord() },
+  ];
 
   protected readonly moreActions = computed<SfMenuItem[]>(() => [
     { id: 'history', label: this.state.t('recordSet.menu.history'), icon: 'history' },
@@ -323,11 +337,22 @@ export class SampleRecordSetComponent {
     }
   }
 
+  /** *Release* with nothing pending is not disabled: it says so. */
   private async releaseRecords(rows: readonly SampleRecord[]): Promise<void> {
+    if (!rows.some((row) => this.langs.some((lang) => row.status[lang] !== 'released'))) {
+      this.state.notice('folder.bulk.nothingToRelease');
+      return;
+    }
     const params = { count: rows.length, name: this.state.recordName(rows[0] ?? null) };
     if (await this.confirmRelease(rows, this.state.t('recordSet.releaseTitle', params))) {
       this.toasts.show(this.state.t('recordSet.releaseDone', params), 'success');
     }
+  }
+
+  /** Announce only: the copies are not made; the Undo says so. */
+  private duplicateRecords(rows: readonly SampleRecord[]): void {
+    const params = { count: rows.length, name: this.state.recordName(rows[0] ?? null) };
+    this.toasts.undo(this.state.t('menus.duplicated', params), () => this.state.notice('menus.duplicatedBack'));
   }
 
   private confirmRelease(rows: readonly SampleRecord[], title: string): Promise<boolean> {

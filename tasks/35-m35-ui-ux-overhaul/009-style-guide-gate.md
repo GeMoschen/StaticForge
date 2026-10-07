@@ -708,6 +708,21 @@ and the app was built to match; decisions continue after 167.
 170. **Reaching the wrapper:** the tree title (*Navigation*) is a button that opens "All navigation" as a folder view (the empty state offers the same); it has no rename, move, hide, delete or favorite.
 171. **Hidden marker in the tree:** a hidden entry's name is **muted** and carries the neutral eye-off badge *Hidden from menu* (after any release status); it keeps its place in the menu order and in the filter.
 
+## Review round 15 (2026-10-07): menus, bulk bars, media grid and page URLs (signed off 2026-10-07)
+
+Sample catch-up for M35.22 follow-ups 1-4 (the app already implements them). **Announce only:** menus have the app's entries, order and enabled/disabled states; actions toast (with Undo where the app has it).
+Open `/styleguide/sample?area=pages|content|navigation|media` and right-click rows, empty space and selections. `area=media&readonly=1` shows the read-only menus.
+
+172. **Row menus = tree menus (pages, content, navigation, media):** a right click on a list row (also Shift+F10 / menu key) opens the same entries as the tree, in the same order: New..., Rename... (a dialog), Cut, Copy, Paste, Move to..., favorite, Duplicate, Release, Delete. Copy only for pages, navigation items, record sets and media files (not folders); Duplicate only for pages, records and media files; Paste is disabled when the clipboard is empty or the target invalid; on a page row it pastes next to it, on a folder row into it. Read-only hides editing entries and keeps favorite and Release.
+173. **Release:** in every menu and bar; on a folder it releases everything inside. With nothing pending it stays enabled and shows the info toast "Nothing here is waiting to be released."
+174. **Empty-space menus:** pages and content: New page / New folder / New record set; navigation: New menu item (table) and New menu item + New folder (tree); media: Upload, New folder, Paste. A left click on empty tree space opens the root, a right click opens this menu (not in templates); in tables a left click clears the selection.
+175. **Multi-selection:** the bulk bar and the right-click menu on several rows show the same actions (pages: Move, Release, Duplicate if a page is selected, Delete; content adds Cut/Copy; navigation: Move, Copy, Release, Show/Hide, Delete; media: counted Move, Cut, Copy, Duplicate, Download, Release, Delete). The pages, content and media trees are multiselect like the app; the navigation tree stays single-select as in the app.
+176. **Record grid:** row menu = bulk actions (Release, Move, Duplicate, Delete) acting on the row or its selection; empty space: New record.
+177. **Media grid and list:** folders first (accent-coloured folder icon, menu, F2, right click), then files. Explorer behaviour: click, Ctrl, Shift, double click opens, marquee (Ctrl keeps the selection), click on empty space clears, right click selects an unselected card first, arrows / Home / End / Space / Enter / Ctrl+A / F2 / Delete / Shift+F10 / Escape. One rename (the tree's inline one; no second Rename... entry); Upload in the folder menus; the list lost its Actions column and uses the table's row and empty menus. Navigation folder icons are accent-coloured too.
+178. **Page URLs from the registry:** the Pages URL column (still developer mode only) and the page settings address show the registered URL plainly; a computed one is muted with the title "Not assigned yet". Two sample pages (never-released drafts) show it.
+179. **Build status / banner:** icon, spinner and text vertically centred (sample top bar).
+180. **Known gaps of the sample:** Rename... / Move to... in navigation show a "Not part of the sample" notice (no dialogs); folder delete, favorites in navigation and Paste after Copy are announce-only; the keyboard sheet does not list the new media keys.
+
 ## Notes / hazards
 
 - Sign-off: **signed off by the user on 2026-10-01** — gallery https://claude.ai/artifact/33yY26sd6H17UTP9sPPJid

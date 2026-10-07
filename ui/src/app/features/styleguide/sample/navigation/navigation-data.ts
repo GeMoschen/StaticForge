@@ -67,6 +67,11 @@ export function initialNavOrder(): SampleNavOrder {
   return new Map(ORDER);
 }
 
+/** What is already released in a fresh copy of the menu; *Release…* on the rest releases it, on these it says there is nothing. */
+export function initialReleasedNav(): readonly string[] {
+  return ['n-home', 'n-imprint'];
+}
+
 /** The scripted selections of the `nav` query parameter in the screenshots. */
 export const FIXED_NAV_FOLDER = 'n-coffee';
 export const FIXED_NAV_ITEM = 'n-company';

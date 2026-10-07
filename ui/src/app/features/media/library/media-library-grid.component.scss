@@ -18,7 +18,7 @@
 // The selection rubber band: a translucent accent rectangle that does not take pointer events.
 .grid__marquee {
   position: absolute;
-  z-index: 1;
+  z-index: var(--sf-z-sticky);
   pointer-events: none;
   border: 1px solid var(--sf-accent);
   border-radius: var(--sf-radius-sm);

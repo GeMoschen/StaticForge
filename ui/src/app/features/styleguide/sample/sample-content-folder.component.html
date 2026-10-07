@@ -27,6 +27,9 @@
   [label]="'styleguide.sample.folder.table' | transloco: { name: title() }"
   [searchPlaceholder]="'styleguide.sample.folder.search' | transloco"
   [bulkActions]="bulkActions()"
+  [rowMenu]="rowMenu"
+  [emptyMenu]="emptyMenu"
+  emptyClickClears
   [emptyTitle]="'styleguide.sample.folder.empty' | transloco"
   (rowOpen)="open($event)"
 >
