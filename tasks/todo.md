@@ -114,8 +114,8 @@ every screen. Screen migration starts only after the style guide (M35.9) is sign
   - Built (shell/tree/folder view, record set view + grid + filter builder, record editor); 318 test files / 3,331 tests, build + lint green. **Open:** the New record set dialog awaits sign-off in the sample (gate round 10); no Chrome check yet; journey m25 needs the new UI (M35.31).
 - [ ] M35.21 templates IDE (built; Chrome check and Java compile pending)
   - Sample extended (gate round 13, decisions 153-167, screenshots in `35-m35-ui-ux-overhaul/round13-shots/`); signed off 2026-10-04; building the app.
-- [ ] M35.22 navigation and globals
-  - Built (navigation + sibling-order backend, globals); 336 test files / 3,680 tests, build + lint + backend tests green. **Open:** nine sample deviations await approval (see `35-m35-ui-ux-overhaul/022-navigation-globals.md`); no Chrome check; e2e m8 journeys need the new UI (M35.31).
+- [x] M35.22 navigation and globals
+  - Built (navigation + sibling-order backend, globals); 336 test files / 3,680 tests, build + lint + backend tests green. **Signed off by the user 2026-10-07** (sample deviations approved, see `35-m35-ui-ux-overhaul/022-navigation-globals.md`). **Open:** no Chrome check; e2e m8 journeys need the new UI (M35.31).
 - [ ] M35.23 changes, schedules, release dialogs
 - [ ] M35.24 publishing, quality, redirects, URL registry
 - [ ] M35.25 settings sub-pages, members, import/export

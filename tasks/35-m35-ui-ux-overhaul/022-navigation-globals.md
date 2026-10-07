@@ -1,6 +1,6 @@
 ---
 id: M35.22
-status: review
+status: done
 depends: [M35.11, M35.12, M35.13, M35.14, M35.15, M35.17]
 epic: m35-ui-ux-overhaul
 feature: screens
@@ -88,6 +88,8 @@ previous list back. `NavTreeView` gains `resolvedPageName`.
 6. Globals: usage chips are one header chip plus a "Use in templates" list (the M35.17 form has no per-field slot).
 7. Globals: a folder shows a name header and "select a global set" state (sample has no folder pane).
 8. Globals: create/rename/move/delete need `canEditTemplates` (developer, not time travel); the old screen only checked read-only.
+
+**Signed off by the user on 2026-10-07** (Telegram: "Signoff m35.022"): the eight sample deviations above are approved as built.
 
 **Open:** item breadcrumb has no folder trail; deleting the open dirty global set from the tree can still show the leave dialog; `e2e/m8-journeys.spec.ts`
 uses the old controls (M35.31); no browser check yet.
