@@ -32,9 +32,11 @@
     <sf-field [label]="'styleguide.sample.changes.schedule.when' | transloco" required>
       <sf-date-input mode="datetime" [value]="when()" (valueChange)="when.set($event)" />
     </sf-field>
-    <sf-field [label]="'styleguide.sample.changes.schedule.zone' | transloco">
-      <sf-combobox [options]="zoneOptions" [value]="zone()" (valueChange)="zone.set($any($event))" />
-    </sf-field>
+    @if (!customRepeat()) {
+      <sf-field [label]="'styleguide.sample.changes.schedule.zone' | transloco">
+        <sf-combobox [options]="zoneOptions" [value]="zone()" (valueChange)="zone.set($any($event))" />
+      </sf-field>
+    }
   </div>
 
   @if (isGeneration()) {
@@ -42,12 +44,22 @@
       <sf-field [label]="'styleguide.sample.changes.schedule.repeat' | transloco">
         <sf-select [options]="repeatOptions()" [value]="repeat()" (valueChange)="repeat.set($event ?? 'once')" required />
       </sf-field>
-      @if (showCron()) {
+      @if (showCron() && !customRepeat()) {
         <sf-field [label]="'styleguide.sample.changes.schedule.cron' | transloco" [hint]="'styleguide.sample.changes.schedule.cronHint' | transloco">
           <sf-input monospace [readonly]="repeat() !== 'custom'" [value]="cronValue()" (valueChange)="cron.set($event)" />
         </sf-field>
       }
     </div>
+    @if (customRepeat()) {
+      <div class="rd__row">
+        <sf-field [label]="'styleguide.sample.changes.schedule.zone' | transloco">
+          <sf-combobox [options]="zoneOptions" [value]="zone()" (valueChange)="zone.set($any($event))" />
+        </sf-field>
+        <sf-field [label]="'styleguide.sample.changes.schedule.cron' | transloco" [hint]="'styleguide.sample.changes.schedule.cronHint' | transloco">
+          <sf-input monospace [value]="cronValue()" (valueChange)="cron.set($event)" />
+        </sf-field>
+      </div>
+    }
   } @else {
     <sf-switch class="sd__then" [value]="thenGenerate()" (valueChange)="thenGenerate.set($event)">{{
       'styleguide.sample.changes.schedule.thenGenerate' | transloco

@@ -132,6 +132,8 @@ export class SampleScheduleDialogComponent implements OnInit {
     { value: 'once', label: this.t('repeatOptions.once') },
     ...CRON_PRESETS.map((id) => ({ value: id, label: this.t(`repeatOptions.${id}`) })),
   ]);
+  /** A custom repeat puts the time zone and the cron expression in one row (zone first). */
+  protected readonly customRepeat = computed(() => this.isGeneration() && this.repeat() === 'custom');
   /** The cron expression is shown for a custom repeat, and read-only in developer mode for a preset. */
   protected readonly showCron = computed(() => this.repeat() === 'custom' || (this.dev() && this.repeat() !== 'once'));
   protected readonly cronValue = computed(() => {

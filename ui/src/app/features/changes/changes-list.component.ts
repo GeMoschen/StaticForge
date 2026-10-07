@@ -14,6 +14,7 @@ import { SfIconComponent } from '../../shared/components/sf-icon.component';
 import { SfTooltipDirective } from '../../shared/directives/sf-tooltip.directive';
 import { ProjectMembersStore } from '../../core/project/project-members.store';
 import { scheduledFor, statusIcon } from '../release/release-status.util';
+import { scheduleKind } from '../schedules/schedule.util';
 import { formatInstant } from '../schedules/zoned-time.util';
 import { CHANGE_TYPES, typeIcon } from './changes-query.util';
 import { type ChangeRowView, ChangesStore } from './changes.store';
@@ -152,7 +153,7 @@ export class ChangesListComponent {
     return scheduledFor(row.scheduled, row.locale)
       .map((ref) =>
         this.t('page.scheduledFor', {
-          kind: this.transloco.translate(`release.schedule.kinds.${ref.type}`),
+          kind: this.transloco.translate(`release.schedule.kinds.${scheduleKind(ref.type)}`),
           time: formatInstant(ref.nextRunAt ?? ref.runAt),
         }),
       )

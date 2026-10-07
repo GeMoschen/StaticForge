@@ -1,7 +1,7 @@
 <sf-dialog size="md" [title]="title()" [dismissible]="!submitting()" (closed)="close()">
   @if (kindOptions().length > 1 && !editing()) {
     <sf-field class="sd__kind" [label]="'release.schedule.kind' | transloco">
-      <sf-segmented [options]="kindOptions()" [value]="type()" (valueChange)="setType($event)" />
+      <sf-segmented [options]="kindOptions()" [value]="kind()" (valueChange)="setKind($event)" />
     </sf-field>
   }
 
@@ -53,31 +53,7 @@
     </sf-field>
   }
 
-  @if (recurring()) {
-    <sf-segmented class="sd__block" size="sm" [aria-label]="'release.schedule.cronMode' | transloco" [options]="cronModeOptions" [value]="cronMode()" (valueChange)="cronMode.set($event ?? 'preset')" />
-    @if (cronMode() === 'preset') {
-      <div class="rd__row">
-        <sf-field [label]="'release.schedule.repeat' | transloco">
-          <sf-select [options]="presetOptions" [value]="presetKind()" (valueChange)="presetKind.set($event ?? 'daily')" required />
-        </sf-field>
-        @if (presetKind() === 'weekly') {
-          <sf-field [label]="'release.schedule.on' | transloco">
-            <sf-select [options]="weekdayOptions" [value]="presetWeekday()" (valueChange)="presetWeekday.set($event ?? 1)" required />
-          </sf-field>
-        }
-        <sf-field [label]="(presetKind() === 'hourly' ? 'release.schedule.atMinute' : 'release.schedule.at') | transloco">
-          <sf-date-input mode="time" [value]="presetTime()" (valueChange)="presetTime.set($event ?? presetTime())" />
-        </sf-field>
-      </div>
-    } @else {
-      <sf-field class="sd__block" [label]="'release.schedule.cron' | transloco" [hint]="'release.schedule.cronHint' | transloco">
-        <sf-input monospace [spellcheck]="false" [invalid]="!!previewError()" [value]="advancedCron()" (valueChange)="advancedCron.set($event)" />
-      </sf-field>
-    }
-    <sf-field class="sd__block" [label]="'release.schedule.zone' | transloco" [hint]="zoneAbbreviation() || undefined">
-      <sf-combobox [options]="zoneOptions()" [value]="zone()" (valueChange)="setZone($event)" />
-    </sf-field>
-  } @else {
+  @if (!recurring()) {
     <div class="rd__row">
       <sf-field [label]="'release.schedule.dateTime' | transloco" required>
         <sf-date-input mode="datetime" [value]="whenLocal()" (valueChange)="setWhen($event)" />
@@ -89,6 +65,39 @@
     @if (inPast()) {
       <p class="sd__error sd__block" role="alert">{{ 'release.schedule.reason.past' | transloco }}</p>
     }
+  }
+
+  @if (kind() === 'GENERATION') {
+    <div class="rd__row">
+      <sf-field [label]="'release.schedule.repeat' | transloco">
+        <sf-select [options]="repeatOptions" [value]="repeat()" (valueChange)="setRepeat($event)" required />
+      </sf-field>
+      @if (repeat() === 'weekly') {
+        <sf-field [label]="'release.schedule.on' | transloco">
+          <sf-select [options]="weekdayOptions" [value]="presetWeekday()" (valueChange)="presetWeekday.set($event ?? 1)" required />
+        </sf-field>
+      }
+      @if (recurring() && repeat() !== 'custom') {
+        <sf-field [label]="(repeat() === 'hourly' ? 'release.schedule.atMinute' : 'release.schedule.at') | transloco">
+          <sf-date-input mode="time" [value]="presetTime()" (valueChange)="presetTime.set($event ?? presetTime())" />
+        </sf-field>
+      }
+    </div>
+  }
+
+  @if (recurring() && repeat() === 'custom') {
+    <div class="rd__row sd__custom">
+      <sf-field [label]="'release.schedule.zone' | transloco" [hint]="zoneAbbreviation() || undefined">
+        <sf-combobox [options]="zoneOptions()" [value]="zone()" (valueChange)="setZone($event)" />
+      </sf-field>
+      <sf-field [label]="'release.schedule.cron' | transloco" [hint]="'release.schedule.cronHint' | transloco">
+        <sf-input monospace [spellcheck]="false" [invalid]="!!previewError()" [value]="advancedCron()" (valueChange)="advancedCron.set($event)" />
+      </sf-field>
+    </div>
+  } @else if (recurring()) {
+    <sf-field class="sd__block" [label]="'release.schedule.zone' | transloco" [hint]="zoneAbbreviation() || undefined">
+      <sf-combobox [options]="zoneOptions()" [value]="zone()" (valueChange)="setZone($event)" />
+    </sf-field>
   }
 
   @if (releaseState() && permissions.canIncrementalBuild()) {

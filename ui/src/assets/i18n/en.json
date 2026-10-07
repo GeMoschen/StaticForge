@@ -4767,9 +4767,13 @@
       "kind": "Kind",
       "what": "What",
       "when": "Next run",
+      "repeat": "Repeat",
       "owner": "Owner",
       "status": "Status",
       "actions": "Actions"
+    },
+    "repeat": {
+      "once": "Once"
     },
     "statuses": {
       "PENDING": "Pending",
@@ -7464,16 +7468,14 @@
       "title": {
         "RELEASE": "Schedule release",
         "UNPUBLISH": "Schedule unpublish",
-        "GENERATION": "Schedule generation",
-        "RECURRING_GENERATION": "Schedule recurring generation"
+        "GENERATION": "Schedule generation"
       },
       "titleEdit": "Edit {kind} schedule",
       "kind": "What to schedule",
       "kinds": {
         "RELEASE": "Release",
         "UNPUBLISH": "Unpublish",
-        "GENERATION": "Generation",
-        "RECURRING_GENERATION": "Recurring generation"
+        "GENERATION": "Generation"
       },
       "items": "Items",
       "nothingRelease": "Nothing to release.",
@@ -7481,9 +7483,6 @@
       "drift": "Draft changed since scheduled",
       "dateTime": "Date and time",
       "zone": "Time zone",
-      "cronMode": "How to repeat",
-      "cronPreset": "Repeat",
-      "cronAdvanced": "Advanced (cron)",
       "repeat": "Repeat",
       "on": "On",
       "at": "At",
@@ -7494,10 +7493,12 @@
       "nextRuns": "Next runs ({zone})",
       "computing": "Computing next runs…",
       "presets": {
+        "once": "Once",
         "hourly": "Every hour",
         "daily": "Every day",
         "weekdays": "Every weekday (Mon–Fri)",
-        "weekly": "Every week"
+        "weekly": "Every week",
+        "custom": "Custom (cron)"
       },
       "weekdays": {
         "0": "Sunday",

@@ -10,6 +10,24 @@ type Item = components['schemas']['Item'];
 /** The action types of M27 (epic decision 21). */
 export type ScheduleType = 'RELEASE' | 'UNPUBLISH' | 'GENERATION' | 'RECURRING_GENERATION';
 
+/**
+ * What a person schedules (sample, M35.23): a recurring generation is a *Generation* repeated, not a kind of its own — the
+ * backend keeps the separate `RECURRING_GENERATION` type, the screens speak in kinds.
+ */
+export type ScheduleKind = 'RELEASE' | 'UNPUBLISH' | 'GENERATION';
+
+export const SCHEDULE_KINDS: readonly ScheduleKind[] = ['RELEASE', 'UNPUBLISH', 'GENERATION'];
+
+/** The kind a backend type belongs to. */
+export function scheduleKind(type: string | null | undefined): ScheduleKind | null {
+  return type === 'RECURRING_GENERATION' ? 'GENERATION' : SCHEDULE_KINDS.find((kind) => kind === type) ?? null;
+}
+
+/** The backend types behind a kind (a list filter on Generation matches one-off and recurring). */
+export function typesOfKind(kind: string): ScheduleType[] {
+  return kind === 'GENERATION' ? ['GENERATION', 'RECURRING_GENERATION'] : [kind as ScheduleType];
+}
+
 export const SCHEDULE_TYPES: readonly { value: ScheduleType; label: string }[] = [
   { value: 'RELEASE', label: 'Release' },
   { value: 'UNPUBLISH', label: 'Unpublish' },
@@ -92,8 +110,7 @@ export function scheduleStatusKey(schedule: Pick<ScheduleView, 'status' | 'type'
 }
 
 /**
- * What a schedule does, in one translated line, by name: "Home (EN)", "3 items", "Every day at 09:00 · Full build · all
- * channels". An item without a name shows its UID in developer mode only, else "Untitled" — never a UUID.
+ * What a schedule does, in one translated line, by name: "Home (EN)", "3 items", "Full build · all channels". An item without a name shows its UID in developer mode only, else "Untitled" — never a UUID.
  */
 export function scheduleWhatText(schedule: ScheduleView, t: Translate, dev: boolean): string {
   if (isReleaseState(schedule.type)) {
@@ -108,7 +125,12 @@ export function scheduleWhatText(schedule: ScheduleView, t: Translate, dev: bool
   const params = (schedule.params ?? {}) as GenerationParams;
   const channels = params.channels && params.channels.length > 0 ? params.channels.join(', ') : t('schedules.page.allChannels');
   const build = t('schedules.page.build', { mode: t(`schedules.mode.${params.mode === 'INCREMENTAL' ? 'INCREMENTAL' : 'FULL'}`), channels });
-  return isRecurring(schedule.type) ? `${describeCronText(schedule.cron, t)} · ${build}` : build;
+  return build;
+}
+
+/** The Repeat column: "Once", or the cron in words ("Every day at 09:00"). */
+export function scheduleRepeatText(schedule: ScheduleView, t: Translate): string {
+  return isRecurring(schedule.type) ? describeCronText(schedule.cron, t) : t('schedules.repeat.once');
 }
 
 /** Whether the list/row actions apply (the server decides in the end; these only hide what it would refuse). */

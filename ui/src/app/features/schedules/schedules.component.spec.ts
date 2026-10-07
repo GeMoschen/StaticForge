@@ -137,6 +137,16 @@ describe('SchedulesComponent', () => {
     expect(list.request.params.get('size')).toBe('50');
   });
 
+  it('filters on the three kinds; Generation asks for the one-off and the recurring type', async () => {
+    const { list } = await setup({ inputs: { type: 'GENERATION' } });
+    expect(list.request.params.getAll('type')).toEqual(['GENERATION', 'RECURRING_GENERATION']);
+    fireEvent.click(screen.getByRole('button', { name: /^Type/ }));
+    expect(await screen.findByRole('menuitem', { name: 'Release' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'Unpublish' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'Generation' })).toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: 'Recurring generation' })).toBeNull();
+  });
+
   it('lists kind, what, next run, owner by name and status, with the drift warning', async () => {
     await setup();
     expect(screen.getByRole('heading', { level: 1, name: 'Schedules' })).toBeInTheDocument();
@@ -168,7 +178,9 @@ describe('SchedulesComponent', () => {
       ],
     });
     const [first] = dataRows();
-    expect(within(first).getByText('Every day at 09:00 · Incremental build · all channels')).toBeInTheDocument();
+    expect(within(first).getByText('Generation')).toBeInTheDocument();
+    expect(within(first).getByText('Incremental build · all channels')).toBeInTheDocument();
+    expect(within(first).getByText('Every day at 09:00')).toBeInTheDocument();
     expect(within(first).getByText('Paused')).toBeInTheDocument();
     expect(within(first).getByText('Last: Failed')).toBeInTheDocument();
   });

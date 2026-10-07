@@ -46,11 +46,13 @@ import {
 import {
   type LatenessUnit,
   type ScheduleForm,
+  type ScheduleKind,
   type ScheduleType,
-  SCHEDULE_TYPES,
+  SCHEDULE_KINDS,
   isRecurring,
   isReleaseState,
   latenessFromIso,
+  scheduleKind,
   scheduleRequest,
 } from './schedule.util';
 import { formatInstant, utcToZoned, viewerZone, zoneAbbreviation, zoneIds, zonedToUtc } from './zoned-time.util';
@@ -58,6 +60,9 @@ import { formatInstant, utcToZoned, viewerZone, zoneAbbreviation, zoneIds, zoned
 type ScheduleView = components['schemas']['ScheduleView'];
 
 const PREVIEW_DEBOUNCE_MS = 400;
+
+/** The Repeat select's value: a one-off, a preset, or a cron expression typed by hand. */
+type RepeatChoice = 'once' | CronPresetKind | 'custom';
 
 interface ThenGenerate {
   targetId?: number | null;
@@ -73,7 +78,8 @@ interface GenerationParams extends ThenGenerate {
  * The schedule dialog (M27.6.5, restyled in M35.23), opened from an editor's release actions, the Changes view and the
  * Schedules page: scheduled release/unpublish of the given items, one-off and recurring generation. The title always
  * says what is scheduled ("Schedule release", "Schedule unpublish", …) and, when several kinds are allowed, a segmented
- * switch changes it. Times are taken in a chosen time zone (the viewer's by default) and sent as UTC instants; a recurring schedule
+ * switch changes it. A generation repeats through its Repeat select (once, a preset, a cron of its own); a repeat other
+ * than "once" is the backend's recurring type. Times are taken in a chosen time zone (the viewer's by default) and sent as UTC instants; a recurring schedule
  * keeps the cron and its zone (`zoneId`), and its next runs come from the server so cron semantics (DST included) live
  * in one place.
  */
@@ -113,8 +119,8 @@ export class ScheduleDialogComponent implements OnDestroy {
   protected readonly permissions = inject(ProjectPermissionsStore);
 
   readonly projectKey = input.required<string>();
-  /** The types offered; the first is preselected. */
-  readonly types = input<ScheduleType[]>(['RELEASE', 'UNPUBLISH', 'GENERATION', 'RECURRING_GENERATION']);
+  /** The types offered (a recurring generation counts as Generation); the first is preselected. */
+  readonly types = input<ScheduleType[]>(['RELEASE', 'UNPUBLISH', 'GENERATION']);
   /** Release: the (asset, locale) pairs the caller offers, ticked ones scheduled. */
   readonly choices = input<ReleaseChoice[]>([]);
   /** Unpublish: the pairs offered when the type is switched to Unpublish (released ones differ from releasable ones). */
@@ -130,25 +136,26 @@ export class ScheduleDialogComponent implements OnDestroy {
   readonly saved = output<ScheduleView>();
   readonly closed = output<void>();
 
-  /** The kinds the switch offers, in the order of {@link SCHEDULE_TYPES}. */
-  protected readonly kindOptions = computed<SfSegmentedOption<ScheduleType>[]>(() =>
-    SCHEDULE_TYPES.filter((t) => this.types().includes(t.value)).map((t) => ({
-      value: t.value,
-      label: this.transloco.translate(`release.schedule.kinds.${t.value}`),
+  /** The kinds the switch offers, in the order of {@link SCHEDULE_KINDS}. */
+  protected readonly kindOptions = computed<SfSegmentedOption<ScheduleKind>[]>(() => {
+    const offered = new Set(this.types().map((type) => scheduleKind(type)));
+    return SCHEDULE_KINDS.filter((kind) => offered.has(kind)).map((kind) => ({
+      value: kind,
+      label: this.transloco.translate(`release.schedule.kinds.${kind}`),
+    }));
+  });
+  protected readonly repeatOptions: SfSelectOption<RepeatChoice>[] = [
+    { value: 'once', label: this.transloco.translate('release.schedule.presets.once') },
+    ...CRON_PRESET_OPTIONS.map<SfSelectOption<RepeatChoice>>((option) => ({
+      value: option.kind,
+      label: this.transloco.translate(`release.schedule.presets.${option.kind}`),
     })),
-  );
-  protected readonly presetOptions = CRON_PRESET_OPTIONS.map<SfSelectOption<CronPresetKind>>((option) => ({
-    value: option.kind,
-    label: this.transloco.translate(`release.schedule.presets.${option.kind}`),
-  }));
+    { value: 'custom', label: this.transloco.translate('release.schedule.presets.custom') },
+  ];
   protected readonly weekdayOptions = WEEKDAYS.map<SfSelectOption<number>>((day) => ({
     value: day.value,
     label: this.transloco.translate(`release.schedule.weekdays.${day.value}`),
   }));
-  protected readonly cronModeOptions: SfSegmentedOption<'preset' | 'advanced'>[] = [
-    { value: 'preset', label: this.transloco.translate('release.schedule.cronPreset') },
-    { value: 'advanced', label: this.transloco.translate('release.schedule.cronAdvanced') },
-  ];
   protected readonly pinOptions: SfRadioOption<'PINNED' | 'LATEST'>[] = [
     { value: 'PINNED', label: this.transloco.translate('release.schedule.pinned') },
     { value: 'LATEST', label: this.transloco.translate('release.schedule.latest') },
@@ -167,8 +174,7 @@ export class ScheduleDialogComponent implements OnDestroy {
   protected readonly date = signal('');
   protected readonly time = signal('');
   protected readonly zone = signal(viewerZone());
-  protected readonly cronMode = signal<'preset' | 'advanced'>('preset');
-  protected readonly presetKind = signal<CronPresetKind>('daily');
+  protected readonly repeat = signal<RepeatChoice>('once');
   protected readonly presetTime = signal('09:00');
   protected readonly presetWeekday = signal(1);
   protected readonly advancedCron = signal('0 9 * * 1-5');
@@ -192,15 +198,17 @@ export class ScheduleDialogComponent implements OnDestroy {
   protected readonly previewLoading = signal(false);
 
   protected readonly editing = computed(() => this.schedule() !== null);
+  /** What the switch shows: a recurring generation is a Generation. */
+  protected readonly kind = computed(() => scheduleKind(this.type()) ?? 'RELEASE');
   protected readonly recurring = computed(() => isRecurring(this.type()));
   protected readonly releaseState = computed(() => isReleaseState(this.type()));
   /** Always explicit: "Schedule release", "Schedule unpublish", … (or "Edit … schedule" for an existing one). */
   protected readonly title = computed(() =>
     this.editing()
       ? this.transloco.translate('release.schedule.titleEdit', {
-          kind: this.transloco.translate(`release.schedule.kinds.${this.type()}`).toLowerCase(),
+          kind: this.transloco.translate(`release.schedule.kinds.${this.kind()}`).toLowerCase(),
         })
-      : this.transloco.translate(`release.schedule.title.${this.type()}`),
+      : this.transloco.translate(`release.schedule.title.${this.kind()}`),
   );
   /** Date and time as one local value for the date-time input. */
   protected readonly whenLocal = computed(() => (this.date() && this.time() ? `${this.date()}T${this.time()}` : null));
@@ -238,9 +246,9 @@ export class ScheduleDialogComponent implements OnDestroy {
     this.selection().filter((choice) => choice.checked).map((choice) => itemKey(choice.assetUuid, choice.locale)),
   );
   protected readonly cron = computed(() =>
-    this.cronMode() === 'preset'
-      ? presetCron({ kind: this.presetKind(), time: this.presetTime(), weekday: this.presetWeekday() })
-      : this.advancedCron().trim(),
+    this.repeat() === 'custom' || this.repeat() === 'once'
+      ? this.advancedCron().trim()
+      : presetCron({ kind: this.repeat() as CronPresetKind, time: this.presetTime(), weekday: this.presetWeekday() }),
   );
   protected readonly runAt = computed(() => zonedToUtc(this.date(), this.time(), this.zone()));
   protected readonly inPast = computed(() => {
@@ -342,13 +350,24 @@ export class ScheduleDialogComponent implements OnDestroy {
     }
   }
 
-  protected setType(type: ScheduleType | null): void {
-    if (!type) {
+  /** The kind switch: a generation is one-off or recurring by its Repeat select. */
+  protected setKind(kind: ScheduleKind | null): void {
+    if (!kind) {
       return;
     }
+    const type = this.typeOf(kind, this.repeat());
     this.type.set(type);
     this.selection.set(this.choicesOf(type).map((choice) => ({ ...choice })));
     this.error.set(null);
+  }
+
+  protected setRepeat(repeat: RepeatChoice | null): void {
+    this.repeat.set(repeat ?? 'once');
+    this.type.set(this.typeOf(this.kind(), this.repeat()));
+  }
+
+  private typeOf(kind: ScheduleKind, repeat: RepeatChoice): ScheduleType {
+    return kind === 'GENERATION' && repeat !== 'once' ? 'RECURRING_GENERATION' : kind;
   }
 
   private choicesOf(type: ScheduleType): ReleaseChoice[] {
@@ -406,7 +425,7 @@ export class ScheduleDialogComponent implements OnDestroy {
         this.submitting.set(false);
         this.events.changed();
         const when = view.nextRunAt ?? view.runAt;
-        const kind = this.transloco.translate(`release.schedule.kinds.${view.type}`);
+        const kind = this.transloco.translate(`release.schedule.kinds.${scheduleKind(view.type)}`);
         this.toast.show(
           this.transloco.translate(`release.schedule.toast.${existing ? 'rescheduled' : 'scheduled'}${when ? 'At' : ''}`, {
             kind,
@@ -433,14 +452,14 @@ export class ScheduleDialogComponent implements OnDestroy {
     const start = utcToZoned(schedule?.runAt ?? schedule?.nextRunAt ?? nextHour, zone);
     const type = (schedule?.type as ScheduleType | undefined) ?? types[0] ?? 'RELEASE';
     this.type.set(type);
+    const preset = parsePresetCron(schedule?.cron);
+    // A recurring schedule opens as a Generation with its Repeat set; a new one offered as recurring starts daily.
+    this.repeat.set(!isRecurring(type) ? 'once' : schedule?.cron && !preset ? 'custom' : (preset?.kind ?? 'daily'));
     this.selection.set(this.choicesOf(type).map((choice) => ({ ...choice })));
     this.date.set(start.date);
     this.time.set(start.time);
     // A recurring schedule keeps the zone its cron was written in (epic decision 24).
     this.zone.set(schedule && isRecurring(schedule.type) && schedule.zoneId ? schedule.zoneId : zone);
-    const preset = parsePresetCron(schedule?.cron);
-    this.cronMode.set(schedule?.cron && !preset ? 'advanced' : 'preset');
-    this.presetKind.set(preset?.kind ?? 'daily');
     this.presetTime.set(preset?.time ?? '09:00');
     this.presetWeekday.set(preset?.weekday ?? 1);
     this.advancedCron.set(schedule?.cron ?? '0 9 * * 1-5');

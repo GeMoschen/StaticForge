@@ -140,7 +140,7 @@ export class ChangesComponent {
     const types: ScheduleType[] = [
       'RELEASE',
       ...(unpublishChoices.length > 0 ? (['UNPUBLISH'] as const) : []),
-      ...(this.permissions.canScheduleGeneration() ? (['GENERATION', 'RECURRING_GENERATION'] as const) : []),
+      ...(this.permissions.canScheduleGeneration() ? (['GENERATION'] as const) : []),
     ];
     this.scheduling.set({ types, choices: this.choicesOf(rows), unpublishChoices });
   }

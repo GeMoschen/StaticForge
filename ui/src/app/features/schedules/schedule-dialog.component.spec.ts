@@ -22,7 +22,7 @@ interface Form {
   zone: { set(value: string): void };
   date: { set(value: string): void };
   time: { set(value: string): void };
-  cronMode: { set(value: 'preset' | 'advanced'): void };
+  repeat: { set(value: string): void };
   advancedCron: { set(value: string): void };
 }
 
@@ -140,7 +140,7 @@ describe('ScheduleDialogComponent', () => {
     fixture.detectChanges();
     expect(page().querySelectorAll('.sd__runs li').length).toBe(2);
 
-    form.cronMode.set('advanced');
+    form.repeat.set('custom');
     form.advancedCron.set('61 * * * *');
     fixture.detectChanges();
     vi.advanceTimersByTime(500);
@@ -166,6 +166,9 @@ describe('ScheduleDialogComponent', () => {
       params: { mode: 'INCREMENTAL', targetId: null, channels: [] } as unknown as ScheduleView['params'],
       version: 4,
     });
+    // A recurring schedule opens as a Generation with its Repeat set (a weekday cron reads as the weekday preset).
+    expect(page().querySelector('h2')?.textContent).toContain('generation');
+    expect(page().textContent).toContain('Every weekday (Mon–Fri)');
     expect((page().querySelector('sf-combobox input') as HTMLInputElement).value).toBe('America/New_York');
     vi.advanceTimersByTime(500);
     http
@@ -238,10 +241,11 @@ describe('ScheduleDialogComponent title and kind switch (M35.23)', () => {
   });
 
   it('has no items for a generation: it picks target and mode, and a recurring one a repeat', () => {
-    open(['RELEASE', 'UNPUBLISH', 'GENERATION', 'RECURRING_GENERATION']);
-    expect(screen.getAllByRole('radio').map((radio) => radio.textContent?.trim())).toEqual(
-      expect.arrayContaining(['Release', 'Unpublish', 'Generation', 'Recurring generation']),
-    );
+    open(['RELEASE', 'UNPUBLISH', 'GENERATION']);
+    // Three kinds, as in the sample: a repeat is a select inside Generation, not a kind of its own.
+    const radios = screen.getAllByRole('radio').map((radio) => radio.textContent?.trim());
+    expect(radios).toEqual(expect.arrayContaining(['Release', 'Unpublish', 'Generation']));
+    expect(radios).not.toContain('Recurring generation');
     (screen.getByRole('radio', { name: 'Generation' }) as HTMLElement).click();
     fixture.detectChanges();
     fixture.detectChanges();
@@ -251,6 +255,39 @@ describe('ScheduleDialogComponent title and kind switch (M35.23)', () => {
     expect(document.body.querySelector('h2')?.textContent?.trim()).toBe('Schedule generation');
     expect(screen.queryByText('Items')).toBeNull();
     expect(screen.getByText('Date and time')).toBeTruthy();
+    expect(screen.getByText('Repeat')).toBeTruthy();
+  });
+
+  it('puts the time zone and the cron expression of a custom repeat in one row, zone first', () => {
+    open(['GENERATION']);
+    (fixture.componentInstance as unknown as { setRepeat: (r: string) => void }).setRepeat('custom');
+    fixture.detectChanges();
+    const zone = document.body.querySelector('sf-combobox') as HTMLElement;
+    const cron = document.body.querySelector('sf-input') as HTMLElement;
+    expect(zone.closest('.rd__row')).toBe(cron.closest('.rd__row'));
+    expect(zone.compareDocumentPosition(cron) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    for (const request of http.match((r) => r.url.endsWith('/targets') || r.url.endsWith('/channels') || r.url.endsWith('/preview-times'))) {
+      request.flush([]);
+    }
+  });
+
+  it('turns a Generation into the recurring type through its Repeat select, and back with Once', () => {
+    open(['GENERATION']);
+    const form = fixture.componentInstance as unknown as { type: () => string; setRepeat: (r: string) => void };
+    expect(form.type()).toBe('GENERATION');
+    form.setRepeat('weekly');
+    fixture.detectChanges();
+    expect(form.type()).toBe('RECURRING_GENERATION');
+    expect(document.body.querySelector('h2')?.textContent?.trim()).toBe('Schedule generation');
+    expect(screen.queryByText('Date and time')).toBeNull();
+    expect(screen.getByText('On')).toBeTruthy();
+    form.setRepeat('once');
+    fixture.detectChanges();
+    expect(form.type()).toBe('GENERATION');
+    expect(screen.getByText('Date and time')).toBeTruthy();
+    for (const request of http.match((r) => r.url.endsWith('/targets') || r.url.endsWith('/channels') || r.url.endsWith('/preview-times'))) {
+      request.flush([]);
+    }
   });
 
   it('shows several languages of one asset as checkboxes and several assets as a count', () => {

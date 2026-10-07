@@ -36,15 +36,18 @@ import { ScheduleDialogComponent } from './schedule-dialog.component';
 import { ScheduleHistoryComponent } from './schedule-history.component';
 import {
   SCHEDULE_STATUSES,
-  SCHEDULE_TYPES,
+  SCHEDULE_KINDS,
   type ScheduleType,
   canCancelSchedule,
   canEditSchedule,
   canRepin,
   canRunNow,
   canTakeOver,
+  scheduleKind,
+  scheduleRepeatText,
   scheduleStatusKey,
   scheduleWhatText,
+  typesOfKind,
   showsDrift,
 } from './schedule.util';
 import { formatInstantWithZone, viewerZone, zoneLabel } from './zoned-time.util';
@@ -63,7 +66,6 @@ const KIND_ICONS: Readonly<Record<string, string>> = {
   RELEASE: 'publish',
   UNPUBLISH: 'cloud_off',
   GENERATION: 'build',
-  RECURRING_GENERATION: 'autorenew',
 };
 const NEW_KIND_TYPES: Readonly<Record<NewKind, ScheduleType>> = {
   release: 'RELEASE',
@@ -193,6 +195,7 @@ export class SchedulesComponent {
       { id: 'kind', header: header('kind'), value: (r) => this.kindName(r), width: 190 },
       { id: 'what', header: header('what'), value: (r) => this.what(r), hideable: false, width: 300 },
       { id: 'when', header: header('when'), value: (r) => this.nextRun(r), width: 260 },
+      { id: 'repeat', header: header('repeat'), value: (r) => this.repeat(r), width: 200 },
       { id: 'owner', header: header('owner'), value: (r) => this.members.nameOf(r.ownerUserId), width: 170 },
       { id: 'status', header: header('status'), value: (r) => this.statusName(r), width: 200 },
       { id: 'actions', header: header('actions'), hideable: false, searchable: false, width: 64, align: 'end' },
@@ -206,7 +209,7 @@ export class SchedulesComponent {
 
   /** The three filters: what they offer and what is picked (one value each, as the URL holds it). */
   private readonly filterOptions = computed<Record<FilterKey, readonly { value: string; label: string }[]>>(() => ({
-    type: SCHEDULE_TYPES.map((t) => ({ value: t.value, label: this.transloco.translate(`release.schedule.kinds.${t.value}`) })),
+    type: SCHEDULE_KINDS.map((kind) => ({ value: kind, label: this.transloco.translate(`release.schedule.kinds.${kind}`) })),
     status: SCHEDULE_STATUSES.map((s) => ({
       value: s.value,
       label: s.value === 'FAILED' ? this.t('filters.statusFailed') : this.t(`statuses.${s.value}`),
@@ -319,11 +322,15 @@ export class SchedulesComponent {
   }
 
   protected kindIcon(row: ScheduleView): string {
-    return KIND_ICONS[row.type ?? ''] ?? 'schedule';
+    return KIND_ICONS[scheduleKind(row.type) ?? ''] ?? 'schedule';
   }
 
   protected kindName(row: ScheduleView): string {
-    return this.transloco.translate(`release.schedule.kinds.${row.type}`);
+    return this.transloco.translate(`release.schedule.kinds.${scheduleKind(row.type)}`);
+  }
+
+  protected repeat(row: ScheduleView): string {
+    return scheduleRepeatText(row, (key, params) => this.transloco.translate(key, params));
   }
 
   protected what(row: ScheduleView): string {
@@ -393,7 +400,7 @@ export class SchedulesComponent {
     const first = NEW_KIND_TYPES[kind];
     const permitted: ScheduleType[] = [
       ...(this.permissions.canScheduleRelease() ? (['RELEASE', 'UNPUBLISH'] as const) : []),
-      ...(this.permissions.canScheduleGeneration() ? (['GENERATION', 'RECURRING_GENERATION'] as const) : []),
+      ...(this.permissions.canScheduleGeneration() ? (['GENERATION'] as const) : []),
     ];
     const types = [first, ...permitted.filter((t) => t !== first)];
     if (!this.permissions.canScheduleRelease()) {
@@ -536,7 +543,7 @@ export class SchedulesComponent {
     this.error.set(null);
     this.request = this.api
       .listSchedules(key, {
-        type: query.type ? [query.type] : undefined,
+        type: query.type ? typesOfKind(query.type) : undefined,
         status: query.status ? [query.status] : undefined,
         owner: query.owner ? Number(query.owner) : undefined,
         page: query.page,

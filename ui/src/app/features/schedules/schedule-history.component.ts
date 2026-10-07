@@ -14,7 +14,7 @@ import { SfSkeletonComponent } from '../../shared/components/layout/sf-skeleton.
 import { SfButtonComponent } from '../../shared/components/sf-button.component';
 import { ReleaseEventsStore } from '../release/release-events.store';
 import { localeTag } from '../release/release-status.util';
-import { type Translate, latenessFromIso, scheduleStatusKey, scheduleWhatText } from './schedule.util';
+import { type Translate, isRecurring, latenessFromIso, scheduleKind, scheduleRepeatText, scheduleStatusKey, scheduleWhatText } from './schedule.util';
 import { formatDuration, formatInstant, formatInstantWithZone } from './zoned-time.util';
 
 type ScheduleView = components['schemas']['ScheduleView'];
@@ -112,8 +112,10 @@ export class ScheduleHistoryComponent {
     const schedule = this.schedule();
     return schedule
       ? this.t('history.title', {
-          kind: this.transloco.translate(`release.schedule.kinds.${schedule.type}`),
-          what: scheduleWhatText(schedule, this.translate, this.dev()),
+          kind: this.transloco.translate(`release.schedule.kinds.${scheduleKind(schedule.type)}`),
+          what: isRecurring(schedule.type)
+            ? `${scheduleRepeatText(schedule, this.translate)} · ${scheduleWhatText(schedule, this.translate, this.dev())}`
+            : scheduleWhatText(schedule, this.translate, this.dev()),
         })
       : this.t('history.titlePending');
   });

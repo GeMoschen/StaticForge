@@ -81,6 +81,9 @@
   <ng-template sfDataTableCell="when" [sfDataTableCellRows]="rows()" let-row>
     <span class="cell-muted">{{ nextRun(row) }}</span>
   </ng-template>
+  <ng-template sfDataTableCell="repeat" [sfDataTableCellRows]="rows()" let-row>
+    <span class="cell-muted">{{ repeat(row) }}</span>
+  </ng-template>
   <ng-template sfDataTableCell="owner" [sfDataTableCellRows]="rows()" let-row>
     <span class="cell-name">
       <sf-avatar size="sm" [name]="members.nameOf(row.ownerUserId)" />

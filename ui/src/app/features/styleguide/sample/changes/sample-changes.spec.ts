@@ -176,6 +176,17 @@ describe('sample Schedules area', () => {
     expect(within(generation).getByRole('combobox', { name: 'Repeat' })).toBeInTheDocument();
   });
 
+  it('puts the time zone and the cron expression in one row, zone first, for a custom repeat', async () => {
+    await render(SampleSchedulesAreaComponent, { providers: providers({ schedule: 'generation' }) });
+    const dialog = await screen.findByRole('dialog', { name: 'Schedule generation' });
+    fireEvent.change(within(dialog).getByRole('combobox', { name: 'Repeat' }), { target: { value: '5' } });
+    const cron = await within(dialog).findByText('Cron expression');
+    const zone = within(dialog).getByText('Time zone');
+    const row = cron.closest('.rd__row') as HTMLElement;
+    expect(row.contains(zone)).toBe(true);
+    expect(zone.compareDocumentPosition(cron) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
   it('keeps version, missed-time policy and comment in a collapsed "Advanced options" disclosure', async () => {
     await render(SampleSchedulesAreaComponent, { providers: providers({ schedule: '1' }) });
     const dialog = await screen.findByRole('dialog', { name: 'Schedule release' });
