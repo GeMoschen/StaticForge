@@ -108,7 +108,8 @@ export class SfComboboxComponent<T = unknown> extends SfControlBase<T | T[] | nu
 
   private readonly onDocumentPointerDown = (event: Event) => {
     const target = event.target as Node | null;
-    if (!target || !this.host.nativeElement.contains(target)) {
+    // The panel lives in <body> (anchorPanel), so it is not inside the host: a press on an option is not "outside".
+    if (!target || !(this.host.nativeElement.contains(target) || this.panel()?.nativeElement.contains(target))) {
       this.close();
     }
   };

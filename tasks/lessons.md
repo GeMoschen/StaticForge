@@ -203,3 +203,12 @@
   and threw `insertBefore ... not a child`. jsdom showed it only when the two events were dispatched without a change-detection pass between them.
 - **Rule:** wrap such an element in a slot that stays where Angular put it (an `ng-container` does not help: its first node is its first child). Reproduce
   with plain `dispatchEvent` calls, not `fireEvent`, which runs change detection after each event.
+
+## A panel moved into `<body>` is outside its host for an outside-press handler (2026-10-07)
+- **Mistake (sf-combobox, found as "clicking an item only closes the dropdown" in the Schedules item picker):** the combobox's
+  document `pointerdown` handler closed the list when the target was not inside the host, but `anchorPanel` had moved the
+  panel into `<body>`. A real press on an option closed (and removed) the panel before the `click` could choose. The spec only
+  fired `click`, which skips the press, so it passed.
+- **Rule:** an outside-press handler must treat the portaled panel as inside (`sf-menu`, `sf-popover` and `sf-date-input` do).
+  Specs for pickers dispatch the whole sequence a browser sends (`pointerdown`, `mousedown`, `mouseup`, `click`) and assert the
+  list is still open between press and click.

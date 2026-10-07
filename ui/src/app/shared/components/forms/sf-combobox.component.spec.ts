@@ -326,6 +326,31 @@ describe('SfComboboxComponent', () => {
       expect(host.value).toEqual(['en']);
     });
 
+    it('selects an option pressed like a browser does (pointerdown, mousedown, click) and keeps the list open', async () => {
+      const { key, host, fixture } = await setup(multi);
+      host.value = [];
+      fixture.detectChanges();
+      key('ArrowDown');
+
+      // The panel sits in <body>, outside the host: its pointerdown must not count as an outside press.
+      const option = screen.getByRole('option', { name: /Japanese/ });
+      option.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, cancelable: true }));
+      option.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+      expect(screen.getByRole('listbox')).toBeInTheDocument();
+      option.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+      option.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      fixture.detectChanges();
+
+      expect(host.value).toEqual(['ja']);
+      expect(screen.getByRole('listbox')).toBeInTheDocument();
+      expect(screen.getByRole('option', { name: /Japanese/ })).toHaveAttribute('aria-selected', 'true');
+
+      // A press outside still closes it.
+      document.body.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+      fixture.detectChanges();
+      expect(screen.queryByRole('listbox')).toBeNull();
+    });
+
     it('removes the last value with Backspace in the empty input', async () => {
       const { key, host, fixture } = await setup(multi);
       host.value = ['en', 'ko'];
