@@ -7127,7 +7127,7 @@
       "more": "More release actions for “{name}”",
       "unpublish": "Unpublish…",
       "discard": "Discard changes…",
-      "nothingWaiting": "Nothing here is waiting to be released.",
+      "nothingToRelease": "Every language is released.",
       "nothingToUnpublish": "Nothing is online to unpublish.",
       "nothingToDiscard": "No language has changes to discard."
     },

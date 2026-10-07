@@ -11,7 +11,6 @@ import { EditingLocaleStore } from '../../core/project/editing-locale.store';
 import { LocalesStore } from '../../core/project/locales.store';
 import { ProjectContextStore } from '../../core/project/project-context.store';
 import { ALL_PUBLISH_PERMISSIONS, projectDetail } from '../../core/project/testing/project-detail.fixture';
-import { ToastService } from '../../core/ui/toast.service';
 import { ReleaseActionsComponent } from './release-actions.component';
 import { ReleaseEventsStore } from './release-events.store';
 
@@ -184,20 +183,16 @@ describe('ReleaseActionsComponent', () => {
     expect(items[1].disabledReason).toBe('No language has changes to discard.');
   });
 
-  it('keeps Release enabled with nothing waiting and says so in an info toast (decision 173)', () => {
+  it('disables Release with a reason when nothing is waiting, as in the sample', () => {
     render('DEVELOPER', ALL_PUBLISH_PERMISSIONS, {
       ...DETAIL,
       release: { de: { status: 'PUBLISHED' }, en: { status: 'PUBLISHED' } },
     });
-    const release = screen.getByRole('button', { name: 'Release…' }) as HTMLButtonElement;
-    expect(release.disabled).toBe(false);
-    expect(release.getAttribute('aria-disabled')).toBeNull();
+    const release = screen.getByRole('button', { name: /Release…/ }) as HTMLButtonElement;
+    expect(release.getAttribute('aria-disabled')).toBe('true');
 
     release.click();
     fixture.detectChanges();
-    const toast = TestBed.inject(ToastService).toasts().at(-1);
-    expect(toast?.message).toBe('Nothing here is waiting to be released.');
-    expect(toast?.kind).toBe('info');
     expect(document.body.querySelector('sf-release-dialog')).toBeNull();
   });
 

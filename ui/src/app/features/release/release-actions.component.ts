@@ -20,7 +20,6 @@ import { LocalesStore } from '../../core/project/locales.store';
 import { ProjectMembersStore } from '../../core/project/project-members.store';
 import { ProjectPermissionsStore } from '../../core/project/project-permissions.store';
 import { ShortcutService } from '../../core/ui/shortcut.service';
-import { ToastService } from '../../core/ui/toast.service';
 import { SfStatusComponent, type SfStatusTone } from '../../shared/components/display/sf-status.component';
 import { SfMenuComponent } from '../../shared/components/menu/sf-menu.component';
 import type { SfMenuItem } from '../../shared/components/menu/sf-menu-item';
@@ -42,7 +41,7 @@ type AssetDetailView = components['schemas']['AssetDetailView'];
  * primary **Release…**, **Schedule…** and, in ⋮, **Unpublish…** and **Discard changes…**. The group has a divider of
  * its own, so its ⋮ is not mistaken for the item's ⋮ next to it.
  *
- * Release stays enabled when nothing is waiting: it says so in an info toast (decision 173). Unpublish and Discard open
+ * Release is disabled with a reason when every language is released (as in the sample). Unpublish and Discard open
  * the release dialog in their mode, which lists what goes offline or is thrown away and offers the redirect of an
  * unpublished page's old URLs.
  *
@@ -74,7 +73,6 @@ export class ReleaseActionsComponent implements OnDestroy {
   private readonly events = inject(ReleaseEventsStore);
   private readonly members = inject(ProjectMembersStore);
   private readonly transloco = inject(TranslocoService);
-  private readonly toast = inject(ToastService);
   protected readonly permissions = inject(ProjectPermissionsStore);
 
   readonly projectKey = input.required<string>();
@@ -210,15 +208,6 @@ export class ReleaseActionsComponent implements OnDestroy {
 
   ngOnDestroy(): void {
     this.request?.unsubscribe();
-  }
-
-  /** The primary button: with nothing waiting it says so instead of opening an empty dialog (decision 173). */
-  protected onRelease(): void {
-    if (this.canReleaseAny()) {
-      this.open('release');
-    } else {
-      this.toast.show(this.transloco.translate('release.actions.nothingWaiting'), 'info');
-    }
   }
 
   protected open(mode: ReleaseMode): void {

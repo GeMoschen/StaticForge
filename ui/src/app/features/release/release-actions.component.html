@@ -7,7 +7,12 @@
     }
   </ul>
   @if (permissions.canRelease()) {
-    <sf-button icon="publish" (click)="onRelease()">{{ 'release.actions.release' | transloco }}</sf-button>
+    <sf-button
+      icon="publish"
+      [disabled]="!canReleaseAny()"
+      [disabledReason]="canReleaseAny() ? null : ('release.actions.nothingToRelease' | transloco)"
+      (click)="open('release')"
+    >{{ 'release.actions.release' | transloco }}</sf-button>
     @if (permissions.canScheduleRelease() && scheduleTypes().length > 0) {
       <sf-button variant="secondary" icon="schedule" (click)="scheduling.set(true)">{{ 'release.actions.schedule' | transloco }}</sf-button>
     }
