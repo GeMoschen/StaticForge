@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { describeCron, parsePresetCron, presetCron } from './cron-presets.util';
 import { latenessFromIso, latenessToIso, scheduleRequest, type ScheduleForm } from './schedule.util';
-import { formatDuration, utcToZoned, zoneOffsetMs, zonedToUtc } from './zoned-time.util';
+import { formatDuration, utcToZoned, zoneIds, zoneOffsetMs, zonedToUtc } from './zoned-time.util';
 
 const BERLIN = 'Europe/Berlin';
 
@@ -114,5 +114,16 @@ describe('schedule request', () => {
     expect(latenessToIso(15, 'minutes')).toBe('PT15M');
     expect(latenessFromIso('PT2H')).toEqual({ value: 2, unit: 'hours' });
     expect(latenessFromIso('PT1H30M')).toEqual({ value: 90, unit: 'minutes' });
+  });
+});
+
+describe('zoneIds', () => {
+  it('lists UTC and the included zones once, sorted', () => {
+    const ids = zoneIds('Europe/Berlin', 'Mars/Olympus');
+    expect(ids).toContain('UTC');
+    expect(ids).toContain('Europe/Berlin');
+    expect(ids).toContain('Mars/Olympus');
+    expect(ids.filter((id) => id === 'Europe/Berlin')).toHaveLength(1);
+    expect(ids).toEqual([...ids].sort());
   });
 });

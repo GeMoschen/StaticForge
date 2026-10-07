@@ -11,7 +11,6 @@
   "src/app/features/generation/findings/sf-run-findings.component.html": 37,
   "src/app/features/generation/generation-dialog.component.html": 45,
   "src/app/features/generation/generation-live-log.component.html": 7,
-  "src/app/features/generation/generation-options.component.ts": 9,
   "src/app/features/generation/generation-run-details.component.html": 19,
   "src/app/features/generation/generation.component.html": 22,
   "src/app/features/generation/insight/sf-plan-entries-table.component.ts": 18,

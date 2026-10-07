@@ -142,6 +142,31 @@ export function zoneAbbreviation(zone: string, at: Date = new Date()): string {
   return '';
 }
 
+const COMMON_ZONES = [
+  'UTC',
+  'Europe/London',
+  'Europe/Berlin',
+  'America/New_York',
+  'America/Chicago',
+  'America/Los_Angeles',
+  'Asia/Tokyo',
+  'Australia/Sydney',
+];
+
+/**
+ * The IANA zones a schedule may be written in: every zone the platform knows (`Intl.supportedValuesOf`), else a short
+ * common list; always `UTC` and `include` (the viewer's or the stored zone), sorted.
+ */
+export function zoneIds(...include: string[]): string[] {
+  let known: string[] = [];
+  try {
+    known = (Intl as unknown as { supportedValuesOf?: (key: string) => string[] }).supportedValuesOf?.('timeZone') ?? [];
+  } catch {
+    known = [];
+  }
+  return [...new Set([...(known.length > 0 ? known : COMMON_ZONES), 'UTC', ...include.filter(Boolean)])].sort();
+}
+
 /** "Europe/Berlin (CEST)" — how the schedule dialog labels a zone. */
 export function zoneLabel(zone: string, at: Date = new Date()): string {
   const abbreviation = zoneAbbreviation(zone, at);

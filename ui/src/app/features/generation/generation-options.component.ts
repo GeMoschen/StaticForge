@@ -1,5 +1,10 @@
 import { ChangeDetectionStrategy, Component, computed, effect, inject, input, model, signal, untracked } from '@angular/core';
+import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
 import type { components } from '../../core/api/generated/schema.d.ts';
+import { SfCheckboxComponent } from '../../shared/components/forms/sf-checkbox.component';
+import { SfSegmentedComponent, type SfSegmentedOption } from '../../shared/components/forms/sf-segmented.component';
+import { SfSelectComponent, type SfSelectOption } from '../../shared/components/forms/sf-select.component';
+import { SfFieldComponent } from '../../shared/components/sf-field.component';
 import { ChannelsService } from '../channels/channels.service';
 import { GenerationService } from './generation.service';
 
@@ -14,103 +19,64 @@ type GenerationTargetView = components['schemas']['GenerationTargetView'];
   selector: 'sf-generation-options',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
+  imports: [SfCheckboxComponent, SfFieldComponent, SfSegmentedComponent, SfSelectComponent, TranslocoPipe],
   template: `
     <div class="options">
-      @if (showMode()) {
-        <fieldset class="options__group">
-          <legend class="options__legend">Mode</legend>
-          <label class="options__choice">
-            <input type="radio" [name]="name() + '-mode'" value="FULL" [checked]="mode() === 'FULL'" (change)="mode.set('FULL')" />
-            Full
-          </label>
-          <label class="options__choice">
-            <input
-              type="radio"
-              [name]="name() + '-mode'"
-              value="INCREMENTAL"
-              [checked]="mode() === 'INCREMENTAL'"
-              (change)="mode.set('INCREMENTAL')"
-            />
-            Incremental
-          </label>
-        </fieldset>
-      }
-      <label class="options__field">
-        <span class="options__legend">Target</span>
-        @if (targets().length === 0) {
-          <span class="options__note">No generation target yet — the build uses the project's default output.</span>
-        } @else if (!anyTarget()) {
-          <span class="options__fixed">Default target</span>
-        } @else {
-          <select class="options__select" [value]="targetValue()" (change)="onTarget($event)">
-            <option value="">Default target</option>
-            @for (target of targets(); track target.id) {
-              <option [value]="target.id">{{ target.name ?? 'Untitled' }}</option>
-            }
-          </select>
-        }
-      </label>
-      @if (channelOptions().length > 0) {
-        <fieldset class="options__group">
-          <legend class="options__legend">Channels</legend>
-          @for (channel of channelOptions(); track channel) {
-            <label class="options__choice">
-              <input type="checkbox" [checked]="isChecked(channel)" (change)="toggleChannel(channel, $event)" />
-              {{ channel }}
-            </label>
+      @if (showMode() || (targets().length > 0 && anyTarget())) {
+        <div class="options__row">
+          @if (targets().length > 0 && anyTarget()) {
+            <sf-field [label]="'release.generationOptions.target' | transloco">
+              <sf-select [options]="targetOptions()" [value]="targetId()" (valueChange)="targetId.set($event)" required />
+            </sf-field>
           }
-        </fieldset>
+          @if (showMode()) {
+            <sf-field [label]="'release.generationOptions.mode' | transloco">
+              <sf-segmented size="sm" [options]="modeOptions()" [value]="mode()" (valueChange)="mode.set($event ?? 'FULL')" />
+            </sf-field>
+          }
+        </div>
+      }
+      @if (targets().length === 0) {
+        <p class="options__note">{{ 'release.generationOptions.noTargets' | transloco }}</p>
+      } @else if (!anyTarget()) {
+        <p class="options__note">{{ 'release.generationOptions.defaultOnly' | transloco }}</p>
+      }
+      @if (channelOptions().length > 0) {
+        <sf-field [label]="'release.generationOptions.channels' | transloco">
+          <div class="options__channels">
+            @for (channel of channelOptions(); track channel) {
+              <sf-checkbox [value]="isChecked(channel)" [disabled]="isOnlyChannel(channel)" (valueChange)="toggleChannel(channel, $event)">{{ channel }}</sf-checkbox>
+            }
+          </div>
+        </sf-field>
       }
     </div>
   `,
   styles: [
     `
+      :host {
+        display: block;
+      }
       .options {
         display: flex;
         flex-direction: column;
-        gap: var(--sf-2);
+        gap: var(--sf-space-3);
       }
-      .options__group {
+      .options__row {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+        gap: var(--sf-space-3);
+      }
+      .options__channels {
         display: flex;
         flex-wrap: wrap;
-        gap: var(--sf-3);
-        margin: 0;
-        padding: 0;
-        border: none;
-      }
-      .options__legend {
-        width: 100%;
-        padding: 0;
-        font-size: var(--sf-text-xs);
-        font-weight: 600;
-        color: var(--sf-slate);
-      }
-      .options__field {
-        display: flex;
-        flex-direction: column;
-        gap: var(--sf-1);
-      }
-      .options__choice {
-        display: inline-flex;
-        align-items: center;
-        gap: var(--sf-1);
-        font-size: var(--sf-text-sm);
-      }
-      .options__select {
-        padding: var(--sf-1) var(--sf-2);
-        border: 1px solid var(--sf-line);
-        border-radius: var(--sf-radius-md);
-        background: var(--sf-surface);
-        color: var(--sf-ink);
-        font-size: var(--sf-text-sm);
-      }
-      .options__fixed {
-        font-size: var(--sf-text-sm);
-        color: var(--sf-ink);
+        gap: var(--sf-space-2) var(--sf-space-4);
       }
       .options__note {
-        font-size: var(--sf-text-xs);
-        color: var(--sf-slate);
+        margin: 0;
+        color: var(--sf-text-muted);
+        font-size: var(--sf-fs-12);
+        line-height: var(--sf-lh-12);
       }
     `,
   ],
@@ -118,20 +84,30 @@ type GenerationTargetView = components['schemas']['GenerationTargetView'];
 export class GenerationOptionsComponent {
   private readonly generation = inject(GenerationService);
   private readonly channelsApi = inject(ChannelsService);
+  private readonly transloco = inject(TranslocoService);
 
   readonly projectKey = input.required<string>();
   readonly showMode = input(true);
   /** Whether any target may be chosen (M28: `FULL_BUILD`); otherwise the build goes to the default target, shown. */
   readonly anyTarget = input(true);
-  /** Distinguishes the radio groups when two option blocks are on one page. */
-  readonly name = input('generation');
   readonly mode = model<'FULL' | 'INCREMENTAL'>('FULL');
   readonly targetId = model<number | null>(null);
   readonly channels = model<string[]>([]);
 
   protected readonly targets = signal<GenerationTargetView[]>([]);
   protected readonly channelOptions = signal<string[]>([]);
-  protected readonly targetValue = computed(() => (this.targetId() == null ? '' : String(this.targetId())));
+  protected readonly modeOptions = computed<SfSegmentedOption<'FULL' | 'INCREMENTAL'>[]>(() => [
+    { value: 'FULL', label: this.transloco.translate('release.generationOptions.full') },
+    { value: 'INCREMENTAL', label: this.transloco.translate('release.generationOptions.incremental') },
+  ]);
+  /** "Default target" first (no target id: the server's default output), then the project's targets. */
+  protected readonly targetOptions = computed<SfSelectOption<number | null>[]>(() => [
+    { value: null, label: this.transloco.translate('release.generationOptions.defaultTarget') },
+    ...this.targets().map((target) => ({
+      value: target.id ?? null,
+      label: target.name || this.transloco.translate('release.generationOptions.untitled') || '',
+    })),
+  ]);
 
   constructor() {
     effect(() => {
@@ -145,23 +121,21 @@ export class GenerationOptionsComponent {
     return chosen.length === 0 || chosen.includes(channel);
   }
 
-  protected toggleChannel(channel: string, event: Event): void {
-    const checked = (event.target as HTMLInputElement).checked;
+  /** The last ticked channel can't be unticked: no channel at all isn't a build (an empty list means "every channel"). */
+  protected isOnlyChannel(channel: string): boolean {
+    const chosen = this.channels().length === 0 ? this.channelOptions() : this.channels();
+    return chosen.length === 1 && chosen[0] === channel;
+  }
+
+  protected toggleChannel(channel: string, checked: boolean): void {
     const all = this.channelOptions();
     const current = this.channels().length === 0 ? all : this.channels();
     if (!checked && current.length <= 1) {
-      // No channel at all isn't a build; an empty list would even mean "every channel".
-      (event.target as HTMLInputElement).checked = true;
       return;
     }
     const next = checked ? [...new Set([...current, channel])] : current.filter((c) => c !== channel);
     // Every channel ticked is "all channels" — including ones enabled later.
     this.channels.set(all.every((c) => next.includes(c)) ? [] : all.filter((c) => next.includes(c)));
-  }
-
-  protected onTarget(event: Event): void {
-    const value = (event.target as HTMLSelectElement).value;
-    this.targetId.set(value ? Number(value) : null);
   }
 
   private load(projectKey: string): void {

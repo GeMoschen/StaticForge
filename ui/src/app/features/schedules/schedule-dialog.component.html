@@ -59,7 +59,9 @@
           <sf-input monospace [spellcheck]="false" [invalid]="!!previewError()" [value]="advancedCron()" (valueChange)="advancedCron.set($event)" />
         </sf-field>
       }
-      <p class="rd__note">{{ 'release.schedule.zone' | transloco: { zone: zoneText() } }}</p>
+      <sf-field [label]="'release.schedule.zone' | transloco" [hint]="zoneAbbreviation() || undefined">
+        <sf-combobox [options]="zoneOptions()" [value]="zone()" (valueChange)="setZone($event)" />
+      </sf-field>
       @if (previewError(); as message) {
         <p class="sd__error" role="alert">{{ message }}</p>
       } @else if (previewText().length > 0) {
@@ -75,10 +77,14 @@
         <sf-spinner [label]="'release.schedule.computing' | transloco" />
       }
     } @else {
-      <sf-field [label]="'release.schedule.dateTime' | transloco" required>
-        <sf-date-input mode="datetime" [value]="whenLocal()" (valueChange)="setWhen($event)" />
-      </sf-field>
-      <p class="rd__note">{{ 'release.schedule.zone' | transloco: { zone: zoneText() } }}</p>
+      <div class="rd__row">
+        <sf-field [label]="'release.schedule.dateTime' | transloco" required>
+          <sf-date-input mode="datetime" [value]="whenLocal()" (valueChange)="setWhen($event)" />
+        </sf-field>
+        <sf-field [label]="'release.schedule.zone' | transloco" [hint]="zoneAbbreviation() || undefined">
+          <sf-combobox [options]="zoneOptions()" [value]="zone()" (valueChange)="setZone($event)" />
+        </sf-field>
+      </div>
       @if (inPast()) {
         <p class="sd__error" role="alert">{{ 'release.schedule.reason.past' | transloco }}</p>
       }
@@ -102,7 +108,7 @@
             [projectKey]="projectKey()"
             [showMode]="false"
             [anyTarget]="permissions.canFullBuild()"
-            name="then"
+           
             [(targetId)]="targetId"
             [(channels)]="channels"
           />
@@ -112,7 +118,7 @@
   } @else {
     <section class="rd__part" aria-labelledby="sd-build">
       <h3 class="rd__heading" id="sd-build">{{ 'release.schedule.build' | transloco }}</h3>
-      <sf-generation-options [projectKey]="projectKey()" name="build" [(mode)]="mode" [(targetId)]="targetId" [(channels)]="channels" />
+      <sf-generation-options [projectKey]="projectKey()" [(mode)]="mode" [(targetId)]="targetId" [(channels)]="channels" />
     </section>
   }
 

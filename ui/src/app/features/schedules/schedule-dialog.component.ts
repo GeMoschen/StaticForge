@@ -18,6 +18,7 @@ import { problemOf } from '../../core/api/problem.util';
 import { ProjectPermissionsStore } from '../../core/project/project-permissions.store';
 import { ToastService } from '../../core/ui/toast.service';
 import { SfDialogComponent, SfDialogFooterDirective } from '../../shared/components/dialog/sf-dialog.component';
+import { SfComboboxComponent, type SfComboboxOption } from '../../shared/components/forms/sf-combobox.component';
 import { SfCheckboxComponent } from '../../shared/components/forms/sf-checkbox.component';
 import { SfDateInputComponent } from '../../shared/components/forms/sf-date-input.component';
 import { SfInputComponent } from '../../shared/components/forms/sf-input.component';
@@ -52,7 +53,7 @@ import {
   latenessFromIso,
   scheduleRequest,
 } from './schedule.util';
-import { formatInstant, utcToZoned, viewerZone, zoneLabel, zonedToUtc } from './zoned-time.util';
+import { formatInstant, utcToZoned, viewerZone, zoneAbbreviation, zoneIds, zonedToUtc } from './zoned-time.util';
 
 type ScheduleView = components['schemas']['ScheduleView'];
 
@@ -72,8 +73,8 @@ interface GenerationParams extends ThenGenerate {
  * The schedule dialog (M27.6.5, restyled in M35.23), opened from an editor's release actions, the Changes view and the
  * Schedules page: scheduled release/unpublish of the given items, one-off and recurring generation. The title always
  * says what is scheduled ("Schedule release", "Schedule unpublish", …) and, when several kinds are allowed, a segmented
- * switch changes it. Times are taken and shown in the viewer's zone and sent as UTC instants; a recurring schedule
- * keeps the cron and the creator's zone, and its next runs come from the server so cron semantics (DST included) live
+ * switch changes it. Times are taken in a chosen time zone (the viewer's by default) and sent as UTC instants; a recurring schedule
+ * keeps the cron and its zone (`zoneId`), and its next runs come from the server so cron semantics (DST included) live
  * in one place.
  */
 @Component({
@@ -85,6 +86,7 @@ interface GenerationParams extends ThenGenerate {
     ReleasePlanComponent,
     SfButtonComponent,
     SfCheckboxComponent,
+    SfComboboxComponent,
     SfDateInputComponent,
     SfDialogComponent,
     SfDialogFooterDirective,
@@ -197,7 +199,12 @@ export class ScheduleDialogComponent implements OnDestroy {
   protected readonly whenLocal = computed(() => (this.date() && this.time() ? `${this.date()}T${this.time()}` : null));
   /** The item list's own words: "Nothing to release." / "Nothing to unpublish." */
   protected readonly nothingKey = computed(() => (this.type() === 'RELEASE' ? 'release.schedule.nothingRelease' : 'release.schedule.nothingUnpublish'));
-  protected readonly zoneText = computed(() => zoneLabel(this.zone(), new Date(this.runAt() ?? Date.now())));
+  /** The zone's abbreviation at the chosen time ("CET"), shown under the zone field. */
+  protected readonly zoneAbbreviation = computed(() => zoneAbbreviation(this.zone(), new Date(this.runAt() ?? Date.now())));
+  /** Every zone the platform knows, plus the one in use (a stored zone the platform no longer lists). */
+  protected readonly zoneOptions = computed<SfComboboxOption<string>[]>(() =>
+    zoneIds(this.zone(), viewerZone()).map((zone) => ({ value: zone, label: zone })),
+  );
   protected readonly items = computed(() => itemsOf(this.selection()));
   protected readonly cron = computed(() =>
     this.cronMode() === 'preset'
@@ -291,6 +298,13 @@ export class ScheduleDialogComponent implements OnDestroy {
     const [date = '', time = ''] = (value ?? '').split('T');
     this.date.set(date);
     this.time.set(time);
+  }
+
+  /** The zone combobox's value; an emptied box keeps the zone it had (a schedule always has one). */
+  protected setZone(value: string | string[] | null): void {
+    if (typeof value === 'string') {
+      this.zone.set(value);
+    }
   }
 
   protected setType(type: ScheduleType | null): void {

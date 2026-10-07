@@ -79,7 +79,8 @@ describe('ScheduleDialogComponent', () => {
     form.date.set('2026-10-25');
     form.time.set('03:30');
     fixture.detectChanges();
-    expect(page().textContent).toContain('Europe/Berlin (CET)');
+    expect((page().querySelector('sf-combobox input') as HTMLInputElement).value).toBe('Europe/Berlin');
+    expect(page().textContent).toContain('CET');
 
     vi.advanceTimersByTime(300);
     http.expectOne(`${BASE}/releases/plan`).flush({ items: [], dependencies: [], incomplete: [], warnings: [] });
@@ -96,6 +97,28 @@ describe('ScheduleDialogComponent', () => {
       params: { items: [{ assetUuid: 'page-1', locale: 'en' }], includeDependencies: [] },
     });
     request.flush({ id: 5, type: 'RELEASE', runAt: '2026-10-25T02:30:00Z', status: 'PENDING' } satisfies ScheduleView);
+  });
+
+  it('lets the user pick the time zone in the combobox and sends the time in that zone', () => {
+    open(['GENERATION']);
+    const input = page().querySelector('sf-combobox input') as HTMLInputElement;
+    input.focus();
+    input.value = 'Asia/Tokyo';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    fixture.detectChanges();
+    fixture.detectChanges();
+    const option = screen.getByRole('option', { name: 'Asia/Tokyo' });
+    option.click();
+    const form = fixture.componentInstance as unknown as Form;
+    form.date.set('2026-10-01');
+    form.time.set('09:00');
+    fixture.detectChanges();
+    expect(input.value).toBe('Asia/Tokyo');
+    expect(page().textContent).toContain('GMT+9');
+    scheduleButton().click();
+    const request = http.expectOne((r) => r.method === 'POST' && r.url === `${BASE}/schedules`);
+    expect(request.request.body).toMatchObject({ type: 'GENERATION', runAt: '2026-10-01T00:00:00.000Z' });
+    request.flush({ id: 1, type: 'GENERATION', status: 'PENDING' } satisfies ScheduleView);
   });
 
   it('refuses a time in the past before asking the server', () => {
@@ -143,7 +166,7 @@ describe('ScheduleDialogComponent', () => {
       params: { mode: 'INCREMENTAL', targetId: null, channels: [] } as unknown as ScheduleView['params'],
       version: 4,
     });
-    expect(page().textContent).toContain('America/New_York');
+    expect((page().querySelector('sf-combobox input') as HTMLInputElement).value).toBe('America/New_York');
     vi.advanceTimersByTime(500);
     http
       .expectOne(`${BASE}/schedules/preview-times`)
@@ -283,8 +306,8 @@ describe('ScheduleDialogComponent "then generate" for an editor (M28.3.3)', () =
     const el = open(['RELEASE', 'SCHEDULE_RELEASE', 'INCREMENTAL_BUILD']);
     expect(el.textContent).toContain('Generate right after');
     tickThenGenerate(el);
-    expect(el.querySelector('.options__select')).toBeNull();
-    expect(el.querySelector('.options__fixed')?.textContent?.trim()).toBe('Default target');
+    expect(el.querySelector('sf-generation-options sf-select')).toBeNull();
+    expect(el.querySelector('sf-generation-options')?.textContent).toContain('The build goes to the default target.');
 
     vi.advanceTimersByTime(300);
     http.expectOne(`${BASE}/releases/plan`).flush({ items: [], dependencies: [], incomplete: [], warnings: [] });
@@ -300,8 +323,8 @@ describe('ScheduleDialogComponent "then generate" for an editor (M28.3.3)', () =
   it('lets a holder of FULL_BUILD choose the target', () => {
     const el = open(['RELEASE', 'SCHEDULE_RELEASE', 'INCREMENTAL_BUILD', 'FULL_BUILD']);
     tickThenGenerate(el);
-    const options = Array.from(el.querySelectorAll('.options__select option')).map((o) => o.textContent?.trim());
+    const options = Array.from(el.querySelectorAll('sf-generation-options sf-select option')).map((o) => o.textContent?.trim());
     expect(options).toEqual(['Default target', 'Live', 'Staging']);
-    expect(el.querySelector('.options__fixed')).toBeNull();
+    expect(el.querySelector('sf-generation-options')?.textContent).not.toContain('default target.');
   });
 });

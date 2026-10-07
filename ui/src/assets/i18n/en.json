@@ -7237,7 +7237,7 @@
       "drift": "Draft changed since scheduled",
       "when": "When",
       "dateTime": "Date and time",
-      "zone": "Time zone: {zone}",
+      "zone": "Time zone",
       "cronMode": "How to repeat",
       "cronPreset": "Repeat",
       "cronAdvanced": "Advanced (cron)",
@@ -7301,6 +7301,17 @@
         "rescheduled": "{kind} rescheduled.",
         "rescheduledAt": "{kind} rescheduled for {when}."
       }
+    },
+    "generationOptions": {
+      "target": "Target",
+      "mode": "Mode",
+      "full": "Full",
+      "incremental": "Incremental",
+      "defaultTarget": "Default target",
+      "untitled": "Untitled",
+      "noTargets": "No generation target yet — the build uses the project's default output.",
+      "defaultOnly": "The build goes to the default target.",
+      "channels": "Channels"
     }
   }
 }
