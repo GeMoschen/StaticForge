@@ -8,6 +8,7 @@ import { provideRouter } from '@angular/router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { components } from '../../core/api/generated/schema.d.ts';
 import { DeveloperModeService } from '../../core/frame/developer-mode.service';
+import { LocalesStore } from '../../core/project/locales.store';
 import { ReleaseDialogComponent } from './release-dialog.component';
 import { ReleaseEventsStore } from './release-events.store';
 import type { ReleaseChoice } from './release-choice.util';
@@ -265,5 +266,88 @@ describe('ReleaseDialogComponent', () => {
       'Cancel',
       'publishRelease',
     ]);
+  });
+
+  describe('a multi-item release from a list', () => {
+    // Rows as the Changes view builds them: one choice per (asset, language), media without a language.
+    const ROWS: ReleaseChoice[] = [
+      { assetUuid: 'page-1', locale: 'de', label: 'Spring · DE — Changed', status: 'CHANGED', checked: true, assetType: 'PAGE', assetName: 'Spring' },
+      { assetUuid: 'page-1', locale: 'en', label: 'Spring · EN — New', status: 'NEW', checked: true, assetType: 'PAGE', assetName: 'Spring' },
+      { assetUuid: 'page-2', locale: 'de', label: 'Munich · DE — Changed', status: 'CHANGED', checked: true, assetType: 'PAGE', assetName: 'Munich' },
+      { assetUuid: 'media-1', locale: '', label: 'hero.jpg — New', status: 'NEW', checked: true, assetType: 'MEDIA', assetName: 'hero.jpg' },
+      { assetUuid: 'media-2', locale: '', label: 'logo.png — New', status: 'NEW', checked: true, assetType: 'MEDIA', assetName: 'logo.png' },
+    ];
+
+    function openList(choices: ReleaseChoice[]): void {
+      TestBed.inject(LocalesStore).set('proj', {
+        defaultLocale: 'de',
+        locales: [
+          { code: 'de', label: 'Deutsch' },
+          { code: 'en', label: 'English' },
+        ],
+      } as never);
+      fixture = TestBed.createComponent(ReleaseDialogComponent);
+      fixture.componentRef.setInput('projectKey', 'proj');
+      fixture.componentRef.setInput('choices', choices);
+      fixture.detectChanges();
+      fixture.detectChanges();
+      vi.advanceTimersByTime(300);
+    }
+
+    const boxes = () => Array.from(page().querySelectorAll('sf-checkbox')).map((box) => box.textContent?.replace(/\s+/g, ' ').trim());
+
+    it('titles the dialog with the number of distinct items and offers one checkbox per language', () => {
+      openList(ROWS);
+      http.expectOne(PLAN_URL).flush(PLAN);
+      fixture.detectChanges();
+
+      expect(page().querySelector('h2')?.textContent?.trim()).toBe('Release “4 items”');
+      expect(Array.from(page().querySelectorAll('h3')).map((h) => h.textContent?.trim())).toEqual(['Languages', 'Also release (2)']);
+      expect(boxes().slice(0, 4)).toEqual([
+        'All changed languages',
+        'Deutsch (DE) — Changed Default',
+        'English (EN) — New',
+        'Not language-specific (2 items)',
+      ]);
+    });
+
+    it('applies a ticked language to every selected item in it and drops them from the request', () => {
+      openList(ROWS);
+      http.expectOne(PLAN_URL).flush(PLAN);
+      fixture.detectChanges();
+
+      const [, de, , shared] = Array.from(page().querySelectorAll('sf-checkbox input')) as HTMLInputElement[];
+      de.click();
+      fixture.detectChanges();
+      vi.advanceTimersByTime(300);
+      const request = http.expectOne(PLAN_URL);
+      expect(request.request.body.items).toEqual([
+        { assetUuid: 'page-1', locale: 'en' },
+        { assetUuid: 'media-1' },
+        { assetUuid: 'media-2' },
+      ]);
+      request.flush(PLAN);
+
+      // One checkbox toggles all the items without a language.
+      shared.click();
+      fixture.detectChanges();
+      vi.advanceTimersByTime(300);
+      const next = http.expectOne(PLAN_URL);
+      expect(next.request.body.items).toEqual([{ assetUuid: 'page-1', locale: 'en' }]);
+      next.flush(PLAN);
+    });
+
+    it('names a single item in the title and shows only the not-language-specific checkbox for media', () => {
+      openList([ROWS[3]]);
+      http.expectOne(PLAN_URL).flush(PLAN);
+      expect(page().querySelector('h2')?.textContent?.trim()).toBe('Release “hero.jpg”');
+
+      fixture.destroy();
+      openList([ROWS[3], ROWS[4]]);
+      http.expectOne(PLAN_URL).flush(PLAN);
+      fixture.detectChanges();
+      expect(Array.from(page().querySelectorAll('h3')).map((h) => h.textContent?.trim())[0]).toBe('Items');
+      expect(boxes()[0]).toBe('Not language-specific (2 items)');
+    });
   });
 });

@@ -122,6 +122,11 @@ export function sortChanges(rows: readonly SampleChange[], sort: ChangeSort): Sa
   });
 }
 
+/** Pages and records are written per language; media, globals and navigation links are not (release key `""`). */
+export function isLanguageSpecific(row: SampleChange): boolean {
+  return row.type === 'page' || row.type === 'record';
+}
+
 /** The release dialog's languages for a set of rows: every language, the changed ones choosable. */
 export function releaseLanguagesOf(rows: readonly SampleChange[], statusLabel: (row: SampleChange | null) => string): ReleaseLanguage[] {
   return CHANGE_LANGS.map((lang) => {
@@ -189,7 +194,7 @@ export class SampleChangesAreaComponent {
   protected readonly search = signal('');
   protected readonly diffId = signal<string | null>(null);
   protected readonly selected = signal<readonly string[]>([]);
-  protected readonly release = signal<{ readonly subject: string; readonly languages: readonly ReleaseLanguage[] } | null>(null);
+  protected readonly release = signal<{ readonly subject: string; readonly languages: readonly ReleaseLanguage[]; readonly shared: number } | null>(null);
   protected readonly schedule = signal<{ readonly subject: string } | null>(null);
 
   protected readonly rows = computed(() => {
@@ -331,10 +336,13 @@ export class SampleChangesAreaComponent {
   protected openRelease(rows: readonly SampleChange[]): void {
     const assets = new Set(rows.map((r) => r.asset));
     // One asset: all its languages (unchanged ones shown as released); several: the languages of the selection.
-    const scope = assets.size === 1 ? CHANGES.filter((c) => c.asset === rows[0].asset) : rows;
+    const scope = (assets.size === 1 ? CHANGES.filter((c) => c.asset === rows[0].asset) : rows).filter(isLanguageSpecific);
+    // Media, globals and navigation links have no language: they are one checkbox, not a row per language.
+    const shared = new Set(rows.filter((r) => !isLanguageSpecific(r)).map((r) => r.asset)).size;
     this.release.set({
+      shared,
       subject: assets.size === 1 ? rows[0].name : this.t('itemCount', { count: assets.size }),
-      languages: releaseLanguagesOf(scope, (row) => (row ? this.t(`statuses.${row.status}`) : this.t('statuses.released'))),
+      languages: scope.length === 0 ? [] : releaseLanguagesOf(scope, (row) => (row ? this.t(`statuses.${row.status}`) : this.t('statuses.released'))),
     });
   }
 

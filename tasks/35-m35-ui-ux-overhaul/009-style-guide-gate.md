@@ -723,6 +723,12 @@ Open `/styleguide/sample?area=pages|content|navigation|media` and right-click ro
 179. **Build status / banner:** icon, spinner and text vertically centred (sample top bar).
 180. **Known gaps of the sample:** Rename... / Move to... in navigation show a "Not part of the sample" notice (no dialogs); folder delete, favorites in navigation and Paste after Copy are announce-only; the keyboard sheet does not list the new media keys.
 
+## Review round 16 (2026-10-07): release dialog for a multi-item selection (pending sign-off)
+
+Follow-up of M35.23: the app's release dialog now looks like the sample's. Open `/styleguide/sample?area=changes&sel=16&release=1`.
+
+181. **Items without a language in the release dialog:** items that are not language-specific (media, globals, navigation links: release key `""`) appear as **one** extra checkbox below the language checkboxes, *Not language-specific (3 items)*, ticked by default and toggling all of them; *All changed languages* governs the languages only. A selection of such items alone shows the heading *Items* with that one checkbox. Pending sign-off.
+
 ## Notes / hazards
 
 - Sign-off: **signed off by the user on 2026-10-01** — gallery https://claude.ai/artifact/33yY26sd6H17UTP9sPPJid

@@ -137,6 +137,27 @@ describe('sample Changes area', () => {
     fireEvent.click(within(dialog).getByRole('checkbox', { name: "I've read the warnings" }));
     await waitFor(() => expect(release).not.toHaveAttribute('aria-disabled'));
   });
+
+  it('release=1 with sel=16: the items without a language are one extra checkbox, ticked and toggling all of them', async () => {
+    await render(SampleChangesAreaComponent, { providers: providers({ sel: '16', release: '1' }) });
+
+    const dialog = await screen.findByRole('dialog', { name: /^Release “\d+ items”$/ });
+    const shared = within(dialog).getByRole('checkbox', { name: 'Not language-specific (3 items)' });
+    expect(shared).toBeChecked();
+    // The language checkboxes govern the languages only.
+    fireEvent.click(within(dialog).getByRole('checkbox', { name: 'All changed languages' }));
+    expect(within(dialog).getByRole('checkbox', { name: /Deutsch \(DE\)/ })).not.toBeChecked();
+    expect(shared).toBeChecked();
+    const release = within(dialog).getByRole('button', { name: 'Release' });
+    expect(release).toHaveAttribute('aria-disabled', 'true');
+    // Unticking it as well leaves nothing to release.
+    fireEvent.click(shared);
+    await waitFor(() => expect(shared).not.toBeChecked());
+    fireEvent.click(within(dialog).getByRole('checkbox', { name: /Deutsch \(DE\)/ }));
+    fireEvent.click(within(dialog).getByRole('checkbox', { name: /English \(EN\)/ }));
+    fireEvent.click(shared);
+    await waitFor(() => expect(shared).toBeChecked());
+  });
 });
 
 describe('sample Schedules area', () => {

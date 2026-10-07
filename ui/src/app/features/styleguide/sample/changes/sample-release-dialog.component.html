@@ -2,10 +2,12 @@
   <p class="rd__intro">{{ 'styleguide.sample.changes.release.intro' | transloco }}</p>
 
   <section class="rd__part" aria-labelledby="rd-langs">
-    <h3 class="rd__heading" id="rd-langs">{{ 'styleguide.sample.changes.release.languages' | transloco }}</h3>
-    <sf-checkbox class="rd__all" [value]="allTicked()" [indeterminate]="someTicked()" (valueChange)="tickAll($event)">{{
-      'styleguide.sample.changes.release.allChanged' | transloco
-    }}</sf-checkbox>
+    <h3 class="rd__heading" id="rd-langs">{{ (languages().length ? 'styleguide.sample.changes.release.languages' : 'styleguide.sample.changes.release.items') | transloco }}</h3>
+    @if (languages().length) {
+      <sf-checkbox class="rd__all" [value]="allTicked()" [indeterminate]="someTicked()" (valueChange)="tickAll($event)">{{
+        'styleguide.sample.changes.release.allChanged' | transloco
+      }}</sf-checkbox>
+    }
     <ul class="rd__list rd__list--indent">
       @for (l of languages(); track l.lang) {
         <li>
@@ -18,6 +20,11 @@
         </li>
       }
     </ul>
+    @if (sharedCount() > 0) {
+      <sf-checkbox class="rd__shared" [value]="sharedTicked()" (valueChange)="sharedTicked.set($event)">{{
+        'styleguide.sample.changes.release.notLanguageSpecific' | transloco: { count: sharedCount() }
+      }}</sf-checkbox>
+    }
   </section>
 
   <section class="rd__part" aria-labelledby="rd-deps">

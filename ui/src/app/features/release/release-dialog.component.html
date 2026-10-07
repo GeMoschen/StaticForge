@@ -10,29 +10,56 @@
 
     <section class="rd__part" aria-labelledby="rd-choices">
       <h3 class="rd__heading" id="rd-choices">{{ legend() }}</h3>
-      @if (multiple()) {
-        <sf-checkbox class="rd__all" [value]="allTicked()" [indeterminate]="someTicked()" (valueChange)="tickAll($event)">{{
-          (mode() === 'release' ? 'release.dialog.allChanged' : 'release.dialog.selectAll') | transloco
-        }}</sf-checkbox>
-      }
-      <ul class="rd__list" [class.rd__list--indent]="multiple() && !manyAssets()">
-        @for (choice of selection(); track $index; let i = $index) {
-          <li>
-            @if (multiple()) {
-              <sf-checkbox [value]="choice.checked" (valueChange)="toggle(i, $event)">
-                {{ choice.label }}
-                @if (choice.locale && choice.locale === defaultLocale()) {
-                  <sf-badge class="rd__badge" [label]="'release.dialog.default' | transloco" />
-                }
-              </sf-checkbox>
-            } @else {
-              <p class="rd__single">{{ choice.label }}</p>
-            }
-          </li>
-        } @empty {
-          <li class="rd__note">{{ 'release.dialog.nothing' | transloco: { action: actionLabel().toLowerCase() } }}</li>
+      @if (grouped()) {
+        @if (languageGroups().length > 1) {
+          <sf-checkbox class="rd__all" [value]="allLanguagesTicked()" [indeterminate]="someLanguagesTicked()" (valueChange)="tickAllLanguages($event)">{{
+            'release.dialog.allChanged' | transloco
+          }}</sf-checkbox>
         }
-      </ul>
+        @if (languageGroups().length > 0) {
+          <ul class="rd__list" [class.rd__list--indent]="languageGroups().length > 1">
+            @for (group of languageGroups(); track group.locale) {
+              <li>
+                <sf-checkbox [value]="group.checked" [indeterminate]="group.indeterminate" (valueChange)="toggleLocale(group.locale, $event)">
+                  {{ group.label }}
+                  @if (group.locale === defaultLocale()) {
+                    <sf-badge class="rd__badge" [label]="'release.dialog.default' | transloco" />
+                  }
+                </sf-checkbox>
+              </li>
+            }
+          </ul>
+        }
+        @if (sharedGroup(); as shared) {
+          <sf-checkbox class="rd__shared" [value]="shared.checked" [indeterminate]="shared.indeterminate" (valueChange)="toggleLocale('', $event)">{{
+            shared.label
+          }}</sf-checkbox>
+        }
+      } @else {
+        @if (multiple()) {
+          <sf-checkbox class="rd__all" [value]="allTicked()" [indeterminate]="someTicked()" (valueChange)="tickAll($event)">{{
+            (mode() === 'release' ? 'release.dialog.allChanged' : 'release.dialog.selectAll') | transloco
+          }}</sf-checkbox>
+        }
+        <ul class="rd__list" [class.rd__list--indent]="multiple() && !manyAssets()">
+          @for (choice of selection(); track $index; let i = $index) {
+            <li>
+              @if (multiple()) {
+                <sf-checkbox [value]="choice.checked" (valueChange)="toggle(i, $event)">
+                  {{ choice.label }}
+                  @if (choice.locale && choice.locale === defaultLocale()) {
+                    <sf-badge class="rd__badge" [label]="'release.dialog.default' | transloco" />
+                  }
+                </sf-checkbox>
+              } @else {
+                <p class="rd__single">{{ choice.label }}</p>
+              }
+            </li>
+          } @empty {
+            <li class="rd__note">{{ 'release.dialog.nothing' | transloco: { action: actionLabel().toLowerCase() } }}</li>
+          }
+        </ul>
+      }
     </section>
 
     @if (mode() === 'release') {

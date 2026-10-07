@@ -97,7 +97,7 @@
 </ng-template>
 
 @if (release(); as r) {
-  <sf-sample-release-dialog [subject]="r.subject" [languages]="r.languages" (closed)="release.set(null)" />
+  <sf-sample-release-dialog [subject]="r.subject" [languages]="r.languages" [sharedCount]="r.shared" (closed)="release.set(null)" />
 }
 @if (schedule(); as s) {
   <sf-sample-schedule-dialog kind="release" [subject]="s.subject" (closed)="schedule.set(null)" />

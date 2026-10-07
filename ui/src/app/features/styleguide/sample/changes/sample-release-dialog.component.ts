@@ -46,6 +46,8 @@ export class SampleReleaseDialogComponent {
   /** What is released: an item's name, or "2 items". */
   readonly subject = input.required<string>();
   readonly languages = input.required<readonly ReleaseLanguage[]>();
+  /** How many selected items are not language-specific (media, globals, navigation links): one checkbox for all. */
+  readonly sharedCount = input(0);
 
   /** Cancelled or released; the host removes the dialog. */
   readonly closed = output<void>();
@@ -66,6 +68,10 @@ export class SampleReleaseDialogComponent {
     return changed.length > 0 && changed.every((lang) => this.ticked().has(lang));
   });
   protected readonly someTicked = computed(() => !this.allTicked() && this.ticked().size > 0);
+  /** The checkbox of the items without a language: ticked to start with, toggling all of them. */
+  protected readonly sharedTicked = signal(true);
+  /** Something is ticked: a language, or the items without a language. */
+  private readonly anyTicked = computed(() => this.ticked().size > 0 || (this.sharedCount() > 0 && this.sharedTicked()));
 
   protected readonly errors = computed(() => this.relevant(RELEASE_ERRORS));
   protected readonly warnings = computed(() => this.relevant(RELEASE_WARNINGS));
@@ -74,7 +80,7 @@ export class SampleReleaseDialogComponent {
 
   /** Why Release is disabled, or null when it may go. */
   protected readonly blocked = computed<string | null>(() => {
-    if (this.ticked().size === 0) {
+    if (!this.anyTicked()) {
       return this.t('reasonNothing');
     }
     if (this.errors().length > 0) {
@@ -123,6 +129,6 @@ export class SampleReleaseDialogComponent {
   /** Checks of the ticked languages (and those of no language). */
   private relevant(checks: readonly ReleaseCheck[]): ReleaseCheck[] {
     const ticked = this.ticked();
-    return ticked.size === 0 ? [] : checks.filter((c) => c.lang === null || ticked.has(c.lang));
+    return this.anyTicked() ? checks.filter((c) => c.lang === null || ticked.has(c.lang)) : [];
   }
 }
