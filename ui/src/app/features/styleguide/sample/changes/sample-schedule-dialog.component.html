@@ -67,6 +67,33 @@
     }
   </section>
 
+  <details class="sd__advanced">
+    <summary class="sd__advanced-summary">{{ 'styleguide.sample.changes.schedule.advanced.title' | transloco }}</summary>
+    <div class="sd__advanced-body">
+      @if (kind() === 'release') {
+        <sf-field [label]="'styleguide.sample.changes.schedule.advanced.version' | transloco">
+          <sf-radio-group [options]="pinOptions()" [value]="pin()" (valueChange)="pin.set($event ?? 'pinned')" />
+        </sf-field>
+      }
+      <sf-field [label]="'styleguide.sample.changes.schedule.advanced.missed' | transloco">
+        <sf-radio-group [options]="missedOptions()" [value]="missed()" (valueChange)="missed.set($event ?? 'runLate')" />
+      </sf-field>
+      @if (missed() === 'skip') {
+        <sf-field [label]="'styleguide.sample.changes.schedule.advanced.lateness' | transloco">
+          <sf-number-input [min]="1" [value]="lateness()" (valueChange)="setLateness($event)" />
+        </sf-field>
+      }
+      <sf-field [label]="'styleguide.sample.changes.schedule.advanced.comment' | transloco" optional>
+        <sf-textarea
+          [rows]="2"
+          [placeholder]="'styleguide.sample.changes.schedule.advanced.commentPlaceholder' | transloco"
+          [value]="comment()"
+          (valueChange)="comment.set($event)"
+        />
+      </sf-field>
+    </div>
+  </details>
+
   <ng-container sfDialogFooter>
     <sf-button variant="secondary" (click)="closed.emit()">{{ 'styleguide.sample.changes.cancel' | transloco }}</sf-button>
     <sf-button icon="schedule" [disabled]="!!blocked()" [disabledReason]="blocked()" (click)="schedule()">{{ title() }}</sf-button>

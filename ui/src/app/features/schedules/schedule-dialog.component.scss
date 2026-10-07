@@ -2,29 +2,11 @@
   display: contents;
 }
 
-// Parts under h3 headings, as in the release dialog (M35.23).
+// A compact stack of blocks (as the sample): fields carry their own label, no section headings.
 .sd__kind,
-.sd__pick,
-.rd__part,
-.rd__row,
-sf-release-plan,
-.sd__comment {
+.sd__block {
   display: block;
   margin-block: 0 var(--sf-space-4);
-}
-
-.rd__part {
-  display: flex;
-  flex-direction: column;
-  gap: var(--sf-space-2);
-}
-
-.rd__heading {
-  margin: 0;
-  color: var(--sf-text);
-  font-size: var(--sf-fs-14);
-  line-height: var(--sf-lh-14);
-  font-weight: var(--sf-weight-semibold);
 }
 
 .rd__note {
@@ -32,6 +14,14 @@ sf-release-plan,
   color: var(--sf-text-muted);
   font-size: var(--sf-fs-12);
   line-height: var(--sf-lh-12);
+}
+
+.sd__subject {
+  margin: 0;
+  color: var(--sf-text);
+  font-size: var(--sf-fs-14);
+  line-height: var(--sf-lh-14);
+  font-weight: var(--sf-weight-medium);
 }
 
 .rd__list {
@@ -47,7 +37,7 @@ sf-release-plan,
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
   gap: var(--sf-space-3);
-  margin: 0;
+  margin: 0 0 var(--sf-space-4);
 }
 
 .sd__item {
@@ -76,6 +66,25 @@ sf-release-plan,
   padding: var(--sf-space-3);
   border-radius: var(--sf-radius-md);
   background: var(--sf-surface-sunken);
+}
+
+.sd__advanced {
+  margin-block: 0 var(--sf-space-4);
+}
+
+.sd__advanced-summary {
+  cursor: pointer;
+  color: var(--sf-text-muted);
+  font-size: var(--sf-fs-13);
+  line-height: var(--sf-lh-13);
+  font-weight: var(--sf-weight-medium);
+}
+
+.sd__advanced-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sf-space-3);
+  margin-top: var(--sf-space-3);
 }
 
 .sd__preview-title {

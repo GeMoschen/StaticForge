@@ -13,6 +13,7 @@ import { ReleaseEventsStore } from '../release/release-events.store';
 import { type ReleaseChoice, type ReleaseMode, eligible } from '../release/release-choice.util';
 import type { ReleaseStatus } from '../release/release-status.util';
 import { ScheduleDialogComponent } from '../schedules/schedule-dialog.component';
+import type { ScheduleType } from '../schedules/schedule.util';
 import { ChangesDiffComponent } from './changes-diff.component';
 import { ChangesFiltersComponent } from './changes-filters.component';
 import { ChangesListComponent } from './changes-list.component';
@@ -81,7 +82,8 @@ export class ChangesComponent {
   );
 
   protected readonly dialog = signal<{ mode: ReleaseMode; choices: ReleaseChoice[] } | null>(null);
-  protected readonly scheduling = signal<ReleaseChoice[] | null>(null);
+  /** The schedule dialog's offer: the selection as releasable and as unpublishable items, and the kinds the viewer may create. */
+  protected readonly scheduling = signal<{ types: ScheduleType[]; choices: ReleaseChoice[]; unpublishChoices: ReleaseChoice[] } | null>(null);
 
   constructor() {
     // Alt+Shift+R releases the selected changes (M35.14).
@@ -133,6 +135,13 @@ export class ChangesComponent {
   }
 
   protected scheduleSelected(rows: readonly ChangeRowView[] = this.store.selectedRows()): void {
-    this.scheduling.set(this.choicesOf(rows));
+    const unpublishChoices = this.choicesOf(rows.filter((row) => eligible('unpublish', row.status)));
+    // Release and unpublish take the selection's items (unpublish only those that are online); generation takes none.
+    const types: ScheduleType[] = [
+      'RELEASE',
+      ...(unpublishChoices.length > 0 ? (['UNPUBLISH'] as const) : []),
+      ...(this.permissions.canScheduleGeneration() ? (['GENERATION', 'RECURRING_GENERATION'] as const) : []),
+    ];
+    this.scheduling.set({ types, choices: this.choicesOf(rows), unpublishChoices });
   }
 }

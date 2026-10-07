@@ -14,7 +14,7 @@ type ScheduleView = components['schemas']['ScheduleView'];
 
 const BASE = '/api/v1/projects/proj';
 const CHOICES: ReleaseChoice[] = [
-  { assetUuid: 'page-1', locale: 'en', label: 'English (EN) — Changed', status: 'CHANGED', checked: true },
+  { assetUuid: 'page-1', locale: 'en', label: 'Munich · EN — Changed', status: 'CHANGED', checked: true, assetName: 'Munich' },
 ];
 
 /** Writable view of the dialog's protected form signals. */
@@ -196,10 +196,10 @@ describe('ScheduleDialogComponent title and kind switch (M35.23)', () => {
   });
 
   const UNPUBLISH_CHOICES: ReleaseChoice[] = [
-    { assetUuid: 'page-1', locale: 'de', label: 'Deutsch (DE) — Published', status: 'PUBLISHED', checked: true },
+    { assetUuid: 'page-1', locale: 'de', label: 'Munich · DE — Published', status: 'PUBLISHED', checked: true, assetName: 'Munich' },
   ];
 
-  function open(types: string[], schedule: ScheduleView | null = null): void {
+  function open(types: string[], schedule: ScheduleView | null = null, choices: ReleaseChoice[] = CHOICES): void {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-09-26T10:00:00Z'));
     TestBed.configureTestingModule({
@@ -210,7 +210,7 @@ describe('ScheduleDialogComponent title and kind switch (M35.23)', () => {
     fixture = TestBed.createComponent(ScheduleDialogComponent);
     fixture.componentRef.setInput('projectKey', 'proj');
     fixture.componentRef.setInput('types', types);
-    fixture.componentRef.setInput('choices', CHOICES);
+    fixture.componentRef.setInput('choices', choices);
     fixture.componentRef.setInput('unpublishChoices', UNPUBLISH_CHOICES);
     fixture.componentRef.setInput('schedule', schedule);
     fixture.detectChanges();
@@ -224,15 +224,78 @@ describe('ScheduleDialogComponent title and kind switch (M35.23)', () => {
     open(['RELEASE', 'UNPUBLISH']);
     expect(document.body.querySelector('h2')?.textContent?.trim()).toBe('Schedule release');
     expect(screen.getByRole('radio', { name: 'Release' }).getAttribute('aria-checked')).toBe('true');
-    expect(screen.getByRole('checkbox', { name: 'English (EN) — Changed' })).toBeTruthy();
+    // A lone item is plain text, not a ticked checkbox.
+    expect(screen.getByText('Munich (EN)')).toBeTruthy();
+    expect(screen.queryByRole('checkbox')).toBeNull();
 
     (screen.getByRole('radio', { name: 'Unpublish' }) as HTMLElement).click();
     fixture.detectChanges();
     expect(document.body.querySelector('h2')?.textContent?.trim()).toBe('Schedule unpublish');
-    // The items follow the kind: the released languages are offered, not the changed ones.
-    expect(screen.getByRole('checkbox', { name: 'Deutsch (DE) — Published' })).toBeTruthy();
-    expect(screen.queryByRole('checkbox', { name: 'English (EN) — Changed' })).toBeNull();
+    // The items follow the kind: the online ones are offered, not the changed ones.
+    expect(screen.getByText('Munich (DE)')).toBeTruthy();
+    expect(screen.queryByText('Munich (EN)')).toBeNull();
     expect(screen.getByRole('button', { name: 'Schedule unpublish' })).toBeTruthy();
+  });
+
+  it('has no items for a generation: it picks target and mode, and a recurring one a repeat', () => {
+    open(['RELEASE', 'UNPUBLISH', 'GENERATION', 'RECURRING_GENERATION']);
+    expect(screen.getAllByRole('radio').map((radio) => radio.textContent?.trim())).toEqual(
+      expect.arrayContaining(['Release', 'Unpublish', 'Generation', 'Recurring generation']),
+    );
+    (screen.getByRole('radio', { name: 'Generation' }) as HTMLElement).click();
+    fixture.detectChanges();
+    fixture.detectChanges();
+    for (const request of http.match((r) => r.url.endsWith('/targets') || r.url.endsWith('/channels'))) {
+      request.flush([]);
+    }
+    expect(document.body.querySelector('h2')?.textContent?.trim()).toBe('Schedule generation');
+    expect(screen.queryByText('Items')).toBeNull();
+    expect(screen.getByText('Date and time')).toBeTruthy();
+  });
+
+  it('shows several languages of one asset as checkboxes and several assets as a count', () => {
+    const more: ReleaseChoice[] = [{ assetUuid: 'page-1', locale: 'de', label: 'Munich · DE — New', status: 'NEW', checked: true, assetName: 'Munich' }];
+    open(['RELEASE'], null, [...CHOICES, ...more]);
+    expect(screen.getByRole('checkbox', { name: 'Munich · EN — Changed' })).toBeTruthy();
+    expect(screen.getByRole('checkbox', { name: 'Munich · DE — New' })).toBeTruthy();
+  });
+
+  it('shows several assets as a count, not a checkbox each', () => {
+    open(['RELEASE'], null, [...CHOICES, { assetUuid: 'page-2', locale: 'en', label: 'Home · EN — New', status: 'NEW', checked: true, assetName: 'Home' }]);
+    expect(screen.getByText('2 items')).toBeTruthy();
+    expect(screen.queryByRole('checkbox')).toBeNull();
+  });
+
+  it('keeps version, missed-time policy and comment in collapsed "Advanced options", open when an edited schedule departs from the defaults', () => {
+    open(['RELEASE']);
+    const details = () => document.body.querySelector('details.sd__advanced') as HTMLDetailsElement;
+    expect(details().open).toBe(false);
+    expect(details().textContent).toContain('Which version');
+    expect(details().textContent).toContain('If the time is missed');
+    expect(details().textContent).toContain('Comment');
+    // No separate section headings any more.
+    expect(Array.from(document.body.querySelectorAll('h3')).map((h) => h.textContent?.trim())).not.toContain('When');
+  });
+
+  it('opens "Advanced options" for an edited schedule that departs from the defaults', () => {
+    open(['RELEASE'], {
+      id: 3,
+      type: 'RELEASE',
+      status: 'PENDING',
+      runAt: '2026-09-27T09:00:00Z',
+      pinPolicy: 'LATEST',
+      missedPolicy: 'RUN_LATE',
+      version: 1,
+    });
+    expect((document.body.querySelector('details.sd__advanced') as HTMLDetailsElement).open).toBe(true);
+  });
+
+  it('previews the next run in the chosen zone', () => {
+    open(['RELEASE']);
+    const preview = document.body.querySelector('.sd__preview') as HTMLElement;
+    expect(preview.querySelector('h3')?.textContent).toMatch(/^Next runs \(.+\)$/);
+    expect(preview.querySelectorAll('li')).toHaveLength(1);
+    expect(document.body.textContent).not.toContain('No unreleased dependencies.');
   });
 
   it('offers no switch when only one kind is allowed, and still names it', () => {
@@ -286,11 +349,8 @@ describe('ScheduleDialogComponent "then generate" for an editor (M28.3.3)', () =
     return document.body;
   }
 
-  /** Switches "Generate right after" on and answers the generation options' loads. */
-  function tickThenGenerate(el: HTMLElement): void {
-    const box = screen.getByRole('switch', { name: /Generate right after/ }) as HTMLInputElement;
-    box.click();
-    fixture.detectChanges();
+  /** "Then generate" starts on (as in the sample); answers the generation options' loads. */
+  function answerGenerationOptions(): void {
     fixture.detectChanges();
     http.expectOne(`${BASE}/targets`).flush(TARGETS);
     http.expectOne(`${BASE}/channels`).flush([]);
@@ -299,13 +359,24 @@ describe('ScheduleDialogComponent "then generate" for an editor (M28.3.3)', () =
 
   it('offers no "then generate" without INCREMENTAL_BUILD', () => {
     const el = open(['RELEASE', 'SCHEDULE_RELEASE']);
-    expect(el.textContent).not.toContain('Generate right after');
+    expect(el.textContent).not.toContain('Then generate');
+    expect(el.querySelector('sf-generation-options')).toBeNull();
+  });
+
+  it('starts "Then generate" on, and lets it be switched off', () => {
+    const el = open(['RELEASE', 'SCHEDULE_RELEASE', 'INCREMENTAL_BUILD']);
+    answerGenerationOptions();
+    const box = screen.getByRole('switch', { name: 'Then generate (incremental build of the default target)' }) as HTMLInputElement;
+    expect(box.getAttribute('aria-checked') ?? String(box.checked)).toBe('true');
+    box.click();
+    fixture.detectChanges();
+    expect(el.querySelector('sf-generation-options')).toBeNull();
   });
 
   it('builds only the default target with INCREMENTAL_BUILD but no FULL_BUILD, and sends no target', () => {
     const el = open(['RELEASE', 'SCHEDULE_RELEASE', 'INCREMENTAL_BUILD']);
-    expect(el.textContent).toContain('Generate right after');
-    tickThenGenerate(el);
+    expect(el.textContent).toContain('Then generate');
+    answerGenerationOptions();
     expect(el.querySelector('sf-generation-options sf-select')).toBeNull();
     expect(el.querySelector('sf-generation-options')?.textContent).toContain('The build goes to the default target.');
 
@@ -322,7 +393,7 @@ describe('ScheduleDialogComponent "then generate" for an editor (M28.3.3)', () =
 
   it('lets a holder of FULL_BUILD choose the target', () => {
     const el = open(['RELEASE', 'SCHEDULE_RELEASE', 'INCREMENTAL_BUILD', 'FULL_BUILD']);
-    tickThenGenerate(el);
+    answerGenerationOptions();
     const options = Array.from(el.querySelectorAll('sf-generation-options sf-select option')).map((o) => o.textContent?.trim());
     expect(options).toEqual(['Default target', 'Live', 'Staging']);
     expect(el.querySelector('sf-generation-options')?.textContent).not.toContain('default target.');

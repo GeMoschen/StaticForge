@@ -1909,7 +1909,20 @@
           "previewEmpty": "Pick a date and time to see the next runs.",
           "reasonWhen": "Pick a date and time.",
           "reasonItems": "Pick at least one item.",
-          "scheduled": "{title}: scheduled — prototype, nothing is saved."
+          "scheduled": "{title}: scheduled — prototype, nothing is saved.",
+          "advanced": {
+            "title": "Advanced options",
+            "version": "Which version",
+            "pinned": "Release the versions as they are now",
+            "latest": "Release whatever is saved at that time",
+            "missed": "If the time is missed",
+            "runLate": "Run as soon as possible",
+            "skip": "Skip if too late",
+            "lateness": "Skip if more than (minutes late)",
+            "comment": "Comment",
+            "commentPlaceholder": "Optional note for the revision or run",
+            "reasonLateness": "Enter how late is too late."
+          }
         },
         "schedules": {
           "title": "Schedules",
@@ -7466,7 +7479,6 @@
       "nothingRelease": "Nothing to release.",
       "nothingUnpublish": "Nothing to unpublish.",
       "drift": "Draft changed since scheduled",
-      "when": "When",
       "dateTime": "Date and time",
       "zone": "Time zone",
       "cronMode": "How to repeat",
@@ -7479,7 +7491,7 @@
       "cron": "Cron expression",
       "cronHint": "minute hour day month weekday",
       "cronFailed": "Invalid cron expression.",
-      "nextRuns": "Next runs (your time)",
+      "nextRuns": "Next runs ({zone})",
       "computing": "Computing next runs…",
       "presets": {
         "hourly": "Every hour",
@@ -7499,10 +7511,8 @@
       "version": "Which version",
       "pinned": "Release the versions as they are now",
       "latest": "Release whatever is saved at that time",
-      "then": "Then",
-      "thenGenerate": "Generate right after (incremental build)",
-      "build": "Build",
-      "missed": "If the time is missed (server down, project archived)",
+      "thenGenerate": "Then generate (incremental build of the default target)",
+      "missed": "If the time is missed",
       "runLate": "Run as soon as possible",
       "skipLate": "Skip if too late",
       "lateness": "Skip if more than",
@@ -7533,7 +7543,9 @@
         "rescheduledAt": "{kind} rescheduled for {when}."
       },
       "pickRelease": "Pick the changes to release",
-      "pickUnpublish": "Pick the content to take offline"
+      "pickUnpublish": "Pick the content to take offline",
+      "advanced": "Advanced options",
+      "itemCount": "{count, plural, one {# item} other {# items}}"
     },
     "generationOptions": {
       "target": "Target",

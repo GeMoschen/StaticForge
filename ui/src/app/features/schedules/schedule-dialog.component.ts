@@ -182,6 +182,8 @@ export class ScheduleDialogComponent implements OnDestroy {
   protected readonly latenessUnit = signal<LatenessUnit>('minutes');
   protected readonly comment = signal('');
   protected readonly planState = signal<ReleasePlanState | null>(null);
+  /** "Advanced options" opens with an edited schedule that departs from the defaults. */
+  protected readonly advancedOpen = signal(false);
 
   protected readonly submitting = signal(false);
   protected readonly error = signal<string | null>(null);
@@ -211,6 +213,23 @@ export class ScheduleDialogComponent implements OnDestroy {
     zoneIds(this.zone(), viewerZone()).map((zone) => ({ value: zone, label: zone })),
   );
   protected readonly items = computed(() => itemsOf(this.selection()));
+  /** How the offered items read: one plain name, a count, or — several languages of one asset — a checkbox each. */
+  protected readonly itemsView = computed<'one' | 'count' | 'list'>(() => {
+    const selection = this.selection();
+    if (selection.length <= 1) {
+      return 'one';
+    }
+    return this.assetCount() > 1 ? 'count' : 'list';
+  });
+  protected readonly assetCount = computed(() => new Set(this.selection().map((choice) => choice.assetUuid)).size);
+  /** "Munich (EN)" for the lone item (the choice's own label when it names no asset). */
+  protected readonly singleLabel = computed(() => {
+    const choice = this.selection()[0];
+    if (!choice) {
+      return '';
+    }
+    return choice.assetName ? `${choice.assetName}${choice.locale ? ` (${localeTag(choice.locale)})` : ''}` : choice.label;
+  });
   /** The picker's options (one per offered choice) and the keys of the ticked ones. */
   protected readonly pickOptions = computed<SfComboboxOption<string>[]>(() =>
     this.selection().map((choice) => ({ value: itemKey(choice.assetUuid, choice.locale), label: choice.label })),
@@ -228,7 +247,11 @@ export class ScheduleDialogComponent implements OnDestroy {
     const runAt = this.runAt();
     return runAt !== null && Date.parse(runAt) <= Date.now();
   });
-  protected readonly previewText = computed(() => (this.previewTimes() ?? []).map((iso) => formatInstant(iso, viewerZone())));
+  /** The next run times in the chosen zone: the server's for a cron, the picked time for a one-off. */
+  protected readonly previewText = computed(() => {
+    const times = this.recurring() ? (this.previewTimes() ?? []) : [this.runAt()].filter((iso): iso is string => iso !== null && !this.inPast());
+    return times.map((iso) => formatInstant(iso, this.zone()));
+  });
   /** The release plan is shown (and blocks) when creating a release; an edit keeps the stored, resolved items. */
   protected readonly showPlan = computed(() => this.type() === 'RELEASE' && !this.editing());
 
@@ -425,7 +448,8 @@ export class ScheduleDialogComponent implements OnDestroy {
     const then = (schedule?.thenGenerate ?? null) as ThenGenerate | null;
     const params = (schedule?.params ?? {}) as GenerationParams;
     const build = isReleaseState(schedule?.type) ? then : params;
-    this.thenGenerate.set(then !== null);
+    // A new release or unpublish generates right after by default (as the sample does), when the viewer may build.
+    this.thenGenerate.set(schedule ? then !== null : this.permissions.canIncrementalBuild());
     this.mode.set(params.mode === 'INCREMENTAL' ? 'INCREMENTAL' : 'FULL');
     this.targetId.set(build?.targetId ?? null);
     this.channels.set(build?.channels ?? []);
@@ -434,6 +458,9 @@ export class ScheduleDialogComponent implements OnDestroy {
     this.latenessValue.set(lateness.value);
     this.latenessUnit.set(lateness.unit);
     this.comment.set(params.comment ?? '');
+    this.advancedOpen.set(
+      schedule !== null && (this.pinPolicy() === 'LATEST' || this.missedPolicy() === 'SKIP_IF_LATER_THAN' || (!isReleaseState(schedule.type) && this.comment() !== '')),
+    );
     this.error.set(null);
   }
 

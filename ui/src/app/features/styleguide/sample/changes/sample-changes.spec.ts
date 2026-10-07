@@ -176,6 +176,26 @@ describe('sample Schedules area', () => {
     expect(within(generation).getByRole('combobox', { name: 'Repeat' })).toBeInTheDocument();
   });
 
+  it('keeps version, missed-time policy and comment in a collapsed "Advanced options" disclosure', async () => {
+    await render(SampleSchedulesAreaComponent, { providers: providers({ schedule: '1' }) });
+    const dialog = await screen.findByRole('dialog', { name: 'Schedule release' });
+
+    const summary = within(dialog).getByText('Advanced options');
+    const details = summary.closest('details') as HTMLDetailsElement;
+    expect(details.open).toBe(false);
+    fireEvent.click(summary);
+    details.open = true;
+    expect(within(dialog).getByRole('radio', { name: 'Release the versions as they are now' })).toBeChecked();
+    expect(within(dialog).getByRole('radio', { name: 'Run as soon as possible' })).toBeChecked();
+    expect(within(dialog).getByRole('textbox', { name: /Comment/ })).toBeInTheDocument();
+
+    // A skip policy asks how late; the version choice belongs to a release only.
+    fireEvent.click(within(dialog).getByRole('radio', { name: 'Skip if too late' }));
+    expect(await within(dialog).findByText('Skip if more than (minutes late)')).toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole('radio', { name: /Unpublish/ }));
+    await waitFor(() => expect(within(dialog).queryByText('Which version')).toBeNull());
+  });
+
   it('cancels a schedule only after the confirmation', async () => {
     await render(SampleSchedulesAreaComponent, { providers: providers({}) });
     const confirm = vi.spyOn(TestBed.inject(ConfirmService), 'confirm').mockResolvedValue(true);

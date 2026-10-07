@@ -162,7 +162,7 @@
           </fieldset>
         }
       </section>
-    } @else if (!loading()) {
+    } @else if (!loading() && !quietWhenClean()) {
       <p class="plan__note">{{ 'release.plan.noDependencies' | transloco }}</p>
     }
 

@@ -5,9 +5,12 @@ import { SfDialogComponent, SfDialogFooterDirective } from '../../../../shared/c
 import { SfComboboxComponent, SfComboboxOption } from '../../../../shared/components/forms/sf-combobox.component';
 import { SfDateInputComponent } from '../../../../shared/components/forms/sf-date-input.component';
 import { SfInputComponent } from '../../../../shared/components/forms/sf-input.component';
+import { SfNumberInputComponent } from '../../../../shared/components/forms/sf-number-input.component';
+import { SfRadioGroupComponent, SfRadioOption } from '../../../../shared/components/forms/sf-radio-group.component';
 import { SfSegmentedComponent, SfSegmentedOption } from '../../../../shared/components/forms/sf-segmented.component';
 import { SfSelectComponent, SfSelectOption } from '../../../../shared/components/forms/sf-select.component';
 import { SfSwitchComponent } from '../../../../shared/components/forms/sf-switch.component';
+import { SfTextareaComponent } from '../../../../shared/components/forms/sf-textarea.component';
 import { SfButtonComponent } from '../../../../shared/components/sf-button.component';
 import { SfFieldComponent } from '../../../../shared/components/sf-field.component';
 import {
@@ -24,6 +27,8 @@ import {
 import { injectSampleDevMode, injectSampleNotice, injectSampleText } from './sample-area.util';
 
 type BuildMode = 'incremental' | 'full';
+type PinPolicy = 'pinned' | 'latest';
+type MissedPolicy = 'runLate' | 'skip';
 /** The repeat select's value: a preset or `once`. */
 type RepeatChoice = CronPresetId | 'once';
 
@@ -48,7 +53,9 @@ function defaultWhen(): string {
  * release" / "Schedule unpublish" / "Schedule generation") and a segmented switch changes it. Release and unpublish
  * name their items (fixed when opened from an item, else a picker) and may generate right after; a generation picks
  * target and mode and may repeat (cron presets; the expression in developer mode or for a custom one). Date and time
- * (`sf-date-input` datetime), a time zone combobox and a preview of the next run times. Nothing is saved.
+ * (`sf-date-input` datetime), a time zone combobox and a preview of the next run times. The rarely changed rest sits in a
+ * collapsed "Advanced options" disclosure at the bottom (round 16, decision 182): which version a release takes, what
+ * happens when the time is missed, and a comment. Nothing is saved.
  */
 @Component({
   selector: 'sf-sample-schedule-dialog',
@@ -61,9 +68,12 @@ function defaultWhen(): string {
     SfDialogFooterDirective,
     SfFieldComponent,
     SfInputComponent,
+    SfNumberInputComponent,
+    SfRadioGroupComponent,
     SfSegmentedComponent,
     SfSelectComponent,
     SfSwitchComponent,
+    SfTextareaComponent,
     TranslocoPipe,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -92,6 +102,10 @@ export class SampleScheduleDialogComponent implements OnInit {
   protected readonly repeat = signal<RepeatChoice>('once');
   protected readonly cron = signal(CRON_OF.custom);
   protected readonly thenGenerate = signal(true);
+  protected readonly pin = signal<PinPolicy>('pinned');
+  protected readonly missed = signal<MissedPolicy>('runLate');
+  protected readonly lateness = signal(15);
+  protected readonly comment = signal('');
 
   protected readonly title = computed(() => this.t(`title.${this.kind()}`));
   protected readonly isGeneration = computed(() => this.kind() === 'generation');
@@ -104,6 +118,14 @@ export class SampleScheduleDialogComponent implements OnInit {
   protected readonly modeOptions = computed<SfSegmentedOption<BuildMode>[]>(() => [
     { value: 'incremental', label: this.t('modes.incremental') },
     { value: 'full', label: this.t('modes.full') },
+  ]);
+  protected readonly pinOptions = computed<SfRadioOption<PinPolicy>[]>(() => [
+    { value: 'pinned', label: this.t('advanced.pinned') },
+    { value: 'latest', label: this.t('advanced.latest') },
+  ]);
+  protected readonly missedOptions = computed<SfRadioOption<MissedPolicy>[]>(() => [
+    { value: 'runLate', label: this.t('advanced.runLate') },
+    { value: 'skip', label: this.t('advanced.skip') },
   ]);
   protected readonly zoneOptions: SfComboboxOption<string>[] = TIME_ZONES.map((zone) => ({ value: zone, label: zone }));
   protected readonly repeatOptions = computed<SfSelectOption<RepeatChoice>[]>(() => [
@@ -134,6 +156,9 @@ export class SampleScheduleDialogComponent implements OnInit {
     if (!this.isGeneration() && !this.subject() && this.items().length === 0) {
       return this.t('reasonItems');
     }
+    if (this.missed() === 'skip' && !(this.lateness() >= 1)) {
+      return this.t('advanced.reasonLateness');
+    }
     return null;
   });
 
@@ -145,6 +170,10 @@ export class SampleScheduleDialogComponent implements OnInit {
     if (kind) {
       this.kind.set(kind);
     }
+  }
+
+  protected setLateness(value: number | null): void {
+    this.lateness.set(value ?? 0);
   }
 
   protected setItems(value: string | string[] | null): void {

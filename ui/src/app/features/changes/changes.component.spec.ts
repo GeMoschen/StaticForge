@@ -285,11 +285,17 @@ describe('ChangesComponent', () => {
   });
 
   it('opens the schedule dialog for the selection, only with the schedule permission', async () => {
-    await setup();
+    const { http } = await setup();
     fireEvent.click(await screen.findByRole('checkbox', { name: 'Select Hero' }));
     const bar = await screen.findByRole('group', { name: 'Bulk actions' });
     fireEvent.click(within(bar).getByRole('button', { name: 'Schedule…' }));
-    expect(await screen.findByRole('dialog', { name: 'Schedule release' })).toBeInTheDocument();
+    const dialog = await screen.findByRole('dialog', { name: 'Schedule release' });
+    // One selected item is plain text, not a ticked checkbox; a new item cannot be unpublished, so no kind switch.
+    expect(within(dialog).queryByRole('checkbox')).toBeNull();
+    expect(await within(dialog).findByText('Hero')).toBeInTheDocument();
+    // "Then generate" starts on: its target and channel lists load.
+    http.match((r) => r.url.endsWith('/targets') || r.url.endsWith('/channels')).forEach((r) => r.flush([]));
+    expect(within(dialog).queryByRole('radio', { name: 'Unpublish' })).toBeNull();
   });
 
   it('disables Discard, with the reason, when none of the selected rows has a released version', async () => {

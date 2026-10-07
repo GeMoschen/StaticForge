@@ -92,6 +92,8 @@ export class ReleasePlanComponent implements OnDestroy {
    * always accepts them and records them with its run (M33.6), so the schedule dialog only shows them.
    */
   readonly confirmWarnings = input(true);
+  /** Says nothing when the plan finds nothing to report (no "No unreleased dependencies." line) — the schedule dialog. */
+  readonly quietWhenClean = input(false);
 
   readonly stateChange = output<ReleasePlanState>();
   /** An incomplete asset's "Open" link was followed: the dialog closes. */

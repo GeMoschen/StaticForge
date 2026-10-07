@@ -728,6 +728,7 @@ Open `/styleguide/sample?area=pages|content|navigation|media` and right-click ro
 Follow-up of M35.23: the app's release dialog now looks like the sample's. Open `/styleguide/sample?area=changes&sel=16&release=1`.
 
 181. **Items without a language in the release dialog:** items that are not language-specific (media, globals, navigation links: release key `""`) appear as **one** extra checkbox below the language checkboxes, *Not language-specific (3 items)*, ticked by default and toggling all of them; *All changed languages* governs the languages only. A selection of such items alone shows the heading *Items* with that one checkbox. Pending sign-off.
+182. **Advanced options in the schedule dialog:** the capabilities the sample lacked — *Which version* (release only: as they are now / whatever is saved), *If the time is missed* (run as soon as possible / skip if too late, with "skip if more than N minutes late") and the *Comment* — sit in a **collapsed "Advanced options" disclosure at the bottom** of the schedule dialog, in the sample and in the app (user decision 2026-10-07). An existing schedule that departs from the defaults opens it expanded. The dialog has no section headings; the plan's "No unreleased dependencies." line is not shown (findings and dependencies still are). Open `/styleguide/sample?area=changes&sel=1`, *Schedule…*. Pending sign-off.
 
 ## Notes / hazards
 

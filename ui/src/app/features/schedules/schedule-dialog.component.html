@@ -5,8 +5,12 @@
     </sf-field>
   }
 
+  @if (!releaseState()) {
+    <sf-generation-options class="sd__block" [projectKey]="projectKey()" [(mode)]="mode" [(targetId)]="targetId" [(channels)]="channels" />
+  }
+
   @if (releaseState() && pickItems() && !editing()) {
-    <sf-field class="sd__pick" [label]="'release.schedule.items' | transloco" required>
+    <sf-field class="sd__block" [label]="'release.schedule.items' | transloco" required>
       <sf-combobox
         multiple
         [options]="pickOptions()"
@@ -16,8 +20,7 @@
       />
     </sf-field>
   } @else if (releaseState()) {
-    <section class="rd__part" aria-labelledby="sd-items">
-      <h3 class="rd__heading" id="sd-items">{{ 'release.schedule.items' | transloco }}</h3>
+    <sf-field class="sd__block" [label]="'release.schedule.items' | transloco">
       @if (editing()) {
         <ul class="rd__list">
           @for (item of schedule()?.items ?? []; track $index) {
@@ -32,136 +35,131 @@
             </li>
           }
         </ul>
+      } @else if (selection().length === 0) {
+        <p class="rd__note">{{ nothingKey() | transloco }}</p>
+      } @else if (itemsView() === 'one') {
+        <p class="sd__subject">{{ singleLabel() }}</p>
+      } @else if (itemsView() === 'count') {
+        <p class="sd__subject">{{ 'release.schedule.itemCount' | transloco: { count: assetCount() } }}</p>
       } @else {
         <ul class="rd__list">
           @for (choice of selection(); track $index; let i = $index) {
             <li>
               <sf-checkbox [value]="choice.checked" (valueChange)="toggleItem(i, $event)">{{ choice.label }}</sf-checkbox>
             </li>
-          } @empty {
-            <li class="rd__note">{{ nothingKey() | transloco }}</li>
           }
         </ul>
       }
-    </section>
-  }
-
-  <section class="rd__part" aria-labelledby="sd-when">
-    <h3 class="rd__heading" id="sd-when">{{ 'release.schedule.when' | transloco }}</h3>
-    @if (recurring()) {
-      <sf-segmented size="sm" [aria-label]="'release.schedule.cronMode' | transloco" [options]="cronModeOptions" [value]="cronMode()" (valueChange)="cronMode.set($event ?? 'preset')" />
-      @if (cronMode() === 'preset') {
-        <div class="rd__row">
-          <sf-field [label]="'release.schedule.repeat' | transloco">
-            <sf-select [options]="presetOptions" [value]="presetKind()" (valueChange)="presetKind.set($event ?? 'daily')" required />
-          </sf-field>
-          @if (presetKind() === 'weekly') {
-            <sf-field [label]="'release.schedule.on' | transloco">
-              <sf-select [options]="weekdayOptions" [value]="presetWeekday()" (valueChange)="presetWeekday.set($event ?? 1)" required />
-            </sf-field>
-          }
-          <sf-field [label]="(presetKind() === 'hourly' ? 'release.schedule.atMinute' : 'release.schedule.at') | transloco">
-            <sf-date-input mode="time" [value]="presetTime()" (valueChange)="presetTime.set($event ?? presetTime())" />
-          </sf-field>
-        </div>
-      } @else {
-        <sf-field [label]="'release.schedule.cron' | transloco" [hint]="'release.schedule.cronHint' | transloco">
-          <sf-input monospace [spellcheck]="false" [invalid]="!!previewError()" [value]="advancedCron()" (valueChange)="advancedCron.set($event)" />
-        </sf-field>
-      }
-      <sf-field [label]="'release.schedule.zone' | transloco" [hint]="zoneAbbreviation() || undefined">
-        <sf-combobox [options]="zoneOptions()" [value]="zone()" (valueChange)="setZone($event)" />
-      </sf-field>
-      @if (previewError(); as message) {
-        <p class="sd__error" role="alert">{{ message }}</p>
-      } @else if (previewText().length > 0) {
-        <div class="sd__preview" aria-live="polite">
-          <h4 class="sd__preview-title">{{ 'release.schedule.nextRuns' | transloco }}</h4>
-          <ol class="sd__runs">
-            @for (line of previewText(); track $index) {
-              <li>{{ line }}</li>
-            }
-          </ol>
-        </div>
-      } @else if (previewLoading()) {
-        <sf-spinner [label]="'release.schedule.computing' | transloco" />
-      }
-    } @else {
-      <div class="rd__row">
-        <sf-field [label]="'release.schedule.dateTime' | transloco" required>
-          <sf-date-input mode="datetime" [value]="whenLocal()" (valueChange)="setWhen($event)" />
-        </sf-field>
-        <sf-field [label]="'release.schedule.zone' | transloco" [hint]="zoneAbbreviation() || undefined">
-          <sf-combobox [options]="zoneOptions()" [value]="zone()" (valueChange)="setZone($event)" />
-        </sf-field>
-      </div>
-      @if (inPast()) {
-        <p class="sd__error" role="alert">{{ 'release.schedule.reason.past' | transloco }}</p>
-      }
-    }
-  </section>
-
-  @if (type() === 'RELEASE') {
-    <section class="rd__part" aria-labelledby="sd-version">
-      <h3 class="rd__heading" id="sd-version">{{ 'release.schedule.version' | transloco }}</h3>
-      <sf-radio-group [aria-labelledby]="'sd-version'" [options]="pinOptions" [value]="pinPolicy()" (valueChange)="pinPolicy.set($event ?? 'PINNED')" />
-    </section>
-  }
-
-  @if (releaseState()) {
-    @if (permissions.canIncrementalBuild()) {
-      <section class="rd__part" aria-labelledby="sd-then">
-        <h3 class="rd__heading" id="sd-then">{{ 'release.schedule.then' | transloco }}</h3>
-        <sf-switch [value]="thenGenerate()" (valueChange)="thenGenerate.set($event)">{{ 'release.schedule.thenGenerate' | transloco }}</sf-switch>
-        @if (thenGenerate()) {
-          <sf-generation-options
-            [projectKey]="projectKey()"
-            [showMode]="false"
-            [anyTarget]="permissions.canFullBuild()"
-           
-            [(targetId)]="targetId"
-            [(channels)]="channels"
-          />
-        }
-      </section>
-    }
-  } @else {
-    <section class="rd__part" aria-labelledby="sd-build">
-      <h3 class="rd__heading" id="sd-build">{{ 'release.schedule.build' | transloco }}</h3>
-      <sf-generation-options [projectKey]="projectKey()" [(mode)]="mode" [(targetId)]="targetId" [(channels)]="channels" />
-    </section>
-  }
-
-  <section class="rd__part" aria-labelledby="sd-missed">
-    <h3 class="rd__heading" id="sd-missed">{{ 'release.schedule.missed' | transloco }}</h3>
-    <sf-radio-group [aria-labelledby]="'sd-missed'" [options]="missedOptions" [value]="missedPolicy()" (valueChange)="missedPolicy.set($event ?? 'RUN_LATE')" />
-    @if (missedPolicy() === 'SKIP_IF_LATER_THAN') {
-      <div class="rd__row">
-        <sf-field [label]="'release.schedule.lateness' | transloco">
-          <sf-number-input [min]="1" [value]="latenessValue()" (valueChange)="setLateness($event)" />
-        </sf-field>
-        <sf-field [label]="'release.schedule.latenessUnit' | transloco">
-          <sf-select [options]="latenessUnitOptions" [value]="latenessUnit()" (valueChange)="latenessUnit.set($event ?? 'minutes')" required />
-        </sf-field>
-      </div>
-    }
-  </section>
-
-  @if (showPlan()) {
-    <sf-release-plan [projectKey]="projectKey()" [items]="items()" [confirmWarnings]="false" (stateChange)="planState.set($event)" (navigated)="closed.emit()" />
-    @if (planState()?.blocked && pinPolicy() === 'LATEST') {
-      <p class="rd__note">{{ 'release.schedule.latestNote' | transloco }}</p>
-    }
-  }
-
-  @if (!editing() || !releaseState()) {
-    <sf-field class="sd__comment" [label]="'release.schedule.comment' | transloco" optional>
-      <sf-textarea [rows]="2" [placeholder]="'release.schedule.commentPlaceholder' | transloco" [value]="comment()" (valueChange)="comment.set($event)" />
     </sf-field>
   }
 
+  @if (recurring()) {
+    <sf-segmented class="sd__block" size="sm" [aria-label]="'release.schedule.cronMode' | transloco" [options]="cronModeOptions" [value]="cronMode()" (valueChange)="cronMode.set($event ?? 'preset')" />
+    @if (cronMode() === 'preset') {
+      <div class="rd__row">
+        <sf-field [label]="'release.schedule.repeat' | transloco">
+          <sf-select [options]="presetOptions" [value]="presetKind()" (valueChange)="presetKind.set($event ?? 'daily')" required />
+        </sf-field>
+        @if (presetKind() === 'weekly') {
+          <sf-field [label]="'release.schedule.on' | transloco">
+            <sf-select [options]="weekdayOptions" [value]="presetWeekday()" (valueChange)="presetWeekday.set($event ?? 1)" required />
+          </sf-field>
+        }
+        <sf-field [label]="(presetKind() === 'hourly' ? 'release.schedule.atMinute' : 'release.schedule.at') | transloco">
+          <sf-date-input mode="time" [value]="presetTime()" (valueChange)="presetTime.set($event ?? presetTime())" />
+        </sf-field>
+      </div>
+    } @else {
+      <sf-field class="sd__block" [label]="'release.schedule.cron' | transloco" [hint]="'release.schedule.cronHint' | transloco">
+        <sf-input monospace [spellcheck]="false" [invalid]="!!previewError()" [value]="advancedCron()" (valueChange)="advancedCron.set($event)" />
+      </sf-field>
+    }
+    <sf-field class="sd__block" [label]="'release.schedule.zone' | transloco" [hint]="zoneAbbreviation() || undefined">
+      <sf-combobox [options]="zoneOptions()" [value]="zone()" (valueChange)="setZone($event)" />
+    </sf-field>
+  } @else {
+    <div class="rd__row">
+      <sf-field [label]="'release.schedule.dateTime' | transloco" required>
+        <sf-date-input mode="datetime" [value]="whenLocal()" (valueChange)="setWhen($event)" />
+      </sf-field>
+      <sf-field [label]="'release.schedule.zone' | transloco" [hint]="zoneAbbreviation() || undefined">
+        <sf-combobox [options]="zoneOptions()" [value]="zone()" (valueChange)="setZone($event)" />
+      </sf-field>
+    </div>
+    @if (inPast()) {
+      <p class="sd__error sd__block" role="alert">{{ 'release.schedule.reason.past' | transloco }}</p>
+    }
+  }
+
+  @if (releaseState() && permissions.canIncrementalBuild()) {
+    <sf-switch class="sd__block" [value]="thenGenerate()" (valueChange)="thenGenerate.set($event)">{{ 'release.schedule.thenGenerate' | transloco }}</sf-switch>
+    @if (thenGenerate()) {
+      <sf-generation-options
+        class="sd__block"
+        [projectKey]="projectKey()"
+        [showMode]="false"
+        [anyTarget]="permissions.canFullBuild()"
+        [(targetId)]="targetId"
+        [(channels)]="channels"
+      />
+    }
+  }
+
+  @if (previewError(); as message) {
+    <p class="sd__error sd__block" role="alert">{{ message }}</p>
+  } @else if (previewText().length > 0) {
+    <section class="sd__preview sd__block" aria-live="polite">
+      <h3 class="sd__preview-title">{{ 'release.schedule.nextRuns' | transloco: { zone: zone() } }}</h3>
+      <ol class="sd__runs">
+        @for (line of previewText(); track $index) {
+          <li>{{ line }}</li>
+        }
+      </ol>
+    </section>
+  } @else if (recurring() && previewLoading()) {
+    <sf-spinner [label]="'release.schedule.computing' | transloco" />
+  }
+
+  @if (showPlan()) {
+    <sf-release-plan class="sd__block" [projectKey]="projectKey()" [items]="items()" [confirmWarnings]="false" [quietWhenClean]="true" (stateChange)="planState.set($event)" (navigated)="closed.emit()" />
+    @if (planState()?.blocked && pinPolicy() === 'LATEST') {
+      <p class="rd__note sd__block">{{ 'release.schedule.latestNote' | transloco }}</p>
+    }
+  }
+
+  <details class="sd__advanced" [open]="advancedOpen()">
+    <summary class="sd__advanced-summary">{{ 'release.schedule.advanced' | transloco }}</summary>
+    <div class="sd__advanced-body">
+      @if (type() === 'RELEASE') {
+        <sf-field [label]="'release.schedule.version' | transloco">
+          <sf-radio-group [options]="pinOptions" [value]="pinPolicy()" (valueChange)="pinPolicy.set($event ?? 'PINNED')" />
+        </sf-field>
+      }
+
+      <sf-field [label]="'release.schedule.missed' | transloco">
+        <sf-radio-group [options]="missedOptions" [value]="missedPolicy()" (valueChange)="missedPolicy.set($event ?? 'RUN_LATE')" />
+      </sf-field>
+      @if (missedPolicy() === 'SKIP_IF_LATER_THAN') {
+        <div class="rd__row">
+          <sf-field [label]="'release.schedule.lateness' | transloco">
+            <sf-number-input [min]="1" [value]="latenessValue()" (valueChange)="setLateness($event)" />
+          </sf-field>
+          <sf-field [label]="'release.schedule.latenessUnit' | transloco">
+            <sf-select [options]="latenessUnitOptions" [value]="latenessUnit()" (valueChange)="latenessUnit.set($event ?? 'minutes')" required />
+          </sf-field>
+        </div>
+      }
+
+      @if (!editing() || !releaseState()) {
+        <sf-field [label]="'release.schedule.comment' | transloco" optional>
+          <sf-textarea [rows]="2" [placeholder]="'release.schedule.commentPlaceholder' | transloco" [value]="comment()" (valueChange)="comment.set($event)" />
+        </sf-field>
+      }
+    </div>
+  </details>
+
   @if (error(); as message) {
-    <p class="sd__error" role="alert">{{ message }}</p>
+    <p class="sd__error sd__block" role="alert">{{ message }}</p>
   }
 
   <ng-container sfDialogFooter>

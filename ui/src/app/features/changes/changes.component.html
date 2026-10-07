@@ -1,8 +1,14 @@
 @if (dialog(); as d) {
   <sf-release-dialog [projectKey]="projectKey()" [mode]="d.mode" [choices]="d.choices" (closed)="dialog.set(null)" />
 }
-@if (scheduling(); as choices) {
-  <sf-schedule-dialog [projectKey]="projectKey()" [types]="['RELEASE']" [choices]="choices" (closed)="scheduling.set(null)" />
+@if (scheduling(); as s) {
+  <sf-schedule-dialog
+    [projectKey]="projectKey()"
+    [types]="s.types"
+    [choices]="s.choices"
+    [unpublishChoices]="s.unpublishChoices"
+    (closed)="scheduling.set(null)"
+  />
 }
 
 <sf-page-header class="area__header" [title]="'changes.page.title' | transloco" [subtitle]="'changes.page.subtitle' | transloco">
