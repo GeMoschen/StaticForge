@@ -212,3 +212,8 @@
 - **Rule:** an outside-press handler must treat the portaled panel as inside (`sf-menu`, `sf-popover` and `sf-date-input` do).
   Specs for pickers dispatch the whole sequence a browser sends (`pointerdown`, `mousedown`, `mouseup`, `click`) and assert the
   list is still open between press and click.
+
+## Component specs that mock the API client can't see a missing header (2026-10-07)
+- **Mistake (found by the user in the running app, M35.22 follow-ups):** renaming pages, record sets, global sets and folders returned `412 If-Match header is required`. The rename callers passed no revision to `renameAsset`/`renameFolder`; the backend has always demanded it. Every component spec mocked the `ApiClient` and even asserted the call with `undefined` as the etag, so the gap was part of the "passing" expectation.
+- **Rule:** a mutating call that the server guards with `If-Match` must be impossible to make without a revision: the client method itself reads the current one when the caller has none. A spec that asserts "called with `undefined`" for such an argument is a red flag.
+- **Rule:** every new UI write path gets one real-backend click-through (or an HttpTestingController spec on the client method) before it is called done, not only mocked component specs.
