@@ -36,7 +36,7 @@ import { consumeQueryParam } from '../../shared/deep-link';
 import { assetRoute } from '../../shared/asset-route.util';
 import { restoreDeletedAsset } from '../../shared/restore-deleted-asset';
 import { HistoryDrawerStore } from '../history/history-drawer.store';
-import { ReleaseBarComponent } from '../release/release-bar.component';
+import { ReleaseActionsComponent } from '../release/release-actions.component';
 import type { ReleaseMode } from '../release/release-choice.util';
 import { TimeTravelStore } from '../revisions/time-travel.store';
 import {
@@ -91,7 +91,7 @@ const ASSET_TYPES: ReadonlySet<string> = new Set([
     MoveTargetDialogComponent,
     RecordGridComponent,
     RecordSetQueryPanelComponent,
-    ReleaseBarComponent,
+    ReleaseActionsComponent,
     RouterLink,
     SfAssetFavoriteComponent,
     SfBadgeComponent,

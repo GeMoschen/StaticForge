@@ -31,13 +31,6 @@
   line-height: var(--sf-lh-12);
 }
 
-// The release actions are a group of their own, set apart from the item's ⋮ (decision 34).
-.detail__release {
-  margin-inline-end: var(--sf-space-1);
-  padding-inline-end: var(--sf-space-3);
-  border-inline-end: 1px solid var(--sf-border-strong);
-}
-
 .detail__meta {
   display: flex;
   flex-wrap: wrap;

@@ -4,7 +4,7 @@ import type { ReleaseBlock } from './release-status.util';
 
 type ScheduledRefView = components['schemas']['ScheduledRefView'];
 
-/** The release state of one asset as the server last reported it to a release bar. */
+/** The release state of one asset as the server last reported it to the release actions. */
 export interface ObservedRelease {
   uuid: string;
   release: ReleaseBlock;

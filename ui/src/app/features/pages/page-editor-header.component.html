@@ -42,9 +42,7 @@
         (click)="editor.setPreviewOpen(!editor.previewOpen())"
         >{{ 'pages.editor.header.preview' | transloco }}</sf-button
       >
-      <sf-release-bar
-        class="page-editor__release"
-        layout="header"
+      <sf-release-actions
         [projectKey]="editor.projectKey()"
         [assetUuid]="editor.uuid()"
         [refreshKey]="editor.releaseRefresh()"

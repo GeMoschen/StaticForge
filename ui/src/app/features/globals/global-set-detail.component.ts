@@ -52,7 +52,7 @@ import { Subscription } from 'rxjs';
 import { ApiClient } from '../../core/api/api.client';
 import { RuleBinding, mergeFindings } from '../forms/rules/rule-binding';
 import { GlobalsService, etagFor, type Diagnostic, type GlobalSetDetailView } from './globals.service';
-import { ReleaseBarComponent } from '../release/release-bar.component';
+import { ReleaseActionsComponent } from '../release/release-actions.component';
 import type { ReleaseMode } from '../release/release-choice.util';
 import { isOnline } from '../release/release-status.util';
 import { useFrameItem } from '../../core/frame/use-frame-item';
@@ -98,7 +98,7 @@ interface ContentIssue {
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
-    ReleaseBarComponent,
+    ReleaseActionsComponent,
     SfAssetFavoriteComponent,
     SfButtonComponent,
     SfCdlSectionsEditorComponent,

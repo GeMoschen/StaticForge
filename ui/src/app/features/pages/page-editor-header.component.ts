@@ -12,7 +12,7 @@ import { SfSaveStatusComponent } from '../../shared/components/layout/sf-save-st
 import type { SfMenuItem } from '../../shared/components/menu/sf-menu-item';
 import { SfAssetFavoriteComponent } from '../../shared/components/sf-asset-favorite.component';
 import { SfButtonComponent } from '../../shared/components/sf-button.component';
-import { ReleaseBarComponent } from '../release/release-bar.component';
+import { ReleaseActionsComponent } from '../release/release-actions.component';
 import { PageDeleteDialogComponent } from './page-delete-dialog.component';
 import { PageEditorStore } from './page-editor.store';
 import { PagesTreeRefresh } from './pages-tree-refresh.service';
@@ -31,7 +31,7 @@ import { PagesTreeRefresh } from './pages-tree-refresh.service';
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     PageDeleteDialogComponent,
-    ReleaseBarComponent,
+    ReleaseActionsComponent,
     SfAssetFavoriteComponent,
     SfBadgeComponent,
     SfButtonComponent,

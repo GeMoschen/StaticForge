@@ -24,7 +24,7 @@ import { type AssetPicked, SfAssetPickerDialogComponent } from '../../shared/com
 import { SfButtonComponent } from '../../shared/components/sf-button.component';
 import { SfFieldComponent } from '../../shared/components/sf-field.component';
 import { SfIconComponent } from '../../shared/components/sf-icon.component';
-import { ReleaseBarComponent } from '../release/release-bar.component';
+import { ReleaseActionsComponent } from '../release/release-actions.component';
 import { type NavEntry, type NavUrls, entryUrl } from './navigation-tree.util';
 import { NavigationService, etagFor } from './navigation.service';
 
@@ -70,7 +70,7 @@ export function storedLabel(raw: unknown, locale: string | null): string {
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
-    ReleaseBarComponent,
+    ReleaseActionsComponent,
     SfAssetFavoriteComponent,
     SfAssetPickerDialogComponent,
     SfBannerComponent,

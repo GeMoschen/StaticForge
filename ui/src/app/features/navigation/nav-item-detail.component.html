@@ -13,9 +13,7 @@
     <ng-container sfPageHeaderActions>
       <sf-save-status class="detail__status" [state]="saveState()" [savedAt]="savedAt()" />
       <sf-button icon="save" [disabled]="!canEdit() || !dirty() || saving()" (click)="onSaveClick()">{{ 'navigation.item.save' | transloco }}</sf-button>
-      <sf-release-bar
-        class="detail__release"
-        layout="header"
+      <sf-release-actions
         [projectKey]="projectKey()"
         [assetUuid]="entry().uuid"
         [refreshKey]="entry().revision"

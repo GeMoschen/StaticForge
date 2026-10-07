@@ -13,13 +13,13 @@ import { provideProjectPermissions } from '../../core/project/testing/project-pe
 import { ToastService } from '../../core/ui/toast.service';
 import { SfAssetFavoriteComponent } from '../../shared/components/sf-asset-favorite.component';
 import { type AssetPicked, SfAssetPickerDialogComponent } from '../../shared/components/sf-asset-picker-dialog.component';
-import { ReleaseBarComponent } from '../release/release-bar.component';
+import { ReleaseActionsComponent } from '../release/release-actions.component';
 import { NavItemDetailComponent, storedLabel } from './nav-item-detail.component';
 import type { NavEntry } from './navigation-tree.util';
 import { NavigationService } from './navigation.service';
 
-@Component({ selector: 'sf-release-bar', standalone: true, template: '' })
-class ReleaseBarStub {
+@Component({ selector: 'sf-release-actions', standalone: true, template: '' })
+class ReleaseActionsStub {
   readonly projectKey = input<string>();
   readonly assetUuid = input<string | null>();
   readonly refreshKey = input<unknown>();
@@ -102,8 +102,8 @@ async function setup(options: SetupOptions = {}) {
     ],
     configureTestBed: (tb) => {
       tb.overrideComponent(NavItemDetailComponent, {
-        remove: { imports: [ReleaseBarComponent, SfAssetFavoriteComponent, SfAssetPickerDialogComponent] },
-        add: { imports: [ReleaseBarStub, FavoriteStub, PickerStub] },
+        remove: { imports: [ReleaseActionsComponent, SfAssetFavoriteComponent, SfAssetPickerDialogComponent] },
+        add: { imports: [ReleaseActionsStub, FavoriteStub, PickerStub] },
       });
     },
   });

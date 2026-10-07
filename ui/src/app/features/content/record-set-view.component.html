@@ -22,8 +22,7 @@
       @if (rs.deleted && !timeTravelling()) {
         <sf-button variant="primary" icon="restore_from_trash" [disabled]="readOnly()" (click)="restoreSet()">{{ 'content.recordSet.restore' | transloco }}</sf-button>
       } @else if (!rs.deleted) {
-        <sf-release-bar
-          layout="header"
+        <sf-release-actions
           [projectKey]="projectKey()"
           [assetUuid]="rs.uuid"
           [refreshKey]="rs.revision"

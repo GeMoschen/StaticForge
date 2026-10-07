@@ -131,7 +131,7 @@ export interface DrawerAnswers {
 }
 
 /**
- * Answers every pending read of the drawer (the file in full, usages, history, previews, the text, the release bar...) and
+ * Answers every pending read of the drawer (the file in full, usages, history, previews, the text, the release actions...) and
  * leaves writes (`PUT`, `POST`, `DELETE`) alone, for the spec to answer. Returns what it answered.
  */
 export function answerReads(http: HttpTestingController, answers: DrawerAnswers = {}): TestRequest[] {

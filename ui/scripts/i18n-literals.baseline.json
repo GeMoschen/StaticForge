@@ -19,7 +19,6 @@
   "src/app/features/pages/conflict-drawer.component.html": 18,
   "src/app/features/pages/page-delete-dialog.component.html": 6,
   "src/app/features/preview/preview.frame.component.html": 19,
-  "src/app/features/release/release-bar.component.html": 6,
   "src/app/features/revisions/visual-diff/body-diff.component.html": 3,
   "src/app/features/revisions/visual-diff/field-diff.component.html": 4,
   "src/app/features/revisions/visual-diff/visual-diff.component.html": 6,

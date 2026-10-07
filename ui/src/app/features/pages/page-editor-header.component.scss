@@ -35,14 +35,6 @@
   white-space: nowrap;
 }
 
-// The release actions are their own group: a divider sets them apart from the page's own ⋮, which sf-page-header
-// renders right after them (decision 34).
-.page-editor__release {
-  margin-inline-end: var(--sf-space-1);
-  padding-inline-end: var(--sf-space-3);
-  border-inline-end: 1px solid var(--sf-border-strong);
-}
-
 .page-editor__meta {
   display: flex;
   flex-wrap: wrap;

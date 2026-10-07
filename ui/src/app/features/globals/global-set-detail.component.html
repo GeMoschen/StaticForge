@@ -14,9 +14,7 @@
               {{ 'globals.detail.save' | transloco }}
             </sf-button>
           }
-          <sf-release-bar
-            class="global-detail__release"
-            layout="header"
+          <sf-release-actions
             [projectKey]="projectKey()"
             [assetUuid]="set.uuid"
             [refreshKey]="set.revision"

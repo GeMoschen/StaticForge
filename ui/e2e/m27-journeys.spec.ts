@@ -234,7 +234,7 @@ async function openPage(page: Page, name: string): Promise<void> {
   await expect(page.locator('sf-page-editor')).toBeVisible();
 }
 
-const bar = (page: Page) => page.locator('sf-page-editor sf-release-bar');
+const bar = (page: Page) => page.locator('sf-page-editor sf-release-actions');
 
 /** The editor's badge text for the editing language, e.g. "Changed". */
 async function expectBadge(page: Page, text: string): Promise<void> {
@@ -479,9 +479,9 @@ test.describe('M27 release and scheduling journey', () => {
       buffer: EN_PNG,
     });
     await expect(drawer.locator('[data-locale="en"]')).toContainText('hero-en.png');
-    await drawer.locator('sf-release-bar').getByRole('button', { name: 'Release…' }).click();
+    await drawer.locator('sf-release-actions').getByRole('button', { name: 'Release…' }).click();
     await page.getByRole('dialog', { name: /^Release/ }).locator('.dialog__actions').getByRole('button', { name: 'Release', exact: true }).click();
-    await expect(drawer.locator('sf-release-bar .bar__locale[title="English: Published"]')).toBeVisible();
+    await expect(drawer.locator('sf-release-actions .bar__locale[title="English: Published"]')).toBeVisible();
     await snap(page, '05-localized-media');
     await drawer.getByRole('button', { name: 'Close' }).first().click();
     await expect(drawer).toHaveCount(0);
@@ -513,7 +513,7 @@ test.describe('M27 release and scheduling journey', () => {
     await scheduleDialog.getByText('Generate right after (incremental build)').click();
     await scheduleDialog.getByRole('button', { name: 'Schedule', exact: true }).click();
     await expect(scheduleDialog).toHaveCount(0);
-    await expect(bar(page).locator('.bar__pending')).toContainText('Release scheduled for');
+    await expect(bar(page).locator('.ra__pending')).toContainText('Release scheduled for');
     await setHeadline(page, 'Alpha EN v4');
     await rail(page, 'Schedules');
     const releaseRow = page.locator('tbody tr', { hasText: 'Release' });

@@ -19,7 +19,7 @@ import { ShortcutService } from '../../core/ui/shortcut.service';
 import { ToastService } from '../../core/ui/toast.service';
 import { ConfirmService } from '../../shared/components/dialog/confirm.service';
 import { HistoryDrawerStore } from '../history/history-drawer.store';
-import { stubReleaseBar } from '../release/testing/release-bar.stub';
+import { stubReleaseActions } from '../release/testing/release-actions.stub';
 import { TimeTravelStore } from '../revisions/time-travel.store';
 import { ContentService, type DatasetDetailView, type RecordSetDetailView } from './content.service';
 import { RecordSetViewComponent } from './record-set-view.component';
@@ -132,7 +132,7 @@ const moreAction = async (name: string) => {
 };
 
 describe('RecordSetViewComponent', () => {
-  beforeEach(() => stubReleaseBar(RecordSetViewComponent));
+  beforeEach(() => stubReleaseActions(RecordSetViewComponent));
   afterEach(() => vi.restoreAllMocks());
 
   describe('the page', () => {

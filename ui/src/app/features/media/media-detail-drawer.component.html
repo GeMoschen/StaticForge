@@ -26,6 +26,12 @@
       [disabled]="singleFile()"
       (click)="step.emit(1)"
     />
+    <sf-release-actions
+      [projectKey]="projectKey()"
+      [assetUuid]="media().uuid"
+      [refreshKey]="store.revision()"
+      (changed)="onReleaseChanged($event)"
+    />
     <sf-menu size="sm" [items]="fileActions()" [label]="'media.drawer.header.more' | transloco" />
   </div>
 
@@ -42,13 +48,6 @@
         }}</span>
       }
     </p>
-
-    <sf-release-bar
-      [projectKey]="projectKey()"
-      [assetUuid]="media().uuid"
-      [refreshKey]="store.revision()"
-      (changed)="onReleaseChanged($event)"
-    />
 
     <sf-tabs
       class="detail__tabs"

@@ -167,7 +167,7 @@ async function openPage(page: Page, name: string): Promise<void> {
   await expect(page.locator('sf-page-editor')).toBeVisible();
 }
 
-const bar = (page: Page) => page.locator('sf-page-editor sf-release-bar');
+const bar = (page: Page) => page.locator('sf-page-editor sf-release-actions');
 
 async function setHeadline(page: Page, text: string): Promise<void> {
   const input = page.locator('sf-page-editor sf-content-form').getByRole('textbox', { name: /Headline/ });
@@ -247,7 +247,7 @@ async function scheduleRelease(page: Page, minutes: number, thenGenerate: boolea
   }
   await dialog.getByRole('button', { name: 'Schedule', exact: true }).click();
   await expect(dialog).toHaveCount(0);
-  await expect(bar(page).locator('.bar__pending')).toContainText('Release scheduled for');
+  await expect(bar(page).locator('.ra__pending')).toContainText('Release scheduled for');
 }
 
 async function editorSignIn(browser: Browser): Promise<Page> {

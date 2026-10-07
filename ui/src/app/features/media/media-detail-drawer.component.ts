@@ -17,7 +17,7 @@ import { SfButtonComponent } from '../../shared/components/sf-button.component';
 import { SfTab, SfTabsComponent } from '../../shared/components/sf-tabs.component';
 import { SfFileSizePipe } from '../../shared/pipes/sf-file-size.pipe';
 import { ConflictDrawerComponent } from '../pages/conflict-drawer.component';
-import { ReleaseBarComponent } from '../release/release-bar.component';
+import { ReleaseActionsComponent } from '../release/release-actions.component';
 import type { ReleaseMode } from '../release/release-choice.util';
 import { TimeTravelStore } from '../revisions/time-travel.store';
 import { formatOf } from './library/media-library.util';
@@ -74,7 +74,7 @@ export interface MediaDrawerPosition {
     MediaDrawerUsagesComponent,
     MediaDrawerVariantsComponent,
     MediaDrawerVersionsComponent,
-    ReleaseBarComponent,
+    ReleaseActionsComponent,
     SfAssetFavoriteComponent,
     SfBannerComponent,
     SfButtonComponent,

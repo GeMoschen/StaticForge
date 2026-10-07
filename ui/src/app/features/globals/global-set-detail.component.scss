@@ -47,13 +47,6 @@
   line-height: var(--sf-lh-12);
 }
 
-// The release actions are a group of their own, set apart from the set's own ⋮ (decision 34).
-.global-detail__release {
-  margin-inline-end: var(--sf-space-1);
-  padding-inline-end: var(--sf-space-3);
-  border-inline-end: 1px solid var(--sf-border-strong);
-}
-
 .global-detail__meta {
   display: flex;
   flex-wrap: wrap;

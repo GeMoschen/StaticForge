@@ -10,7 +10,7 @@ import type { SfMenuItem } from '../../shared/components/menu/sf-menu-item';
 import { SfAssetFavoriteComponent } from '../../shared/components/sf-asset-favorite.component';
 import { SfButtonComponent } from '../../shared/components/sf-button.component';
 import { HistoryDrawerStore } from '../history/history-drawer.store';
-import { ReleaseBarComponent } from '../release/release-bar.component';
+import { ReleaseActionsComponent } from '../release/release-actions.component';
 import type { ReleaseMode } from '../release/release-choice.util';
 import type { RecordDetailView } from './content.service';
 
@@ -26,7 +26,7 @@ import type { RecordDetailView } from './content.service';
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
-    ReleaseBarComponent,
+    ReleaseActionsComponent,
     SfAssetFavoriteComponent,
     SfBadgeComponent,
     SfButtonComponent,

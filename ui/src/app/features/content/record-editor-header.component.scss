@@ -26,14 +26,6 @@
   line-height: var(--sf-lh-12);
 }
 
-// The release actions are their own group: a divider sets them apart from the record's own ⋮, which sf-page-header
-// renders right after them (decision 34).
-.record-header__release {
-  margin-inline-end: var(--sf-space-1);
-  padding-inline-end: var(--sf-space-3);
-  border-inline-end: 1px solid var(--sf-border-strong);
-}
-
 .record-header__meta {
   display: flex;
   flex-wrap: wrap;

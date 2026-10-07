@@ -32,9 +32,7 @@
         [label]="'content.record.header.history' | transloco"
         (click)="historyDrawer.toggle()"
       />
-      <sf-release-bar
-        class="record-header__release"
-        layout="header"
+      <sf-release-actions
         [projectKey]="projectKey()"
         [assetUuid]="record().uuid"
         [refreshKey]="releaseRefresh()"
