@@ -68,6 +68,26 @@ describe('ReleaseDialogComponent', () => {
     http.verify();
   });
 
+  /**
+   * Answers the dialog's release-state reads (`GET /assets/{uuid}`, once per asset): by default the asset's own choices as
+   * its release block, or the given blocks (`{ uuid: { de: 'CHANGED', fr: 'PUBLISHED' } }`); `fail` answers with a 500.
+   */
+  function flushAssets(choices: ReleaseChoice[], blocks: Record<string, Record<string, string>> = {}, fail = false): string[] {
+    const requests = http.match((req) => /\/api\/v1\/projects\/proj\/assets\/[^/]+$/.test(req.url));
+    for (const request of requests) {
+      const uuid = request.request.url.split('/').pop() as string;
+      if (fail) {
+        request.flush({}, { status: 500, statusText: 'Server Error' });
+        continue;
+      }
+      const release =
+        blocks[uuid] ?? Object.fromEntries(choices.filter((c) => c.assetUuid === uuid).map((c) => [c.locale, c.status as string]));
+      request.flush({ uuid, release: Object.fromEntries(Object.entries(release).map(([key, status]) => [key, { status }])) });
+    }
+    fixture.detectChanges();
+    return requests.map((request) => request.request.url.split('/').pop() as string);
+  }
+
   function open(mode: 'release' | 'unpublish' | 'discard', choices: ReleaseChoice[] = CHOICES): void {
     fixture = TestBed.createComponent(ReleaseDialogComponent);
     fixture.componentRef.setInput('projectKey', 'proj');
@@ -76,6 +96,9 @@ describe('ReleaseDialogComponent', () => {
     fixture.componentRef.setInput('subjectName', 'Home');
     fixture.detectChanges();
     fixture.detectChanges();
+    if (mode === 'release') {
+      flushAssets(choices);
+    }
   }
 
   function flushPlan(plan: ReleasePlanView = PLAN): void {
@@ -278,12 +301,13 @@ describe('ReleaseDialogComponent', () => {
       { assetUuid: 'media-2', locale: '', label: 'logo.png — New', status: 'NEW', checked: true, assetType: 'MEDIA', assetName: 'logo.png' },
     ];
 
-    function openList(choices: ReleaseChoice[]): void {
+    function openList(choices: ReleaseChoice[], blocks: Record<string, Record<string, string>> = {}): string[] {
       TestBed.inject(LocalesStore).set('proj', {
         defaultLocale: 'de',
         locales: [
           { code: 'de', label: 'Deutsch' },
           { code: 'en', label: 'English' },
+          { code: 'fr', label: 'Français' },
         ],
       } as never);
       fixture = TestBed.createComponent(ReleaseDialogComponent);
@@ -291,7 +315,9 @@ describe('ReleaseDialogComponent', () => {
       fixture.componentRef.setInput('choices', choices);
       fixture.detectChanges();
       fixture.detectChanges();
+      const read = flushAssets(choices, blocks);
       vi.advanceTimersByTime(300);
+      return read;
     }
 
     const boxes = () => Array.from(page().querySelectorAll('sf-checkbox')).map((box) => box.textContent?.replace(/\s+/g, ' ').trim());
@@ -335,6 +361,58 @@ describe('ReleaseDialogComponent', () => {
       const next = http.expectOne(PLAN_URL);
       expect(next.request.body.items).toEqual([{ assetUuid: 'page-1', locale: 'en' }]);
       next.flush(PLAN);
+    });
+
+    it('always shows the Languages block, even for one item in one language', () => {
+      openList([ROWS[2]]);
+      http.expectOne(PLAN_URL).flush(PLAN);
+      fixture.detectChanges();
+
+      expect(Array.from(page().querySelectorAll('h3')).map((h) => h.textContent?.trim())[0]).toBe('Languages');
+      expect(boxes().slice(0, 2)).toEqual(['All changed languages', 'Deutsch (DE) — Changed Default']);
+    });
+
+    it('adds the item\'s other changed languages ticked, and its unchanged ones disabled, from its release state', () => {
+      openList([ROWS[0]], { 'page-1': { de: 'CHANGED', en: 'NEW', fr: 'PUBLISHED' } });
+      vi.advanceTimersByTime(300);
+      const request = http.expectOne(PLAN_URL);
+      expect(request.request.body.items).toEqual([
+        { assetUuid: 'page-1', locale: 'de' },
+        { assetUuid: 'page-1', locale: 'en' },
+      ]);
+      request.flush(PLAN);
+      fixture.detectChanges();
+
+      expect(boxes().slice(0, 4)).toEqual([
+        'All changed languages',
+        'Deutsch (DE) — Changed Default',
+        'English (EN) — New',
+        'Français (FR) — Published',
+      ]);
+      const inputs = Array.from(page().querySelectorAll('.rd__list input[type="checkbox"]')) as HTMLInputElement[];
+      expect(inputs.map((box) => [box.checked, box.disabled])).toEqual([
+        [true, false],
+        [true, false],
+        [false, true],
+      ]);
+    });
+
+    it('reads each asset once and falls back to the selected rows when the read fails', () => {
+      // Five rows, three assets with a language: one read each (media without a language need none).
+      expect(openList(ROWS, { 'page-1': { de: 'CHANGED', en: 'NEW' }, 'page-2': { de: 'CHANGED' } })).toEqual(['page-1', 'page-2']);
+      http.expectOne(PLAN_URL).flush(PLAN);
+
+      fixture.destroy();
+      fixture = TestBed.createComponent(ReleaseDialogComponent);
+      fixture.componentRef.setInput('projectKey', 'proj');
+      fixture.componentRef.setInput('choices', [ROWS[0]]);
+      fixture.detectChanges();
+      fixture.detectChanges();
+      expect(flushAssets([ROWS[0]], {}, true)).toEqual(['page-1']);
+      vi.advanceTimersByTime(300);
+      http.expectOne(PLAN_URL).flush(PLAN);
+      fixture.detectChanges();
+      expect(boxes().slice(0, 2)).toEqual(['All changed languages', 'Deutsch (DE) — Changed Default']);
     });
 
     it('names a single item in the title and shows only the not-language-specific checkbox for media', () => {

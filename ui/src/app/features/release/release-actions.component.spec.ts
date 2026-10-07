@@ -146,10 +146,18 @@ describe('ReleaseActionsComponent', () => {
     fixture.detectChanges();
     fixture.detectChanges();
     http.match((r) => r.url.endsWith('/releases/plan'));
+    // The dialog reads the release state of the asset, to list its unchanged languages as well.
+    http.match(DETAIL_URL).forEach((request) => request.flush(DETAIL));
+    fixture.detectChanges();
 
     expect(document.body.querySelector('h2')?.textContent?.trim()).toBe('Release “Home”');
     const boxes = Array.from(document.body.querySelectorAll('.rd__list input[type="checkbox"]')) as HTMLInputElement[];
-    expect(boxes.map((box) => box.checked)).toEqual([true, true]);
+    // Deutsch is published: shown, not choosable.
+    expect(boxes.map((box) => [box.checked, box.disabled])).toEqual([
+      [false, true],
+      [true, false],
+      [true, false],
+    ]);
     expect((screen.getByRole('checkbox', { name: 'All changed languages' }) as HTMLInputElement).checked).toBe(true);
   });
 

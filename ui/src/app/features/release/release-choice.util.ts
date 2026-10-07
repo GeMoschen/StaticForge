@@ -27,6 +27,8 @@ export interface ReleaseChoice {
   label: string;
   status: ReleaseStatus | null;
   checked: boolean;
+  /** Shown but not choosable: a language with nothing to release (a release lists every language of the item). */
+  disabled?: boolean;
   /** The asset's type, name and folder: a page's old URLs can be redirected when it goes offline (M30.6.3). */
   assetType?: string;
   assetName?: string;

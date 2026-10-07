@@ -11,7 +11,7 @@ import {
   viewChild,
 } from '@angular/core';
 import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
-import { forkJoin, of, catchError, map } from 'rxjs';
+import { forkJoin, of, catchError, map, type Subscription } from 'rxjs';
 import { ApiClient } from '../../core/api/api.client';
 import type { components } from '../../core/api/generated/schema.d.ts';
 import { problemOf } from '../../core/api/problem.util';
@@ -32,9 +32,9 @@ import { ReleaseEventsStore } from './release-events.store';
 import { RedirectAfterService } from './redirect-after.service';
 import { RedirectOptionComponent } from './redirect-option.component';
 import { type RedirectIntent, type RedirectSource, NO_REDIRECT, intentReady } from './redirect-option.util';
-import { type ReleaseChoice, type ReleaseMode, assetName, itemsOf } from './release-choice.util';
+import { type ReleaseChoice, type ReleaseMode, assetName, eligible, itemKey, itemsOf } from './release-choice.util';
 import { ReleasePlanComponent, type ReleasePlanState } from './release-plan.component';
-import { localeTag, statusLabel } from './release-status.util';
+import { localeStatuses, localeTag, statusLabel } from './release-status.util';
 
 type ReleaseResultView = components['schemas']['ReleaseResultView'];
 type ReleaseTargetView = components['schemas']['ReleaseTargetView'];
@@ -57,6 +57,8 @@ interface ChoiceGroup {
   label: string;
   /** How many selected (asset, language) rows the checkbox toggles. */
   count: number;
+  /** Nothing of it can be released (the language is unchanged): shown, not choosable. */
+  disabled: boolean;
   checked: boolean;
   indeterminate: boolean;
 }
@@ -116,6 +118,7 @@ export class ReleaseDialogComponent {
   readonly done = output<ReleaseResultView>();
   readonly closed = output<void>();
 
+  private otherLanguages?: Subscription;
   private readonly plan = viewChild(ReleasePlanComponent);
   private readonly redirectOption = viewChild(RedirectOptionComponent);
 
@@ -187,15 +190,15 @@ export class ReleaseDialogComponent {
   /** "Language(s)" for one asset's locales, "Items" for a selection of several assets. */
   protected readonly legend = computed(() =>
     this.transloco.translate(
-      `release.dialog.${this.grouped() ? (this.languageGroups().length > 0 ? 'languages' : 'items') : this.manyAssets() ? 'items' : this.multiple() ? 'languages' : 'language'}`,
+      `release.dialog.${this.grouped() ? (this.languageGroups().length > 0 || this.subjectName() ? 'languages' : 'items') : this.manyAssets() ? 'items' : this.multiple() ? 'languages' : 'language'}`,
     ),
   );
   /**
-   * A release of several rows from a list offers one checkbox per language (ticking it applies to every selected item in
-   * that language) and one for the items without a language, not a checkbox per row. An editor names its subject and
-   * keeps its per-language choices; unpublish and discard list the rows.
+   * A release always shows the Languages block of the sample (M35.23): one checkbox per language (ticking it applies to
+   * every item in that language, an unchanged language is shown disabled) and one for the items without a language, not
+   * a checkbox per row. Unpublish and discard list the rows.
    */
-  protected readonly grouped = computed(() => this.mode() === 'release' && !this.subjectName() && this.multiple());
+  protected readonly grouped = computed(() => this.mode() === 'release');
   protected readonly languageGroups = computed<ChoiceGroup[]>(() => {
     if (!this.grouped()) {
       return [];
@@ -211,7 +214,8 @@ export class ReleaseDialogComponent {
     return [...byLocale.entries()]
       .sort(([a], [b]) => rank(a) - rank(b) || a.localeCompare(b))
       .map(([locale, rows]) => {
-        const statuses = [...new Set(rows.map((row) => statusLabel(row.status)))].join(' / ');
+        const shown = rows.some((row) => !row.disabled) ? rows.filter((row) => !row.disabled) : rows;
+        const statuses = [...new Set(shown.map((row) => statusLabel(row.status)))].join(' / ');
         return {
           ...this.groupState(locale, rows),
           label: `${this.locales.labelOf(locale)} (${localeTag(locale)})${statuses ? ` — ${statuses}` : ''}`,
@@ -225,12 +229,18 @@ export class ReleaseDialogComponent {
       ? null
       : {
           ...this.groupState('', rows),
-          label: this.transloco.translate('release.dialog.notLanguageSpecific', { count: rows.length }),
+          label:
+            this.subjectName() && rows.length === 1
+              ? rows[0].label
+              : this.transloco.translate('release.dialog.notLanguageSpecific', { count: rows.length }),
         };
   });
-  protected readonly allLanguagesTicked = computed(() => this.languageGroups().every((group) => group.checked));
+  private readonly choosableGroups = computed(() => this.languageGroups().filter((group) => !group.disabled));
+  protected readonly allLanguagesTicked = computed(
+    () => this.choosableGroups().length > 0 && this.choosableGroups().every((group) => group.checked),
+  );
   protected readonly someLanguagesTicked = computed(
-    () => !this.allLanguagesTicked() && this.languageGroups().some((group) => group.checked || group.indeterminate),
+    () => !this.allLanguagesTicked() && this.choosableGroups().some((group) => group.checked || group.indeterminate),
   );
   protected readonly allTicked = computed(() => this.selection().length > 0 && this.checkedCount() === this.selection().length);
   protected readonly someTicked = computed(() => this.checkedCount() > 0 && !this.allTicked());
@@ -276,7 +286,10 @@ export class ReleaseDialogComponent {
     effect(
       () => {
         const choices = this.choices();
-        untracked(() => this.selection.set(choices.map((choice) => ({ ...choice }))));
+        untracked(() => {
+          this.selection.set(choices.map((choice) => ({ ...choice })));
+          this.loadOtherLanguages(choices);
+        });
       },
       { allowSignalWrites: true },
     );
@@ -298,17 +311,17 @@ export class ReleaseDialogComponent {
 
   /** "All changed languages" (or "Select all"): ticks every offered choice, or unticks them. */
   protected tickAll(checked: boolean): void {
-    this.selection.update((list) => list.map((choice) => ({ ...choice, checked })));
+    this.selection.update((list) => list.map((choice) => (choice.disabled ? choice : { ...choice, checked })));
   }
 
   /** A language checkbox (or `''`, the one of the items without a language): every selected row of it follows. */
   protected toggleLocale(locale: string, checked: boolean): void {
-    this.selection.update((list) => list.map((choice) => (choice.locale === locale ? { ...choice, checked } : choice)));
+    this.selection.update((list) => list.map((choice) => (choice.locale === locale && !choice.disabled ? { ...choice, checked } : choice)));
   }
 
   /** "All changed languages" of a grouped release: the language rows only, the not-language-specific ones keep their tick. */
   protected tickAllLanguages(checked: boolean): void {
-    this.selection.update((list) => list.map((choice) => (choice.locale ? { ...choice, checked } : choice)));
+    this.selection.update((list) => list.map((choice) => (choice.locale && !choice.disabled ? { ...choice, checked } : choice)));
   }
 
   protected close(): void {
@@ -372,8 +385,58 @@ export class ReleaseDialogComponent {
   }
 
   private groupState(locale: string, rows: readonly ReleaseChoice[]): Omit<ChoiceGroup, 'label'> {
-    const ticked = rows.filter((row) => row.checked).length;
-    return { locale, count: rows.length, checked: ticked === rows.length, indeterminate: ticked > 0 && ticked < rows.length };
+    const choosable = rows.filter((row) => !row.disabled);
+    const ticked = choosable.filter((row) => row.checked).length;
+    return {
+      locale,
+      count: rows.length,
+      disabled: choosable.length === 0,
+      checked: choosable.length > 0 && ticked === choosable.length,
+      indeterminate: ticked > 0 && ticked < choosable.length,
+    };
+  }
+
+  /**
+   * A release offers all of an item's languages, as the sample does: the other changed ones (ticked) and the unchanged
+   * ones (disabled), even when the caller picked one row, or rows on another page. The asset's release state is read
+   * once per asset; a failed read leaves the caller's rows as they are.
+   */
+  private loadOtherLanguages(choices: readonly ReleaseChoice[]): void {
+    this.otherLanguages?.unsubscribe();
+    const assets = new Map<string, ReleaseChoice>();
+    for (const choice of choices) {
+      if (choice.locale && !assets.has(choice.assetUuid)) {
+        assets.set(choice.assetUuid, choice);
+      }
+    }
+    if (this.mode() !== 'release' || assets.size === 0) {
+      return;
+    }
+    const known = new Set(choices.map((choice) => itemKey(choice.assetUuid, choice.locale)));
+    this.otherLanguages = forkJoin(
+      [...assets.entries()].map(([uuid, sibling]) =>
+        this.api.assetDetail(this.projectKey(), uuid).pipe(
+          map((detail) =>
+            localeStatuses(detail.release)
+              .filter((entry) => entry.key && !known.has(itemKey(uuid, entry.key)))
+              .map<ReleaseChoice>((entry) => ({
+                ...sibling,
+                locale: entry.key,
+                label: `${sibling.assetName ?? sibling.label} · ${localeTag(entry.key)} — ${statusLabel(entry.status)}`,
+                status: entry.status,
+                checked: eligible('release', entry.status),
+                disabled: !eligible('release', entry.status),
+              })),
+          ),
+          catchError(() => of([] as ReleaseChoice[])),
+        ),
+      ),
+    ).subscribe((found) => {
+      const extra = found.flat();
+      if (extra.length > 0) {
+        this.selection.update((list) => [...list, ...extra]);
+      }
+    });
   }
 
   private successMessage(mode: ReleaseMode, result: ReleaseResultView): string {

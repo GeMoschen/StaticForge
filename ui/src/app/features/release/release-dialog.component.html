@@ -11,16 +11,16 @@
     <section class="rd__part" aria-labelledby="rd-choices">
       <h3 class="rd__heading" id="rd-choices">{{ legend() }}</h3>
       @if (grouped()) {
-        @if (languageGroups().length > 1) {
+        @if (languageGroups().length > 0) {
           <sf-checkbox class="rd__all" [value]="allLanguagesTicked()" [indeterminate]="someLanguagesTicked()" (valueChange)="tickAllLanguages($event)">{{
             'release.dialog.allChanged' | transloco
           }}</sf-checkbox>
         }
         @if (languageGroups().length > 0) {
-          <ul class="rd__list" [class.rd__list--indent]="languageGroups().length > 1">
+          <ul class="rd__list rd__list--indent">
             @for (group of languageGroups(); track group.locale) {
               <li>
-                <sf-checkbox [value]="group.checked" [indeterminate]="group.indeterminate" (valueChange)="toggleLocale(group.locale, $event)">
+                <sf-checkbox [value]="group.checked" [indeterminate]="group.indeterminate" [disabled]="group.disabled" (valueChange)="toggleLocale(group.locale, $event)">
                   {{ group.label }}
                   @if (group.locale === defaultLocale()) {
                     <sf-badge class="rd__badge" [label]="'release.dialog.default' | transloco" />

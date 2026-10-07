@@ -277,11 +277,19 @@ describe('ChangesComponent', () => {
     const bar = await screen.findByRole('group', { name: 'Bulk actions' });
     expect(bar.textContent).toContain('2 selected');
     fireEvent.click(within(bar).getByRole('button', { name: 'Release…' }));
+    // The dialog reads the release state of the page (not of the media): its other languages join the selection.
+    const asset = await waitFor(() => http.expectOne(`${BASE}/assets/${HOME}`));
+    asset.flush({ uuid: HOME, release: { de: { status: 'NEW' }, en: { status: 'CHANGED' }, fr: { status: 'PUBLISHED' } } });
     const plan = await waitFor(() => http.expectOne(`${BASE}/releases/plan`));
     // The shared key ("every language") travels as an item without a locale.
-    expect(plan.request.body).toEqual({ items: [{ assetUuid: HOME, locale: 'en' }, { assetUuid: HERO }] });
+    expect(plan.request.body.items).toEqual(
+      expect.arrayContaining([{ assetUuid: HOME, locale: 'en' }, { assetUuid: HERO }]),
+    );
     plan.flush({ items: [], dependencies: [], incomplete: [], warnings: [] });
-    expect(await screen.findByRole('dialog', { name: /Release/ })).toBeInTheDocument();
+    const dialog = await screen.findByRole('dialog', { name: /Release/ });
+    expect(within(dialog).getByRole('heading', { name: 'Languages' })).toBeInTheDocument();
+    expect(await within(dialog).findByRole('checkbox', { name: /\(DE\)/ })).toBeChecked();
+    expect(within(dialog).getByRole('checkbox', { name: /\(FR\)/ })).toBeDisabled();
   });
 
   it('opens the schedule dialog for the selection, only with the schedule permission', async () => {
