@@ -1,0 +1,49 @@
+@if (subject()) {
+  <ul class="ra__pills" [attr.aria-label]="'release.actions.statusLabel' | transloco">
+    @for (pill of pills(); track pill.key) {
+      <li>
+        <sf-status size="sm" [tone]="pill.tone" [icon]="pill.icon" [label]="pill.label" [detail]="pill.detail" [iconOnly]="false" />
+      </li>
+    }
+  </ul>
+  @if (permissions.canRelease()) {
+    <sf-button icon="publish" (click)="onRelease()">{{ 'release.actions.release' | transloco }}</sf-button>
+    @if (permissions.canScheduleRelease() && scheduleTypes().length > 0) {
+      <sf-button variant="secondary" icon="schedule" (click)="scheduling.set(true)">{{ 'release.actions.schedule' | transloco }}</sf-button>
+    }
+    <sf-menu variant="secondary" [label]="'release.actions.more' | transloco: { name: name() }" [items]="moreItems()" />
+  }
+  @if (pending().length > 0) {
+    <ul class="ra__pending">
+      @for (line of pending(); track line.id) {
+        <li>
+          <a [routerLink]="['/p', projectKey(), 'schedules']" [queryParams]="{ id: line.id }">
+            <sf-icon name="schedule" />
+            {{ line.text }}
+          </a>
+        </li>
+      }
+    </ul>
+  }
+
+  @if (scheduling()) {
+    <sf-schedule-dialog
+      [projectKey]="projectKey()"
+      [types]="scheduleTypes()"
+      [choices]="releaseChoices()"
+      [unpublishChoices]="unpublishChoices()"
+      (closed)="scheduling.set(false)"
+    />
+  }
+
+  @if (dialog(); as d) {
+    <sf-release-dialog
+      [projectKey]="projectKey()"
+      [mode]="d.mode"
+      [choices]="d.choices"
+      [subjectName]="name()"
+      (done)="onDone(d.mode)"
+      (closed)="dialog.set(null)"
+    />
+  }
+}

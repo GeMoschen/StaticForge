@@ -7115,5 +7115,192 @@
         "deletedOnline": "Deleted “{name}”. It stays online until you release the deletion."
       }
     }
+  },
+  "release": {
+    "actions": {
+      "statusLabel": "Release status per language",
+      "pill": "{language}: {status}",
+      "scheduled": "Scheduled",
+      "allLanguages": "All languages",
+      "release": "Release…",
+      "schedule": "Schedule…",
+      "more": "More release actions for “{name}”",
+      "unpublish": "Unpublish…",
+      "discard": "Discard changes…",
+      "nothingWaiting": "Nothing here is waiting to be released.",
+      "nothingToUnpublish": "Nothing is online to unpublish.",
+      "nothingToDiscard": "No language has changes to discard."
+    },
+    "dialog": {
+      "title": {
+        "release": "Release",
+        "unpublish": "Unpublish",
+        "discard": "Discard changes"
+      },
+      "titleNamed": {
+        "release": "Release “{name}”",
+        "unpublish": "Unpublish “{name}”",
+        "discard": "Discard changes of “{name}”"
+      },
+      "intro": {
+        "release": "Goes online with the next build.",
+        "unpublish": "Goes offline with the next build. The draft stays and can be released again.",
+        "discard": "Writes the released version back as the draft — a new revision; the discarded draft stays in the history."
+      },
+      "language": "Language",
+      "languages": "Languages",
+      "items": "Items",
+      "allChanged": "All changed languages",
+      "selectAll": "Select all",
+      "default": "Default",
+      "nothing": "Nothing to {action}.",
+      "discardHeading": "What would be discarded",
+      "diffLoading": "Loading changes…",
+      "diffFailed": "Could not load the changes.",
+      "diffNone": "No field changes (a move, rename or deletion).",
+      "keptNote": "Discarded. The shared fields (not per language) were kept, because other languages have unreleased changes on them: {items}.",
+      "comment": "Comment",
+      "commentPlaceholder": "Optional note for the revision",
+      "cancel": "Cancel",
+      "close": "Close",
+      "failed": "Could not {action} — try again.",
+      "reason": {
+        "nothing": "Tick at least one language.",
+        "nothingItems": "Tick at least one item.",
+        "redirect": "Choose the page to redirect to, or untick the redirect.",
+        "checking": "Checking what the release takes along…",
+        "errors": "{count, plural, one {Fix the blocking error first.} other {Fix the # blocking errors first.}}",
+        "warnings": "Confirm that you've read the warnings."
+      },
+      "toast": {
+        "release": "Released in r{revision} — goes online with the next build.{skipped, plural, =0 {} other { # skipped: nothing to do.}}",
+        "unpublish": "Unpublished in r{revision} — goes offline with the next build.{skipped, plural, =0 {} other { # skipped: nothing to do.}}",
+        "discard": "Changes discarded in r{revision}.{skipped, plural, =0 {} other { # skipped: nothing to do.}}",
+        "nothingToRelease": "Nothing to release — already published.",
+        "nothingChanged": "Nothing changed."
+      }
+    },
+    "plan": {
+      "checking": "Checking dependencies…",
+      "updating": "Updating…",
+      "failed": "Could not compute what the release takes along.",
+      "errors": "{count, plural, one {# blocking error} other {# blocking errors}}",
+      "errorsNote": "Fix these before releasing — or untick the language or dependency they belong to.",
+      "notIncluded": "(not included)",
+      "open": "Open",
+      "warnings": "{count, plural, one {# warning} other {# warnings}}",
+      "acknowledge": "I've read the warnings",
+      "scheduledWarnings": "The scheduled release goes ahead and records these warnings with its run.",
+      "notes": "Notes ({count})",
+      "fills": "Filled in on release",
+      "dependencies": "Also release ({count})",
+      "dependenciesNote": "Unreleased items the selection needs. Anything you untick renders empty until it is released.",
+      "noDependencies": "No unreleased dependencies.",
+      "via": "via {name}",
+      "reasons": {
+        "reference": "Referenced by the selection",
+        "container": "Folders and sets it sits in",
+        "setMember": "Records of the selected sets",
+        "descendant": "Descendants of a changed folder"
+      }
+    },
+    "redirect": {
+      "wanted": "Redirect old URL to…",
+      "wantedMany": "Redirect the old URLs to…",
+      "looking": "Looking for the nearest folder page…",
+      "noPage": "No page chosen",
+      "change": "Change page…",
+      "choose": "Choose page…",
+      "hint": "Requests for the page’s current URLs are sent to this page once a build no longer contains it.",
+      "hintMany": "Requests for the pages’ current URLs are sent to this page once a build no longer contains them.",
+      "offlineItself": "“{name}” is going offline itself — choose another page.",
+      "untitled": "Untitled"
+    },
+    "schedule": {
+      "title": {
+        "RELEASE": "Schedule release",
+        "UNPUBLISH": "Schedule unpublish",
+        "GENERATION": "Schedule generation",
+        "RECURRING_GENERATION": "Schedule recurring generation"
+      },
+      "titleEdit": "Edit {kind} schedule",
+      "kind": "What to schedule",
+      "kinds": {
+        "RELEASE": "Release",
+        "UNPUBLISH": "Unpublish",
+        "GENERATION": "Generation",
+        "RECURRING_GENERATION": "Recurring generation"
+      },
+      "items": "Items",
+      "nothingRelease": "Nothing to release.",
+      "nothingUnpublish": "Nothing to unpublish.",
+      "drift": "Draft changed since scheduled",
+      "when": "When",
+      "dateTime": "Date and time",
+      "zone": "Time zone: {zone}",
+      "cronMode": "How to repeat",
+      "cronPreset": "Repeat",
+      "cronAdvanced": "Advanced (cron)",
+      "repeat": "Repeat",
+      "on": "On",
+      "at": "At",
+      "atMinute": "At minute",
+      "cron": "Cron expression",
+      "cronHint": "minute hour day month weekday",
+      "cronFailed": "Invalid cron expression.",
+      "nextRuns": "Next runs (your time)",
+      "computing": "Computing next runs…",
+      "presets": {
+        "hourly": "Every hour",
+        "daily": "Every day",
+        "weekdays": "Every weekday (Mon–Fri)",
+        "weekly": "Every week"
+      },
+      "weekdays": {
+        "0": "Sunday",
+        "1": "Monday",
+        "2": "Tuesday",
+        "3": "Wednesday",
+        "4": "Thursday",
+        "5": "Friday",
+        "6": "Saturday"
+      },
+      "version": "Which version",
+      "pinned": "Release the versions as they are now",
+      "latest": "Release whatever is saved at that time",
+      "then": "Then",
+      "thenGenerate": "Generate right after (incremental build)",
+      "build": "Build",
+      "missed": "If the time is missed (server down, project archived)",
+      "runLate": "Run as soon as possible",
+      "skipLate": "Skip if too late",
+      "lateness": "Skip if more than",
+      "latenessUnit": "Unit",
+      "minutes": "minutes late",
+      "hours": "hours late",
+      "latestNote": "Incomplete items are skipped at run time unless they are completed by then.",
+      "comment": "Comment",
+      "commentPlaceholder": "Optional note for the revision or run",
+      "cancel": "Cancel",
+      "save": "Save",
+      "failed": "Could not save the schedule — try again.",
+      "conflict": "Someone changed this schedule in the meantime — close the dialog and open it again.",
+      "reason": {
+        "cron": "Enter a cron expression.",
+        "cronInvalid": "Fix the cron expression first.",
+        "when": "Pick a date and time.",
+        "past": "Pick a time in the future.",
+        "lateness": "Enter how late is too late.",
+        "items": "Pick at least one item.",
+        "checking": "Checking what the release takes along…",
+        "blocked": "Fix the blocking errors first, or release whatever is saved at that time."
+      },
+      "toast": {
+        "scheduled": "{kind} scheduled.",
+        "scheduledAt": "{kind} scheduled for {when}.",
+        "rescheduled": "{kind} rescheduled.",
+        "rescheduledAt": "{kind} rescheduled for {when}."
+      }
+    }
   }
 }

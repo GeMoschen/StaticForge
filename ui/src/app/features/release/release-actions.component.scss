@@ -1,0 +1,51 @@
+// The release actions are a group of their own: spacing and a vertical divider set their ⋮ apart from the item's own
+// ⋮, which the page header renders right after them (M35.9 decision 34).
+:host {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sf-space-2);
+  margin-inline-end: var(--sf-space-1);
+  padding-inline-end: var(--sf-space-3);
+  border-inline-end: 1px solid var(--sf-border-strong);
+}
+
+// Nothing to act on (no release state, still loading): no divider either.
+:host(.is-empty) {
+  display: none;
+}
+
+.ra__pills {
+  display: inline-flex;
+  gap: var(--sf-space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ra__pending {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--sf-fs-12);
+  line-height: var(--sf-lh-12);
+
+  a {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--sf-space-1);
+    max-width: 24rem;
+    overflow: hidden;
+    color: var(--sf-text-muted);
+    text-decoration: none;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+
+    &:hover {
+      color: var(--sf-text);
+      text-decoration: underline;
+    }
+  }
+}
