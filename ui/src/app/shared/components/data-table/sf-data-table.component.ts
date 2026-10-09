@@ -33,7 +33,7 @@ import { SfCheckboxComponent } from '../forms/sf-checkbox.component';
 import { SfSearchInputComponent } from '../forms/sf-search-input.component';
 import { SfBannerComponent } from '../layout/sf-banner.component';
 import { SfSkeletonComponent } from '../layout/sf-skeleton.component';
-import { sfUniqueId } from '../forms/sf-field-context';
+import { SfFilterPopoverComponent } from '../filter/sf-filter-popover.component';
 import { SfPopoverComponent, SfPopoverTriggerDirective } from '../popover/sf-popover.component';
 import { SfButtonComponent } from '../sf-button.component';
 import { SfEmptyStateComponent } from '../sf-empty-state.component';
@@ -158,6 +158,7 @@ interface Resize {
     SfDataTableColumnsComponent,
     SfEmptyStateComponent,
     SfIconComponent,
+    SfFilterPopoverComponent,
     SfPopoverComponent,
     SfPopoverTriggerDirective,
     SfSearchInputComponent,
@@ -356,11 +357,7 @@ export class SfDataTableComponent<T> implements OnInit, OnDestroy {
       })),
     );
   });
-  /** Prefix of the ids that name the filter groups of the filter popover. */
-  protected readonly filterGroupId = `${sfUniqueId('sf-data-table-filter')}-`;
-  protected isPicked(filterId: string, value: string): boolean {
-    return (this._query().filters[filterId] ?? []).includes(value);
-  }
+  protected readonly pickedFilters = computed(() => this._query().filters);
   protected readonly showToolbar = computed(
     () => this.searchable() || this.filters().length > 0 || this.chooserAvailable(),
   );
@@ -541,7 +538,9 @@ export class SfDataTableComponent<T> implements OnInit, OnDestroy {
 
   toggleFilterValue(filterId: string, value: string): void {
     const current = this._query().filters[filterId] ?? [];
-    const values = current.includes(value) ? current.filter((v) => v !== value) : [...current, value];
+    const single = this.filters().some((f) => f.id === filterId && f.single);
+    const others = single ? [] : current.filter((v) => v !== value);
+    const values = current.includes(value) ? others : [...others, value];
     this.setFilterValues(filterId, values);
   }
 

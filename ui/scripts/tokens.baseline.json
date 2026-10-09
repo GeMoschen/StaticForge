@@ -7,18 +7,6 @@
     "colors": 1,
     "zIndex": 0
   },
-  "src/app/features/generation/findings/sf-run-findings.component.scss": {
-    "colors": 0,
-    "zIndex": 1
-  },
-  "src/app/features/generation/generation-dialog.component.scss": {
-    "colors": 2,
-    "zIndex": 2
-  },
-  "src/app/features/generation/generation-live-log.component.scss": {
-    "colors": 4,
-    "zIndex": 0
-  },
   "src/app/features/pages/conflict-drawer.component.scss": {
     "colors": 3,
     "zIndex": 0
@@ -42,18 +30,6 @@
   "src/app/features/settings/project-settings-members.component.scss": {
     "colors": 0,
     "zIndex": 1
-  },
-  "src/app/features/settings/project-settings-publish-policy.component.scss": {
-    "colors": 2,
-    "zIndex": 2
-  },
-  "src/app/features/settings/project-settings-targets.component.scss": {
-    "colors": 2,
-    "zIndex": 2
-  },
-  "src/app/features/settings/project-settings-url-registry.component.scss": {
-    "colors": 2,
-    "zIndex": 2
   },
   "src/app/shared/components/sf-octl-editor.component.scss": {
     "colors": 1,

@@ -139,7 +139,7 @@ export class SampleBuildDialogComponent {
     this.scope.set(Array.isArray(value) ? (value as string[]) : []);
   }
 
-  @HostListener('document:keydown', ['$event'])
+  @HostListener('keydown', ['$event'])
   protected onKey(event: KeyboardEvent): void {
     if (event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey && event.key.toLowerCase() === 'p') {
       event.preventDefault();

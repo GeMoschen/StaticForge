@@ -1,5 +1,25 @@
 @use 'sample-area';
 
+.area__filters {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sf-space-2);
+}
+
+.bar,
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sf-space-2);
+}
+
+.chips {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
 .cell-when {
   display: inline-flex;
   align-items: baseline;

@@ -11,7 +11,7 @@ import { ImportSessionStore } from './import-session.store';
 /**
  * Project settings tab: "Import" half of `M10`/`M11`'s selective export/import feature —
  * pick a `.zip` archive, analyze it for conflicts, then let the user cancel or commit.
- * Same standalone/OnPush/signals shape as `project-settings-url-registry.component`.
+ * Standalone/OnPush, signals for state.
  *
  * <p>Import is gated on conflicts that refuse the whole import (`blocksImport`), not on every `BLOCKING`
  * one: assets whose conflict rejects only themselves are listed under "Not imported" and simply stay out

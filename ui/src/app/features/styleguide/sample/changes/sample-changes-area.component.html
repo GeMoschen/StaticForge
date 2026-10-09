@@ -10,6 +10,7 @@
     [aria-label]="t(dev() ? 'searchDev' : 'search')"
     (valueChange)="search.set($event)"
   />
+  <sf-filter-popover [groups]="groups()" [picked]="popoverPicked()" (toggled)="toggleFilter($event.group, $event.value)" (cleared)="clearPopover()" />
   @for (menu of filterMenus(); track menu.id) {
     <sf-menu variant="secondary" size="md" align="start" [text]="menu.text" [label]="menu.name" [items]="menu.items" />
   }
@@ -26,8 +27,8 @@
 
 @if (chips().length) {
   <ul class="area__chips" [attr.aria-label]="'styleguide.sample.changes.activeFilters' | transloco">
-    @for (chip of chips(); track chip.id) {
-      <li><sf-tag removable [label]="chip.label" (removed)="setFilter(chip.id, null)" /></li>
+    @for (chip of chips(); track chip.id + ':' + chip.value) {
+      <li><sf-tag removable [label]="chip.label" (removed)="toggleFilter(chip.id, chip.value)" /></li>
     }
     <li>
       <sf-button variant="ghost" size="md" (click)="clearFilters()">{{ 'styleguide.sample.changes.clearFilters' | transloco }}</sf-button>

@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { FrameContextStore } from '../../core/frame/frame-context.store';
 import { BuildNowService } from '../generation/build-now.service';
 import { GenerationService } from '../generation/generation.service';
-import type { GenerationRunView } from '../generation/generation.store';
+import type { GenerationRunView } from '../publishing/runs/runs.util';
 import { ReleaseEventsStore } from '../release/release-events.store';
 import { BuildStatusStore } from './build-status.store';
 import { buildStateOf, stateOfRun, toneOf } from './build-status.util';

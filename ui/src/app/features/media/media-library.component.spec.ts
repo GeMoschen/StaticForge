@@ -690,7 +690,7 @@ describe('MediaLibraryComponent', () => {
       const bar = screen.getByRole('group', { name: 'Library tools' });
       const inOrder = [
         within(bar).getByRole('searchbox', { name: 'Search this folder' }),
-        within(bar).getByRole('combobox', { name: 'File type' }),
+        within(bar).getByRole('button', { name: 'Filters' }),
         within(bar).getByRole('button', { name: /^Sort: Name/ }),
         within(bar).getByRole('radio', { name: 'Grid' }),
         within(bar).getByRole('radio', { name: 'List' }),
@@ -704,16 +704,34 @@ describe('MediaLibraryComponent', () => {
       expect(inOrder.filter((control) => control.getAttribute('role') !== 'radio' && control.getAttribute('tabindex') === '-1')).toEqual([]);
     });
 
-    it('sends the type filter to the URL, and offers each type', async () => {
+    it('sends the type filter to the URL, offers each type but "all", and returns to all on the same tag or Clear', async () => {
       const { navigate } = await setup({ inputs: { folder: 'products-uuid' } });
       await screen.findAllByRole('gridcell');
-      const type = screen.getByRole('combobox', { name: 'File type' });
-      expect(within(type).getAllByRole('option').map((o) => o.textContent?.trim())).toEqual(['All types', 'Images', 'Documents', 'Text']);
+      fireEvent.click(screen.getByRole('button', { name: 'Filters' }));
+      const type = await screen.findByRole('group', { name: 'File type' });
+      expect(within(type).getAllByRole('button').map((o) => o.textContent?.trim())).toEqual(['Images', 'Documents', 'Text']);
 
-      fireEvent.change(type, { target: { value: '1' } });
-
+      fireEvent.click(within(type).getByRole('button', { name: 'Images' }));
       await waitFor(() => expect(lastQuery(navigate)).toEqual({ type: 'images' }));
       expect(navigate.mock.lastCall?.[1]).toMatchObject({ replaceUrl: true });
+
+      // Another tag replaces the picked one.
+      fireEvent.click(within(type).getByRole('button', { name: 'Text' }));
+      await waitFor(() => expect(lastQuery(navigate)).toEqual({ type: 'text' }));
+    });
+
+    it('returns to all types on the picked tag again, and on Clear filters', async () => {
+      const { navigate } = await setup({ inputs: { folder: 'products-uuid', type: 'text' } });
+      await screen.findAllByRole('gridcell');
+      fireEvent.click(screen.getByRole('button', { name: 'Filters' }));
+      const type = await screen.findByRole('group', { name: 'File type' });
+
+      fireEvent.click(within(type).getByRole('button', { name: 'Text' }));
+      await waitFor(() => expect(lastQuery(navigate)).toEqual({ type: null }));
+
+      navigate.mockClear();
+      fireEvent.click(screen.getByRole('button', { name: 'Clear filters' }));
+      await waitFor(() => expect(lastQuery(navigate)).toEqual({ type: null }));
     });
 
     it('narrows the folder by the type from the URL', async () => {
@@ -721,7 +739,9 @@ describe('MediaLibraryComponent', () => {
       await screen.findAllByRole('gridcell');
 
       expect(cardNames()).toEqual(['brand.css', 'logo.svg']);
-      await waitFor(() => expect(screen.getByRole('combobox', { name: 'File type' })).toHaveDisplayValue(/Text/));
+      fireEvent.click(screen.getByRole('button', { name: 'Filters' }));
+      const type = await screen.findByRole('group', { name: 'File type' });
+      expect(within(type).getByRole('button', { name: 'Text' })).toHaveAttribute('aria-pressed', 'true');
     });
 
     it('sorts by the URL’s field and direction, and names the sort on its button', async () => {

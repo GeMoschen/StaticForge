@@ -94,4 +94,23 @@ describe('AreaShellComponent', () => {
     fixture.detectChanges();
     expect(screen.getByRole('heading', { level: 1 }).textContent).toContain('Members');
   });
+
+  it('projects an area’s status and actions into the page header', async () => {
+    const location = signal(parseFrameLocation('/p/acme/publishing/runs'));
+    await render(
+      `<sf-area-shell area="publishing"><b sfAreaStatus>Status chip</b><button sfAreaActions>Area action</button></sf-area-shell>`,
+      {
+        imports: [AreaShellComponent],
+        providers: [
+          provideRouter([{ path: 'p/:projectKey/publishing', children: [{ path: ':page', component: PageComponent }] }]),
+          { provide: FrameContextStore, useValue: { location, projectKey: computed(() => location().projectKey) } },
+          { provide: DeveloperModeService, useValue: { enabled: signal(false) } },
+          { provide: ProjectPermissionsStore, useValue: { readsAsProjectAdmin: signal(true) } },
+        ],
+      },
+    );
+    const header = screen.getByRole('heading', { level: 1 }).closest('.sf-page-header') as HTMLElement;
+    expect(header.textContent).toContain('Status chip');
+    expect(header.querySelector('button')?.textContent).toBe('Area action');
+  });
 });

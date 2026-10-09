@@ -8,12 +8,9 @@ import {
   impactHeadline,
   otherCausesLabel,
   planRequestKey,
-  planSummaryLine,
   reasonBadge,
   reasonText,
-  redirectsLine,
   rootKindRows,
-  viaRows,
   type PlanEntryView,
   type PlanSummaryView,
   type ReasonView,
@@ -117,23 +114,12 @@ describe('build insight summaries', () => {
     via: [{ edge: 'SECTION_TEMPLATE', assetType: 'SECTION_TEMPLATE', uid: 'teaser', count: 412 }],
   };
 
-  it('writes the run history one-liner', () => {
-    expect(planSummaryLine(incremental)).toBe('Incremental · 37 pages (via 2 changes)');
-    expect(planSummaryLine({ incremental: false, pageCount: 5000 })).toBe('Full · 5,000 pages');
-    expect(planSummaryLine({ incremental: false, pageCount: 1, scoped: true })).toBe('Scoped · 1 page');
-    expect(planSummaryLine({ incremental: false, pageCount: 3, fallbackCause: 'BASE_BUILD_MISSING' })).toBe(
-      'Full · 3 pages · fell back from incremental',
-    );
-    expect(planSummaryLine(null)).toBe('');
-  });
-
   it('counts by root kind and first edge, largest first', () => {
     expect(rootKindRows(incremental).map((row) => `${row.label}: ${row.count}`)).toEqual([
       'Changed: 30',
       'Missing from the previous build: 7',
     ]);
     expect(firstEdgeRows(incremental.byFirstEdge).map((row) => row.label)).toEqual(['places section', 'No chain']);
-    expect(viaRows(incremental)).toEqual(['412 via section_template:teaser']);
   });
 
   it('warns about a fallback to a full build', () => {
@@ -168,15 +154,5 @@ describe('build insight summaries', () => {
       q: 'news',
       validate: 'true',
     });
-  });
-});
-
-describe('redirectsLine', () => {
-  it('reads the redirect counts of a run, leaving out what the summary lacks', () => {
-    expect(redirectsLine({ redirectsAdded: 2, redirectsActive: 14 })).toBe('2 redirects added · 14 redirects active');
-    expect(redirectsLine({ redirectsAdded: 1 })).toBe('1 redirect added');
-    expect(redirectsLine({ redirectsAdded: 0, redirectsActive: 0 })).toBe('0 redirects added · 0 redirects active');
-    expect(redirectsLine({ pageCount: 3 })).toBe('');
-    expect(redirectsLine(null)).toBe('');
   });
 });

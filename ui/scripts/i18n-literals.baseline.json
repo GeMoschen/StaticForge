@@ -3,12 +3,6 @@
   "src/app/features/content/move-target-dialog.component.ts": 5,
   "src/app/features/dashboard/archived-banner.component.ts": 3,
   "src/app/features/dashboard/dashboard.component.html": 19,
-  "src/app/features/generation/findings/sf-finding-counts.component.ts": 4,
-  "src/app/features/generation/findings/sf-run-findings.component.html": 37,
-  "src/app/features/generation/generation-dialog.component.html": 45,
-  "src/app/features/generation/generation-live-log.component.html": 7,
-  "src/app/features/generation/generation-run-details.component.html": 19,
-  "src/app/features/generation/generation.component.html": 22,
   "src/app/features/generation/insight/sf-plan-entries-table.component.ts": 18,
   "src/app/features/generation/insight/sf-rebuild-reason.component.ts": 3,
   "src/app/features/pages/conflict-drawer.component.html": 18,
@@ -31,11 +25,5 @@
   "src/app/features/settings/project-settings-import.component.html": 5,
   "src/app/features/settings/project-settings-locales.component.html": 41,
   "src/app/features/settings/project-settings-media.component.html": 11,
-  "src/app/features/settings/project-settings-members.component.html": 23,
-  "src/app/features/settings/project-settings-publish-policy.component.html": 13,
-  "src/app/features/settings/project-settings-quality.component.html": 19,
-  "src/app/features/settings/project-settings-redirects.component.html": 40,
-  "src/app/features/settings/project-settings-targets.component.html": 34,
-  "src/app/features/settings/project-settings-url-registry.component.html": 46,
-  "src/app/features/settings/redirect-dialog.component.html": 26
+  "src/app/features/settings/project-settings-members.component.html": 23
 }

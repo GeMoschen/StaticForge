@@ -12,9 +12,8 @@ import { ProjectPermissionsStore } from '../../core/project/project-permissions.
 import { DensityService } from '../../core/ui/density.service';
 import { ShortcutService } from '../../core/ui/shortcut.service';
 import { ThemeService } from '../../core/ui/theme.service';
-import { BuildNowService } from '../generation/build-now.service';
+import { BuildDialogService } from '../publishing/runs/build-dialog/build-dialog.service';
 import { HistoryDrawerStore } from '../history/history-drawer.store';
-import { BuildStatusStore } from './build-status.store';
 import { useFrameShortcuts } from './frame-shortcuts';
 
 const press = (init: KeyboardEventInit & { key: string }) =>
@@ -27,12 +26,11 @@ class Frame {
   }
 }
 
-function setup(options: { url?: string; dev?: boolean; canBuild?: boolean; building?: boolean } = {}) {
+function setup(options: { url?: string; dev?: boolean; canBuild?: boolean } = {}) {
   const location = signal(parseFrameLocation(options.url ?? '/p/acme/pages'));
   const dev = signal(options.dev ?? false);
   const canBuild = signal(options.canBuild ?? true);
-  const state = signal(options.building ? 'running' : 'success');
-  const buildNow = { start: vi.fn() };
+  const buildDialog = { open: vi.fn() };
   const history = { toggle: vi.fn() };
   const preferences = { railCollapsed: signal(false), setRailCollapsed: vi.fn() };
   TestBed.configureTestingModule({
@@ -43,8 +41,7 @@ function setup(options: { url?: string; dev?: boolean; canBuild?: boolean; build
       { provide: ProjectPermissionsStore, useValue: { canIncrementalBuild: canBuild } },
       { provide: PreferencesService, useValue: preferences },
       { provide: HistoryDrawerStore, useValue: history },
-      { provide: BuildNowService, useValue: buildNow },
-      { provide: BuildStatusStore, useValue: { state } },
+      { provide: BuildDialogService, useValue: buildDialog },
       { provide: ThemeService, useValue: { theme: signal('light'), toggle: vi.fn() } },
       { provide: DensityService, useValue: { density: signal('compact'), toggle: vi.fn() } },
       { provide: SessionService, useValue: { signOut: vi.fn() } },
@@ -53,7 +50,7 @@ function setup(options: { url?: string; dev?: boolean; canBuild?: boolean; build
   const router = TestBed.inject(Router);
   const navigate = vi.spyOn(router, 'navigate').mockResolvedValue(true);
   const fixture = TestBed.createComponent(Frame);
-  return { fixture, navigate, buildNow, history, preferences, dev, canBuild, location, shortcuts: TestBed.inject(ShortcutService) };
+  return { fixture, navigate, buildDialog, history, preferences, dev, canBuild, location, shortcuts: TestBed.inject(ShortcutService) };
 }
 
 describe('frame shortcuts', () => {
@@ -104,23 +101,17 @@ describe('frame shortcuts', () => {
     expect(history.toggle).toHaveBeenCalledTimes(1);
   });
 
-  it('starts a build with Alt+Shift+B only for whoever may build, and not while one runs', () => {
-    const { buildNow, canBuild, shortcuts } = setup();
+  it('opens the Build now dialog with Alt+Shift+B only for whoever may build', () => {
+    const { buildDialog, canBuild, shortcuts } = setup();
     press({ key: 'B', code: 'KeyB', altKey: true, shiftKey: true });
-    expect(buildNow.start).toHaveBeenCalledWith('acme', 'Build now');
+    expect(buildDialog.open).toHaveBeenCalledTimes(1);
     expect(shortcuts.actions().map((c) => c.id)).toContain('build');
 
-    buildNow.start.mockClear();
+    buildDialog.open.mockClear();
     canBuild.set(false);
     press({ key: 'B', code: 'KeyB', altKey: true, shiftKey: true });
-    expect(buildNow.start).not.toHaveBeenCalled();
+    expect(buildDialog.open).not.toHaveBeenCalled();
     expect(shortcuts.actions().map((c) => c.id)).not.toContain('build');
-  });
-
-  it('keeps Build now away while a build runs', () => {
-    const { buildNow } = setup({ building: true });
-    press({ key: 'B', code: 'KeyB', altKey: true, shiftKey: true });
-    expect(buildNow.start).not.toHaveBeenCalled();
   });
 
   it('offers the palette-only actions, and takes everything back with the frame', () => {

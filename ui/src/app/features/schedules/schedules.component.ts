@@ -23,6 +23,7 @@ import { SfStatusComponent, type SfStatusTone } from '../../shared/components/di
 import { SfTagComponent } from '../../shared/components/display/sf-tag.component';
 import { SfBannerComponent } from '../../shared/components/layout/sf-banner.component';
 import { SfPageHeaderComponent } from '../../shared/components/layout/sf-page-header.component';
+import { type SfFilterGroup, SfFilterPopoverComponent } from '../../shared/components/filter/sf-filter-popover.component';
 import { SfMenuComponent } from '../../shared/components/menu/sf-menu.component';
 import { type SfMenuItem, toContextItems } from '../../shared/components/menu/sf-menu-item';
 import { SfButtonComponent } from '../../shared/components/sf-button.component';
@@ -119,6 +120,7 @@ interface DialogState {
     SfButtonComponent,
     SfDataTableCellDirective,
     SfDataTableComponent,
+    SfFilterPopoverComponent,
     SfIconComponent,
     SfMenuComponent,
     SfPageHeaderComponent,
@@ -222,8 +224,18 @@ export class SchedulesComponent {
     owner: this.owner() || undefined,
   }));
 
+  /** Type and status share one filter popover (gate decision 209); each holds one value, so a toggle replaces or clears. */
+  protected readonly filterGroups = computed<SfFilterGroup[]>(() =>
+    (['type', 'status'] as const).map((key) => ({ id: key, label: this.t(`filters.${key}`), options: this.filterOptions()[key] })),
+  );
+  protected readonly pickedGroups = computed<Record<string, string[]>>(() => ({
+    type: this.type() ? [this.type()!] : [],
+    status: this.status() ? [this.status()!] : [],
+  }));
+
+  /** Owner can list every member, so it stays a menu beside the popover. */
   protected readonly filterMenus = computed(() =>
-    (['type', 'status', 'owner'] as const).map((key) => {
+    (['owner'] as const).map((key) => {
       const chosen = this.picked()[key];
       const name = this.t(`filters.${key}`);
       const items: SfMenuItem[] = [
@@ -367,6 +379,11 @@ export class SchedulesComponent {
 
   protected setFilter(key: FilterKey, value: string | null): void {
     this.navigate({ [key]: value, page: null });
+  }
+
+  protected toggleFilter(group: string, value: string): void {
+    const key = group as FilterKey;
+    this.setFilter(key, this.picked()[key] === value ? null : value);
   }
 
   protected clearFilters(): void {

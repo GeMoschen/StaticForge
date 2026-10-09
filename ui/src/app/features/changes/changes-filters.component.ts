@@ -5,6 +5,7 @@ import { ProjectContextStore } from '../../core/project/project-context.store';
 import { ProjectMembersStore } from '../../core/project/project-members.store';
 import { SfTagComponent } from '../../shared/components/display/sf-tag.component';
 import { SfSearchInputComponent } from '../../shared/components/forms/sf-search-input.component';
+import { SfFilterPopoverComponent, SfFilterGroup } from '../../shared/components/filter/sf-filter-popover.component';
 import { SfMenuComponent } from '../../shared/components/menu/sf-menu.component';
 import type { SfMenuItem } from '../../shared/components/menu/sf-menu-item';
 import { SfButtonComponent } from '../../shared/components/sf-button.component';
@@ -19,14 +20,15 @@ interface FilterOption {
   readonly icon?: string;
 }
 
-type FilterId = 'type' | 'status' | 'lang' | 'by' | 'folder';
+type PopoverId = 'type' | 'status' | 'lang';
+type FilterId = PopoverId | 'by' | 'folder';
 
 /** How many picked values a trigger names before it says "3 selected". */
 const NAMED_PICKS = 2;
 
 /**
  * The filter bar of the Changes view (M35.23, gate decisions 26, 41 and 43): search, type (each type with its icon),
- * status, language, changed by, folder and — at the end — the sort, in one row of normal-size controls. Removable chips
+ * status, language (one Filters popover with a group each), changed by, folder (menus) and — at the end — the sort, in one row of normal-size controls. Removable chips
  * of what is set sit below it, only while a filter is active. Type, status and language take several picks (the URL
  * holds them as repeated parameters); changed by and folder take one.
  */
@@ -34,7 +36,7 @@ const NAMED_PICKS = 2;
   selector: 'sf-changes-filters',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [SfButtonComponent, SfMenuComponent, SfSearchInputComponent, SfTagComponent],
+  imports: [SfButtonComponent, SfFilterPopoverComponent, SfMenuComponent, SfSearchInputComponent, SfTagComponent],
   templateUrl: './changes-filters.component.html',
   styleUrl: './changes-filters.component.scss',
 })
@@ -85,9 +87,27 @@ export class ChangesFiltersComponent {
     };
   });
 
+  /** Type, status and language: the groups of the Filters popover (language only in a localized project). */
+  protected readonly groups = computed<SfFilterGroup[]>(() => {
+    const ids: PopoverId[] = this.store.localeOptions().length > 0 ? ['type', 'status', 'lang'] : ['type', 'status'];
+    return ids.map((id) => ({ id, label: this.t(`filters.${id}`), options: this.options()[id] }));
+  });
+  protected readonly popoverPicked = computed(() => {
+    const picked = this.picked();
+    return { type: picked.type, status: picked.status, lang: picked.lang };
+  });
+
+  protected toggle(group: string, value: string): void {
+    this.pick(group as FilterId, value);
+  }
+
+  protected clearPopover(): void {
+    this.store.update({ type: [], status: [], locale: [] });
+  }
+
   protected readonly menus = computed(() => {
     const picked = this.picked();
-    const ids: FilterId[] = this.store.localeOptions().length > 0 ? ['type', 'status', 'lang', 'by', 'folder'] : ['type', 'status', 'by', 'folder'];
+    const ids: FilterId[] = ['by', 'folder'];
     return ids.map((id) => {
       const options = this.options()[id];
       const chosen = picked[id];

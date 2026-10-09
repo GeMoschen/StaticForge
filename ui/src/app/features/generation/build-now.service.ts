@@ -4,7 +4,7 @@ import { Subject } from 'rxjs';
 import { ProjectPermissionsStore } from '../../core/project/project-permissions.store';
 import { ToastService } from '../../core/ui/toast.service';
 import { GenerationService } from './generation.service';
-import type { GenerationRunView } from './generation.store';
+import type { GenerationRunView } from '../publishing/runs/runs.util';
 
 /**
  * "Build now" after a release (M28.3.3, epic decision 14). A release only changes what the next build renders; this
@@ -29,13 +29,13 @@ export class BuildNowService {
     }
     this.toasts.show(`${message} Build now to put it online.`, 'success', {
       label: 'Build now',
-      run: () => this.start(projectKey),
+      run: () => this.start(projectKey, undefined, 'RELEASE'),
     });
   }
 
   /** Starts the incremental build to the default target and offers its progress. */
-  start(projectKey: string, comment = 'Build after release'): void {
-    this.generation.start(projectKey, { mode: 'INCREMENTAL', comment }).subscribe({
+  start(projectKey: string, comment = 'Build after release', trigger: 'MANUAL' | 'RELEASE' = 'MANUAL'): void {
+    this.generation.start(projectKey, { mode: 'INCREMENTAL', comment, trigger }).subscribe({
       next: (run) => {
         this.started.next(run);
         this.toasts.show(`Build #${run.id} started.`, 'success', {

@@ -50,6 +50,10 @@ describe('ProjectPermissionsStore', () => {
           expect(s.canCreateTargets(), label).toBe(rank >= 2 && writable);
           expect(s.canManageTargets(), label).toBe(rank >= 3 && writable);
           expect(s.canAdminProject(), label).toBe(rank >= 3 && writable);
+          expect(s.canEditRedirects(), label).toBe(rank >= 2 && writable);
+          expect(s.canOverrideUrls(), label).toBe(rank >= 2 && writable);
+          expect(s.canDeleteAllRedirects(), label).toBe(rank >= 3 && writable);
+          expect(s.canResetUrls(), label).toBe(rank >= 3 && writable);
           expect(s.canPromote(), label).toBe(rank >= 2 && writable);
           expect(s.canScheduleGeneration(), label).toBe(rank >= 2 && writable);
           expect(s.canRelease(), label).toBe(permissions.includes('RELEASE') && writable);

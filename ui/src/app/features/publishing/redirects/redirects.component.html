@@ -1,0 +1,116 @@
+@if (canEdit()) {
+  <div class="section__bar">
+    <sf-button icon="add" (click)="add()">{{ t('add') }}</sf-button>
+  </div>
+}
+
+@if (access.readOnlyLabel(); as label) {
+  <sf-banner tone="info">{{ label }}</sf-banner>
+}
+
+@if (conflict()) {
+  <sf-banner tone="warning" live="polite">
+    {{ t('conflict') }}
+    <sf-button sfBannerActions variant="secondary" size="sm" icon="refresh" (click)="reload()">{{ t('reload') }}</sf-button>
+  </sf-banner>
+}
+
+@if (!loading() || rows().length > 0) {
+  <p class="section__hint">
+    {{ basisRunId() === null ? t('introNoBuild') : t('intro', { n: basisRunId() }) }}
+  </p>
+}
+
+<sf-data-table
+  class="section__table"
+  mode="server"
+  paging="pager"
+  urlSync=""
+  searchable
+  [rowsOpenable]="canEdit()"
+  [pageSize]="pageSize"
+  [total]="total()"
+  [loading]="loading()"
+  [error]="loadFailed() ? t('loadError') : null"
+  [columns]="columns()"
+  [rows]="rows()"
+  [rowKey]="rowKey"
+  [rowLabel]="rowLabel"
+  [filters]="filters()"
+  [label]="t('table')"
+  [searchPlaceholder]="t('search')"
+  [emptyTitle]="t('empty')"
+  [emptyDescription]="t('emptyHint')"
+  (queryChange)="onQuery($event)"
+  (rowOpen)="edit($event)"
+  (retry)="retry()"
+>
+  @if (permissions.canDeleteAllRedirects() && manualCount() > 0) {
+    <sf-menu sfDataTableToolbar variant="ghost" size="md" [items]="moreActions()" [label]="t('more')" />
+  }
+  <ng-template sfDataTableCell="from" [sfDataTableCellRows]="rows()" let-row>
+    <code class="cell-code">{{ displayPath(row.fromPath) }}</code>
+  </ng-template>
+  <ng-template sfDataTableCell="to" [sfDataTableCellRows]="rows()" let-row>
+    <span class="cell-target">
+      @if (row.toAssetUuid) {
+        <span class="cell-name__text">{{ pageName(row) }}</span>
+        @if (row.resolvedTarget) {
+          <code class="cell-code">{{ displayPath(row.resolvedTarget) }}</code>
+        }
+      } @else {
+        <code class="cell-code">{{ displayPath(row.toPath) }}</code>
+      }
+    </span>
+  </ng-template>
+  <ng-template sfDataTableCell="channel" [sfDataTableCellRows]="rows()" let-row>
+    <span class="cell-muted">{{ channelName(row.channel) }}</span>
+  </ng-template>
+  <ng-template sfDataTableCell="lang" [sfDataTableCellRows]="rows()" let-row>
+    <span class="cell-muted">{{ row.locale ? row.locale.toUpperCase() : t('noLanguage') }}</span>
+  </ng-template>
+  <ng-template sfDataTableCell="kind" [sfDataTableCellRows]="rows()" let-row>
+    <span class="cell-muted">{{ t('kind.' + row.kind) }}</span>
+  </ng-template>
+  <ng-template sfDataTableCell="state" [sfDataTableCellRows]="rows()" let-row>
+    @if (stateOf(row.state); as state) {
+      <span tabindex="0" class="cell-state" [sfTooltip]="t('stateHint.' + state)">
+        <sf-status size="sm" [tone]="tones[state]" [icon]="icons[state]" [label]="t('state.' + state)" />
+      </span>
+    } @else {
+      <span class="cell-muted">{{ t('notBuilt') }}</span>
+    }
+  </ng-template>
+  <ng-template sfDataTableCell="created" [sfDataTableCellRows]="rows()" let-row>
+    @if (row.kind === 'AUTO' && row.sourceRunId != null) {
+      <a class="cell-link" [routerLink]="['/p', projectKey(), 'publishing', 'runs']" [queryParams]="{ run: row.sourceRunId }">{{
+        t('fromRun', { n: row.sourceRunId })
+      }}</a>
+    } @else {
+      <span class="cell-muted">
+        @if (row.createdAt) {
+          <sf-relative-time [value]="row.createdAt" />
+        }
+        @if (row.createdBy != null) {
+          {{ ' · ' + t('by', { name: members.nameOf(row.createdBy) }) }}
+        }
+      </span>
+    }
+  </ng-template>
+  @if (canEdit()) {
+    <ng-template sfDataTableCell="actions" [sfDataTableCellRows]="rows()" let-row>
+      <sf-menu size="sm" [items]="rowActions(row)" [label]="t('actions', { path: displayPath(row.fromPath) })" />
+    </ng-template>
+  }
+</sf-data-table>
+
+@if (dialog(); as d) {
+  <sf-redirect-dialog
+    [projectKey]="projectKey()"
+    [redirect]="d.redirect"
+    [channels]="channels()"
+    (saved)="onSaved()"
+    (stale)="reload()"
+    (closed)="dialog.set(null)"
+  />
+}

@@ -1,0 +1,110 @@
+@if (access.readOnlyLabel(); as label) {
+  <sf-banner tone="info">{{ label }}</sf-banner>
+}
+
+@if (!loading() && !loadFailed()) {
+  <div class="section__bar">
+    <span class="urls__total">{{ t('total', { count: total() }) }}</span>
+  </div>
+}
+
+<sf-data-table
+  class="section__table"
+  mode="server"
+  paging="pager"
+  urlSync=""
+  searchable
+  [rowsOpenable]="false"
+  [pageSize]="pageSize"
+  [total]="total()"
+  [loading]="loading()"
+  [error]="loadFailed() ? t('loadError') : null"
+  [columns]="columns()"
+  [rows]="rows()"
+  [rowKey]="rowKey"
+  [rowLabel]="rowLabel"
+  [filters]="filters()"
+  [label]="t('table')"
+  [searchPlaceholder]="t('search')"
+  [emptyTitle]="t('empty')"
+  [emptyDescription]="t('emptyHint')"
+  (queryChange)="onQuery($event)"
+  (retry)="retry()"
+>
+  @if (canReset() && total() > 0) {
+    <sf-menu sfDataTableToolbar variant="ghost" size="md" [items]="moreActions()" [label]="t('more')" />
+  }
+  <ng-template sfDataTableCell="target" [sfDataTableCellRows]="rows()" let-row>
+    <span class="cell-name">
+      <sf-icon class="cell-name__icon" [name]="typeIcon(row)" />
+      <span class="cell-name__text">{{ targetName(row) }}</span>
+      @if (row.targetDeleted) {
+        <sf-badge tone="danger" [label]="t('deleted')" />
+      }
+    </span>
+  </ng-template>
+  <ng-template sfDataTableCell="channel" [sfDataTableCellRows]="rows()" let-row>
+    <span class="cell-muted">{{ row.channelKey ? row.channelKey : t('allChannels') }}</span>
+  </ng-template>
+  <ng-template sfDataTableCell="lang" [sfDataTableCellRows]="rows()" let-row>
+    <span class="cell-muted">{{ row.locale ? row.locale.toUpperCase() : t('noLanguage') }}</span>
+  </ng-template>
+  <ng-template sfDataTableCell="area" [sfDataTableCellRows]="rows()" let-row>
+    <span class="cell-muted">{{ t('area.' + enumKey(row.area)) }}</span>
+  </ng-template>
+  <ng-template sfDataTableCell="url" [sfDataTableCellRows]="rows()" let-row>
+    @if (editing(); as edit) {
+      @if (edit.id === row.id) {
+        <span class="url-edit">
+          <span class="url-edit__row">
+            <sf-input
+              monospace
+              class="url-edit__input"
+              [value]="edit.value"
+              [invalid]="!!editError()"
+              [disabled]="edit.saving"
+              [aria-label]="t('editLabel', { name: row.targetLabel })"
+              (valueChange)="setEdit($event)"
+              (keydown.enter)="saveEdit()"
+              (keydown.escape)="cancelEdit()"
+            />
+            <sf-button size="sm" icon="check" [loading]="edit.saving" [label]="t('editSave')" (click)="saveEdit()" />
+            <sf-button size="sm" variant="ghost" icon="close" [disabled]="edit.saving" [label]="t('editCancel')" (click)="cancelEdit()" />
+          </span>
+          @if (editError(); as error) {
+            <span class="url-edit__error" role="alert">{{ error }}</span>
+          }
+        </span>
+      } @else {
+        <code class="cell-code">{{ urlText(row.url) }}</code>
+      }
+    } @else {
+      <code class="cell-code">{{ urlText(row.url) }}</code>
+    }
+  </ng-template>
+  <ng-template sfDataTableCell="overridden" [sfDataTableCellRows]="rows()" let-row>
+    @if (row.overridden) {
+      <sf-badge tone="accent" icon="edit" [label]="t('manual')" />
+    } @else {
+      <span class="cell-muted">{{ t('auto') }}</span>
+    }
+  </ng-template>
+  <ng-template sfDataTableCell="assigned" [sfDataTableCellRows]="rows()" let-row>
+    <span class="cell-muted"><sf-relative-time [value]="row.assignedAt" /></span>
+  </ng-template>
+  @if (canOverride() || canReset()) {
+    <ng-template sfDataTableCell="actions" [sfDataTableCellRows]="rows()" let-row>
+      <span class="row-actions">
+        @if (canOverride()) {
+          <sf-button variant="ghost" size="sm" icon="edit" [label]="t('override')" (click)="startEdit(row)" />
+        }
+        @if (canReset()) {
+          @if (row.overridden) {
+            <sf-button variant="ghost" size="sm" icon="undo" [disabled]="resetting()" [label]="t('resetRow')" (click)="resetRow(row)" />
+          }
+          <sf-button variant="ghost" size="sm" icon="layers_clear" [disabled]="resetting()" [label]="t('resetAssetTooltip')" (click)="resetAsset(row)" />
+        }
+      </span>
+    </ng-template>
+  }
+</sf-data-table>

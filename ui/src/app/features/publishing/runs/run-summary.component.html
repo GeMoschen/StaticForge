@@ -1,0 +1,127 @@
+@let r = run();
+<dl class="summary">
+  <div class="summary__fact">
+    <dt>{{ t('run.facts.started') }}</dt>
+    <dd><sf-relative-time [value]="r.startedAt" /></dd>
+  </div>
+  @if (r.finishedAt) {
+    <div class="summary__fact">
+      <dt>{{ t('run.facts.finished') }}</dt>
+      <dd><sf-relative-time [value]="r.finishedAt" /></dd>
+    </div>
+  }
+  <div class="summary__fact">
+    <dt>{{ t('run.facts.startedBy') }}</dt>
+    <dd>{{ r.startedBy?.displayName ?? '—' }}</dd>
+  </div>
+  <div class="summary__fact">
+    <dt>{{ t('run.facts.trigger') }}</dt>
+    <dd>{{ t('runs.trigger.' + trigger()) }}</dd>
+  </div>
+  <div class="summary__fact">
+    <dt>{{ t('run.facts.files') }}</dt>
+    <dd>{{ t('run.filesValue', { written: r.filesWritten ?? 0, skipped: r.filesSkipped ?? 0, size: bytes() }) }}</dd>
+  </div>
+  <div class="summary__fact">
+    <dt>{{ t('run.facts.channels') }}</dt>
+    <dd>{{ channels() }}</dd>
+  </div>
+  @if (redirectsAdded() > 0) {
+    <div class="summary__fact">
+      <dt>{{ t('run.facts.redirects') }}</dt>
+      <dd>{{ redirectsAdded() }}</dd>
+    </div>
+  }
+  @if (totals(); as counts) {
+    <div class="summary__fact">
+      <dt>{{ t('run.facts.findings') }}</dt>
+      <dd>
+        @if (counts.errors + counts.warnings === 0) {
+          {{ t('runs.noFindings') }}
+        } @else {
+          {{ t('runs.findings', counts) }}
+          <button type="button" class="summary__link" (click)="showFindings.emit(false)">{{ t('run.showFindings') }}</button>
+        }
+      </dd>
+    </div>
+  }
+  @if (revision(); as revision) {
+    <div class="summary__fact">
+      <dt>{{ t('run.facts.revision') }}</dt>
+      <dd>{{ revision }}</dd>
+    </div>
+  }
+  @if (r.comment) {
+    <div class="summary__fact">
+      <dt>{{ t('run.facts.comment') }}</dt>
+      <dd>{{ r.comment }}</dd>
+    </div>
+  }
+  @if (developerMode() && target(); as target) {
+    <div class="summary__fact">
+      <dt>{{ t('run.facts.output') }}</dt>
+      <dd>
+        <code>{{ target.outputPath }}</code>
+      </dd>
+    </div>
+  }
+</dl>
+
+@if (heldBack().length) {
+  <section class="held" aria-labelledby="run-held-title">
+    <h3 class="held__title" id="run-held-title">
+      <sf-icon name="pause_circle" />
+      {{ t('run.held.title', { count: heldBack().length }) }}
+    </h3>
+    <p class="held__text">{{ t('run.held.text') }}</p>
+    <ul class="held__pages">
+      @for (page of heldBack(); track $index) {
+        <li>
+          {{ page.name ?? t('run.held.deleted') }}
+          @if (page.locale) {
+            <span class="held__meta">{{ page.locale.toUpperCase() }}</span>
+          }
+          @if (severalChannels()) {
+            <span class="held__meta">{{ page.channel }}</span>
+          }
+        </li>
+      }
+    </ul>
+    <sf-button variant="ghost" size="sm" iconTrailing="arrow_forward" (click)="showFindings.emit(true)">{{ t('run.showFindings') }}</sf-button>
+  </section>
+}
+
+@if (problems().length) {
+  <section class="problems" aria-labelledby="run-problems-title">
+    <h3 class="problems__title" id="run-problems-title">{{ t('run.problems.title') }}</h3>
+    <ul class="problems__list">
+      @for (group of problems(); track $index) {
+        <li class="problem" [class.is-error]="group.severity === 'error'">
+          <sf-icon [name]="group.severity === 'error' ? 'error' : 'warning'" />
+          <div class="problem__body">
+            @for (message of group.messages; track $index) {
+              <p class="problem__message">
+                @if (developerMode()) {
+                  <code class="problem__code">{{ group.code }}</code>
+                }
+                {{ message }}
+              </p>
+            }
+            @if (group.pages?.length) {
+              <p class="problem__pages">
+                <span>{{ t('run.problems.pages') }}</span>
+                @for (page of group.pages; track page.uuid) {
+                  @if (pageExists(page)) {
+                    <a class="problem__page" [routerLink]="pageRoute(page)">{{ pageLabel(page) }}</a>
+                  } @else {
+                    <span class="problem__page">{{ pageLabel(page) }}</span>
+                  }
+                }
+              </p>
+            }
+          </div>
+        </li>
+      }
+    </ul>
+  </section>
+}

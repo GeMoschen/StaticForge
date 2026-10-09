@@ -73,6 +73,12 @@ export class ProjectPermissionsStore {
   readonly canEditQualityRules = computed(() => this.isDeveloper() && this.writable());
   /** Manual redirects are the developers' (M30, epic decision 17), like URL registry overrides. */
   readonly canEditRedirects = computed(() => this.isDeveloper() && this.writable());
+  /** Deleting every manual redirect at once is the project admins' (as the API: irreversible and bulk). */
+  readonly canDeleteAllRedirects = this.canAdminProject;
+  /** Overriding a registered URL is the developers' (as the API). */
+  readonly canOverrideUrls = computed(() => this.isDeveloper() && this.writable());
+  /** Resetting registered URLs (one, an asset, a channel, an area, all) is the project admins' (as the API). */
+  readonly canResetUrls = this.canAdminProject;
   /**
    * "Redirect old URL to…" in the unpublish and delete dialogs (M30, epic decision 17): whoever may unpublish
    * (`RELEASE`), and developers.

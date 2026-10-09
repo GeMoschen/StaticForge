@@ -1,4 +1,4 @@
-import type { GenerationRunView } from '../generation/generation.store';
+import type { GenerationRunView } from '../publishing/runs/runs.util';
 
 /** What the top bar says about the project's last build. */
 export type BuildState = 'none' | 'running' | 'success' | 'partial' | 'failed' | 'cancelled';

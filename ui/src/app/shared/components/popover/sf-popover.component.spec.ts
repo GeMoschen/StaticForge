@@ -76,6 +76,18 @@ describe('SfPopoverComponent', () => {
     expect(screen.queryByRole('dialog')).toBeNull();
   });
 
+  it('stays open when only the query string changes', async () => {
+    const { trigger, fixture } = await setup();
+    const router = TestBed.inject(Router);
+    await router.navigateByUrl('/list');
+    fireEvent.click(trigger);
+    await screen.findByRole('dialog');
+
+    await router.navigateByUrl('/list?status=draft');
+    fixture.detectChanges();
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+  });
+
   it('opens on focus without taking focus, and closes when focus leaves', async () => {
     await setup();
     const help = screen.getByRole('button', { name: 'Help' });

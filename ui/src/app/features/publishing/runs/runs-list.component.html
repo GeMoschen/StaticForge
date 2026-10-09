@@ -1,0 +1,50 @@
+<sf-data-table
+  class="runs__table"
+  paging="pager"
+  urlSync=""
+  searchable
+  [columns]="columns()"
+  [rows]="store.runs()"
+  [rowKey]="rowKey"
+  [rowLabel]="rowLabel"
+  [filters]="filters()"
+  [rowMenu]="rowMenu"
+  [loading]="!store.loaded()"
+  [error]="store.failed() && store.runs().length === 0 ? t('loadError') : null"
+  [searchPlaceholder]="t('search')"
+  [label]="t('table')"
+  [emptyTitle]="t('empty')"
+  [emptyDescription]="t('emptyHint')"
+  (rowOpen)="open($event)"
+  (retry)="store.load()"
+>
+  <ng-template sfDataTableCell="status" [sfDataTableCellRows]="store.runs()" let-row>
+    <span class="runs__status">
+      <span class="runs__number">{{ '#' + row.id }}</span>
+      @if (statusOf(row) === 'running') {
+        <sf-status size="sm" [tone]="tones.running" [icon]="icons.running" [label]="stageLabel(row)" [detail]="t('status.running')" />
+      } @else {
+        <sf-status size="sm" [tone]="tones[statusOf(row)]" [icon]="icons[statusOf(row)]" [label]="t('status.' + statusOf(row))" />
+      }
+    </span>
+  </ng-template>
+  <ng-template sfDataTableCell="started" [sfDataTableCellRows]="store.runs()" let-row>
+    <sf-relative-time [value]="row.startedAt" />
+  </ng-template>
+  <ng-template sfDataTableCell="duration" [sfDataTableCellRows]="store.runs()" let-row>
+    @if (duration(row); as text) {
+      {{ text }}
+    } @else {
+      <span class="runs__muted">{{ t(statusOf(row) === 'queued' ? 'waiting' : 'inProgress') }}</span>
+    }
+  </ng-template>
+  <ng-template sfDataTableCell="pages" [sfDataTableCellRows]="store.runs()" let-row>
+    {{ row.planSummary?.pageCount ?? '—' }}
+  </ng-template>
+  <ng-template sfDataTableCell="findings" [sfDataTableCellRows]="store.runs()" let-row>
+    <span [class.runs__errors]="hasErrors(row)" [class.runs__muted]="!hasErrors(row)">{{ findingsText(row) }}</span>
+  </ng-template>
+  <ng-template sfDataTableCell="actions" [sfDataTableCellRows]="store.runs()" let-row>
+    <sf-menu size="sm" [label]="actionsLabel(row)" [items]="rowActions(row)" />
+  </ng-template>
+</sf-data-table>

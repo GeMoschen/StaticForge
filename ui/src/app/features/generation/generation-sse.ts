@@ -11,6 +11,10 @@ export interface GenerationRunEvent {
   errors: number;
   warnings: number;
   diagnostics: unknown;
+  /** The log line's number (from 1, per run), time (ISO-8601) and level; absent on `STATUS` events. */
+  n?: number;
+  time?: string;
+  level?: string;
 }
 
 function parseNumber(value: unknown): number {
@@ -45,7 +49,11 @@ export function parseGenerationFrame(raw: string): GenerationRunEvent | null {
   }
   try {
     const parsed = JSON.parse(dataLines.join('\n')) as Record<string, unknown>;
+    const n = parsed['n'];
     return {
+      ...(typeof n === 'number' && Number.isFinite(n) ? { n } : {}),
+      ...(parseString(parsed['time']) ? { time: parseString(parsed['time']) } : {}),
+      ...(parseString(parsed['level']) ? { level: parseString(parsed['level']) } : {}),
       stage: parseString(parsed['stage']) || 'STATUS',
       message: parseString(parsed['message']),
       filesWritten: parseNumber(parsed['filesWritten']),

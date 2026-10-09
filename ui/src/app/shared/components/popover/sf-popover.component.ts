@@ -82,9 +82,13 @@ export class SfPopoverComponent implements OnDestroy {
   };
 
   constructor() {
-    inject(Router, { optional: true })
-      ?.events.pipe(
-        filter((event) => event instanceof NavigationStart),
+    const router = inject(Router, { optional: true });
+    // Only a change of page closes it: a list that keeps its filters in the query string navigates on every pick.
+    const pathOf = (url: string) => url.split(/[?#]/)[0];
+    router?.events
+      .pipe(
+        filter((event): event is NavigationStart => event instanceof NavigationStart),
+        filter((event) => pathOf(event.url) !== pathOf(router.url)),
         takeUntilDestroyed(inject(DestroyRef)),
       )
       .subscribe(() => this.close(false));

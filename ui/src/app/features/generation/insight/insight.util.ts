@@ -204,38 +204,6 @@ export function count(value: number | undefined, singular: string, plural = `${s
   return `${NUMBER.format(n)} ${n === 1 ? singular : plural}`;
 }
 
-/** The run history's one-liner: "Incremental · 37 pages (via 2 changes)" or "Full · 5,000 pages". */
-export function planSummaryLine(summary: PlanSummaryView | undefined | null): string {
-  if (!summary) {
-    return '';
-  }
-  const pages = count(summary.pageCount, 'page');
-  if (summary.incremental) {
-    const media = summary.processedMediaCount ? `, ${count(summary.processedMediaCount, 'media file')}` : '';
-    return `Incremental · ${pages}${media} (via ${count(summary.changedAssetCount, 'change')})`;
-  }
-  const scope = summary.scoped ? 'Scoped' : 'Full';
-  const fallback = summary.fallbackCause ? ' · fell back from incremental' : '';
-  return `${scope} · ${pages}${fallback}`;
-}
-
-/**
- * A run's redirect counts (M30.4.2): "2 redirects added · 14 redirects active"; `active` is left out for a run that
- * published nothing, and the line is empty for a run from before redirects.
- */
-export function redirectsLine(summary: PlanSummaryView | undefined | null): string {
-  const added = summary?.redirectsAdded;
-  const active = summary?.redirectsActive;
-  const parts: string[] = [];
-  if (added != null) {
-    parts.push(`${count(added, 'redirect')} added`);
-  }
-  if (active != null) {
-    parts.push(`${count(active, 'redirect')} active`);
-  }
-  return parts.join(' · ');
-}
-
 export interface CountRow {
   key: string;
   label: string;
@@ -255,11 +223,6 @@ export function firstEdgeRows(
   return countRows(byFirstEdge, (key) =>
     key === 'NONE' ? noChainLabel : key === 'REFERENCE' ? 'references' : EDGE_LABELS[key] ?? key,
   );
-}
-
-/** "412 via section_template:teaser" lines. */
-export function viaRows(summary: PlanSummaryView | undefined | null): string[] {
-  return (summary?.via ?? []).map((via) => `${NUMBER.format(via.count ?? 0)} via ${assetLabel(via.assetType, via.uid)}`);
 }
 
 function countRows(counts: Record<string, number> | undefined | null, label: (key: string) => string): CountRow[] {

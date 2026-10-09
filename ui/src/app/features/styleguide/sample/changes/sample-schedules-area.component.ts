@@ -5,10 +5,13 @@ import { SfDataTableCellDirective } from '../../../../shared/components/data-tab
 import { SfDataTableComponent } from '../../../../shared/components/data-table/sf-data-table.component';
 import { ConfirmService } from '../../../../shared/components/dialog/confirm.service';
 import { SfDrawerComponent } from '../../../../shared/components/dialog/sf-drawer.component';
+import { SfFilterPopoverComponent, type SfFilterGroup } from '../../../../shared/components/filter/sf-filter-popover.component';
 import { SfAvatarComponent } from '../../../../shared/components/display/sf-avatar.component';
 import { SfBadgeComponent } from '../../../../shared/components/display/sf-badge.component';
 import { SfRelativeTimeComponent } from '../../../../shared/components/display/sf-relative-time.component';
 import { SfStatusComponent } from '../../../../shared/components/display/sf-status.component';
+import { SfTagComponent } from '../../../../shared/components/display/sf-tag.component';
+import { SfButtonComponent } from '../../../../shared/components/sf-button.component';
 import { SfPageHeaderComponent } from '../../../../shared/components/layout/sf-page-header.component';
 import { SfMenuComponent, SfMenuItem } from '../../../../shared/components/menu/sf-menu.component';
 import { SfIconComponent } from '../../../../shared/components/sf-icon.component';
@@ -21,6 +24,7 @@ import {
   SCHEDULE_STATUS_TONES,
   SampleSchedule,
   ScheduleKind,
+  ScheduleStatus,
 } from './changes-data';
 import { SampleScheduleDialogComponent } from './sample-schedule-dialog.component';
 import { injectSampleNotice, injectSampleQuery, injectSampleText, minutesAgo, oneOf } from './sample-area.util';
@@ -44,12 +48,15 @@ import { injectSampleNotice, injectSampleQuery, injectSampleText, minutesAgo, on
     SfDataTableCellDirective,
     SfDataTableComponent,
     SfDateTimePipe,
+    SfButtonComponent,
     SfDrawerComponent,
+    SfFilterPopoverComponent,
     SfIconComponent,
     SfMenuComponent,
     SfPageHeaderComponent,
     SfRelativeTimeComponent,
     SfStatusComponent,
+    SfTagComponent,
     TranslocoPipe,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -70,6 +77,46 @@ export class SampleSchedulesAreaComponent {
   protected readonly schedules = signal<readonly SampleSchedule[]>(SCHEDULES);
   protected readonly dialog = signal<{ readonly kind: ScheduleKind; readonly subject: string | null } | null>(null);
   protected readonly historyOf = signal<SampleSchedule | null>(null);
+
+  private readonly statuses = Object.keys(SCHEDULE_STATUS_TONES) as ScheduleStatus[];
+  /** One value per filter, like the real list. */
+  protected readonly picked = signal<{ type?: string; status?: string; owner?: string }>({});
+  protected readonly pickedGroups = computed(() => ({
+    type: this.picked().type ? [this.picked().type!] : [],
+    status: this.picked().status ? [this.picked().status!] : [],
+  }));
+  protected readonly filterGroups = computed<SfFilterGroup[]>(() => [
+    { id: 'type', label: this.t('filters.type'), options: SCHEDULE_KINDS.map((k) => ({ value: k, label: this.t(`kinds.${k}`) })) },
+    { id: 'status', label: this.t('filters.status'), options: this.statuses.map((s) => ({ value: s, label: this.t(`statuses.${s}`) })) },
+  ]);
+  private readonly owners = [...new Map(SCHEDULES.map((s) => [s.owner.name, s.owner.name])).values()];
+  protected readonly ownerItems = computed<SfMenuItem[]>(() => [
+    { id: '', label: this.t('filters.anyOwner'), icon: this.picked().owner ? undefined : 'check', action: () => this.setFilter('owner', null) },
+    ...this.owners.map((name, i) => ({
+      id: name,
+      label: name,
+      icon: this.picked().owner === name ? 'check' : undefined,
+      separatorBefore: i === 0,
+      action: () => this.setFilter('owner', name),
+    })),
+  ]);
+  protected readonly ownerText = computed(() =>
+    this.picked().owner ? this.t('filters.picked', { filter: this.t('filters.owner'), value: this.picked().owner }) : this.t('filters.owner'),
+  );
+  protected readonly chips = computed(() =>
+    (['type', 'status', 'owner'] as const).flatMap((key) => {
+      const value = this.picked()[key];
+      if (!value) {
+        return [];
+      }
+      const shown = key === 'owner' ? value : this.t(`${key === 'type' ? 'kinds' : 'statuses'}.${value}`);
+      return [{ key, label: this.t('filters.picked', { filter: this.t(`filters.${key}`), value: shown }) }];
+    }),
+  );
+  protected readonly visible = computed(() => {
+    const { type, status, owner } = this.picked();
+    return this.schedules().filter((s) => (!type || s.kind === type) && (!status || s.status === status) && (!owner || s.owner.name === owner));
+  });
 
   protected readonly newItems = computed<SfMenuItem[]>(() =>
     SCHEDULE_KINDS.map((kind) => ({
@@ -124,6 +171,19 @@ export class SampleSchedulesAreaComponent {
         action: () => void this.cancel(row),
       },
     ];
+  }
+
+  protected setFilter(key: 'type' | 'status' | 'owner', value: string | null): void {
+    this.picked.update((p) => ({ ...p, [key]: value ?? undefined }));
+  }
+
+  protected toggleFilter(group: string, value: string): void {
+    const key = group as 'type' | 'status';
+    this.setFilter(key, this.picked()[key] === value ? null : value);
+  }
+
+  protected clearFilters(): void {
+    this.picked.set({});
   }
 
   protected at(row: SampleSchedule): number {

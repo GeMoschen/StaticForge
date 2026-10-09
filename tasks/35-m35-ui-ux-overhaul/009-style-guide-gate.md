@@ -776,6 +776,8 @@ Round 17 review changes (2026-10-09, user; signed off with the round)
 211. **Quality groups:** each category can be folded (chevron; `qcollapsed=links,seo`) and has its own Off / Warning / Error control that sets all its rules at once (a rule capped at Warning takes Warning for Error; no segment is checked while the rules differ).
 212. **Example data for r-44:** it failed at the upload (bucket credentials) *after* planning and checking, so Rebuilt and Findings show a plan and findings. The "no plan stored" state moved to the new run r-41 (failed before planning).
 
+213. **Type, status and language filters use the popover (Changes, Media, Schedules):** Changes: Type, Status and Language are one *Filters* popover with three groups (several picks each, Type keeps its icons, Language only in a localized project; Clear inside empties the three groups); Changed by and Folder stay menus; search, sort and the chips row are unchanged; the sample Changes area has the same bar (`cfilter=type:page|media`). Schedules list: Type and Status in the popover (Owner stays a menu); the sample schedules area got the same bar.
+
 Sample-only choices to confirm: Promote goes to the default target (or the CDN mirror if already there); the impact dialog shows fixed demo rows; sample runs r-43 (now incremental, 0 pages) and r-47 (217 warnings incl. unstored) changed to show the new states.
 
 ## Notes / hazards

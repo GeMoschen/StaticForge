@@ -1,0 +1,65 @@
+@let r = run();
+<div class="detail__head">
+  <sf-button variant="ghost" size="sm" icon="arrow_back" (click)="back()">{{ t('run.back') }}</sf-button>
+  <div class="detail__title-row">
+    <h2 class="detail__title">{{ t('runs.number', { n: r.id }) }}</h2>
+    @if (status() === 'running') {
+      <sf-status [tone]="tones.running" [icon]="icons.running" [label]="stage()" [detail]="t('runs.status.running')" />
+    } @else {
+      <sf-status [tone]="tones[status()]" [icon]="icons[status()]" [label]="t('runs.status.' + status())" />
+    }
+    <span class="detail__actions">
+      @if (canCancel()) {
+        <sf-button class="detail__cancel" variant="secondary" size="sm" icon="stop_circle" (click)="cancel()">{{ t('run.cancel') }}</sf-button>
+      }
+      @if (canPromote()) {
+        <sf-button class="detail__promote" variant="secondary" size="sm" icon="publish" (click)="promote()">{{ t('run.promote') }}</sf-button>
+      }
+    </span>
+  </div>
+  <dl class="detail__counts">
+    <div class="detail__count">
+      <dt>{{ t('run.facts.mode') }}</dt>
+      <dd>{{ t('runs.mode.' + mode()) }}</dd>
+    </div>
+    <div class="detail__count">
+      <dt>{{ t('run.facts.target') }}</dt>
+      <dd>{{ target() }}</dd>
+    </div>
+    <div class="detail__count">
+      <dt>{{ t('run.facts.pages') }}</dt>
+      <dd>{{ r.planSummary?.pageCount ?? '—' }}</dd>
+    </div>
+    <div class="detail__count">
+      <dt>{{ t('run.facts.errors') }}</dt>
+      <dd [class.detail__danger]="counts().errors > 0">{{ counts().errors }}</dd>
+    </div>
+    <div class="detail__count">
+      <dt>{{ t('run.facts.warnings') }}</dt>
+      <dd [class.detail__warning]="counts().warnings > 0">{{ counts().warnings }}</dd>
+    </div>
+    <div class="detail__count">
+      <dt>{{ t('run.facts.duration') }}</dt>
+      <dd>{{ duration() }}</dd>
+    </div>
+  </dl>
+</div>
+
+<sf-tabs #tabStrip class="detail__tabs" [tabs]="tabs()" [selected]="tab()" [label]="t('run.tabs.label')" (selectTab)="selectTab($event)" />
+
+<div class="detail__panel" role="tabpanel" [id]="tabStrip.panelId(tab())" [attr.aria-labelledby]="tabStrip.tabId(tab())" [class.is-log]="tab() === 'log'">
+  @switch (tab()) {
+    @case ('summary') {
+      <sf-run-summary [projectKey]="projectKey()" [run]="r" (showFindings)="showFindings($event)" />
+    }
+    @case ('rebuilt') {
+      <sf-run-rebuilt [projectKey]="projectKey()" [run]="r" />
+    }
+    @case ('findings') {
+      <sf-run-findings [projectKey]="projectKey()" [run]="r" />
+    }
+    @case ('log') {
+      <sf-run-log class="detail__log" [projectKey]="projectKey()" [run]="r" (finished)="store.load()" />
+    }
+  }
+</div>

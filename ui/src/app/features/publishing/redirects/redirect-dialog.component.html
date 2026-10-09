@@ -1,0 +1,83 @@
+<sf-dialog size="md" [title]="title()" [dismissible]="!draft().saving" (closed)="closed.emit()">
+  <div class="form">
+    @if (automatic()) {
+      <p class="form__hint">{{ 'publishing.redirects.dialog.automatic' | transloco }}</p>
+    }
+    <sf-field [label]="'publishing.redirects.dialog.from' | transloco" [hint]="savedAs()" [error]="errors().from" required>
+      <sf-input
+        monospace
+        [value]="draft().from"
+        [placeholder]="'publishing.redirects.dialog.fromPlaceholder' | transloco"
+        [disabled]="draft().saving"
+        (valueChange)="patch({ from: $event })"
+      />
+    </sf-field>
+    <div class="form__row">
+      <sf-field class="form__grow" [label]="'publishing.redirects.dialog.channel' | transloco" required>
+        <sf-select
+          [options]="channelOptions()"
+          [value]="channel()"
+          [disabled]="draft().saving"
+          (valueChange)="patch({ channel: $event ?? '' })"
+        />
+      </sf-field>
+      @if (localized()) {
+        <sf-field class="form__grow" [label]="'publishing.redirects.dialog.lang' | transloco" required>
+          <sf-select
+            [options]="langOptions()"
+            [value]="locale()"
+            [disabled]="draft().saving"
+            (valueChange)="patch({ locale: $event ?? '' })"
+          />
+        </sf-field>
+      }
+    </div>
+    <sf-field [label]="'publishing.redirects.dialog.to' | transloco" required>
+      <sf-radio-group
+        [options]="toOptions()"
+        [value]="draft().toKind"
+        [disabled]="draft().saving"
+        (valueChange)="patch({ toKind: $event ?? 'page' })"
+      />
+    </sf-field>
+    @if (draft().toKind === 'page') {
+      <sf-field [label]="'publishing.redirects.dialog.page' | transloco" [hint]="'publishing.redirects.dialog.pageHint' | transloco" [error]="errors().to">
+        <sf-combobox
+          filter="none"
+          [options]="pageOptions()"
+          [value]="draft().page"
+          [loading]="searching()"
+          [placeholder]="'publishing.redirects.dialog.pagePlaceholder' | transloco"
+          [disabled]="draft().saving"
+          (query)="onPageQuery($event)"
+          (valueChange)="onPage($any($event))"
+        />
+      </sf-field>
+    } @else {
+      <sf-field [label]="'publishing.redirects.dialog.path' | transloco" [hint]="'publishing.redirects.dialog.pathHint' | transloco" [error]="errors().to">
+        <sf-input
+          monospace
+          [value]="draft().path"
+          [placeholder]="'publishing.redirects.dialog.pathPlaceholder' | transloco"
+          [disabled]="draft().saving"
+          (valueChange)="patch({ path: $event })"
+        />
+      </sf-field>
+    }
+    @if (conflict()) {
+      <sf-banner tone="warning" live="assertive">
+        {{ 'publishing.redirects.dialog.conflict' | transloco }}
+        <sf-button sfBannerActions variant="secondary" size="sm" icon="refresh" [loading]="reloading()" (click)="reload()">{{
+          'publishing.redirects.reload' | transloco
+        }}</sf-button>
+      </sf-banner>
+    }
+    @if (serverErrors().general; as message) {
+      <sf-banner tone="danger" live="assertive">{{ message }}</sf-banner>
+    }
+  </div>
+  <ng-container sfDialogFooter>
+    <sf-button variant="secondary" [disabled]="draft().saving" (click)="closed.emit()">{{ 'publishing.redirects.dialog.cancel' | transloco }}</sf-button>
+    <sf-button [loading]="draft().saving" (click)="save()">{{ 'publishing.redirects.dialog.save' | transloco }}</sf-button>
+  </ng-container>
+</sf-dialog>

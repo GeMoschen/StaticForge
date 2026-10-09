@@ -5,8 +5,6 @@ import {
   indexUidOf,
   normalizeSourcePath,
   normalizeTargetPath,
-  stateExplanation,
-  stateLabel,
 } from './redirect.util';
 
 type ChannelView = components['schemas']['ChannelView'];
@@ -40,6 +38,14 @@ describe('redirect.util', () => {
     expect(normalizeSourcePath('/c++.html', 'index.html')).toEqual({ path: 'c++.html' });
   });
 
+  it('names why a path is refused, as a key of the dialog texts', () => {
+    expect(normalizeSourcePath('  ', 'index.html')).toEqual({ error: 'fromEmpty' });
+    expect(normalizeSourcePath('/a.html?x=1', 'index.html')).toEqual({ error: 'fromQuery' });
+    expect(normalizeSourcePath('/a/../b.html', 'index.html')).toEqual({ error: 'dotDot' });
+    expect(normalizeTargetPath('javascript:alert(1)', 'index.html')).toEqual({ error: 'scheme' });
+    expect(normalizeTargetPath('', 'index.html')).toEqual({ error: 'toEmpty' });
+  });
+
   it('refuses what the server refuses for a source path', () => {
     for (const bad of ['', '   ', '/a.html?x=1', '/a.html#top', '//host/a.html', 'https://example.org/a', '/a/../b.html', '/a\\b', '/%zz', '/a/ /b']) {
       expect(normalizeSourcePath(bad, 'index.html').error, bad).toBeTruthy();
@@ -53,13 +59,5 @@ describe('redirect.util', () => {
     for (const bad of ['', 'javascript:alert(1)', 'mailto:a@b.c', '//evil.example/x', '?only=query', '/a b.html#x y', 'https://exa mple.org']) {
       expect(normalizeTargetPath(bad, 'index.html').error, bad).toBeTruthy();
     }
-  });
-
-  it('labels and explains every state, including LOOP and "no build yet"', () => {
-    expect(['ACTIVE', 'SHADOWED', 'DANGLING', 'LOOP'].map(stateLabel)).toEqual(['Active', 'Shadowed', 'Dangling', 'Loop']);
-    expect(stateExplanation('SHADOWED')).toContain('published at the old path');
-    expect(stateExplanation('LOOP')).toContain('leads back to its own path');
-    expect(stateLabel(undefined)).toBe('Not built');
-    expect(stateExplanation(undefined)).toContain('Nothing is published on the default target');
   });
 });

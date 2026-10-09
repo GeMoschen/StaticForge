@@ -24,6 +24,7 @@
 
 <div class="area__filters">
   <div class="bar" role="group" [attr.aria-label]="t('filters.bar')">
+    <sf-filter-popover [groups]="filterGroups()" [picked]="pickedGroups()" (toggled)="toggleFilter($event.group, $event.value)" (cleared)="clearFilters()" />
     @for (menu of filterMenus(); track menu.key) {
       <sf-menu variant="secondary" size="md" align="start" [text]="menu.text" [label]="menu.name" [items]="menu.items" />
     }

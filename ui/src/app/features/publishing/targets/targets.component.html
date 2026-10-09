@@ -1,0 +1,90 @@
+@if (permissions.canCreateTargets() && !empty()) {
+  <div class="section__bar">
+    <sf-button icon="add" (click)="newTarget()">{{ t('new') }}</sf-button>
+  </div>
+}
+@if (access.readOnlyLabel(); as label) {
+  <sf-banner tone="info">{{ label }}</sf-banner>
+} @else if (loaded() && !canChange()) {
+  <p class="section__hint">{{ t('readonlyHint') }}</p>
+}
+
+@if (empty()) {
+  <sf-empty-state
+    icon="dns"
+    level="3"
+    [title]="t('empty')"
+    [description]="t('emptyHint')"
+    [primaryLabel]="permissions.canCreateTargets() ? t('new') : null"
+    primaryIcon="add"
+    (primary)="newTarget()"
+  />
+} @else {
+  <sf-data-table
+    class="section__table"
+    [columns]="columns()"
+    [rows]="targets()"
+    [rowKey]="rowKey"
+    [rowLabel]="rowLabel"
+    [label]="t('table')"
+    [loading]="!loaded() && !loadError()"
+    [error]="loadError()"
+    [emptyTitle]="t('empty')"
+    [columnChooser]="false"
+    [rowsOpenable]="canChange()"
+    (rowOpen)="edit($event)"
+    (retry)="reload()"
+  >
+    <ng-template sfDataTableCell="name" [sfDataTableCellRows]="targets()" let-row>
+      <span class="cell-name">
+        <sf-icon class="cell-name__icon" [name]="kindIcons[kindOf(row.type)]" />
+        <span class="cell-name__text">{{ row.name }}</span>
+        @if (row.isDefault) {
+          <sf-badge tone="accent" [label]="t('default')" />
+        }
+      </span>
+    </ng-template>
+    <ng-template sfDataTableCell="location" [sfDataTableCellRows]="targets()" let-row>
+      <code class="cell-code">{{ row.outputPath }}</code>
+    </ng-template>
+    <ng-template sfDataTableCell="baseUrl" [sfDataTableCellRows]="targets()" let-row>
+      <span class="cell-muted">{{ row.baseUrl }}</span>
+    </ng-template>
+    @if (canChange()) {
+      <ng-template sfDataTableCell="actions" [sfDataTableCellRows]="targets()" let-row>
+        <sf-menu size="sm" [items]="rowActions(row)" [label]="t('actions', { name: row.name })" />
+      </ng-template>
+    }
+  </sf-data-table>
+}
+
+@if (draft(); as d) {
+  <sf-drawer [title]="drawerTitle()" (closed)="close()">
+    <div class="form">
+      <sf-field [label]="t('form.name')" [error]="errors().name ?? null" required>
+        <sf-input [value]="d.name" [maxlength]="120" (valueChange)="patch({ name: $event })" />
+      </sf-field>
+      <sf-field [label]="t('form.kind')">
+        <sf-segmented [options]="kindOptions()" [value]="d.kind" (valueChange)="patch({ kind: $event ?? 'folder' })" />
+      </sf-field>
+      <sf-field [label]="t('form.location')" [hint]="locationHint()" [error]="errors().path ?? null">
+        <sf-input monospace [placeholder]="t('locationPlaceholder')" [value]="d.path" (valueChange)="patch({ path: $event })" />
+      </sf-field>
+      <sf-field [label]="t('form.baseUrl')" [hint]="t('form.baseUrlHint')" [error]="errors().baseUrl ?? null">
+        <sf-input type="url" [value]="d.baseUrl" (valueChange)="patch({ baseUrl: $event })" />
+      </sf-field>
+      <sf-checkbox [value]="d.isDefault" (valueChange)="patch({ isDefault: $event })">{{ t('form.isDefault') }}</sf-checkbox>
+      <fieldset class="form__group">
+        <legend class="form__legend">{{ t('form.redirects') }}</legend>
+        <p class="form__hint">{{ t('form.redirectsHint') }}</p>
+        @for (output of redirectOutputs; track output.key) {
+          <sf-checkbox [value]="d.redirects[output.key]" (valueChange)="patchRedirect(output.key, $event)">{{ t('form.redirect.' + output.key) }}</sf-checkbox>
+        }
+      </fieldset>
+    </div>
+    <ng-container sfDrawerFooter>
+      <sf-button variant="secondary" (click)="close()">{{ t('cancel') }}</sf-button>
+      <sf-button [disabled]="!d.name.trim() || saving()" (click)="save()">{{ d.id == null ? t('create') : t('save') }}</sf-button>
+    </ng-container>
+  </sf-drawer>
+}

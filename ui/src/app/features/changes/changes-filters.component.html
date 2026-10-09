@@ -6,6 +6,7 @@
     [aria-label]="t('filters.placeholder')"
     (valueChange)="store.onSearch($event)"
   />
+  <sf-filter-popover [groups]="groups()" [picked]="popoverPicked()" (toggled)="toggle($event.group, $event.value)" (cleared)="clearPopover()" />
   @for (menu of menus(); track menu.id) {
     <sf-menu variant="secondary" size="md" align="start" [text]="menu.text" [label]="menu.name" [items]="menu.items" />
   }

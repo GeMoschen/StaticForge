@@ -36,7 +36,7 @@ describe('BuildNowService', () => {
     expect(toasts.toasts()).toEqual([{ id: 1, message: 'Released 2 items.', kind: 'success' }]);
   });
 
-  it('offers "Build now", starts the incremental build and links to its progress', () => {
+  it('offers "Build now", starts the incremental build as a release build and links to its progress', () => {
     const { service, toasts } = setUp(['RELEASE', 'INCREMENTAL_BUILD']);
     const navigate = vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
 
@@ -48,7 +48,7 @@ describe('BuildNowService', () => {
 
     announced.action!.run();
     const request = http.expectOne((r) => r.method === 'POST' && r.url === '/api/v1/projects/proj/generations');
-    expect(request.request.body).toEqual({ mode: 'INCREMENTAL', comment: 'Build after release' } satisfies GenerationRequestDto);
+    expect(request.request.body).toEqual({ mode: 'INCREMENTAL', comment: 'Build after release', trigger: 'RELEASE' } satisfies GenerationRequestDto);
     request.flush({ id: 42, mode: 'INCREMENTAL', status: 'QUEUED' } satisfies GenerationRunView);
 
     const started = toasts.toasts().at(-1)!;
@@ -59,5 +59,13 @@ describe('BuildNowService', () => {
     expect(TestBed.inject(Router).createUrlTree(navigate.mock.calls[0][0], navigate.mock.calls[0][1]).toString()).toBe(
       '/p/proj/publishing/runs?run=42',
     );
+  });
+
+  it('starts a quick build as a manual one', () => {
+    const { service } = setUp(['INCREMENTAL_BUILD']);
+    service.start('proj', 'Build now');
+    const request = http.expectOne((r) => r.method === 'POST' && r.url === '/api/v1/projects/proj/generations');
+    expect(request.request.body).toEqual({ mode: 'INCREMENTAL', comment: 'Build now', trigger: 'MANUAL' } satisfies GenerationRequestDto);
+    request.flush({ id: 43 } satisfies GenerationRunView);
   });
 });

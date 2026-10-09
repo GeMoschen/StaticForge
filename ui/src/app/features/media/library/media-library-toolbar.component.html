@@ -7,12 +7,11 @@
     [aria-label]="'media.toolbar.search' | transloco"
     (valueChange)="library.setSearch($event)"
   />
-  <sf-select
-    class="toolbar__type"
-    [options]="typeOptions()"
-    [value]="library.typeFilter()"
-    [aria-label]="'media.toolbar.type' | transloco"
-    (valueChange)="library.setTypeFilter($event ?? 'all')"
+  <sf-filter-popover
+    [groups]="filterGroups()"
+    [picked]="pickedFilters()"
+    (toggled)="toggleType($event.value)"
+    (cleared)="library.setTypeFilter('all')"
   />
   <sf-menu variant="secondary" align="start" [text]="sortText()" [label]="'media.toolbar.sort' | transloco" [items]="sortItems()" />
   <span class="toolbar__spacer"></span>

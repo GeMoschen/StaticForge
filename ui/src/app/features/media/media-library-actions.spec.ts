@@ -406,7 +406,7 @@ describe('the media library actions (phase B)', () => {
       expect(confirm.confirm.mock.calls[0][0]).toMatchObject({ title: 'Delete 2 files?', details: expect.arrayContaining(['brand.css', 'logo.svg']) });
       expect(confirm.confirm.mock.calls[0][0].typeToConfirm).toBeUndefined();
       await waitFor(() => expect(api.deleteAsset).toHaveBeenCalledTimes(2));
-      expect(toasts.toasts().at(-1)?.message).toBe('Deleted 2 files.');
+      await waitFor(() => expect(toasts.toasts().at(-1)?.message).toBe('Deleted 2 files.'));
       expect(toasts.toasts().filter((toast) => toast.action)).toHaveLength(1);
     });
 

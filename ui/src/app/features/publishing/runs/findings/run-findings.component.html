@@ -1,0 +1,111 @@
+@if (active()) {
+  <sf-empty-state icon="schedule" [level]="3" [title]="tr('run.findingsPending')" [description]="tr('run.findingsPendingHint')" />
+} @else if (!checked()) {
+  <sf-empty-state icon="event_busy" [level]="3" [title]="tr('run.findingsNone')" [description]="tr('run.findingsNoneHint')" />
+} @else if (failed() && !loaded()) {
+  <sf-empty-state
+    icon="error"
+    [level]="3"
+    [title]="t('loadError')"
+    [primaryLabel]="tr('runs.retry')"
+    (primary)="retry()"
+  />
+} @else if (empty() && truncated() === 0) {
+  <sf-empty-state icon="verified" [level]="3" [title]="tr('run.noFindings')" [description]="tr('run.noFindingsHint')" />
+} @else {
+  @if (truncated() > 0) {
+    <sf-banner class="findings__truncated" tone="warning">{{ t('truncated', { count: truncated() }) }}</sf-banner>
+  }
+  <div class="filters" role="group" [attr.aria-label]="t('filters')">
+    <sf-segmented size="sm" [options]="severityOptions()" [value]="filter().severity ?? 'all'" [aria-label]="t('bySeverity')" (valueChange)="setSeverity($event)" />
+    <sf-segmented size="sm" [options]="categoryOptions()" [value]="filter().category ?? 'all'" [aria-label]="t('byCategory')" (valueChange)="setCategory($event)" />
+    <sf-combobox
+      class="filters__rule"
+      multiple
+      [options]="ruleOptions()"
+      [value]="ruleValue()"
+      [placeholder]="t('rulePlaceholder')"
+      [aria-label]="t('byRule')"
+      (valueChange)="setRules($event)"
+    />
+    @if (langOptions().length) {
+      <sf-select class="filters__lang" [options]="langOptions()" [value]="filter().lang" [placeholder]="t('langAll')" [aria-label]="t('byLang')" (valueChange)="setLang($event)" />
+    }
+    <sf-search-input class="filters__path" [value]="pathText()" [placeholder]="t('pathPlaceholder')" [aria-label]="t('byPath')" (valueChange)="setPath($event)" />
+  </div>
+  @if (filtered()) {
+    <div class="chips">
+      @for (chip of chips(); track chip.id) {
+        <sf-tag [label]="chip.label" removable (removed)="remove(chip)" />
+      }
+      <sf-button variant="ghost" size="sm" (click)="clearFilters()">{{ t('clear') }}</sf-button>
+    </div>
+  }
+  <p class="sf-sr-only" role="status">{{ t('shown', { count: total() }) }}</p>
+  @if (groups().length === 0 && loaded() && !loading()) {
+    <sf-empty-state
+      icon="filter_alt_off"
+      [level]="3"
+      [title]="t('none')"
+      [description]="t('noneHint')"
+      [primaryLabel]="t('clear')"
+      (primary)="clearFilters()"
+    />
+  } @else {
+    <ul class="findings" [attr.aria-busy]="loading()">
+      @for (group of groups(); track group.code) {
+        <li class="finding">
+          <div class="finding__head">
+            <sf-icon class="finding__icon" [class.is-error]="group.severity === 'error'" [name]="group.severity === 'error' ? 'error' : 'warning'" />
+            <h3 class="finding__title">{{ group.name }}</h3>
+            <sf-badge [tone]="group.severity === 'error' ? 'danger' : 'warning'" [label]="severityCount(group)" />
+            @if (developerMode()) {
+              <code class="finding__code">{{ group.code }}</code>
+            }
+          </div>
+          <ul class="finding__pages">
+            @for (finding of group.findings; track rowKey(finding)) {
+              <li class="finding__page">
+                @if (finding.page?.uuid; as uuid) {
+                  <a class="finding__link" [routerLink]="['/p', projectKey(), 'pages', uuid]" (click)="openPage(finding)">{{ finding.page?.displayName || finding.page?.uid }}</a>
+                } @else {
+                  <span class="finding__link is-plain">{{ t('unknownPage') }}</span>
+                }
+                @if (finding.pageNumber && finding.pageNumber > 1) {
+                  <span class="finding__lang">{{ tr('findings.pageNumber', { n: finding.pageNumber }) }}</span>
+                }
+                @if (finding.locale) {
+                  <span class="finding__lang">{{ finding.locale.toUpperCase() }}</span>
+                }
+                @if (finding.carried) {
+                  <span tabindex="0" [sfTooltip]="t('carriedHint')">
+                    <sf-badge icon="history" [label]="t('carried')" />
+                  </span>
+                }
+                <span class="finding__message">{{ finding.message }}</span>
+                @if (developerMode() && finding.outputPath) {
+                  <code class="finding__path">{{ finding.outputPath }}</code>
+                }
+              </li>
+            }
+          </ul>
+          @if (group.fix) {
+            <p class="finding__fix">
+              <sf-icon name="build" />
+              <span><strong>{{ t('howToFix') }}</strong> {{ group.fix }}</span>
+            </p>
+          }
+        </li>
+      }
+    </ul>
+    @if (hasMore() || failed()) {
+      <div class="more">
+        <span class="more__count">{{ t('showing', { shown: items().length, total: total() }) }}</span>
+        @if (failed()) {
+          <span class="more__error" role="alert">{{ t('loadError') }}</span>
+        }
+        <sf-button variant="secondary" size="sm" [loading]="loading()" (click)="failed() ? retry() : showMore()">{{ failed() ? tr('runs.retry') : t('more') }}</sf-button>
+      </div>
+    }
+  }
+}

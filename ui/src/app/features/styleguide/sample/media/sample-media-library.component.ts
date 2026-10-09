@@ -11,7 +11,7 @@ import { SfRelativeTimeComponent } from '../../../../shared/components/display/s
 import { SfStatusComponent } from '../../../../shared/components/display/sf-status.component';
 import { SfSearchInputComponent } from '../../../../shared/components/forms/sf-search-input.component';
 import { SfSegmentedComponent, SfSegmentedOption } from '../../../../shared/components/forms/sf-segmented.component';
-import { SfSelectComponent, SfSelectOption } from '../../../../shared/components/forms/sf-select.component';
+import { SfFilterPopoverComponent, SfFilterGroup } from '../../../../shared/components/filter/sf-filter-popover.component';
 import { SfBannerComponent } from '../../../../shared/components/layout/sf-banner.component';
 import { SfPageHeaderComponent } from '../../../../shared/components/layout/sf-page-header.component';
 import { SfSkeletonComponent } from '../../../../shared/components/layout/sf-skeleton.component';
@@ -32,6 +32,8 @@ import { MEDIA_SORTS, SampleMediaState, SampleMediaView } from './sample-media-s
 import { SampleMediaUploadsComponent } from './sample-media-uploads.component';
 
 const TYPE_ICONS: Readonly<Record<SampleMediaFile['kind'], string>> = { image: 'image', text: 'code', pdf: 'picture_as_pdf' };
+
+const TYPE_FILTER_ICONS: Readonly<Record<string, string>> = { images: 'image', documents: 'picture_as_pdf', text: 'code' };
 
 /** A folder of the open folder, as a row of the list (above the files). */
 interface FolderRow {
@@ -69,8 +71,8 @@ const isFolderRow = (row: ListRow): row is FolderRow => 'folder' in row;
     SfPageHeaderComponent,
     SfRelativeTimeComponent,
     SfSearchInputComponent,
+    SfFilterPopoverComponent,
     SfSegmentedComponent,
-    SfSelectComponent,
     SfSkeletonComponent,
     SfStatusComponent,
     SfToolbarComponent,
@@ -108,9 +110,27 @@ export class SampleMediaLibraryComponent {
   protected readonly fileOf = (row: ListRow): SampleMediaFile | null => (isFolderRow(row) ? null : row);
   protected readonly folderOf = (row: ListRow): FolderRow | null => (isFolderRow(row) ? row : null);
 
-  protected readonly typeOptions = computed<SfSelectOption<SampleMediaTypeFilter>[]>(() =>
-    MEDIA_TYPE_FILTERS.map((value) => ({ value, label: this.state.t(`toolbar.types.${value}`) })),
-  );
+  /** One group: the types without 'all' (no tag picked is 'all'). */
+  protected readonly filterGroups = computed<SfFilterGroup[]>(() => [
+    {
+      id: 'type',
+      label: this.state.t('toolbar.type'),
+      options: MEDIA_TYPE_FILTERS.filter((value) => value !== 'all').map((value) => ({
+        value,
+        label: this.state.t(`toolbar.types.${value}`),
+        icon: TYPE_FILTER_ICONS[value],
+      })),
+    },
+  ]);
+  protected readonly pickedFilters = computed(() => {
+    const type = this.state.typeFilter();
+    return { type: type === 'all' ? [] : [type] };
+  });
+
+  /** Picking a tag selects it (replacing another); picking the picked one again returns to 'all'. */
+  protected toggleType(value: string): void {
+    this.state.typeFilter.set(value === this.state.typeFilter() ? 'all' : (value as SampleMediaTypeFilter));
+  }
 
   protected readonly viewOptions = computed<SfSegmentedOption<SampleMediaView>[]>(() => [
     { value: 'grid', label: this.state.t('toolbar.grid'), icon: 'grid_view', iconOnly: true },

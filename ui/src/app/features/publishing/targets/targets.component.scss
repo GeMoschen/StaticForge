@@ -1,0 +1,8 @@
+@use '../publishing-section';
+
+.section__hint {
+  margin: 0;
+  color: var(--sf-text-muted);
+  font-size: var(--sf-fs-13);
+  line-height: var(--sf-lh-13);
+}

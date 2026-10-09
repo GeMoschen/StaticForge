@@ -9,9 +9,8 @@ import { ProjectPermissionsStore } from '../../core/project/project-permissions.
 import { DensityService } from '../../core/ui/density.service';
 import { ShortcutDef, ShortcutService } from '../../core/ui/shortcut.service';
 import { ThemeService } from '../../core/ui/theme.service';
-import { BuildNowService } from '../generation/build-now.service';
+import { BuildDialogService } from '../publishing/runs/build-dialog/build-dialog.service';
 import { HistoryDrawerStore } from '../history/history-drawer.store';
-import { BuildStatusStore } from './build-status.store';
 
 /** The `g` chords: the key after `g`, the rail item (`go.<id>`) and its route below the project (`[]` = the project's home). */
 const GO_CHORDS: readonly { readonly key: string; readonly id: string; readonly route: readonly string[]; readonly name: string }[] = [
@@ -43,8 +42,7 @@ export function useFrameShortcuts(): void {
   const permissions = inject(ProjectPermissionsStore);
   const preferences = inject(PreferencesService);
   const history = inject(HistoryDrawerStore);
-  const buildNow = inject(BuildNowService);
-  const buildStatus = inject(BuildStatusStore);
+  const buildDialog = inject(BuildDialogService);
   const theme = inject(ThemeService);
   const density = inject(DensityService);
   const session = inject(SessionService);
@@ -109,8 +107,8 @@ export function useFrameShortcuts(): void {
       group: 'publishing',
       description: item('build'),
       allowInInput: true,
-      enabled: () => inProject() && permissions.canIncrementalBuild() && buildStatus.state() !== 'running',
-      handler: () => buildNow.start(frame.projectKey() ?? '', 'Build now'),
+      enabled: () => inProject() && permissions.canIncrementalBuild(),
+      handler: () => buildDialog.open(),
       palette: { icon: 'construction' },
     },
     ...chords,

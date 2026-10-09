@@ -26,6 +26,16 @@ describe('parseGenerationFrame', () => {
     }
   });
 
+  it('carries the log line number, time and level, and leaves them out on a STATUS event', () => {
+    const line = parseGenerationFrame(
+      'data: {"n":4,"time":"2026-10-09T10:00:00Z","level":"warning","stage":"CHECK","message":"x","filesWritten":1,"errors":0,"warnings":1}',
+    );
+    expect(line).toMatchObject({ n: 4, time: '2026-10-09T10:00:00Z', level: 'warning' });
+    const status = parseGenerationFrame('data: {"stage":"STATUS","message":"RUNNING","filesWritten":0,"errors":0,"warnings":0}');
+    expect(status).not.toHaveProperty('n');
+    expect(status).not.toHaveProperty('level');
+  });
+
   it('tolerates the SSE single leading space after data:', () => {
     const frame =
       'data: {"stage":"STATUS","message":"Done","filesWritten":12,"errors":1,"warnings":2}';

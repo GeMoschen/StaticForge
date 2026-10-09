@@ -1,0 +1,29 @@
+@use '../publishing-section';
+
+.section__hint {
+  margin: 0;
+  color: var(--sf-text-muted);
+  font-size: var(--sf-fs-13);
+  line-height: var(--sf-lh-13);
+}
+
+.cell-target {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--sf-space-2);
+  min-width: 0;
+}
+
+.cell-state {
+  display: inline-flex;
+  border-radius: var(--sf-radius-sm);
+}
+
+.cell-link {
+  color: var(--sf-accent);
+  text-decoration: underline;
+
+  &:hover {
+    color: var(--sf-accent-hover);
+  }
+}

@@ -26,6 +26,8 @@ export interface UrlRegistryListParams {
   targetType?: UrlTargetType;
   /** A language tag; `''` lists the rows without a language. */
   locale?: string;
+  /** Only the rows without a language; survives clients that drop empty parameters, and wins over `locale`. */
+  noLocale?: boolean;
   targetUuid?: string;
   q?: string;
   page?: number;
@@ -51,7 +53,9 @@ export class UrlRegistryService {
         query[key] = value;
       }
     }
-    if (params.locale != null) {
+    if (params.noLocale) {
+      query['noLocale'] = 'true';
+    } else if (params.locale != null) {
       query['locale'] = params.locale;
     }
     if (params.page != null) {
@@ -76,13 +80,13 @@ export class UrlRegistryService {
     });
   }
 
-  /** Overrides one existing row's URL. */
-  override(projectKey: string, id: number, url: string): Observable<UrlRegistryEntryView> {
+  /** Overrides one existing row's URL; `quiet` leaves a failure to the caller (no global error toast). */
+  override(projectKey: string, id: number, url: string, quiet = false): Observable<UrlRegistryEntryView> {
     const req: UrlRegistryOverrideRequest = { url };
     return this.http.patch<UrlRegistryEntryView>(
       `${BASE}/projects/${projectKey}/url-registry/${id}`,
       req,
-      { withCredentials: true },
+      { withCredentials: true, ...(quiet ? { context: new HttpContext().set(SKIP_ERROR_TOAST, true) } : {}) },
     );
   }
 
@@ -95,11 +99,12 @@ export class UrlRegistryService {
 
   /**
    * `req` sets at most one of `entryId`/`targetUuid`/`channelKey`/`area` (`area` may narrow a `targetUuid` reset) —
-   * `{}` resets the whole project.
+   * `{}` resets the whole project. `quiet` leaves a failure to the caller (no global error toast).
    */
-  reset(projectKey: string, req: UrlRegistryResetRequest): Observable<void> {
+  reset(projectKey: string, req: UrlRegistryResetRequest, quiet = false): Observable<void> {
     return this.http.post<void>(`${BASE}/projects/${projectKey}/url-registry/reset`, req, {
       withCredentials: true,
+      ...(quiet ? { context: new HttpContext().set(SKIP_ERROR_TOAST, true) } : {}),
     });
   }
 }
@@ -113,20 +118,6 @@ export function overrideErrorMessage(err: unknown): string {
     }
   }
   return 'Could not save the URL — try again in a moment.';
-}
-
-/** "Page", "Media", "Folder" — the label of a target type. */
-export function targetTypeLabel(type: string | undefined): string {
-  switch (type) {
-    case 'PAGE':
-      return 'Page';
-    case 'MEDIA':
-      return 'Media';
-    case 'FOLDER':
-      return 'Folder';
-    default:
-      return type ?? '';
-  }
 }
 
 /** What a row names besides its asset: a media variant, or page N of a paginated page. */

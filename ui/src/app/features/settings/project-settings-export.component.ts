@@ -13,9 +13,8 @@ import { ExportSelectionRequest, ImportExportService } from './import-export.ser
  * Project settings tab: "Export" half of `M10`/`M11`'s selective export/import — lets the user
  * pick a subset of the project's pages/media/navigation (via the three folder trees loaded by
  * `ProjectContextStore`), page/section templates (flat searchable lists), whole-store picks, and
- * channels/generation-targets toggles, then downloads the resulting ZIP. Mirrors
- * `project-settings-url-registry.component`'s shape: signals for state, services via `inject()`,
- * reload-on-`projectKey`-change effect.
+ * channels/generation-targets toggles, then downloads the resulting ZIP. Standalone/OnPush, signals for
+ * state, services via `inject()`, reload-on-`projectKey`-change effect.
  *
  * All five selection sources (three trees + two template lists) write into the single `selected`
  * uuid set — uuids are globally unique server-side, so no merge step is needed; `exportNow()`'s

@@ -41,12 +41,11 @@
         [aria-label]="'styleguide.sample.media.toolbar.search' | transloco"
         (valueChange)="state.search.set($event)"
       />
-      <sf-select
-        class="library__type"
-        [options]="typeOptions()"
-        [value]="state.typeFilter()"
-        [aria-label]="'styleguide.sample.media.toolbar.type' | transloco"
-        (valueChange)="state.typeFilter.set($event ?? 'all')"
+      <sf-filter-popover
+        [groups]="filterGroups()"
+        [picked]="pickedFilters()"
+        (toggled)="toggleType($event.value)"
+        (cleared)="state.typeFilter.set('all')"
       />
       <sf-menu
         variant="secondary"

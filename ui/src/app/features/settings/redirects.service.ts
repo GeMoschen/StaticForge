@@ -21,6 +21,8 @@ export type RedirectState = 'ACTIVE' | 'SHADOWED' | 'DANGLING' | 'LOOP';
 export interface RedirectsQuery {
   channel?: string;
   locale?: string;
+  /** Only the rows without a language (channels without languages, e.g. files); wins over `locale`. */
+  noLocale?: boolean;
   kind?: RedirectKind;
   state?: RedirectState;
   q?: string;
@@ -40,10 +42,10 @@ export class RedirectsService {
   private readonly http = inject(HttpClient);
 
   list(projectKey: string, query: RedirectsQuery = {}): Observable<RedirectPageView> {
-    const params: Record<string, string | number> = {};
+    const params: Record<string, string | number | boolean> = {};
     for (const [key, value] of Object.entries(query)) {
       if (value !== undefined && value !== null && value !== '') {
-        params[key] = value as string | number;
+        params[key] = value;
       }
     }
     return this.http.get<RedirectPageView>(`${BASE}/projects/${projectKey}/redirects`, { withCredentials: true, params });
@@ -76,6 +78,14 @@ export class RedirectsService {
       withCredentials: true,
       headers: { 'If-Match': `"v${version}"` },
       context: new HttpContext().set(SKIP_ERROR_TOAST, true),
+    });
+  }
+
+  /** Deletes every manual redirect (`PROJECT_ADMIN`); automatic ones stay. Answers how many were removed. */
+  deleteAllManual(projectKey: string): Observable<{ deleted: number }> {
+    return this.http.delete<{ deleted: number }>(`${BASE}/projects/${projectKey}/redirects`, {
+      withCredentials: true,
+      params: { kind: 'MANUAL' },
     });
   }
 

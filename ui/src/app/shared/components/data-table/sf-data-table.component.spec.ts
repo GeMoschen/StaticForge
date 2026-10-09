@@ -67,6 +67,8 @@ interface Config {
   urlSync: string | null;
   loading: boolean;
   error: string | boolean | null;
+  /** The status filter holds one value at a time. */
+  singleFilter: boolean;
 }
 
 const DEFAULTS: Config = {
@@ -80,6 +82,7 @@ const DEFAULTS: Config = {
   urlSync: null,
   loading: false,
   error: null,
+  singleFilter: false,
 };
 let config: Config = DEFAULTS;
 
@@ -125,7 +128,7 @@ let config: Config = DEFAULTS;
 })
 class Host {
   readonly columns = COLUMNS;
-  readonly filters = FILTERS;
+  readonly filters = config.singleFilter ? FILTERS.map((f) => ({ ...f, single: true })) : FILTERS;
   readonly bulkActions: SfDataTableBulkAction<Item>[] = [{ id: 'archive', label: 'Archive' }];
   menuRows: Item[][] = [];
   readonly rowMenu = (rows: Item[]) => {
@@ -628,6 +631,26 @@ describe('SfDataTableComponent', () => {
       expect(names()).toEqual(['Beta', 'Delta']);
       fireEvent.click(screen.getByRole('button', { name: 'Remove Status: Published' }));
       expect(names()).toHaveLength(5);
+      expect(screen.queryByRole('button', { name: /Remove Status/ })).toBeNull();
+    });
+  });
+
+  describe('single-value filters', () => {
+    it('replaces the picked option when another is chosen, and unpicks the chosen one again', async () => {
+      await setup({ singleFilter: true });
+
+      fireEvent.click(screen.getByRole('button', { name: 'Filters' }));
+      const group = screen.getByRole('group', { name: 'Status' });
+      const draft = within(group).getByRole('button', { name: 'Draft' });
+      const published = within(group).getByRole('button', { name: 'Published' });
+      fireEvent.click(draft);
+      fireEvent.click(published);
+
+      expect(draft).toHaveAttribute('aria-pressed', 'false');
+      expect(published).toHaveAttribute('aria-pressed', 'true');
+      expect(screen.getAllByRole('button', { name: /Remove Status/ })).toHaveLength(1);
+      fireEvent.click(published);
+      expect(published).toHaveAttribute('aria-pressed', 'false');
       expect(screen.queryByRole('button', { name: /Remove Status/ })).toBeNull();
     });
   });

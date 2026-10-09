@@ -5,7 +5,7 @@ import { filter, map } from 'rxjs';
 import { FrameContextStore } from '../../core/frame/frame-context.store';
 import { BuildNowService } from '../generation/build-now.service';
 import { GenerationService } from '../generation/generation.service';
-import type { GenerationRunView } from '../generation/generation.store';
+import type { GenerationRunView } from '../publishing/runs/runs.util';
 import { ReleaseEventsStore } from '../release/release-events.store';
 import { RECENT_BUILDS, buildStateOf } from './build-status.util';
 

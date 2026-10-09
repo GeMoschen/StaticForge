@@ -253,11 +253,13 @@ describe('ChangesComponent', () => {
     expect(screen.queryByRole('list', { name: 'Active filters' })).toBeNull();
   });
 
-  it('picks a filter from its menu and goes back to the first page', async () => {
+  it('toggles a type in the Filters popover and goes back to the first page', async () => {
     await setup({ inputs: { type: 'PAGE', page: '3' } });
     const navigate = vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
-    fireEvent.click(screen.getByRole('button', { name: 'Type: Page' }));
-    fireEvent.click(await screen.findByRole('menuitem', { name: /Media/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Filters' }));
+    const type = await screen.findByRole('group', { name: 'Type' });
+    expect(within(type).getByRole('button', { name: 'Page' })).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(within(type).getByRole('button', { name: 'Media' }));
     expect(navigate).toHaveBeenCalledWith(
       [],
       expect.objectContaining({ queryParams: expect.objectContaining({ type: ['PAGE', 'MEDIA'], page: null }) }),
@@ -266,7 +268,9 @@ describe('ChangesComponent', () => {
 
   it('offers the language filter only in a localized project', async () => {
     const view = await setup({ localized: false });
-    expect(screen.queryByRole('button', { name: 'Language' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Filters' }));
+    await screen.findByRole('group', { name: 'Status' });
+    expect(screen.queryByRole('group', { name: 'Language' })).toBeNull();
     view.fixture.destroy();
   });
 

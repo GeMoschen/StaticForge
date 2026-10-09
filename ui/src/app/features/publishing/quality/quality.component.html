@@ -1,0 +1,197 @@
+@if (editable() && loaded()) {
+  <div class="section__bar">
+    <div class="section__actions">
+      @if (!valid()) {
+        <span class="save-status is-invalid" role="status">
+          <sf-icon name="error" />
+          {{ t('fixValues') }}
+        </span>
+      } @else {
+        <span class="save-status" [class.is-dirty]="dirty()" role="status">
+          <sf-icon [name]="dirty() ? 'edit' : 'cloud_done'" />
+          {{ dirty() ? t('unsaved') : t('saved') }}
+        </span>
+      }
+      <sf-button variant="secondary" [disabled]="!dirty() || saving()" (click)="discard()">{{ t('discard') }}</sf-button>
+      <sf-button [disabled]="!dirty() || !valid()" [loading]="saving()" (click)="save()">{{ t('save') }}</sf-button>
+    </div>
+  </div>
+}
+
+<div class="section__scroll quality">
+  <p class="quality__intro">{{ t('intro') }}</p>
+  @if (channels()) {
+    <p class="quality__intro" role="note">{{ t('channels', { channels: channels() }) }}</p>
+  }
+
+  @if (access.readOnlyLabel(); as label) {
+    <sf-banner tone="info">{{ label }}</sf-banner>
+  } @else if (loaded() && !editable()) {
+    <sf-banner tone="info">{{ t('readOnly') }}</sf-banner>
+  } @else if (justSaved()) {
+    <sf-banner tone="info" live="polite">{{ t('rebuildNote') }}</sf-banner>
+  }
+
+  @if (loadError()) {
+    <sf-banner tone="danger">{{ t('loadFailed') }}</sf-banner>
+  } @else if (!loaded()) {
+    <sf-spinner [label]="t('loading')" />
+  } @else {
+    <dl class="summary" [attr.aria-label]="t('summary')">
+      <div class="summary__tile">
+        <dt>{{ t('rulesOn') }}</dt>
+        <dd data-sf-summary="on">{{ summary().on }}</dd>
+      </div>
+      <div class="summary__tile">
+        <dt>{{ t('rulesOff') }}</dt>
+        <dd data-sf-summary="off">{{ summary().off }}</dd>
+      </div>
+      <div class="summary__tile">
+        <dt>{{ t('asErrors') }}</dt>
+        <dd data-sf-summary="errors">{{ summary().errors }}</dd>
+      </div>
+      <div class="summary__tile summary__tile--wide">
+        @if (lastRun()?.run; as run) {
+          <dt>{{ t('lastRun', { n: run.id }) }}</dt>
+          <dd>
+            <span class="summary__errors">{{ t('lastErrors', { count: run.findingErrors }) }}</span>
+            <span class="summary__warnings">{{ t('lastWarnings', { count: run.findingWarnings }) }}</span>
+            <sf-button
+              variant="ghost"
+              size="sm"
+              iconTrailing="arrow_forward"
+              [link]="['/p', projectKey(), 'publishing', 'runs']"
+              [queryParams]="{ run: run.id }"
+              >{{ t('openRun') }}</sf-button
+            >
+          </dd>
+        } @else {
+          <dt>{{ t('lastRunTitle') }}</dt>
+          <dd class="summary__none">{{ t('noRun') }}</dd>
+        }
+      </div>
+    </dl>
+
+    @for (group of groups(); track group.category) {
+      <section class="category" [attr.aria-labelledby]="'quality-category-' + group.category">
+        <div class="category__head">
+          <h2 class="category__title" [id]="'quality-category-' + group.category">
+            <button
+              type="button"
+              class="category__toggle"
+              [attr.aria-expanded]="!isCollapsed(group.category)"
+              [attr.aria-controls]="'quality-rules-' + group.category"
+              (click)="toggleGroup(group.category)"
+            >
+              <sf-icon class="category__chevron" [class.is-collapsed]="isCollapsed(group.category)" name="expand_more" />
+              {{ t('categories.' + group.category.toLowerCase()) }}
+              <span class="category__count">{{ t('onOf', { on: groupInfo(group).on, total: groupInfo(group).total }) }}</span>
+            </button>
+          </h2>
+          @if (editable()) {
+            <sf-segmented
+              class="category__level"
+              size="sm"
+              [options]="groupOptions()"
+              [value]="groupLevel(group)"
+              [disabled]="saving()"
+              [aria-label]="t('groupLevel', { category: t('categories.' + group.category.toLowerCase()) })"
+              (valueChange)="setGroupLevel(group, $event)"
+            />
+          }
+        </div>
+        <ul class="rules" [id]="'quality-rules-' + group.category" [hidden]="isCollapsed(group.category)">
+          @for (rule of group.rules; track rule.code) {
+            <li class="rule" [class.is-off]="applied(rule) === 'OFF'" [attr.data-code]="rule.code">
+              <div class="rule__text">
+                <div class="rule__name-row">
+                  <span class="rule__name">{{ rule.name }}</span>
+                  @if (dev()) {
+                    <code class="rule__code">{{ rule.code }}</code>
+                  }
+                  <sf-badge [label]="t('fixIn.' + fixKey(rule))" />
+                  @if (findings(rule) > 0) {
+                    <sf-badge tone="warning" icon="flag" [label]="t('findings', { count: findings(rule) })" />
+                  }
+                </div>
+                <span class="rule__hint">
+                  <span class="rule__hint-text">{{ rule.description }}</span>
+                  <sf-button variant="ghost" size="sm" icon="info" [label]="t('about', { name: rule.name })" [tooltip]="rule.description ?? null" />
+                </span>
+                @if (isCappedRule(rule)) {
+                  <span class="rule__note">{{ t('capped') }}</span>
+                  @if (storedAboveCap(rule)) {
+                    <span class="rule__note rule__note--warning">
+                      <sf-icon name="warning" />
+                      {{ t('cappedStored') }}
+                    </span>
+                  }
+                }
+                @if (rule.params?.length) {
+                  <div class="rule__params">
+                    @for (param of rule.params; track param.name) {
+                      @if (param.type === 'BOOLEAN') {
+                        <sf-checkbox [value]="value(rule, param) === true" [disabled]="!editable() || saving()" (valueChange)="setParam(rule, param, $event)">{{
+                          param.description || paramLabel(param.name)
+                        }}</sf-checkbox>
+                      } @else {
+                        <sf-field
+                          class="rule__param"
+                          [label]="paramLabel(param.name)"
+                          [hint]="(param.description ?? '') + ' ' + t('paramHint', { default: param.defaultValue, min: param.min, max: param.max })"
+                          [error]="isInvalid(rule, param) ? t('paramError', { min: param.min, max: param.max }) : null"
+                        >
+                          <sf-number-input
+                            [value]="$any(value(rule, param) ?? null)"
+                            [min]="param.min ?? null"
+                            [max]="param.max ?? null"
+                            [step]="1"
+                            [disabled]="!editable() || saving()"
+                            (valueChange)="setParam(rule, param, $event)"
+                          />
+                        </sf-field>
+                      }
+                    }
+                  </div>
+                  @if (rangeInvalid(rule)) {
+                    <span class="rule__note rule__note--danger" role="alert">
+                      <sf-icon name="error" />
+                      {{ t('minAboveMax') }}
+                    </span>
+                  }
+                }
+                @for (error of serverErrorsOf(rule); track $index) {
+                  <span class="rule__note rule__note--danger" role="alert">
+                    <sf-icon name="error" />
+                    {{ error }}
+                  </span>
+                }
+              </div>
+              <div class="rule__side">
+                <span class="rule__level" [sfTooltip]="isCappedRule(rule) ? t('errorUnavailable') : null">
+                  <sf-segmented
+                    size="sm"
+                    [options]="options(rule)"
+                    [value]="applied(rule)"
+                    [disabled]="!editable() || saving()"
+                    [aria-label]="t('levelOf', { name: rule.name })"
+                    (valueChange)="setLevel(rule, $event)"
+                  />
+                </span>
+                @if (editable() && differs(rule)) {
+                  <sf-button variant="ghost" size="sm" icon="undo" [disabled]="saving()" [aria-label]="t('resetRule', { name: rule.name })" (click)="reset(rule)">{{
+                    t('reset')
+                  }}</sf-button>
+                }
+              </div>
+            </li>
+          }
+        </ul>
+      </section>
+    }
+
+    @if (otherErrors().length) {
+      <sf-banner tone="danger" live="assertive">{{ otherErrors().join(' ') }}</sf-banner>
+    }
+  }
+</div>

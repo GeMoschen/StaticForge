@@ -11,7 +11,8 @@ import { SfSideNavComponent, type SfSideNavItem } from '../../shared/components/
 /**
  * An area with sub-pages — Publishing or Settings (M35.11): a secondary side menu (`sf-side-nav`, M35.9 decisions
  * 28–29), then the open sub-page under its own page header (the page's one `h1`). The sub-page is a child route in the
- * outlet. Below 1024 px the menu is a select above the page. What the menu lists follows `areaNav`.
+ * outlet. Below 1024 px the menu is a select above the page. What the menu lists follows `areaNav`. An area can add a
+ * status and actions to the page header: content marked `sfAreaStatus` / `sfAreaActions`.
  */
 @Component({
   selector: 'sf-area-shell',

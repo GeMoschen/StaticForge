@@ -1,7 +1,10 @@
 <div class="area__body" [class.is-narrow]="nav.narrow()">
   <sf-side-nav #nav="sfSideNav" class="area__nav" [items]="items()" [label]="label()" />
   <div class="area__content">
-    <sf-page-header [title]="title()" />
+    <sf-page-header [title]="title()">
+      <ng-container sfPageHeaderStatus><ng-content select="[sfAreaStatus]" /></ng-container>
+      <ng-container sfPageHeaderActions><ng-content select="[sfAreaActions]" /></ng-container>
+    </sf-page-header>
     <div class="area__page">
       <router-outlet />
     </div>

@@ -1,0 +1,91 @@
+@if (access.readOnlyLabel(); as label) {
+  <sf-banner tone="info">{{ label }}</sf-banner>
+}
+@if (loadError()) {
+  <sf-banner tone="danger">{{ t('loadFailed') }}</sf-banner>
+}
+@if (errors().length) {
+  <sf-banner tone="danger" live="assertive">{{ errors().join(' ') }}</sf-banner>
+}
+
+@if (editable()) {
+  <div class="section__bar">
+    <div class="section__actions">
+      <span class="save-status" [class.is-dirty]="dirty()" role="status">
+        <sf-icon [name]="dirty() ? 'edit' : 'cloud_done'" />
+        {{ dirty() ? t('unsaved') : t('saved') }}
+      </span>
+      <sf-button variant="secondary" [disabled]="!dirty() || saving()" (click)="discard()">{{ t('discard') }}</sf-button>
+      <sf-button [disabled]="!dirty()" [loading]="saving()" (click)="save()">{{ t('save') }}</sf-button>
+    </div>
+  </div>
+}
+
+<div class="section__scroll">
+  @if (loaded()) {
+    <section class="card" aria-labelledby="publishing-policy-card">
+      <h2 class="card__title" id="publishing-policy-card">{{ t('cardTitle') }}</h2>
+      <p class="card__intro">{{ t('cardIntro') }}</p>
+      @if (!editable() && !access.readOnlyLabel()) {
+        <p class="card__readonly"><sf-icon name="lock" />{{ t('readonly') }}</p>
+      }
+      <ul class="rows">
+        @for (item of switches; track item.permission) {
+          <li class="row">
+            <sf-switch
+              [value]="isOn(item.permission) && !isBlocked(item.requires)"
+              [disabled]="!editable() || saving() || isBlocked(item.requires)"
+              (valueChange)="toggle(item.permission, $event)"
+              >{{ t('actions.' + item.key) }}</sf-switch
+            >
+            <span class="row__hint">{{ t('hints.' + item.key) }}</span>
+            @if (item.requires && isBlocked(item.requires)) {
+              <span class="row__needs">{{ t('needs', { name: t('actions.' + policyKey(item.requires)) }) }}</span>
+            }
+          </li>
+        }
+      </ul>
+      <p class="card__note"><sf-icon name="verified_user" />{{ t('developersNote') }}</p>
+    </section>
+  }
+</div>
+
+@if (failing(); as schedules) {
+  <sf-dialog size="md" [title]="t('impact.title')" (closed)="cancelSave()">
+    <p class="impact__intro">{{ t('impact.intro') }}</p>
+    <table class="impact">
+      <caption class="sf-sr-only">
+        {{ t('impact.caption') }}
+      </caption>
+      <thead>
+        <tr>
+          <th scope="col">{{ t('impact.columns.type') }}</th>
+          <th scope="col">{{ t('impact.columns.item') }}</th>
+          <th scope="col">{{ t('impact.columns.runAt') }}</th>
+          <th scope="col">{{ t('impact.columns.owner') }}</th>
+          <th scope="col">{{ t('impact.columns.missing') }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (schedule of schedules; track schedule.id) {
+          <tr>
+            <td>{{ typeName(schedule.type) }}</td>
+            <td>
+              {{ schedule.itemName ?? t('impact.noItem') }}
+              @if ((schedule.itemCount ?? 0) > 1) {
+                <span class="impact__more">{{ t('impact.moreItems', { count: (schedule.itemCount ?? 1) - 1 }) }}</span>
+              }
+            </td>
+            <td class="impact__time">{{ formatInstant(schedule.runAt) }}</td>
+            <td>{{ schedule.ownerName ?? t('impact.unknownOwner') }}</td>
+            <td>{{ t('actions.' + policyKey(schedule.missingPermission)) }}</td>
+          </tr>
+        }
+      </tbody>
+    </table>
+    <ng-container sfDialogFooter>
+      <sf-button variant="secondary" (click)="cancelSave()">{{ t('impact.cancel') }}</sf-button>
+      <sf-button variant="danger" (click)="confirmSave()">{{ t('impact.saveAnyway') }}</sf-button>
+    </ng-container>
+  </sf-dialog>
+}

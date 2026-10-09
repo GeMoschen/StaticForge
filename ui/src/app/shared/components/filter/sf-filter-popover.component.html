@@ -1,0 +1,28 @@
+<sf-button variant="secondary" size="md" icon="filter_list" [sfPopoverTrigger]="panel">{{ 'shared.filter.filters' | transloco }}</sf-button>
+<sf-popover #panel [label]="'shared.filter.filters' | transloco" align="start">
+  <div class="sf-filter__panel">
+    @for (group of groups(); track group.id) {
+      <div class="sf-filter__group" role="group" [attr.aria-labelledby]="idPrefix + group.id">
+        <span class="sf-filter__title" [id]="idPrefix + group.id">{{ group.label }}</span>
+        <span class="sf-filter__tags">
+          @for (option of group.options; track option.value) {
+            <button
+              type="button"
+              class="sf-filter__tag"
+              [attr.aria-pressed]="isPicked(group.id, option.value)"
+              (click)="toggled.emit({ group: group.id, value: option.value })"
+            >
+              @if (option.icon) {
+                <sf-icon class="sf-filter__tag-icon" [name]="option.icon" />
+              }
+              {{ option.label }}
+            </button>
+          }
+        </span>
+      </div>
+    }
+    @if (anyPicked()) {
+      <sf-button class="sf-filter__clear" variant="ghost" size="sm" (click)="cleared.emit()">{{ 'shared.filter.clear' | transloco }}</sf-button>
+    }
+  </div>
+</sf-popover>

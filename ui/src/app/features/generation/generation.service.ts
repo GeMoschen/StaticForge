@@ -1,6 +1,7 @@
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpContext } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable, map } from 'rxjs';
+import { SKIP_ERROR_TOAST } from '../../core/api/error.interceptor';
 import type { components } from '../../core/api/generated/schema.d.ts';
 import {
   GenerationRunEvent,
@@ -15,16 +16,18 @@ import {
 import {
   FINDINGS_PAGE_SIZE,
   findingApiParams,
-  type FindingFilter,
   type FindingPageView,
   type QualityRuleItem,
-} from './findings/findings.util';
+  type RunFindingsFilter,
+} from '../publishing/runs/findings/run-findings.util';
 
 type GenerationRunView = components['schemas']['GenerationRunView'];
 type GenerationRequestDto = components['schemas']['GenerationRequestDto'];
 type GenerationTargetView = components['schemas']['GenerationTargetView'];
 type GenerationTargetRequest = components['schemas']['GenerationTargetRequest'];
 type QualityRulesView = components['schemas']['QualityRulesView'];
+export type FindingFacetsView = components['schemas']['FindingFacetsView'];
+export type RunLogView = components['schemas']['RunLogView'];
 
 /** Request shape accepted by {@link GenerationService.start}; adds the
  * optional idempotency header carrier on top of the backend DTO. */
@@ -44,20 +47,24 @@ export class GenerationService {
     );
   }
 
+  /**
+   * Starts a run. With `inline` the caller shows a refusal itself (the Build now dialog's "a build is already
+   * running"), so the error toast is skipped.
+   */
   start(
     projectKey: string,
     req: StartGenerationRequest,
+    inline = false,
   ): Observable<GenerationRunView> {
     const { idempotencyKey, ...body } = req;
     const headers: Record<string, string> = {};
     if (idempotencyKey) {
       headers['Idempotency-Key'] = idempotencyKey;
     }
-    return this.http.post<GenerationRunView>(
-      `${BASE}/projects/${projectKey}/generations`,
-      body,
-      Object.keys(headers).length > 0 ? { headers } : undefined,
-    );
+    return this.http.post<GenerationRunView>(`${BASE}/projects/${projectKey}/generations`, body, {
+      ...(Object.keys(headers).length > 0 ? { headers } : {}),
+      ...(inline ? { context: new HttpContext().set(SKIP_ERROR_TOAST, true) } : {}),
+    });
   }
 
   /**
@@ -99,13 +106,31 @@ export class GenerationService {
   findings(
     projectKey: string,
     runId: number,
-    filter: FindingFilter,
+    filter: RunFindingsFilter,
+    page = 0,
     size = FINDINGS_PAGE_SIZE,
   ): Observable<FindingPageView> {
     return this.http.get<FindingPageView>(
       `${BASE}/projects/${projectKey}/generations/${runId}/findings`,
-      { params: findingApiParams(filter, size) },
+      { params: { ...findingApiParams(filter), page: String(page), size: String(size) } },
     );
+  }
+
+  /**
+   * How many findings each facet would hold (severity, category, rule, language) for `filter`; every facet leaves its
+   * own filter out, so picking one shows what it would give.
+   */
+  findingFacets(projectKey: string, runId: number, filter: RunFindingsFilter): Observable<FindingFacetsView> {
+    return this.http.get<FindingFacetsView>(`${BASE}/projects/${projectKey}/generations/${runId}/findings/facets`, {
+      params: findingApiParams(filter),
+    });
+  }
+
+  /** A run's log (M35.24): the lines after `from` (the last `n` seen; 0 = all). */
+  runLog(projectKey: string, runId: number, from = 0): Observable<RunLogView> {
+    return this.http.get<RunLogView>(`${BASE}/projects/${projectKey}/generations/${runId}/log`, {
+      params: from > 0 ? { from: String(from) } : {},
+    });
   }
 
   /** The project's quality rules with their names (M30.1.2): what the findings' codes mean. */
@@ -115,10 +140,11 @@ export class GenerationService {
       .pipe(map((view) => view.rules ?? []));
   }
 
-  status(projectKey: string, runId: number): Observable<GenerationRunView> {
-    return this.http.get<GenerationRunView>(
-      `${BASE}/projects/${projectKey}/generations/${runId}`,
-    );
+  /** One run; with `silent` a refusal (a run that does not exist) is the caller's to show, not a toast. */
+  status(projectKey: string, runId: number, silent = false): Observable<GenerationRunView> {
+    return this.http.get<GenerationRunView>(`${BASE}/projects/${projectKey}/generations/${runId}`, {
+      ...(silent ? { context: new HttpContext().set(SKIP_ERROR_TOAST, true) } : {}),
+    });
   }
 
   cancel(projectKey: string, runId: number): Observable<void> {
@@ -141,6 +167,7 @@ export class GenerationService {
     );
   }
 
+  /** Create and update answer `409`/`400` problems the target form shows on their fields, so they skip the error toast. */
   createTarget(
     projectKey: string,
     req: GenerationTargetRequest,
@@ -148,6 +175,7 @@ export class GenerationService {
     return this.http.post<GenerationTargetView>(
       `${BASE}/projects/${projectKey}/targets`,
       req,
+      { context: new HttpContext().set(SKIP_ERROR_TOAST, true) },
     );
   }
 
@@ -159,6 +187,7 @@ export class GenerationService {
     return this.http.put<GenerationTargetView>(
       `${BASE}/projects/${projectKey}/targets/${id}`,
       req,
+      { context: new HttpContext().set(SKIP_ERROR_TOAST, true) },
     );
   }
 

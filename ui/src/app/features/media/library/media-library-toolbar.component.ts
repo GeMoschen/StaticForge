@@ -2,7 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/c
 import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
 import { SfSearchInputComponent } from '../../../shared/components/forms/sf-search-input.component';
 import { SfSegmentedComponent, type SfSegmentedOption } from '../../../shared/components/forms/sf-segmented.component';
-import { SfSelectComponent, type SfSelectOption } from '../../../shared/components/forms/sf-select.component';
+import { SfFilterPopoverComponent, type SfFilterGroup } from '../../../shared/components/filter/sf-filter-popover.component';
 import { SfToolbarComponent } from '../../../shared/components/layout/sf-toolbar.component';
 import { SfMenuComponent, type SfMenuItem } from '../../../shared/components/menu/sf-menu.component';
 import { SfButtonComponent } from '../../../shared/components/sf-button.component';
@@ -20,10 +20,10 @@ import { MediaUploadStore } from './media-upload.store';
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     SfButtonComponent,
+    SfFilterPopoverComponent,
     SfMenuComponent,
     SfSearchInputComponent,
     SfSegmentedComponent,
-    SfSelectComponent,
     SfToolbarComponent,
     TranslocoPipe,
   ],
@@ -39,9 +39,23 @@ export class MediaLibraryToolbarComponent {
     return this.transloco.translate(`media.toolbar.${key}`, params);
   }
 
-  protected readonly typeOptions = computed<SfSelectOption<MediaTypeFilter>[]>(() =>
-    MEDIA_TYPE_FILTERS.map((value) => ({ value, label: this.t(`types.${value}`) })),
-  );
+  /** One group: the types without 'all' (no tag picked is 'all'). */
+  protected readonly filterGroups = computed<SfFilterGroup[]>(() => [
+    {
+      id: 'type',
+      label: this.t('type'),
+      options: MEDIA_TYPE_FILTERS.filter((value) => value !== 'all').map((value) => ({ value, label: this.t(`types.${value}`) })),
+    },
+  ]);
+  protected readonly pickedFilters = computed(() => {
+    const type = this.library.typeFilter();
+    return { type: type === 'all' ? [] : [type] };
+  });
+
+  /** Picking a tag selects it (replacing another); picking the picked one again returns to 'all'. */
+  protected toggleType(value: string): void {
+    this.library.setTypeFilter(value === this.library.typeFilter() ? 'all' : (value as MediaTypeFilter));
+  }
 
   protected readonly viewOptions = computed<SfSegmentedOption<MediaViewMode>[]>(() => [
     { value: 'grid', label: this.t('grid'), icon: 'grid_view', iconOnly: true },

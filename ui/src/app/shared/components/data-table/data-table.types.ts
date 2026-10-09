@@ -50,6 +50,11 @@ export interface SfDataTableFilter<T = unknown> {
   label: string;
   options: readonly SfDataTableFilterOption[];
   /**
+   * At most one option at a time: picking another replaces the picked one. For a server-mode filter the API takes
+   * a single value.
+   */
+  single?: boolean;
+  /**
    * Client mode: whether a row passes the picked values. Default: the text of the column with the same id is one of
    * them.
    */

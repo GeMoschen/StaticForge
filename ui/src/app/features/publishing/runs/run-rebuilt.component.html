@@ -1,0 +1,71 @@
+@switch (view()) {
+  @case ('plan') {
+    <p class="plan__line">{{ planLine() }}</p>
+    @if (fallback(); as text) {
+      <p class="plan__fallback"><sf-icon name="warning" />{{ text }}</p>
+    }
+    <div class="plan__groups">
+      @if (topChanges().length) {
+        <section aria-labelledby="run-plan-changes">
+          <h3 class="plan__title" id="run-plan-changes">{{ t('run.plan.changes') }}</h3>
+          <ul class="plan__list">
+            @for (change of topChanges(); track change.key) {
+              <li class="plan__change">
+                <sf-icon [name]="change.icon" />
+                <span class="plan__via">{{ change.asset }}</span>
+                <sf-badge [label]="t('run.plan.files', { count: change.count })" />
+              </li>
+            }
+          </ul>
+          @if (moreChanges() > 0) {
+            <p class="plan__more">{{ t('run.plan.more', { count: moreChanges() }) }}</p>
+          }
+        </section>
+      }
+      <section aria-labelledby="run-plan-kinds">
+        <h3 class="plan__title" id="run-plan-kinds">{{ t('run.plan.roots') }}</h3>
+        <ul class="plan__list">
+          @for (kind of kinds(); track kind.key) {
+            <li class="plan__change">
+              <span class="plan__via">{{ kind.label }}</span>
+              <sf-badge [label]="t('run.plan.files', { count: kind.count })" />
+            </li>
+          }
+        </ul>
+      </section>
+    </div>
+    <sf-data-table
+      class="plan__table"
+      mode="server"
+      paging="pager"
+      searchable
+      [rowsOpenable]="false"
+      [columnChooser]="false"
+      [pageSize]="pageSize"
+      [total]="total()"
+      [loading]="loading()"
+      [error]="failed() ? t('run.rebuiltError') : null"
+      [columns]="columns()"
+      [rows]="rows()"
+      [rowKey]="rowKey"
+      [rowLabel]="rowLabel"
+      [filters]="filters()"
+      [searchPlaceholder]="t('run.rebuiltSearch')"
+      [label]="t('run.rebuiltTable')"
+      (queryChange)="onQuery($event)"
+      (retry)="retry()"
+    />
+  }
+  @case ('pending') {
+    <sf-empty-state icon="schedule" [level]="3" [title]="t('run.empty.pending')" [description]="t('run.empty.pendingHint')" />
+  }
+  @case ('none') {
+    <sf-empty-state icon="event_busy" [level]="3" [title]="t('run.empty.none')" [description]="t('run.empty.noneHint')" />
+  }
+  @case ('pruned') {
+    <sf-empty-state icon="auto_delete" [level]="3" [title]="t('run.empty.pruned')" [description]="t('run.empty.prunedHint')" />
+  }
+  @default {
+    <sf-empty-state icon="done_all" [level]="3" [title]="t('run.empty.nothing')" [description]="t('run.empty.nothingHint')" />
+  }
+}

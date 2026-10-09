@@ -20,6 +20,7 @@ import { SfBadgeComponent } from '../../../../shared/components/display/sf-badge
 import { SfRelativeTimeComponent } from '../../../../shared/components/display/sf-relative-time.component';
 import { SfStatusComponent } from '../../../../shared/components/display/sf-status.component';
 import { SfTagComponent } from '../../../../shared/components/display/sf-tag.component';
+import { SfFilterGroup, SfFilterPopoverComponent } from '../../../../shared/components/filter/sf-filter-popover.component';
 import { SfSearchInputComponent } from '../../../../shared/components/forms/sf-search-input.component';
 import { SfPageHeaderComponent } from '../../../../shared/components/layout/sf-page-header.component';
 import { SfMenuComponent, SfMenuItem } from '../../../../shared/components/menu/sf-menu.component';
@@ -47,13 +48,16 @@ import { ReleaseLanguage, SampleReleaseDialogComponent } from './sample-release-
 import { SampleScheduleDialogComponent } from './sample-schedule-dialog.component';
 import { injectSampleDevMode, injectSampleNotice, injectSampleQuery, injectSampleText, minutesAgo, oneOf } from './sample-area.util';
 
-/** The filters of the bar, in its order; each is one pick (or none). */
+/** The filters of the bar, in its order. Type, status and language take several picks (the Filters popover); changed by and folder one. */
 export type ChangeFilterId = 'type' | 'status' | 'lang' | 'by' | 'folder';
 export const CHANGE_FILTER_IDS: readonly ChangeFilterId[] = ['type', 'status', 'lang', 'by', 'folder'];
+/** The filters inside the popover; the others are menus. */
+const POPOVER_IDS = ['type', 'status', 'lang'] as const;
+const MULTI_IDS: readonly ChangeFilterId[] = POPOVER_IDS;
 export type ChangeSort = 'newest' | 'oldest' | 'az' | 'za';
 const SORTS: readonly ChangeSort[] = ['newest', 'oldest', 'az', 'za'];
 
-type ChangeFilters = Readonly<Partial<Record<ChangeFilterId, string>>>;
+type ChangeFilters = Readonly<Partial<Record<ChangeFilterId, readonly string[]>>>;
 
 interface FilterOption {
   readonly value: string;
@@ -65,9 +69,9 @@ const FOLDERS: readonly FilterOption[] = [...new Set(CHANGES.map((c) => c.folder
   .sort()
   .map((label) => ({ value: label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''), label }));
 
-/** `type:page,lang:en,sort:az` ⇄ filters, search and sort (the `cfilter` query parameter). */
+/** `type:page|media,lang:en,sort:az` (several picks joined by `|`) ⇄ filters, search and sort (the `cfilter` query parameter). */
 export function parseChangeFilter(value: string | null): { filters: ChangeFilters; sort: ChangeSort; q: string } {
-  const filters: Partial<Record<ChangeFilterId, string>> = {};
+  const filters: Partial<Record<ChangeFilterId, string[]>> = {};
   let sort: ChangeSort = 'newest';
   let q = '';
   for (const part of (value ?? '').split(',')) {
@@ -82,14 +86,18 @@ export function parseChangeFilter(value: string | null): { filters: ChangeFilter
     } else if (key === 'q') {
       q = val;
     } else if ((CHANGE_FILTER_IDS as readonly string[]).includes(key) && val) {
-      filters[key as ChangeFilterId] = val;
+      const id = key as ChangeFilterId;
+      const values = (MULTI_IDS.includes(id) ? val.split('|') : [val]).filter(Boolean);
+      if (values.length) {
+        filters[id] = values;
+      }
     }
   }
   return { filters, sort, q };
 }
 
 export function formatChangeFilter(filters: ChangeFilters, sort: ChangeSort, q: string): string | null {
-  const parts = CHANGE_FILTER_IDS.filter((id) => filters[id]).map((id) => `${id}:${filters[id]}`);
+  const parts = CHANGE_FILTER_IDS.filter((id) => filters[id]?.length).map((id) => `${id}:${filters[id]!.join('|')}`);
   if (q.trim()) {
     parts.push(`q:${q.trim().replace(/,/g, ' ')}`);
   }
@@ -137,7 +145,7 @@ export function releaseLanguagesOf(rows: readonly SampleChange[], statusLabel: (
 
 /**
  * The sample's Changes area (M35.9 decision 26, M35.23): `sf-page-header` with the count, a compact one-row filter bar
- * (search, type, status, language, changed by, folder, sort) with removable chips below only while a filter is active,
+ * (search, a Filters popover with type, status and language, changed by, folder, sort) with removable chips below only while a filter is active,
  * and an `sf-data-table` with one row per language (default language first), selection and bulk Release / Discard /
  * Schedule. A row opens its diff in an `sf-splitter` pane on the right.
  *
@@ -159,6 +167,7 @@ export function releaseLanguagesOf(rows: readonly SampleChange[], statusLabel: (
     SfButtonComponent,
     SfDataTableCellDirective,
     SfDataTableComponent,
+    SfFilterPopoverComponent,
     SfIconComponent,
     SfMenuComponent,
     SfPageHeaderComponent,
@@ -200,27 +209,41 @@ export class SampleChangesAreaComponent {
   protected readonly rows = computed(() => {
     const filters = this.filters();
     const q = this.search().trim().toLowerCase();
-    const folderLabel = FOLDERS.find((f) => f.value === filters.folder)?.label;
+    const has = (id: ChangeFilterId, value: string) => !filters[id]?.length || filters[id]!.includes(value);
+    const folderLabels = (filters.folder ?? []).map((value) => FOLDERS.find((f) => f.value === value)?.label);
     const matching = CHANGES.filter(
       (c) =>
-        (!filters.type || c.type === filters.type) &&
-        (!filters.status || c.status === filters.status) &&
-        (!filters.lang || c.lang === filters.lang) &&
-        (!filters.by || c.by.id === filters.by) &&
-        (!filters.folder || c.folder === folderLabel) &&
+        has('type', c.type) &&
+        has('status', c.status) &&
+        has('lang', c.lang) &&
+        has('by', c.by.id) &&
+        (folderLabels.length === 0 || folderLabels.includes(c.folder)) &&
         (!q || c.name.toLowerCase().includes(q) || (this.dev() && c.uid.includes(q))),
     );
     return sortChanges(matching, this.sort());
   });
   protected readonly diff = computed(() => CHANGES.find((c) => c.id === this.diffId()) ?? null);
-  protected readonly filtered = computed(() => Object.keys(this.filters()).length > 0 || this.search().trim() !== '');
+  protected readonly filtered = computed(() => CHANGE_FILTER_IDS.some((id) => this.filters()[id]?.length) || this.search().trim() !== '');
 
-  /** The bar's filter menus: their trigger text names the pick, the items tick it. */
+  /** Type, status and language: the groups of the Filters popover. */
+  protected readonly groups = computed<SfFilterGroup[]>(() =>
+    POPOVER_IDS.map((id) => ({
+      id,
+      label: this.t(`filters.${id}`),
+      options: this.optionsOf(id).map((o) => (id === 'type' ? { ...o, icon: CHANGE_TYPE_ICONS[o.value as keyof typeof CHANGE_TYPE_ICONS] } : o)),
+    })),
+  );
+  protected readonly popoverPicked = computed(() => {
+    const filters = this.filters();
+    return { type: filters.type ?? [], status: filters.status ?? [], lang: filters.lang ?? [] };
+  });
+
+  /** Changed by and folder stay menus: their trigger text names the pick, the items tick it. */
   protected readonly filterMenus = computed(() => {
     const filters = this.filters();
-    return CHANGE_FILTER_IDS.map((id) => {
+    return (['by', 'folder'] as const).map((id) => {
       const options = this.optionsOf(id);
-      const picked = options.find((o) => o.value === filters[id]);
+      const picked = options.find((o) => o.value === filters[id]?.[0]);
       const name = this.t(`filters.${id}`);
       const items: SfMenuItem[] = [
         { id: '', label: this.t(`filters.any.${id}`), icon: picked ? undefined : 'check', action: () => this.setFilter(id, null) },
@@ -245,15 +268,16 @@ export class SampleChangesAreaComponent {
     })),
   );
 
+  /** One removable chip per picked value. */
   protected readonly chips = computed(() => {
     const filters = this.filters();
-    return CHANGE_FILTER_IDS.filter((id) => filters[id]).map((id) => ({
-      id,
-      label: this.t('filters.picked', {
-        filter: this.t(`filters.${id}`),
-        value: this.optionsOf(id).find((o) => o.value === filters[id])?.label ?? filters[id],
-      }),
-    }));
+    return CHANGE_FILTER_IDS.flatMap((id) =>
+      (filters[id] ?? []).map((value) => ({
+        id,
+        value,
+        label: this.t('filters.picked', { filter: this.t(`filters.${id}`), value: this.optionsOf(id).find((o) => o.value === value)?.label ?? value }),
+      })),
+    );
   });
 
   protected readonly columns = computed<SfDataTableColumn<SampleChange>[]>(() => {
@@ -304,16 +328,37 @@ export class SampleChangesAreaComponent {
     inject(DestroyRef).onDestroy(() => this.query.set({ cfilter: null, diff: null, sel: null, release: null }));
   }
 
+  /** Sets a single-pick filter (changed by, folder), or clears it with `null`. */
   protected setFilter(id: ChangeFilterId, value: string | null): void {
     this.filters.update((filters) => {
       const next = { ...filters };
       if (value === null) {
         delete next[id];
       } else {
-        next[id] = value;
+        next[id] = [value];
       }
       return next;
     });
+  }
+
+  /** Turns one value of a filter on or off (the popover's tags and the chips' remove). */
+  protected toggleFilter(id: string, value: string): void {
+    const key = id as ChangeFilterId;
+    this.filters.update((filters) => {
+      const current = filters[key] ?? [];
+      const values = current.includes(value) ? current.filter((v) => v !== value) : [...current, value];
+      const next = { ...filters };
+      if (values.length) {
+        next[key] = values;
+      } else {
+        delete next[key];
+      }
+      return next;
+    });
+  }
+
+  protected clearPopover(): void {
+    this.filters.update(({ by, folder }) => ({ ...(by ? { by } : {}), ...(folder ? { folder } : {}) }));
   }
 
   protected clearFilters(): void {

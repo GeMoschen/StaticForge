@@ -9,6 +9,8 @@ import { ProjectContextStore } from '../../core/project/project-context.store';
 import { ArchivedBannerComponent } from '../dashboard/archived-banner.component';
 import { HistoryDrawerComponent } from '../history/history-drawer.component';
 import { HistoryDrawerStore } from '../history/history-drawer.store';
+import { BuildDialogComponent } from '../publishing/runs/build-dialog/build-dialog.component';
+import { BuildDialogService } from '../publishing/runs/build-dialog/build-dialog.service';
 import { TimeTravelBannerComponent } from '../revisions/time-travel-banner.component';
 import { TimeTravelStore } from '../revisions/time-travel.store';
 import { FrameRailComponent } from './frame-rail.component';
@@ -26,6 +28,7 @@ import { FrameTopbarComponent } from './frame-topbar.component';
   standalone: true,
   imports: [
     ArchivedBannerComponent,
+    BuildDialogComponent,
     FrameRailComponent,
     FrameTopbarComponent,
     HistoryDrawerComponent,
@@ -44,6 +47,7 @@ export class AppFrameComponent {
   protected readonly project = inject(ProjectContextStore);
   protected readonly timeTravel = inject(TimeTravelStore);
   protected readonly history = inject(HistoryDrawerStore);
+  protected readonly buildDialog = inject(BuildDialogService);
   /** Created with the frame: Ctrl/Cmd+S and the tab-close prompt work from the first screen on (M35.13). */
   private readonly editors = inject(ActiveEditorService);
 

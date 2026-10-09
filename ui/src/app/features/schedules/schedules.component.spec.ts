@@ -140,11 +140,13 @@ describe('SchedulesComponent', () => {
   it('filters on the three kinds; Generation asks for the one-off and the recurring type', async () => {
     const { list } = await setup({ inputs: { type: 'GENERATION' } });
     expect(list.request.params.getAll('type')).toEqual(['GENERATION', 'RECURRING_GENERATION']);
-    fireEvent.click(screen.getByRole('button', { name: /^Type/ }));
-    expect(await screen.findByRole('menuitem', { name: 'Release' })).toBeInTheDocument();
-    expect(screen.getByRole('menuitem', { name: 'Unpublish' })).toBeInTheDocument();
-    expect(screen.getByRole('menuitem', { name: 'Generation' })).toBeInTheDocument();
-    expect(screen.queryByRole('menuitem', { name: 'Recurring generation' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /^Filters/ }));
+    const type = await screen.findByRole('group', { name: 'Type' });
+    expect(within(type).getByRole('button', { name: 'Release', pressed: false })).toBeInTheDocument();
+    expect(within(type).getByRole('button', { name: 'Unpublish', pressed: false })).toBeInTheDocument();
+    expect(within(type).getByRole('button', { name: 'Generation', pressed: true })).toBeInTheDocument();
+    expect(within(type).queryByRole('button', { name: 'Recurring generation' })).toBeNull();
+    expect(screen.getByRole('group', { name: 'Status' })).toBeInTheDocument();
   });
 
   it('lists kind, what, next run, owner by name and status, with the drift warning', async () => {
@@ -264,12 +266,13 @@ describe('SchedulesComponent', () => {
     expect(navigate).toHaveBeenLastCalledWith([], expect.objectContaining({ queryParams: { type: null, status: null, owner: null, page: null } }));
   });
 
-  it('picks a filter from its menu and goes back to the first page', async () => {
+  it('picks a filter in the popover and goes back to the first page', async () => {
     await setup({ inputs: { page: '3' } });
     const navigate = vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
     expect(screen.queryByRole('list', { name: 'Active filters' })).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'Status' }));
-    fireEvent.click(await screen.findByRole('menuitem', { name: 'Failed or paused' }));
+    fireEvent.click(screen.getByRole('button', { name: /^Filters/ }));
+    const status = await screen.findByRole('group', { name: 'Status' });
+    fireEvent.click(within(status).getByRole('button', { name: 'Failed or paused' }));
     expect(navigate).toHaveBeenCalledWith([], expect.objectContaining({ queryParams: { status: 'FAILED', page: null } }));
   });
 

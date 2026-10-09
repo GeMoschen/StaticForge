@@ -25,15 +25,15 @@ import { ProjectSettingsCodeHighlightingPageComponent } from './features/setting
 import { ProjectSettingsCompactionComponent } from './features/settings/project-settings-compaction.component';
 import { ProjectSettingsMembersComponent } from './features/settings/project-settings-members.component';
 import { ProjectSettingsImportExportComponent } from './features/settings/project-settings-import-export.component';
-import { ProjectSettingsUrlRegistryComponent } from './features/settings/project-settings-url-registry.component';
-import { ProjectSettingsQualityComponent } from './features/settings/project-settings-quality.component';
-import { ProjectSettingsRedirectsComponent } from './features/settings/project-settings-redirects.component';
-import { ProjectSettingsTargetsComponent } from './features/settings/project-settings-targets.component';
-import { ProjectSettingsPublishPolicyComponent } from './features/settings/project-settings-publish-policy.component';
 import { SettingsShellComponent } from './features/settings/settings-shell.component';
 import { ChannelsComponent } from './features/channels/channels.component';
 import { PublishingShellComponent } from './features/publishing/publishing-shell.component';
-import { PublishingRunsComponent } from './features/publishing/publishing-runs.component';
+import { PublishingRunsComponent } from './features/publishing/runs/runs.component';
+import { PublishingTargetsComponent } from './features/publishing/targets/targets.component';
+import { PublishingPolicyComponent } from './features/publishing/policy/policy.component';
+import { PublishingQualityComponent } from './features/publishing/quality/quality.component';
+import { PublishingRedirectsComponent } from './features/publishing/redirects/redirects.component';
+import { PublishingUrlsComponent } from './features/publishing/urls/urls.component';
 import { HistoryPageComponent } from './features/history/history-page.component';
 import { ContentComponent } from './features/content/content.component';
 import { RecordEditorComponent } from './features/content/record-editor.component';
@@ -203,11 +203,11 @@ export const routes: Routes = [
             children: [
               { path: '', pathMatch: 'full', redirectTo: 'runs' },
               { path: 'runs', title: routeTitle('frame.sub.publishing.runs'), component: PublishingRunsComponent },
-              { path: 'targets', title: routeTitle('frame.sub.publishing.targets'), component: ProjectSettingsTargetsComponent },
-              { path: 'policy', title: routeTitle('frame.sub.publishing.policy'), component: ProjectSettingsPublishPolicyComponent },
-              { path: 'quality', title: routeTitle('frame.sub.publishing.quality'), component: ProjectSettingsQualityComponent },
-              { path: 'redirects', title: routeTitle('frame.sub.publishing.redirects'), component: ProjectSettingsRedirectsComponent },
-              { path: 'urls', title: routeTitle('frame.sub.publishing.urls'), component: ProjectSettingsUrlRegistryComponent },
+              { path: 'targets', title: routeTitle('frame.sub.publishing.targets'), component: PublishingTargetsComponent },
+              { path: 'policy', title: routeTitle('frame.sub.publishing.policy'), component: PublishingPolicyComponent },
+              { path: 'quality', title: routeTitle('frame.sub.publishing.quality'), component: PublishingQualityComponent },
+              { path: 'redirects', title: routeTitle('frame.sub.publishing.redirects'), component: PublishingRedirectsComponent },
+              { path: 'urls', title: routeTitle('frame.sub.publishing.urls'), component: PublishingUrlsComponent },
             ],
           },
           // The project's history (M35.12): the timeline, and a revision's detail beside it. It was Settings › Revisions.

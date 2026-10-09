@@ -118,6 +118,13 @@ every screen. Screen migration starts only after the style guide (M35.9) is sign
   - Built (navigation + sibling-order backend, globals); 336 test files / 3,680 tests, build + lint + backend tests green. **Signed off by the user 2026-10-07** (sample deviations approved, see `35-m35-ui-ux-overhaul/022-navigation-globals.md`). **Open:** no Chrome check; e2e m8 journeys need the new UI (M35.31).
 - [x] M35.23 changes, schedules, release dialogs
 - [ ] M35.24 publishing, quality, redirects, URL registry
+  - Design signed off 2026-10-09 (gate round 17, decisions 186-212). User decisions: persist the run log, add run `trigger`, build "Delete all manual redirects", server support for per-rule last-run counts and findings facet counts.
+  - [x] Server A: run log (persist + GET log + SSE replay), trigger, planState, typed heldBack, findings facets, per-rule last-run counts
+  - [x] Server B: DELETE manual redirects, URL registry "No language" filter, target baseUrl check
+  - [x] UI 1: Runs, run detail (tabs, findings, log), Build now dialog
+  - [x] UI 2: Targets (drawer), Policy, Quality
+  - [x] UI 3: Redirects, URL registry
+  - [x] Integration: build, lint, specs green. **Open:** browser walkthrough with a running backend; e2e journeys (M35.31); 2 pre-existing server test failures (Navigation visibleInMenu, Release search CHANGED)
 - [ ] M35.25 settings sub-pages, members, import/export
 - [ ] M35.26 search page
 - [ ] M35.27 tablet layout and review mode

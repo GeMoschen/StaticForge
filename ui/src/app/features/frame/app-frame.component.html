@@ -21,3 +21,7 @@
 @if (projectKey() !== null && history.isOpen()) {
   <sf-history-drawer />
 }
+
+@if (projectKey() !== null && buildDialog.isOpen()) {
+  <sf-build-dialog (closed)="buildDialog.close()" />
+}

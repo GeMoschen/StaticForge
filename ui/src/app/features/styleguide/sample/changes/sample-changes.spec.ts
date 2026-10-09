@@ -55,9 +55,9 @@ describe('sample Changes area', () => {
   });
 
   it('round-trips the cfilter parameter', () => {
-    const parsed = parseChangeFilter('type:page,lang:en,q:harvest,sort:az,bogus:1');
-    expect(parsed).toEqual({ filters: { type: 'page', lang: 'en' }, sort: 'az', q: 'harvest' });
-    expect(formatChangeFilter(parsed.filters, parsed.sort, parsed.q)).toBe('type:page,lang:en,q:harvest,sort:az');
+    const parsed = parseChangeFilter('type:page|media,lang:en,q:harvest,sort:az,bogus:1');
+    expect(parsed).toEqual({ filters: { type: ['page', 'media'], lang: ['en'] }, sort: 'az', q: 'harvest' });
+    expect(formatChangeFilter(parsed.filters, parsed.sort, parsed.q)).toBe('type:page|media,lang:en,q:harvest,sort:az');
   });
 
   it('applies cfilter and shows the active filters as removable chips', async () => {
@@ -70,6 +70,27 @@ describe('sample Changes area', () => {
     await waitFor(() => expect(dataRows()).toHaveLength(CHANGES.length));
     expect(screen.queryByRole('list', { name: 'Active filters' })).toBeNull();
     await waitFor(() => expect(url()).not.toContain('cfilter'));
+  });
+
+  it('filters from the one Filters popover: several types toggle on and off, Clear empties the three groups', async () => {
+    await render(SampleChangesAreaComponent, { providers: providers({}) });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Filters' }));
+    const type = await screen.findByRole('group', { name: 'Type' });
+    expect(screen.getByRole('group', { name: 'Status' })).toBeInTheDocument();
+    expect(screen.getByRole('group', { name: 'Language' })).toBeInTheDocument();
+    fireEvent.click(within(type).getByRole('button', { name: 'Record' }));
+    fireEvent.click(within(type).getByRole('button', { name: 'Media' }));
+    await waitFor(() => expect(within(type).getByRole('button', { name: 'Media' })).toHaveAttribute('aria-pressed', 'true'));
+    expect(dataRows().length).toBeLessThan(CHANGES.length);
+    const both = dataRows().length;
+
+    fireEvent.click(within(type).getByRole('button', { name: 'Media' }));
+    await waitFor(() => expect(dataRows().length).toBeLessThan(both));
+    expect(dataRows()).toHaveLength(2);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Clear filters' }));
+    await waitFor(() => expect(dataRows()).toHaveLength(CHANGES.length));
   });
 
   it('opens the diff pane from diff=1 with marked removed and added text, and from a row click', async () => {
@@ -205,6 +226,28 @@ describe('sample Schedules area', () => {
     expect(await within(dialog).findByText('Skip if more than (minutes late)')).toBeInTheDocument();
     fireEvent.click(within(dialog).getByRole('radio', { name: /Unpublish/ }));
     await waitFor(() => expect(within(dialog).queryByText('Which version')).toBeNull());
+  });
+
+  it('filters by type and status in one popover, with removable chips and Clear', async () => {
+    await render(SampleSchedulesAreaComponent, { providers: providers({}) });
+    const rows = () => screen.getAllByRole('row').filter((r) => r.getAttribute('aria-rowindex') !== '1' && !r.querySelector('th')).length;
+    const all = rows();
+
+    fireEvent.click(screen.getByRole('button', { name: /^Filters/ }));
+    const type = await screen.findByRole('group', { name: 'Type' });
+    expect(screen.getByRole('group', { name: 'Status' })).toBeInTheDocument();
+    fireEvent.click(within(type).getByRole('button', { name: 'Unpublish' }));
+    const chips = await screen.findByRole('list', { name: 'Active filters' });
+    expect(within(chips).getByText('Type: Unpublish')).toBeInTheDocument();
+    expect(rows()).toBeLessThan(all);
+
+    fireEvent.click(within(type).getByRole('button', { name: 'Release' }));
+    expect(within(type).getByRole('button', { name: 'Release', pressed: true })).toBeInTheDocument();
+    expect(within(type).getByRole('button', { name: 'Unpublish', pressed: false })).toBeInTheDocument();
+
+    fireEvent.click(within(chips).getByRole('button', { name: 'Clear all' }));
+    await waitFor(() => expect(screen.queryByRole('list', { name: 'Active filters' })).toBeNull());
+    expect(rows()).toBe(all);
   });
 
   it('cancels a schedule only after the confirmation', async () => {

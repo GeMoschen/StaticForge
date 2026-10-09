@@ -1,0 +1,122 @@
+@use '../publishing-section';
+
+.save-status {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sf-space-1);
+  color: var(--sf-text-muted);
+  font-size: var(--sf-fs-13);
+  line-height: var(--sf-lh-13);
+
+  &.is-dirty {
+    color: var(--sf-warning-text);
+  }
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sf-space-3);
+  max-inline-size: 44rem;
+  padding: var(--sf-space-4) var(--sf-space-5);
+  border: 1px solid var(--sf-border);
+  border-radius: var(--sf-radius-md);
+  background: var(--sf-surface);
+}
+
+.card__title {
+  margin: 0;
+  color: var(--sf-text);
+  font-size: var(--sf-fs-14);
+  line-height: var(--sf-lh-14);
+  font-weight: var(--sf-weight-semibold);
+}
+
+.card__intro,
+.card__readonly,
+.card__note {
+  display: flex;
+  align-items: center;
+  gap: var(--sf-space-2);
+  margin: 0;
+  color: var(--sf-text-muted);
+  font-size: var(--sf-fs-13);
+  line-height: var(--sf-lh-13);
+}
+
+.card__intro {
+  display: block;
+}
+
+.card__readonly {
+  color: var(--sf-text);
+}
+
+.rows {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sf-space-1);
+  padding: var(--sf-space-3) 0;
+  border-bottom: 1px solid var(--sf-border);
+
+  &:last-child {
+    border-bottom: none;
+  }
+}
+
+.row__hint,
+.row__needs {
+  padding-inline-start: calc(var(--sf-space-10) + var(--sf-space-2));
+  color: var(--sf-text-muted);
+  font-size: var(--sf-fs-12);
+  line-height: var(--sf-lh-12);
+}
+
+.row__needs {
+  color: var(--sf-warning-text);
+}
+
+.impact__intro {
+  margin: 0 0 var(--sf-space-3);
+  color: var(--sf-text-muted);
+  font-size: var(--sf-fs-13);
+  line-height: var(--sf-lh-13);
+}
+
+.impact {
+  inline-size: 100%;
+  border-collapse: collapse;
+  font-size: var(--sf-fs-13);
+  line-height: var(--sf-lh-13);
+
+  th,
+  td {
+    padding: var(--sf-space-2) var(--sf-space-3);
+    border-bottom: 1px solid var(--sf-border);
+    text-align: start;
+    vertical-align: top;
+  }
+
+  thead th {
+    color: var(--sf-text-muted);
+    font-size: var(--sf-fs-12);
+    font-weight: var(--sf-weight-semibold);
+  }
+}
+
+.impact__time {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.impact__more {
+  color: var(--sf-text-muted);
+}

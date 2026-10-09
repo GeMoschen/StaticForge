@@ -798,7 +798,7 @@ export interface paths {
         get: operations["listRedirects"];
         put?: never;
         post: operations["createRedirect"];
-        delete?: never;
+        delete: operations["deleteAllManual"];
         options?: never;
         head?: never;
         patch?: never;
@@ -2054,6 +2054,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{projectKey}/quality-rules/last-run": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["lastRun"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{projectKey}/preview/share": {
         parameters: {
             query?: never;
@@ -2246,6 +2262,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{projectKey}/generations/{runId}/log": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["log"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{projectKey}/generations/{runId}/findings": {
         parameters: {
             query?: never;
@@ -2254,6 +2286,22 @@ export interface paths {
             cookie?: never;
         };
         get: operations["findings"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectKey}/generations/{runId}/findings/facets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["findingFacets"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2690,6 +2738,7 @@ export interface components {
             type?: string;
             config?: components["schemas"]["JsonNode"];
             isDefault?: boolean;
+            baseUrl?: string;
         };
         JsonNode: Record<string, never>;
         GenerationTargetView: {
@@ -2703,6 +2752,7 @@ export interface components {
             isDefault?: boolean;
             outputPath?: string;
             redirectFormats?: string[];
+            baseUrl?: string;
         };
         UpdateTemplateRequest: {
             displayName?: string;
@@ -3696,6 +3746,9 @@ export interface components {
             ownerUserId?: number;
             ownerName?: string;
             missingPermission?: string;
+            itemName?: string | null;
+            /** Format: int32 */
+            itemCount?: number;
         };
         PublishPolicyImpactView: {
             failingSchedules?: components["schemas"]["FailingSchedule"][];
@@ -3864,6 +3917,8 @@ export interface components {
             folderPath?: string;
             assetUuids?: string[];
             comment?: string;
+            /** @enum {string} */
+            trigger?: "MANUAL" | "SCHEDULE" | "RELEASE";
         };
         FindingCountsView: {
             /** Format: int32 */
@@ -3905,6 +3960,16 @@ export interface components {
             comment?: string;
             startedBy?: components["schemas"]["StartedBy"];
             findingCounts?: components["schemas"]["FindingCountsView"];
+            trigger?: string;
+            planState?: string;
+            heldBack?: components["schemas"]["HeldBackPage"][];
+        };
+        HeldBackPage: {
+            /** Format: uuid */
+            assetUuid?: string;
+            name?: string;
+            locale?: string;
+            channel?: string;
         };
         PlanSummaryView: {
             mode?: string;
@@ -4345,29 +4410,29 @@ export interface components {
             totalElements?: number;
             /** Format: int32 */
             totalPages?: number;
-            first?: boolean;
-            last?: boolean;
+            /** Format: int32 */
+            numberOfElements?: number;
             /** Format: int32 */
             size?: number;
             content?: components["schemas"]["UrlRegistryEntryView"][];
             /** Format: int32 */
             number?: number;
             sort?: components["schemas"]["SortObject"][];
-            /** Format: int32 */
-            numberOfElements?: number;
             pageable?: components["schemas"]["PageableObject"];
+            first?: boolean;
+            last?: boolean;
             empty?: boolean;
         };
         PageableObject: {
             /** Format: int64 */
             offset?: number;
             sort?: components["schemas"]["SortObject"][];
-            paged?: boolean;
-            unpaged?: boolean;
-            /** Format: int32 */
-            pageNumber?: number;
             /** Format: int32 */
             pageSize?: number;
+            /** Format: int32 */
+            pageNumber?: number;
+            unpaged?: boolean;
+            paged?: boolean;
         };
         SortObject: {
             direction?: string;
@@ -4407,17 +4472,17 @@ export interface components {
             totalElements?: number;
             /** Format: int32 */
             totalPages?: number;
-            first?: boolean;
-            last?: boolean;
+            /** Format: int32 */
+            numberOfElements?: number;
             /** Format: int32 */
             size?: number;
             content?: components["schemas"]["TemplateSummary"][];
             /** Format: int32 */
             number?: number;
             sort?: components["schemas"]["SortObject"][];
-            /** Format: int32 */
-            numberOfElements?: number;
             pageable?: components["schemas"]["PageableObject"];
+            first?: boolean;
+            last?: boolean;
             empty?: boolean;
         };
         TemplateSummary: {
@@ -4534,8 +4599,8 @@ export interface components {
             before?: components["schemas"]["JsonNode"];
             after?: components["schemas"]["JsonNode"];
             blocks?: components["schemas"]["BlockChange"][];
-            add?: boolean;
             remove?: boolean;
+            add?: boolean;
         };
         RevisionDiff: {
             /** Format: int64 */
@@ -4600,6 +4665,12 @@ export interface components {
                 [key: string]: components["schemas"]["LocaleReleaseView"];
             };
             scheduled?: components["schemas"]["ScheduledRefView"][];
+        };
+        QualityLastRunView: {
+            run?: components["schemas"]["LastRun"];
+            counts?: {
+                [key: string]: number;
+            };
         };
         PreviewShareLink: {
             token?: string;
@@ -4690,17 +4761,17 @@ export interface components {
             totalElements?: number;
             /** Format: int32 */
             totalPages?: number;
-            first?: boolean;
-            last?: boolean;
+            /** Format: int32 */
+            numberOfElements?: number;
             /** Format: int32 */
             size?: number;
             content?: components["schemas"]["MediaSummaryView"][];
             /** Format: int32 */
             number?: number;
             sort?: components["schemas"]["SortObject"][];
-            /** Format: int32 */
-            numberOfElements?: number;
             pageable?: components["schemas"]["PageableObject"];
+            first?: boolean;
+            last?: boolean;
             empty?: boolean;
         };
         MediaTextView: {
@@ -4722,6 +4793,27 @@ export interface components {
                 [key: string]: components["schemas"]["LocaleReleaseView"];
             };
             scheduled?: components["schemas"]["ScheduledRefView"][];
+        };
+        Line: {
+            /** Format: int32 */
+            n?: number;
+            /** Format: date-time */
+            time?: string;
+            stage?: string;
+            level?: string;
+            text?: string;
+            /** Format: int64 */
+            files?: number;
+            /** Format: int32 */
+            errors?: number;
+            /** Format: int32 */
+            warnings?: number;
+        };
+        RunLogView: {
+            lines?: components["schemas"]["Line"][];
+            complete?: boolean;
+            truncated?: boolean;
+            pruned?: boolean;
         };
         FindingAsset: {
             /** Format: uuid */
@@ -4749,6 +4841,26 @@ export interface components {
             /** Format: int32 */
             pageNumber?: number;
             page?: components["schemas"]["FindingAsset"];
+        };
+        FindingFacetsView: {
+            /** Format: int64 */
+            total?: number;
+            severity?: {
+                [key: string]: number;
+            };
+            category?: {
+                [key: string]: number;
+            };
+            code?: components["schemas"]["RuleFacet"][];
+            locale?: {
+                [key: string]: number;
+            };
+        };
+        RuleFacet: {
+            code?: string;
+            name?: string;
+            /** Format: int64 */
+            count?: number;
         };
         SseEmitter: {
             /** Format: int64 */
@@ -4857,17 +4969,17 @@ export interface components {
             totalElements?: number;
             /** Format: int32 */
             totalPages?: number;
-            first?: boolean;
-            last?: boolean;
+            /** Format: int32 */
+            numberOfElements?: number;
             /** Format: int32 */
             size?: number;
             content?: components["schemas"]["AssetSummaryView"][];
             /** Format: int32 */
             number?: number;
             sort?: components["schemas"]["SortObject"][];
-            /** Format: int32 */
-            numberOfElements?: number;
             pageable?: components["schemas"]["PageableObject"];
+            first?: boolean;
+            last?: boolean;
             empty?: boolean;
         };
         UsageDto: {
@@ -4976,6 +5088,7 @@ export interface operations {
                 area?: string;
                 targetType?: string;
                 locale?: string;
+                noLocale?: boolean;
                 targetUuid?: string;
                 q?: string;
                 page?: number;
@@ -7072,6 +7185,7 @@ export interface operations {
             query?: {
                 channel?: string;
                 locale?: string;
+                noLocale?: boolean;
                 kind?: string;
                 state?: string;
                 q?: string;
@@ -7119,6 +7233,32 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["RedirectView"];
+                };
+            };
+        };
+    };
+    deleteAllManual: {
+        parameters: {
+            query?: {
+                kind?: string;
+            };
+            header?: never;
+            path: {
+                projectKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": {
+                        [key: string]: number;
+                    };
                 };
             };
         };
@@ -9548,6 +9688,28 @@ export interface operations {
             };
         };
     };
+    lastRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["QualityLastRunView"];
+                };
+            };
+        };
+    };
     share: {
         parameters: {
             query: {
@@ -9881,6 +10043,31 @@ export interface operations {
             };
         };
     };
+    log: {
+        parameters: {
+            query?: {
+                from?: number;
+            };
+            header?: never;
+            path: {
+                projectKey: string;
+                runId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RunLogView"];
+                };
+            };
+        };
+    };
     findings: {
         parameters: {
             query?: {
@@ -9910,6 +10097,37 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["FindingPageView"];
+                };
+            };
+        };
+    };
+    findingFacets: {
+        parameters: {
+            query?: {
+                severity?: string;
+                category?: string;
+                code?: string[];
+                assetUuid?: string;
+                channel?: string;
+                locale?: string;
+                pathPrefix?: string;
+            };
+            header?: never;
+            path: {
+                projectKey: string;
+                runId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["FindingFacetsView"];
                 };
             };
         };

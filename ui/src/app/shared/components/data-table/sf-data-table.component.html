@@ -11,35 +11,7 @@
       />
     }
     @if (filters().length > 0) {
-      <sf-button variant="secondary" size="md" icon="filter_list" [sfPopoverTrigger]="filterPanel">{{
-        'shared.dataTable.filters' | transloco
-      }}</sf-button>
-      <sf-popover #filterPanel [label]="'shared.dataTable.filters' | transloco" align="start">
-        <div class="sf-data-table__filter-panel">
-          @for (filter of filters(); track filter.id) {
-            <div class="sf-data-table__filter-group" role="group" [attr.aria-labelledby]="filterGroupId + filter.id">
-              <span class="sf-data-table__filter-title" [id]="filterGroupId + filter.id">{{ filter.label }}</span>
-              <span class="sf-data-table__filter-tags">
-                @for (option of filter.options; track option.value) {
-                  <button
-                    type="button"
-                    class="sf-data-table__filter-tag"
-                    [attr.aria-pressed]="isPicked(filter.id, option.value)"
-                    (click)="toggleFilterValue(filter.id, option.value)"
-                  >
-                    {{ option.label }}
-                  </button>
-                }
-              </span>
-            </div>
-          }
-          @if (filtered()) {
-            <sf-button class="sf-data-table__filter-clear" variant="ghost" size="sm" (click)="clearFilters()">{{
-              'shared.dataTable.clearFilters' | transloco
-            }}</sf-button>
-          }
-        </div>
-      </sf-popover>
+      <sf-filter-popover [groups]="filters()" [picked]="pickedFilters()" (toggled)="toggleFilterValue($event.group, $event.value)" (cleared)="clearFilters()" />
     }
     @if (chips().length > 0) {
       <ul class="sf-data-table__chips" role="list">

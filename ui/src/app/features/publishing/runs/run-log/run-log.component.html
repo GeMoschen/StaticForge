@@ -1,0 +1,55 @@
+@let s = store;
+@let lines = s.lines();
+@let counters = s.counters();
+<div class="log__bar">
+  <span class="log__count">{{ 'publishing.log.lines' | transloco: { count: lines.length } }}</span>
+  <span class="log__counters" role="group" [attr.aria-label]="'publishing.log.counters' | transloco">
+    <span class="log__counter">{{ 'publishing.log.files' | transloco: { count: counters.files } }}</span>
+    <span class="log__counter" [class.is-error]="counters.errors > 0">{{ 'publishing.log.errors' | transloco: { count: counters.errors } }}</span>
+    <span class="log__counter" [class.is-warning]="counters.warnings > 0">{{ 'publishing.log.warnings' | transloco: { count: counters.warnings } }}</span>
+  </span>
+  @if (s.live()) {
+    <span class="log__follow" role="status">{{ (following() ? 'publishing.log.following' : 'publishing.log.paused') | transloco }}</span>
+    @if (!following()) {
+      <sf-button variant="secondary" size="sm" icon="vertical_align_bottom" (click)="jumpToEnd()">{{ 'publishing.log.jump' | transloco }}</sf-button>
+    }
+  }
+</div>
+@if (s.truncated()) {
+  <sf-banner tone="warning">{{ 'publishing.log.truncated' | transloco }}</sf-banner>
+}
+@if (s.failed()) {
+  <sf-empty-state icon="error" [level]="3" [title]="'publishing.log.loadError' | transloco" [primaryLabel]="'publishing.log.retry' | transloco" (primary)="s.retry()" />
+} @else if (s.pruned()) {
+  <sf-empty-state icon="auto_delete" [level]="3" [title]="'publishing.log.pruned' | transloco" [description]="'publishing.log.prunedHint' | transloco" />
+} @else {
+  <div
+    #view
+    class="log__view"
+    sfVirtualScroll
+    #v="sfVirtualScroll"
+    sfVirtualRowToken="--run-log-row"
+    [sfVirtualCount]="lines.length"
+    role="region"
+    tabindex="0"
+    [attr.aria-label]="'publishing.log.label' | transloco: { n: run().id }"
+    (scroll)="onScroll()"
+  >
+    @if (lines.length === 0) {
+      <div class="log__line log__line--empty" role="status">{{ (s.live() ? 'publishing.log.awaiting' : 'publishing.log.empty') | transloco }}</div>
+    }
+    <div [style.height.px]="v.window().before"></div>
+    @for (line of lines.slice(v.window().start, v.window().end); track line.n) {
+      <div class="log__line" [class.is-warning]="line.level === 'warning'" [class.is-error]="line.level === 'error'">
+        <span class="log__n" aria-hidden="true">{{ line.n }}</span>
+        <span class="log__time">{{ time(line.time) }}</span>
+        <span class="log__stage">{{ '[' + line.stage + ']' }}</span>
+        @if (line.level === 'error' || line.level === 'warning') {
+          <span class="sf-sr-only">{{ 'publishing.log.level.' + line.level | transloco }}:</span>
+        }
+        <span class="log__text">{{ line.text }}</span>
+      </div>
+    }
+    <div [style.height.px]="v.window().after"></div>
+  </div>
+}
