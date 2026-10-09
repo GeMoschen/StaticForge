@@ -610,13 +610,21 @@ describe('SfDataTableComponent', () => {
       expect(screen.getByRole('searchbox', { name: 'Search…' })).toHaveValue('');
     });
 
-    it('filters from the menu and shows each picked value as a removable chip', async () => {
+    it('filters with toggle tags in one popover, grouped by filter, and shows each picked value as a removable chip', async () => {
       await setup();
 
       fireEvent.click(screen.getByRole('button', { name: 'Filters' }));
-      fireEvent.click(screen.getByRole('menuitem', { name: 'Status' }));
-      fireEvent.click(screen.getByRole('menuitem', { name: 'Published' }));
+      const group = screen.getByRole('group', { name: 'Status' });
+      const published = within(group).getByRole('button', { name: 'Published' });
+      expect(published).toHaveAttribute('aria-pressed', 'false');
+      fireEvent.click(published);
 
+      expect(published).toHaveAttribute('aria-pressed', 'true');
+      expect(names()).toEqual(['Beta', 'Delta']);
+      fireEvent.click(published);
+      expect(published).toHaveAttribute('aria-pressed', 'false');
+      expect(names()).toHaveLength(5);
+      fireEvent.click(published);
       expect(names()).toEqual(['Beta', 'Delta']);
       fireEvent.click(screen.getByRole('button', { name: 'Remove Status: Published' }));
       expect(names()).toHaveLength(5);

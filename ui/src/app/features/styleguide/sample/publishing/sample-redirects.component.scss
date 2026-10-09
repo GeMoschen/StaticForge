@@ -11,3 +11,34 @@
   display: inline-flex;
   border-radius: var(--sf-radius-sm);
 }
+
+.redirects__intro {
+  margin: 0;
+  color: var(--sf-text-muted);
+  font-size: var(--sf-fs-13);
+  line-height: var(--sf-lh-13);
+}
+
+.cell-link {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--sf-accent);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+
+  &:hover {
+    color: var(--sf-accent-hover);
+  }
+}
+
+.form__row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sf-space-3);
+}
+
+.form__grow {
+  flex: 1 1 10rem;
+}

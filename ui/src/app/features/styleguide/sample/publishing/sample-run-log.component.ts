@@ -24,7 +24,8 @@ const LOG_CAP = 3000;
 
 /**
  * A run's log: monospace, virtualized (`sfVirtualScroll`, fixed rows of `--sample-log-row`), with line numbers, times
- * and stages; warnings and errors are marked by colour *and* their bracketed code.
+ * and stages (a fixed-width, bold `[STAGE]` prefix); warnings and errors are marked by colour *and* their bracketed code.
+ * The bar counts lines, rendered files, errors and warnings. A queued run has no events yet: the view says *Awaiting events…*.
  *
  * For the running run, fake lines are appended on a timer (stopped on destroy) and the view **follows the tail**:
  * after each render it jumps to the end while following. Scrolling up pauses following ("Jump to end" resumes).
@@ -51,6 +52,18 @@ export class SampleRunLogComponent implements OnInit {
   /** Lines the fake tail appended. */
   private readonly appended = signal<readonly LogLine[]>([]);
   readonly lines = computed<readonly LogLine[]>(() => [...this.base(), ...this.appended()]);
+  /** The bar's counters: files rendered, errors and warnings so far. */
+  protected readonly counters = computed(() => {
+    let files = 0;
+    let errors = 0;
+    let warnings = 0;
+    for (const line of this.lines()) {
+      files += line.stage === 'RENDER' ? 1 : 0;
+      errors += line.level === 'error' ? 1 : 0;
+      warnings += line.level === 'warning' ? 1 : 0;
+    }
+    return { files, errors, warnings };
+  });
   /** Whether the view keeps to the newest line (only a running run's log follows). */
   readonly following = signal(true);
   private timer: ReturnType<typeof setInterval> | null = null;

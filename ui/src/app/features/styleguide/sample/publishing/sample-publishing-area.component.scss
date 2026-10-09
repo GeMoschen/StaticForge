@@ -14,6 +14,12 @@
   gap: var(--sf-space-2);
 }
 
+.area__note {
+  color: var(--sf-text-muted);
+  font-size: var(--sf-fs-14);
+  line-height: var(--sf-lh-14);
+}
+
 .area__body {
   display: grid;
   flex: 1 1 auto;

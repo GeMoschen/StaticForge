@@ -90,3 +90,20 @@
 :host(.sf-status--icon-only) {
   padding: var(--sf-space-0) var(--sf-space-1);
 }
+
+// A running status: its progress icon turns (still under reduced motion, which the spinner also respects).
+.sf-status__icon--spin {
+  // A square box, so the glyph turns around its own centre (the pill's line height would make the box taller).
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1em;
+  height: 1em;
+  line-height: 1;
+  transform-origin: center;
+  animation: sf-spin 1.2s linear infinite;
+
+  @media (prefers-reduced-motion: reduce) {
+    animation-duration: 4s;
+  }
+}

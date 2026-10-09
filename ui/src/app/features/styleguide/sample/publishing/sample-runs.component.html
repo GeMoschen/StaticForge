@@ -7,6 +7,10 @@
     [rows]="rows"
     [rowKey]="rowKey"
     [rowLabel]="rowLabel"
+    searchable
+    [filters]="filters()"
+    [rowMenu]="rowMenu"
+    [searchPlaceholder]="t('runs.search')"
     [label]="t('runs.table')"
     [emptyTitle]="t('runs.empty')"
     (rowOpen)="state.openRun($event.id)"
@@ -30,13 +34,16 @@
     </ng-template>
     <ng-template sfDataTableCell="duration" [sfDataTableCellRows]="rows" let-row>
       @if (row.durationSeconds === null) {
-        <span class="runs__muted">{{ t('runs.inProgress') }}</span>
+        <span class="runs__muted">{{ t(row.status === 'queued' ? 'runs.waiting' : 'runs.inProgress') }}</span>
       } @else {
         {{ duration(row) }}
       }
     </ng-template>
     <ng-template sfDataTableCell="findings" [sfDataTableCellRows]="rows" let-row>
       <span [class.runs__errors]="hasErrors(row)" [class.runs__muted]="!hasErrors(row)">{{ findingsText(row) }}</span>
+    </ng-template>
+    <ng-template sfDataTableCell="actions" [sfDataTableCellRows]="rows" let-row>
+      <sf-menu size="sm" [label]="t('runs.actions.label', { n: row.number })" [items]="rowActions(row)" />
     </ng-template>
   </sf-data-table>
 }

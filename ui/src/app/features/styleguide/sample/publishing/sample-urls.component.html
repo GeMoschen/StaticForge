@@ -1,10 +1,14 @@
 <div class="section__bar">
   <h2 class="section__title">{{ t('sections.urls') }}</h2>
+  <span class="urls__total">{{ t('urls.total', { count: rows().length }) }}</span>
 </div>
 
 <sf-data-table
   class="section__table"
   searchable
+  paging="pager"
+  [pageSize]="pageSize"
+  [rowsOpenable]="false"
   [columns]="columns()"
   [rows]="rows()"
   [rowKey]="rowKey"
@@ -14,7 +18,7 @@
   [searchPlaceholder]="t('urls.search')"
   [emptyTitle]="t('urls.empty')"
   [emptyDescription]="t('urls.emptyHint')"
-  (rowOpen)="state.notice()"
+  (queryChange)="picked.set($event.filters)"
 >
   @if (rows().length > 0) {
     <sf-menu sfDataTableToolbar variant="ghost" size="md" [items]="moreActions()" [label]="t('urls.more')" />
@@ -23,13 +27,48 @@
     <span class="cell-name">
       <sf-icon class="cell-name__icon" [name]="typeIcons[row.type]" />
       <span class="cell-name__text">{{ row.target }}</span>
+      @if (row.deleted) {
+        <sf-badge tone="danger" [label]="t('urls.deleted')" />
+      }
     </span>
+  </ng-template>
+  <ng-template sfDataTableCell="channel" [sfDataTableCellRows]="rows()" let-row>
+    <span class="cell-muted">{{ row.channel === 'all' ? t('urls.allChannels') : row.channel }}</span>
+  </ng-template>
+  <ng-template sfDataTableCell="lang" [sfDataTableCellRows]="rows()" let-row>
+    <span class="cell-muted">{{ row.lang === '—' ? t('urls.noLanguage') : row.lang }}</span>
   </ng-template>
   <ng-template sfDataTableCell="area" [sfDataTableCellRows]="rows()" let-row>
     <span class="cell-muted">{{ t('urls.area.' + row.area) }}</span>
   </ng-template>
   <ng-template sfDataTableCell="url" [sfDataTableCellRows]="rows()" let-row>
-    <code class="cell-code">{{ row.url }}</code>
+    @if (editing(); as edit) {
+      @if (edit.id === row.id) {
+        <span class="url-edit">
+          <span class="url-edit__row">
+            <sf-input
+              monospace
+              class="url-edit__input"
+              [value]="edit.value"
+              [invalid]="!!editError()"
+              [aria-label]="t('urls.editLabel', { name: row.target })"
+              (valueChange)="setEdit($event)"
+              (keydown.enter)="saveEdit()"
+              (keydown.escape)="editing.set(null)"
+            />
+            <sf-button size="sm" icon="check" [label]="t('urls.editSave')" (click)="saveEdit()" />
+            <sf-button size="sm" variant="ghost" icon="close" [label]="t('urls.editCancel')" (click)="editing.set(null)" />
+          </span>
+          @if (editError(); as error) {
+            <span class="url-edit__error" role="alert">{{ error }}</span>
+          }
+        </span>
+      } @else {
+        <code class="cell-code">{{ row.url }}</code>
+      }
+    } @else {
+      <code class="cell-code">{{ row.url }}</code>
+    }
   </ng-template>
   <ng-template sfDataTableCell="overridden" [sfDataTableCellRows]="rows()" let-row>
     @if (row.overridden) {
@@ -40,5 +79,14 @@
   </ng-template>
   <ng-template sfDataTableCell="assigned" [sfDataTableCellRows]="rows()" let-row>
     <span class="cell-muted"><sf-relative-time [value]="assigned(row)" /></span>
+  </ng-template>
+  <ng-template sfDataTableCell="actions" [sfDataTableCellRows]="rows()" let-row>
+    <span class="row-actions">
+      <sf-button variant="ghost" size="sm" icon="edit" [label]="t('urls.override')" (click)="startEdit(row)" />
+      @if (row.overridden) {
+        <sf-button variant="ghost" size="sm" icon="undo" [label]="t('urls.resetRow')" (click)="resetRow(row)" />
+      }
+      <sf-button variant="ghost" size="sm" icon="layers_clear" [label]="t('urls.resetAssetTooltip')" (click)="resetAsset(row)" />
+    </span>
   </ng-template>
 </sf-data-table>

@@ -415,6 +415,8 @@ export class SampleState {
   readonly shortcutsQuery = signal('');
   /** The command palette (M35.14): `null` = closed, else its query including a mode prefix (`>`, `#`, `@`). */
   readonly paletteQuery = signal<string | null>(null);
+  /** Alt+Shift+B / the palette's Build now: the Publishing area opens its Build now dialog when this is set (it clears it). */
+  readonly buildRequested = signal(false);
 
   // ── Unsaved changes (M35.13) ───────────────────────────────────────────────
   private readonly guards = new Set<() => Promise<boolean>>();

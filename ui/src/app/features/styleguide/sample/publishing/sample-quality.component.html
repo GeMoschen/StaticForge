@@ -1,9 +1,32 @@
 <div class="section__bar">
   <h2 class="section__title">{{ t('quality.title') }}</h2>
+  @if (!readOnly()) {
+    <div class="section__actions">
+      @if (invalid().size > 0) {
+        <span class="save-status is-invalid" role="status">
+          <sf-icon name="error" />
+          {{ t('quality.fixValues') }}
+        </span>
+      } @else {
+        <span class="save-status" [class.is-dirty]="dirty()" role="status">
+          <sf-icon [name]="dirty() ? 'edit' : 'cloud_done'" />
+          {{ dirty() ? t('quality.unsaved') : t('quality.saved') }}
+        </span>
+      }
+      <sf-button variant="secondary" [disabled]="!dirty()" (click)="discard()">{{ t('quality.discard') }}</sf-button>
+      <sf-button [disabled]="!dirty() || invalid().size > 0" (click)="save()">{{ t('quality.save') }}</sf-button>
+    </div>
+  }
 </div>
 
 <div class="section__scroll quality">
   <p class="quality__intro">{{ t('quality.intro') }}</p>
+
+  @if (readOnly()) {
+    <sf-banner tone="info">{{ t('quality.readOnly') }}</sf-banner>
+  } @else if (justSaved()) {
+    <sf-banner tone="info">{{ t('quality.rebuildNote') }}</sf-banner>
+  }
 
   <dl class="summary" [attr.aria-label]="t('quality.summary')">
     <div class="summary__tile">
@@ -30,11 +53,32 @@
 
   @for (group of groups(); track group.category) {
     <section class="category" [attr.aria-labelledby]="'sample-quality-' + group.category">
-      <h3 class="category__title" [id]="'sample-quality-' + group.category">
-        {{ t('quality.categories.' + group.category) }}
-        <span class="category__count">{{ t('quality.onOf', { on: group.on, total: group.rules.length }) }}</span>
-      </h3>
-      <ul class="rules">
+      <div class="category__head">
+        <h3 class="category__title" [id]="'sample-quality-' + group.category">
+          <button
+            type="button"
+            class="category__toggle"
+            [attr.aria-expanded]="!isCollapsed(group.category)"
+            [attr.aria-controls]="'sample-quality-rules-' + group.category"
+            (click)="toggleGroup(group.category)"
+          >
+            <sf-icon class="category__chevron" [class.is-collapsed]="isCollapsed(group.category)" name="expand_more" />
+            {{ t('quality.categories.' + group.category) }}
+            <span class="category__count">{{ t('quality.onOf', { on: group.on, total: group.rules.length }) }}</span>
+          </button>
+        </h3>
+        @if (!readOnly()) {
+          <sf-segmented
+            class="category__level"
+            size="sm"
+            [options]="groupOptions"
+            [value]="groupLevel(group)"
+            [aria-label]="t('quality.groupLevel', { category: t('quality.categories.' + group.category) })"
+            (valueChange)="setGroupLevel(group, $event)"
+          />
+        }
+      </div>
+      <ul class="rules" [id]="'sample-quality-rules-' + group.category" [hidden]="isCollapsed(group.category)">
         @for (rule of group.rules; track rule.code) {
           <li class="rule" [class.is-off]="levels()[rule.code] === 'off'">
             <div class="rule__text">
@@ -53,17 +97,58 @@
                 <sf-button variant="ghost" size="sm" icon="info" [label]="t('quality.about', { name: rule.name })" [tooltip]="rule.explanation" />
               </span>
               @if (rule.max === 'warning') {
-                <span class="rule__capped">{{ t('quality.capped') }}</span>
+                <span class="rule__note">{{ t('quality.capped') }}</span>
+                @if (levels()[rule.code] === 'error') {
+                  <span class="rule__note rule__note--warning">
+                    <sf-icon name="warning" />
+                    {{ t('quality.cappedStored') }}
+                  </span>
+                }
+              }
+              @if (rule.channels; as channels) {
+                <span class="rule__note">{{ t('quality.channels', { channels: channels.join(', ') }) }}</span>
+              }
+              @if (rule.params.length > 0) {
+                <div class="rule__params">
+                  @for (param of rule.params; track param.id) {
+                    @if (param.kind === 'number') {
+                      <sf-field
+                        class="rule__param"
+                        [label]="param.label"
+                        [hint]="t('quality.paramHint', { default: param.default, min: param.min, max: param.max })"
+                        [error]="isInvalid(rule, param) ? t('quality.paramError', { min: param.min, max: param.max }) : null"
+                      >
+                        <sf-number-input
+                          [value]="$any(value(rule, param))"
+                          [min]="param.min ?? null"
+                          [max]="param.max ?? null"
+                          [unit]="param.unit ?? null"
+                          [disabled]="readOnly()"
+                          (valueChange)="setParam(rule, param, $event)"
+                        />
+                      </sf-field>
+                    } @else {
+                      <sf-checkbox [value]="value(rule, param) === true" [disabled]="readOnly()" (valueChange)="setParam(rule, param, $event)">{{ param.label }}</sf-checkbox>
+                    }
+                  }
+                </div>
               }
             </div>
-            <sf-segmented
-              size="sm"
-              class="rule__level"
-              [options]="options(rule)"
-              [value]="levels()[rule.code]"
-              [aria-label]="t('quality.levelOf', { name: rule.name })"
-              (valueChange)="setLevel(rule.code, $event)"
-            />
+            <div class="rule__side">
+              <span class="rule__level" [sfTooltip]="rule.max === 'warning' ? t('quality.errorUnavailable') : null">
+                <sf-segmented
+                  size="sm"
+                  [options]="options(rule)"
+                  [value]="levels()[rule.code]"
+                  [disabled]="readOnly()"
+                  [aria-label]="t('quality.levelOf', { name: rule.name })"
+                  (valueChange)="setLevel(rule.code, $event)"
+                />
+              </span>
+              @if (!readOnly() && differs(rule)) {
+                <sf-button variant="ghost" size="sm" icon="undo" [aria-label]="t('quality.resetRule', { name: rule.name })" (click)="reset(rule)">{{ t('quality.reset') }}</sf-button>
+              }
+            </div>
           </li>
         }
       </ul>

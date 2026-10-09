@@ -16,7 +16,14 @@
     />
   </span>
   <ng-container sfPageHeaderActions>
-    <sf-button icon="rocket_launch" (click)="state.buildOpen.set(true)">{{ t('buildNow') }}</sf-button>
+    @if (state.role() === 'editor') {
+      <span class="area__note">{{ t('buildNowEditorNote') }}</span>
+    } @else if (state.noTargets()) {
+      <sf-button variant="ghost" icon="dns" (click)="selectSection('targets')">{{ t('noTargetsLink') }}</sf-button>
+      <sf-button icon="rocket_launch" disabled [disabledReason]="t('noTargetsReason')">{{ t('buildNow') }}</sf-button>
+    } @else {
+      <sf-button icon="rocket_launch" (click)="state.buildOpen.set(true)">{{ t('buildNow') }}</sf-button>
+    }
   </ng-container>
 </sf-page-header>
 

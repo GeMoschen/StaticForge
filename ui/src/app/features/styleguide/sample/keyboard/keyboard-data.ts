@@ -21,6 +21,7 @@ export type PaletteRun =
   | { readonly kind: 'page'; readonly id: string }
   | { readonly kind: 'toggle'; readonly what: 'theme' | 'density' | 'dev' }
   | { readonly kind: 'history' }
+  | { readonly kind: 'build' }
   | { readonly kind: 'favorite' }
   | { readonly kind: 'favorite-open'; readonly favorite: SampleFavorite }
   | { readonly kind: 'switch-mode'; readonly prefix: string }
@@ -138,7 +139,7 @@ function actionEntries(ctx: PaletteContext): PaletteEntry[] {
     });
   }
   entries.push(
-    { id: 'build', group: 'actions', labelKey: 'keyboard.actions.build', icon: 'construction', shortcut: 'Alt+Shift+B', run: { kind: 'notice', key: 'keyboard.notice.build' } },
+    { id: 'build', group: 'actions', labelKey: 'keyboard.actions.build', icon: 'construction', shortcut: 'Alt+Shift+B', run: { kind: 'build' } },
     { id: 'history', group: 'actions', labelKey: 'keyboard.actions.history', icon: 'history', shortcut: 'Alt+H', run: { kind: 'history' } },
     { id: 'switch-project', group: 'actions', labelKey: 'keyboard.actions.switchProject', icon: 'swap_horiz', context: '@', run: { kind: 'switch-mode', prefix: '@' } },
     { id: 'toggle-theme', group: 'actions', labelKey: ctx.dark ? 'keyboard.actions.themeLight' : 'keyboard.actions.themeDark', icon: ctx.dark ? 'light_mode' : 'dark_mode', run: { kind: 'toggle', what: 'theme' } },

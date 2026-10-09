@@ -184,6 +184,14 @@ export class SamplePaletteComponent implements OnDestroy {
       case 'favorite':
         this.state.toggleFavorite(this.state.pageId());
         break;
+      case 'build':
+        void this.state.canLeave().then((ok) => {
+          if (ok) {
+            this.state.openArea('publishing');
+            this.state.buildRequested.set(true);
+          }
+        });
+        break;
       case 'history':
         this.state.history.set(this.state.view() === 'editor' ? 'page' : 'project');
         break;

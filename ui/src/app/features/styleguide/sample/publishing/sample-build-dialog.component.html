@@ -1,52 +1,186 @@
-<sf-dialog size="md" [title]="t('build.title')" (closed)="closed.emit()">
+<sf-dialog [size]="planShown() ? 'lg' : 'md'" [title]="t('build.title')" (closed)="closed.emit()">
   <div class="build">
-    <sf-field [label]="t('build.target')">
-      <sf-select [options]="targetOptions()" [value]="target()" (valueChange)="target.set($event)" required />
-    </sf-field>
-    <sf-field [label]="t('build.mode')" [hint]="mode() === 'full' ? t('build.fullHint') : t('build.incrementalHint')">
-      <sf-segmented [options]="modeOptions()" [value]="mode()" (valueChange)="mode.set($event)" />
-    </sf-field>
+    <fieldset class="build__channels">
+      <legend class="build__legend">{{ t('build.channels') }}</legend>
+      <div class="build__channel-list">
+        @for (channel of channelList; track channel) {
+          <sf-checkbox [value]="channelOn(channel)" [disabled]="channelLocked(channel)" (valueChange)="setChannel(channel, $event)">{{ t('build.channel.' + channel) }}</sf-checkbox>
+        }
+      </div>
+      <p class="build__hint">{{ t('build.channelsHint') }}</p>
+    </fieldset>
+
+    @if (limited()) {
+      <dl class="build__fixed" [attr.aria-label]="t('build.limitedLabel')">
+        <div>
+          <dt>{{ t('build.mode') }}</dt>
+          <dd>{{ t('mode.incremental') }}</dd>
+        </div>
+        <div>
+          <dt>{{ t('build.target') }}</dt>
+          <dd>{{ defaultName }}</dd>
+        </div>
+      </dl>
+      <p class="build__hint">{{ t('build.limitedNote') }}</p>
+    } @else {
+      @if (noTargets()) {
+        <sf-field [label]="t('build.target')" [error]="t('build.noTarget')">
+          <button type="button" class="build__link" (click)="state.section.set('targets'); closed.emit()">
+            <sf-icon name="add" />
+            {{ t('build.createTarget') }}
+          </button>
+        </sf-field>
+      } @else {
+        <sf-field [label]="t('build.target')">
+          <sf-select [options]="targetOptions()" [value]="target()" (valueChange)="target.set($event)" required />
+        </sf-field>
+      }
+      <sf-field [label]="t('build.mode')" [hint]="mode() === 'full' ? t('build.fullHint') : t('build.incrementalHint')">
+        <sf-segmented [options]="modeOptions()" [value]="mode()" (valueChange)="mode.set($event)" />
+      </sf-field>
+    }
     <sf-field [label]="t('build.scope')" [hint]="t('build.scopeHint')">
       <sf-combobox multiple [options]="scopeOptions()" [value]="scope()" [placeholder]="t('build.scopePlaceholder')" (valueChange)="setScope($event)" />
     </sf-field>
+    <sf-field [label]="t('build.comment')" optional>
+      <sf-textarea [rows]="2" [value]="comment()" [placeholder]="t('build.commentPlaceholder')" (valueChange)="comment.set($event)" />
+    </sf-field>
 
-    <section class="plan" aria-labelledby="sample-build-plan">
-      <h3 class="plan__title" id="sample-build-plan">{{ t('build.plan') }}</h3>
-      <dl class="plan__counts">
-        <div class="plan__count">
-          <dt>{{ t('build.counts.pages') }}</dt>
-          <dd>{{ plan().pages }}</dd>
-        </div>
-        <div class="plan__count">
-          <dt>{{ t('build.counts.media') }}</dt>
-          <dd>{{ plan().media }}</dd>
-        </div>
-        <div class="plan__count">
-          <dt>{{ t('build.counts.deleted') }}</dt>
-          <dd>{{ plan().deleted }}</dd>
-        </div>
-        <div class="plan__count">
-          <dt>{{ t('build.counts.redirects') }}</dt>
-          <dd>{{ plan().redirects }}</dd>
-        </div>
-      </dl>
-      <ul class="plan__list">
-        @for (entry of plan().sample; track entry.name) {
-          <li class="plan__entry">
-            <sf-icon name="description" />
-            <span class="plan__name">{{ entry.name }}</span>
-            <span class="plan__reason">{{ entry.reason }}</span>
-          </li>
+    <section class="plan" aria-labelledby="sample-build-plan" [attr.aria-busy]="planState() === 'loading'">
+      <div class="plan__head">
+        <h3 class="plan__title" id="sample-build-plan">{{ t('build.plan') }}</h3>
+        <sf-checkbox [value]="validate()" (valueChange)="validate.set($event)">{{ t('build.validate') }}</sf-checkbox>
+        <sf-button
+          variant="secondary"
+          size="sm"
+          icon="manage_search"
+          class="plan__preview"
+          aria-keyshortcuts="Alt+P"
+          [loading]="planState() === 'loading'"
+          (click)="previewPlan()"
+          >{{ previewLabel() }}</sf-button
+        >
+      </div>
+
+      @if (planState() === 'none') {
+        <p class="plan__hint">{{ t('build.planHint') }}</p>
+      } @else if (planState() === 'ready') {
+        @let s = shown()!;
+        @if (stale()) {
+          <p class="plan__warn" role="status"><sf-icon name="warning" />{{ t('build.stale') }}</p>
         }
-      </ul>
-      @if (plan().pages > plan().sample.length) {
-        <p class="plan__more">{{ t('build.more', { count: plan().pages - plan().sample.length }) }}</p>
+        @if (s.preview.fallback) {
+          <p class="plan__warn" role="status"><sf-icon name="warning" />{{ t('build.fallback') }}</p>
+        }
+        <p class="plan__rev">{{ t('build.computedAt', { revision: s.preview.revision }) }}</p>
+        @if (s.preview.empty) {
+          <p class="plan__empty"><sf-icon name="check_circle" />{{ t('build.nothing') }}</p>
+        } @else {
+          <dl class="plan__counts">
+            <div class="plan__count">
+              <dt>{{ t('build.counts.pages') }}</dt>
+              <dd>{{ s.preview.pages }}</dd>
+            </div>
+            <div class="plan__count">
+              <dt>{{ t('build.counts.media') }}</dt>
+              <dd>{{ s.preview.media }}</dd>
+            </div>
+            <div class="plan__count">
+              <dt>{{ t('build.counts.deleted') }}</dt>
+              <dd>{{ s.preview.deleted }}</dd>
+            </div>
+            <div class="plan__count">
+              <dt>{{ t('build.counts.redirects') }}</dt>
+              <dd>{{ s.preview.redirects }}</dd>
+            </div>
+          </dl>
+          @if (s.preview.roots.length) {
+            <div class="plan__group">
+              <h4 class="plan__subtitle">{{ t('build.roots') }}</h4>
+              <ul class="plan__chips">
+                @for (root of s.preview.roots; track root.kind) {
+                  <li class="plan__chip">{{ t('build.root.' + root.kind) }} <strong>{{ root.count }}</strong></li>
+                }
+              </ul>
+            </div>
+          }
+          @if (s.preview.via.length) {
+            <div class="plan__group">
+              <h4 class="plan__subtitle">{{ t('build.via') }}</h4>
+              <ul class="plan__list">
+                @for (via of s.preview.via; track via.name) {
+                  <li class="plan__entry">
+                    <sf-icon name="subdirectory_arrow_right" />
+                    <span class="plan__name">{{ t('build.viaKind.' + via.kind, { name: via.name }) }}</span>
+                    <span class="plan__reason">{{ t('build.viaCount', { count: via.count }) }}</span>
+                  </li>
+                }
+              </ul>
+            </div>
+          }
+          @if (s.preview.assets.length) {
+            <div class="plan__group">
+              <sf-button variant="ghost" size="sm" [icon]="showAssets() ? 'expand_less' : 'expand_more'" [attr.aria-expanded]="showAssets()" aria-controls="sample-build-assets" (click)="showAssets.set(!showAssets())">{{
+                t('build.showAssets', { count: s.preview.assets.length })
+              }}</sf-button>
+              @if (showAssets()) {
+                <ul class="plan__list plan__list--mono" id="sample-build-assets">
+                  @for (asset of s.preview.assets; track asset.uid) {
+                    <li class="plan__entry">
+                      <code class="plan__name">{{ asset.type }}:{{ asset.uid }}</code>
+                      <span class="plan__reason">{{ t('build.assetChange.' + asset.change, { revision: asset.revision }) }}</span>
+                    </li>
+                  }
+                </ul>
+              }
+            </div>
+          }
+          @if (s.preview.autoRedirects.length) {
+            <div class="plan__group">
+              <sf-button variant="ghost" size="sm" [icon]="showRedirects() ? 'expand_less' : 'expand_more'" [attr.aria-expanded]="showRedirects()" aria-controls="sample-build-redirects" (click)="showRedirects.set(!showRedirects())">{{
+                t('build.showRedirects', { count: s.preview.autoRedirects.length })
+              }}</sf-button>
+              @if (showRedirects()) {
+                <ul class="plan__list plan__list--mono" id="sample-build-redirects">
+                  @for (redirect of s.preview.autoRedirects; track redirect.from) {
+                    <li class="plan__entry">
+                      <code class="plan__name">{{ redirect.from }} → {{ redirect.to }}</code>
+                      <span class="plan__reason">{{ redirect.channel }} · {{ redirect.locale }}</span>
+                    </li>
+                  }
+                </ul>
+              }
+            </div>
+          }
+        }
+        @if (validate()) {
+          <div class="plan__group">
+            <h4 class="plan__subtitle">{{ t('build.diagnostics') }}</h4>
+            @if (diagnostics().length) {
+              <ul class="plan__list">
+                @for (d of diagnostics(); track d.code) {
+                  <li class="plan__entry plan__entry--problem">
+                    <sf-icon name="error" />
+                    <code>{{ d.code }}</code>
+                    <span class="plan__name">{{ d.message }}</span>
+                  </li>
+                }
+              </ul>
+            } @else {
+              <p class="plan__empty"><sf-icon name="check_circle" />{{ t('build.validClean') }}</p>
+            }
+          </div>
+        }
       }
       <p class="plan__note">{{ t('build.planNote') }}</p>
     </section>
+
+    @if (startError()) {
+      <p class="build__error" role="alert"><sf-icon name="error" />{{ t('build.alreadyRunning') }}</p>
+    }
   </div>
   <ng-container sfDialogFooter>
     <sf-button variant="secondary" (click)="closed.emit()">{{ t('build.cancel') }}</sf-button>
-    <sf-button icon="rocket_launch" [disabled]="!target()" (click)="start()">{{ t('build.start') }}</sf-button>
+    <sf-button icon="rocket_launch" [disabled]="!canStart()" [loading]="submitting()" (click)="start()">{{ t('build.start') }}</sf-button>
   </ng-container>
 </sf-dialog>

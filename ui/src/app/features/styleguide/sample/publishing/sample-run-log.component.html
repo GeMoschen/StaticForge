@@ -1,5 +1,10 @@
 <div class="log__bar">
   <span class="log__count">{{ t('log.lines', { count: lines().length }) }}</span>
+  <span class="log__counters" role="group" [attr.aria-label]="t('log.counters')">
+    <span class="log__counter">{{ t('log.files', { count: counters().files }) }}</span>
+    <span class="log__counter" [class.is-error]="counters().errors > 0">{{ t('log.errors', { count: counters().errors }) }}</span>
+    <span class="log__counter" [class.is-warning]="counters().warnings > 0">{{ t('log.warnings', { count: counters().warnings }) }}</span>
+  </span>
   @if (run().status === 'running') {
     <span class="log__follow" role="status">{{ following() ? t('log.following') : t('log.paused') }}</span>
     @if (!following()) {
@@ -19,12 +24,15 @@
   [attr.aria-label]="t('log.label', { n: run().number })"
   (scroll)="onScroll()"
 >
+  @if (lines().length === 0) {
+    <div class="log__line log__line--empty" role="status">{{ t('log.awaiting') }}</div>
+  }
   <div [style.height.px]="v.window().before"></div>
   @for (line of lines().slice(v.window().start, v.window().end); track line.n) {
     <div class="log__line" [class.is-warning]="line.level === 'warning'" [class.is-error]="line.level === 'error'">
       <span class="log__n" aria-hidden="true">{{ line.n }}</span>
       <span class="log__time">{{ line.time }}</span>
-      <span class="log__stage">{{ '[' + line.stage + ']' }}</span>
+      <span class="log__stage" [attr.data-stage]="line.stage">{{ '[' + line.stage + ']' }}</span>
       <span class="log__text">{{ line.text }}</span>
     </div>
   }

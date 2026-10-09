@@ -33,7 +33,7 @@ import { SfCheckboxComponent } from '../forms/sf-checkbox.component';
 import { SfSearchInputComponent } from '../forms/sf-search-input.component';
 import { SfBannerComponent } from '../layout/sf-banner.component';
 import { SfSkeletonComponent } from '../layout/sf-skeleton.component';
-import { SfMenuComponent, SfMenuItem } from '../menu/sf-menu.component';
+import { sfUniqueId } from '../forms/sf-field-context';
 import { SfPopoverComponent, SfPopoverTriggerDirective } from '../popover/sf-popover.component';
 import { SfButtonComponent } from '../sf-button.component';
 import { SfEmptyStateComponent } from '../sf-empty-state.component';
@@ -158,7 +158,6 @@ interface Resize {
     SfDataTableColumnsComponent,
     SfEmptyStateComponent,
     SfIconComponent,
-    SfMenuComponent,
     SfPopoverComponent,
     SfPopoverTriggerDirective,
     SfSearchInputComponent,
@@ -357,19 +356,11 @@ export class SfDataTableComponent<T> implements OnInit, OnDestroy {
       })),
     );
   });
-  protected readonly filterItems = computed<SfMenuItem[]>(() => {
-    const picked = this._query().filters;
-    return this.filters().map((filter) => ({
-      id: filter.id,
-      label: filter.label,
-      children: filter.options.map((option) => ({
-        id: `${filter.id}:${option.value}`,
-        label: option.label,
-        icon: (picked[filter.id] ?? []).includes(option.value) ? 'check' : undefined,
-        action: () => this.toggleFilterValue(filter.id, option.value),
-      })),
-    }));
-  });
+  /** Prefix of the ids that name the filter groups of the filter popover. */
+  protected readonly filterGroupId = `${sfUniqueId('sf-data-table-filter')}-`;
+  protected isPicked(filterId: string, value: string): boolean {
+    return (this._query().filters[filterId] ?? []).includes(value);
+  }
   protected readonly showToolbar = computed(
     () => this.searchable() || this.filters().length > 0 || this.chooserAvailable(),
   );

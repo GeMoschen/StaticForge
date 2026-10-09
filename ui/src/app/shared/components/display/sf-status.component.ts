@@ -32,7 +32,7 @@ const TONE_ICONS: Record<SfStatusTone, string> = {
   imports: [SfIconComponent, SfTooltipDirective],
   template: `
     <span class="sf-status__body" [sfTooltip]="tooltipText()" [sfTooltipDescribes]="false">
-      <sf-icon class="sf-status__icon" [name]="iconName()" />
+      <sf-icon class="sf-status__icon" [class.sf-status__icon--spin]="iconName() === 'progress_activity'" [name]="iconName()" />
       <span class="sf-status__label" [class.sf-sr-only]="iconOnly()">{{ label() }}</span>
       @if (detail()) {
         <span class="sf-sr-only">: {{ detail() }}</span>

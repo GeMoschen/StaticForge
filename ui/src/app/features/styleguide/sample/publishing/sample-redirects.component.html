@@ -1,7 +1,18 @@
 <div class="section__bar">
   <h2 class="section__title">{{ t('sections.redirects') }}</h2>
-  <sf-button icon="add" (click)="state.notice()">{{ t('redirects.add') }}</sf-button>
+  <sf-button icon="add" (click)="newRedirect()">{{ t('redirects.add') }}</sf-button>
 </div>
+
+@if (conflict()) {
+  <sf-banner tone="warning" live="polite">
+    {{ t('redirects.conflict') }}
+    <sf-button sfBannerActions variant="secondary" size="sm" icon="refresh" (click)="reload()">{{ t('redirects.reload') }}</sf-button>
+  </sf-banner>
+}
+
+<p class="redirects__intro">
+  {{ noBuild() ? t('redirects.introNoBuild') : t('redirects.intro', { n: run.number }) }}
+</p>
 
 <sf-data-table
   class="section__table"
@@ -15,7 +26,7 @@
   [searchPlaceholder]="t('redirects.search')"
   [emptyTitle]="t('redirects.empty')"
   [emptyDescription]="t('redirects.emptyHint')"
-  (rowOpen)="state.notice()"
+  (rowOpen)="edit($event)"
 >
   @if (manualCount() > 0) {
     <sf-menu sfDataTableToolbar variant="ghost" size="md" [items]="moreActions()" [label]="t('redirects.more')" />
@@ -35,11 +46,64 @@
     <span class="cell-muted">{{ t('redirects.kind.' + row.kind) }}</span>
   </ng-template>
   <ng-template sfDataTableCell="state" [sfDataTableCellRows]="rows()" let-row>
-    <span tabindex="0" class="cell-state" [sfTooltip]="t('redirects.stateHint.' + row.state)">
-      <sf-status size="sm" [tone]="tones[row.state]" [icon]="icons[row.state]" [label]="t('redirects.state.' + row.state)" />
-    </span>
+    @if (noBuild()) {
+      <span class="cell-muted">{{ t('redirects.notBuilt') }}</span>
+    } @else {
+      <span tabindex="0" class="cell-state" [sfTooltip]="t('redirects.stateHint.' + row.state)">
+        <sf-status size="sm" [tone]="tones[row.state]" [icon]="icons[row.state]" [label]="t('redirects.state.' + row.state)" />
+      </span>
+    }
   </ng-template>
   <ng-template sfDataTableCell="created" [sfDataTableCellRows]="rows()" let-row>
-    <span class="cell-muted"><sf-relative-time [value]="created(row)" />{{ ' · ' + row.createdBy }}</span>
+    @if (row.run) {
+      <button type="button" class="cell-link" (click)="openRun(row); $event.stopPropagation()">{{ t('redirects.fromRun', { n: row.run }) }}</button>
+    } @else {
+      <span class="cell-muted"><sf-relative-time [value]="created(row)" />{{ ' · ' + t('redirects.by', { name: row.createdBy }) }}</span>
+    }
+  </ng-template>
+  <ng-template sfDataTableCell="actions" [sfDataTableCellRows]="rows()" let-row>
+    <sf-menu size="sm" [items]="rowActions(row)" [label]="t('redirects.actions', { path: row.from })" />
   </ng-template>
 </sf-data-table>
+
+@if (draft(); as d) {
+  <sf-dialog size="md" [title]="dialogTitle()" (closed)="close()">
+    <div class="form">
+      <sf-field [label]="t('redirects.dialog.from')" [hint]="savedAs()" [error]="errors().from" required>
+        <sf-input monospace [value]="d.from" [placeholder]="t('redirects.dialog.fromPlaceholder')" [disabled]="d.saving" (valueChange)="patch({ from: $event })" />
+      </sf-field>
+      <div class="form__row">
+        <sf-field class="form__grow" [label]="t('redirects.dialog.channel')" required>
+          <sf-select [options]="channelOptions()" [value]="d.channel" [disabled]="d.saving" (valueChange)="patch({ channel: $event ?? 'html' })" />
+        </sf-field>
+        @if (localized()) {
+          <sf-field class="form__grow" [label]="t('redirects.dialog.lang')" required>
+            <sf-select [options]="langOptions" [value]="d.lang" [disabled]="d.saving" (valueChange)="patch({ lang: $event ?? 'EN' })" />
+          </sf-field>
+        }
+      </div>
+      <sf-field [label]="t('redirects.dialog.to')" required>
+        <sf-radio-group [options]="toOptions()" [value]="d.toKind" [disabled]="d.saving" (valueChange)="patch({ toKind: $event ?? 'page', submitted: false })" />
+      </sf-field>
+      @if (d.toKind === 'page') {
+        <sf-field [label]="t('redirects.dialog.page')" [hint]="t('redirects.dialog.pageHint')" [error]="errors().to">
+          <sf-combobox
+            [options]="pageOptions()"
+            [value]="d.page"
+            [placeholder]="t('redirects.dialog.pagePlaceholder')"
+            [disabled]="d.saving"
+            (valueChange)="patch({ page: $any($event) })"
+          />
+        </sf-field>
+      } @else {
+        <sf-field [label]="t('redirects.dialog.path')" [hint]="t('redirects.dialog.pathHint')" [error]="errors().to">
+          <sf-input monospace [value]="d.path" [placeholder]="t('redirects.dialog.pathPlaceholder')" [disabled]="d.saving" (valueChange)="patch({ path: $event })" />
+        </sf-field>
+      }
+    </div>
+    <ng-container sfDialogFooter>
+      <sf-button variant="secondary" [disabled]="d.saving" (click)="close()">{{ t('redirects.dialog.cancel') }}</sf-button>
+      <sf-button [loading]="d.saving" (click)="save()">{{ t('redirects.dialog.save') }}</sf-button>
+    </ng-container>
+  </sf-dialog>
+}

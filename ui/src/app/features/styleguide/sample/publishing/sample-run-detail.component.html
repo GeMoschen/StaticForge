@@ -8,8 +8,15 @@
       <span class="detail__progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" [attr.aria-valuenow]="r.progress" [attr.aria-label]="t('runs.progressLabel')">
         <span class="detail__progress-bar" [style.width.%]="r.progress"></span>
       </span>
-      <sf-button class="detail__cancel" variant="secondary" size="sm" icon="stop_circle" (click)="state.notice()">{{ t('detail.cancel') }}</sf-button>
     }
+    <span class="detail__actions">
+      @if (state.canCancel(r)) {
+        <sf-button class="detail__cancel" variant="secondary" size="sm" icon="stop_circle" (click)="state.cancelRun(r)">{{ t('detail.cancel') }}</sf-button>
+      }
+      @if (state.canPromote(r)) {
+        <sf-button class="detail__promote" variant="secondary" size="sm" icon="publish" (click)="state.promoteRun(r)">{{ t('detail.promote') }}</sf-button>
+      }
+    </span>
   </div>
   <dl class="detail__counts">
     <div class="detail__count">
@@ -49,6 +56,12 @@
           <dt>{{ t('detail.facts.started') }}</dt>
           <dd><sf-relative-time [value]="started()" /></dd>
         </div>
+        @if (finished(); as end) {
+          <div class="detail__fact">
+            <dt>{{ t('detail.facts.finished') }}</dt>
+            <dd><sf-relative-time [value]="end" /></dd>
+          </div>
+        }
         <div class="detail__fact">
           <dt>{{ t('detail.facts.startedBy') }}</dt>
           <dd>{{ r.by }}</dd>
@@ -61,6 +74,29 @@
           <dt>{{ t('detail.facts.files') }}</dt>
           <dd>{{ t('detail.filesValue', { written: r.filesWritten, skipped: r.filesSkipped, size: r.bytes }) }}</dd>
         </div>
+        <div class="detail__fact">
+          <dt>{{ t('detail.facts.channels') }}</dt>
+          <dd>{{ channels() }}</dd>
+        </div>
+        @if (r.redirectsAdded) {
+          <div class="detail__fact">
+            <dt>{{ t('detail.facts.redirects') }}</dt>
+            <dd>{{ r.redirectsAdded }}</dd>
+          </div>
+        }
+        @if (finished() && r.planState !== 'none') {
+          <div class="detail__fact">
+            <dt>{{ t('detail.facts.findings') }}</dt>
+            <dd>
+              @if (counts().errors + counts().warnings === 0) {
+                {{ t('runs.noFindings') }}
+              } @else {
+                {{ t('runs.findings', counts()) }}
+                <button type="button" class="detail__link" (click)="showFindings()">{{ t('detail.showFindings') }}</button>
+              }
+            </dd>
+          </div>
+        }
         <div class="detail__fact">
           <dt>{{ t('detail.facts.revision') }}</dt>
           <dd>{{ 'r' + r.revision }}</dd>
@@ -78,50 +114,146 @@
           </div>
         }
       </dl>
+      @if (heldBack().length) {
+        <section class="held" aria-labelledby="sample-held-title">
+          <h3 class="held__title" id="sample-held-title">
+            <sf-icon name="pause_circle" />
+            {{ t('detail.held.title', { count: heldBack().length }) }}
+          </h3>
+          <p class="held__text">{{ t('detail.held.text') }}</p>
+          <ul class="held__pages">
+            @for (p of heldBack(); track $index) {
+              <li>{{ p.name }} <span class="finding__lang">{{ p.lang }}</span></li>
+            }
+          </ul>
+          <sf-button variant="ghost" size="sm" iconTrailing="arrow_forward" (click)="showFindings(true)">{{ t('detail.showFindings') }}</sf-button>
+        </section>
+      }
     }
     @case ('rebuilt') {
-      <sf-data-table
-  [rowsOpenable]="false"
-        class="detail__table"
-        [columns]="rebuiltColumns()"
-        [rows]="rebuiltRows()"
-        [rowKey]="rebuiltKey"
-        [label]="t('detail.rebuiltTable')"
-        [emptyTitle]="t('detail.noRebuilt')"
-        [columnChooser]="false"
-      />
-    }
-    @case ('findings') {
-      @if (findings().length === 0) {
-        <sf-empty-state icon="verified" [level]="3" [title]="t('detail.noFindings')" [description]="t('detail.noFindingsHint')" />
-      } @else {
-        <ul class="findings">
-          @for (f of findings(); track f.code) {
-            <li class="finding">
-              <div class="finding__head">
-                <sf-icon class="finding__icon" [class.is-error]="f.severity === 'error'" [name]="f.severity === 'error' ? 'error' : 'warning'" />
-                <h3 class="finding__title">{{ f.rule }}</h3>
-                <sf-badge [tone]="f.severity === 'error' ? 'danger' : 'warning'" [label]="t('detail.findingCount', { count: f.pages.length, severity: t('severity.' + f.severity) })" />
-                @if (state.devMode()) {
-                  <code class="finding__code">{{ f.code }}</code>
-                }
-              </div>
-              <ul class="finding__pages">
-                @for (p of f.pages; track $index) {
-                  <li class="finding__page">
-                    <button type="button" class="finding__link" (click)="openPage()">{{ p.name }}</button>
-                    <span class="finding__lang">{{ p.lang }}</span>
-                    <span class="finding__message">{{ p.message }}</span>
+      @switch (rebuiltView()) {
+        @case ('plan') {
+          <p class="plan__line">{{ t('detail.plan.line', { pages: rebuiltRows().length, changes: changes().length, mode: t('mode.' + r.mode) }) }}</p>
+          <div class="plan__groups">
+            <section aria-labelledby="sample-plan-changes">
+              <h3 class="plan__title" id="sample-plan-changes">{{ t('detail.plan.changes') }}</h3>
+              <ul class="plan__list">
+                @for (c of topChanges(); track c.via) {
+                  <li class="plan__change">
+                    <sf-icon [name]="rootIcons[c.root]" />
+                    <span class="plan__via">{{ c.via }}</span>
+                    <sf-badge [label]="t('detail.plan.pages', { count: c.count })" />
                   </li>
                 }
               </ul>
-              <p class="finding__fix">
-                <sf-icon name="build" />
-                <span><strong>{{ t('detail.howToFix') }}</strong> {{ f.fix }}</span>
-              </p>
-            </li>
-          }
-        </ul>
+              @if (moreChanges() > 0) {
+                <p class="plan__more">{{ t('detail.plan.more', { count: moreChanges() }) }}</p>
+              }
+            </section>
+            <section aria-labelledby="sample-plan-roots">
+              <h3 class="plan__title" id="sample-plan-roots">{{ t('detail.plan.roots') }}</h3>
+              <ul class="plan__list">
+                @for (k of roots(); track k.root) {
+                  <li class="plan__change">
+                    <sf-icon [name]="rootIcons[k.root]" />
+                    <span class="plan__via">{{ t('detail.plan.root.' + k.root) }}</span>
+                    <sf-badge [label]="t('detail.plan.pages', { count: k.count })" />
+                  </li>
+                }
+              </ul>
+            </section>
+          </div>
+          <sf-data-table
+            [rowsOpenable]="false"
+            class="detail__table plan__table"
+            [columns]="rebuiltColumns()"
+            [rows]="rebuiltRows()"
+            [rowKey]="rebuiltKey"
+            [label]="t('detail.rebuiltTable')"
+            [columnChooser]="false"
+          />
+        }
+        @case ('pending') {
+          <sf-empty-state icon="schedule" [level]="3" [title]="t('detail.empty.pending')" [description]="t('detail.empty.pendingHint')" />
+        }
+        @case ('none') {
+          <sf-empty-state icon="event_busy" [level]="3" [title]="t('detail.empty.none')" [description]="t('detail.empty.noneHint')" />
+        }
+        @case ('pruned') {
+          <sf-empty-state icon="auto_delete" [level]="3" [title]="t('detail.empty.pruned')" [description]="t('detail.empty.prunedHint')" />
+        }
+        @default {
+          <sf-empty-state icon="done_all" [level]="3" [title]="t('detail.noRebuilt')" [description]="t('detail.empty.nothingHint')" />
+        }
+      }
+    }
+    @case ('findings') {
+      @if (r.findings.length === 0 && !r.truncated) {
+        <sf-empty-state icon="verified" [level]="3" [title]="t('detail.noFindings')" [description]="t('detail.noFindingsHint')" />
+      } @else {
+        @if (r.truncated) {
+          <sf-banner class="findings__truncated" tone="warning">{{ t('findings.truncated', { count: r.truncated }) }}</sf-banner>
+        }
+        <div class="filters" role="group" [attr.aria-label]="t('findings.filters')">
+          <sf-segmented size="sm" [options]="severityOptions()" [value]="severity() ?? 'all'" [aria-label]="t('findings.bySeverity')" (valueChange)="setSeverity($event)" />
+          <sf-segmented size="sm" [options]="categoryOptions()" [value]="category() ?? 'all'" [aria-label]="t('findings.byCategory')" (valueChange)="setCategory($event)" />
+          <sf-combobox class="filters__rule" multiple [options]="ruleOptions()" [value]="rules()" [placeholder]="t('findings.rulePlaceholder')" [aria-label]="t('findings.byRule')" (valueChange)="setRules($event)" />
+          <sf-select class="filters__lang" [options]="langOptions()" [value]="lang()" [placeholder]="t('findings.langAll')" [aria-label]="t('findings.byLang')" (valueChange)="lang.set($event)" />
+          <sf-search-input class="filters__path" [value]="path()" [placeholder]="t('findings.pathPlaceholder')" [aria-label]="t('findings.byPath')" (valueChange)="path.set($event)" />
+        </div>
+        @if (hasFilter()) {
+          <div class="chips">
+            @for (chip of chips(); track chip.id) {
+              <sf-tag [label]="chip.label" removable (removed)="chip.remove()" />
+            }
+            <sf-button variant="ghost" size="sm" (click)="clearFilters()">{{ t('findings.clear') }}</sf-button>
+          </div>
+        }
+        <p class="sf-sr-only" role="status">{{ t('findings.shown', { count: shownCount() }) }}</p>
+        @if (groups().length === 0) {
+          <sf-empty-state
+            icon="filter_alt_off"
+            [level]="3"
+            [title]="t('findings.none')"
+            [description]="t('findings.noneHint')"
+            [primaryLabel]="t('findings.clear')"
+            (primary)="clearFilters()"
+          />
+        } @else {
+          <ul class="findings">
+            @for (g of groups(); track g.finding.code) {
+              @let f = g.finding;
+              <li class="finding">
+                <div class="finding__head">
+                  <sf-icon class="finding__icon" [class.is-error]="f.severity === 'error'" [name]="f.severity === 'error' ? 'error' : 'warning'" />
+                  <h3 class="finding__title">{{ f.rule }}</h3>
+                  <sf-badge [tone]="f.severity === 'error' ? 'danger' : 'warning'" [label]="t('detail.findingCount', { count: g.pages.length, severity: t('severity.' + f.severity) })" />
+                  @if (state.devMode()) {
+                    <code class="finding__code">{{ f.code }}</code>
+                  }
+                </div>
+                <ul class="finding__pages">
+                  @for (p of g.pages; track $index) {
+                    <li class="finding__page">
+                      <button type="button" class="finding__link" (click)="openPage()">{{ p.name }}</button>
+                      <span class="finding__lang">{{ p.lang }}</span>
+                      @if (p.carried) {
+                        <span tabindex="0" [sfTooltip]="t('findings.carriedHint')">
+                          <sf-badge icon="history" [label]="t('findings.carried')" />
+                        </span>
+                      }
+                      <span class="finding__message">{{ p.message }}</span>
+                    </li>
+                  }
+                </ul>
+                <p class="finding__fix">
+                  <sf-icon name="build" />
+                  <span><strong>{{ t('detail.howToFix') }}</strong> {{ f.fix }}</span>
+                </p>
+              </li>
+            }
+          </ul>
+        }
       }
     }
     @case ('log') {

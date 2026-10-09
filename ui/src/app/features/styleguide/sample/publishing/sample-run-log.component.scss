@@ -76,7 +76,31 @@
 
 .log__stage {
   flex: 0 0 auto;
+  min-inline-size: 10ch;
   color: var(--sf-code-keyword);
+  font-weight: var(--sf-weight-medium);
+}
+
+.log__counters {
+  display: inline-flex;
+  gap: var(--sf-space-3);
+}
+
+.log__counter {
+  font-variant-numeric: tabular-nums;
+
+  &.is-error {
+    color: var(--sf-danger-text);
+  }
+
+  &.is-warning {
+    color: var(--sf-warning-text);
+  }
+}
+
+.log__line--empty {
+  color: var(--sf-code-comment);
+  font-style: italic;
 }
 
 .is-warning .log__stage,

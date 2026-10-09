@@ -2020,6 +2020,9 @@
         "title": "Publishing",
         "notice": "Prototype — nothing is saved.",
         "buildNow": "Build now",
+        "buildNowEditorNote": "Builds are started by developers in this project.",
+        "noTargetsReason": "This project has no target yet. Add one in Targets to build.",
+        "noTargetsLink": "Go to Targets",
         "lastBuild": "Last build #{n}",
         "nav": {
           "label": "Publishing sections",
@@ -2035,6 +2038,7 @@
           "urls": "URL registry"
         },
         "status": {
+          "queued": "Queued",
           "running": "Running",
           "success": "Succeeded",
           "partial": "Partial",
@@ -2059,7 +2063,23 @@
           "empty": "No builds yet",
           "number": "Run #{n}",
           "inProgress": "In progress",
+          "waiting": "Waiting",
+          "search": "Search runs",
           "progressLabel": "Build progress",
+          "cancelTitle": "Cancel run #{n}?",
+          "cancelQueued": "The run has not started; it is removed from the queue.",
+          "cancelRunning": "The run stops after the page it is writing. Files already written stay in the target.",
+          "cancelConfirm": "Cancel run #{n}",
+          "cancelKeep": "Keep running",
+          "promoteTitle": "Promote run #{n} to {target}?",
+          "promoteConfirm": "Promote",
+          "actions": {
+            "label": "Actions for run #{n}",
+            "open": "Open",
+            "log": "Live log",
+            "promote": "Promote",
+            "cancel": "Cancel run"
+          },
           "findings": "{errors} errors · {warnings} warnings",
           "noFindings": "No findings",
           "columns": {
@@ -2070,12 +2090,43 @@
             "started": "Started",
             "duration": "Duration",
             "pages": "Pages",
-            "findings": "Findings"
+            "findings": "Findings",
+            "actions": "Actions"
           }
         },
         "detail": {
           "back": "All runs",
           "cancel": "Cancel run",
+          "promote": "Promote",
+          "showFindings": "Show findings",
+          "channelsAll": "All enabled",
+          "held": {
+            "title": "{count, plural, one {# page was held back} other {# pages were held back}}",
+            "text": "These pages have Error findings, so this build did not publish them. Their previous version stays live."
+          },
+          "plan": {
+            "line": "Plan: {pages, plural, one {# page} other {# pages}} rebuilt because of {changes, plural, one {# change} other {# changes}} ({mode}).",
+            "changes": "Changes behind the rebuild",
+            "roots": "Kind of change",
+            "pages": "{count, plural, one {# page} other {# pages}}",
+            "more": "{count, plural, one {+ # more change} other {+ # more changes}}",
+            "root": {
+              "page": "Page content",
+              "template": "Templates",
+              "navigation": "Navigation",
+              "media": "Media",
+              "settings": "Settings and URLs"
+            }
+          },
+          "empty": {
+            "pending": "The plan is made when the run starts",
+            "pendingHint": "This run is queued. It rebuilds nothing yet.",
+            "none": "No plan was stored for this run",
+            "noneHint": "A run that failed before planning, or one made by an older version, has no plan to show.",
+            "pruned": "The plan was removed by retention",
+            "prunedHint": "Plans are kept for the most recent runs only. The run itself and its findings are still here.",
+            "nothingHint": "Nothing had changed since the last build, so every page was left as it was."
+          },
           "tabs": {
             "label": "Run details",
             "summary": "Summary",
@@ -2091,6 +2142,10 @@
             "warnings": "Warnings",
             "duration": "Duration",
             "started": "Started",
+            "finished": "Finished",
+            "channels": "Channels",
+            "redirects": "Redirects added",
+            "findings": "Findings",
             "startedBy": "Started by",
             "trigger": "Trigger",
             "files": "Files",
@@ -2104,6 +2159,7 @@
             "page": "Page",
             "lang": "Language",
             "reason": "Why",
+            "via": "Because of",
             "path": "Output path"
           },
           "noRebuilt": "Nothing was rebuilt",
@@ -2113,9 +2169,42 @@
           "noFindingsHint": "Every checked page passed the quality rules.",
           "openNotice": "Prototype — the page editor opens here."
         },
+        "findings": {
+          "filters": "Filter findings",
+          "bySeverity": "Severity",
+          "byCategory": "Category",
+          "byRule": "Rule",
+          "byLang": "Language",
+          "byPath": "Output path starts with",
+          "all": "All {count}",
+          "severity": { "error": "Errors {count}", "warning": "Warnings {count}" },
+          "category": { "links": "Links {count}", "seo": "SEO {count}", "accessibility": "Accessibility {count}" },
+          "rulePlaceholder": "All rules",
+          "langAll": "All languages",
+          "pathPlaceholder": "Output path starts with…",
+          "clear": "Clear filters",
+          "chip": {
+            "severity": { "error": "Errors", "warning": "Warnings" },
+            "category": "Category: {name}",
+            "rule": "Rule: {name}",
+            "lang": "Language: {lang}",
+            "path": "Path: {path}"
+          },
+          "shown": "{count, plural, one {# finding shown} other {# findings shown}}",
+          "none": "No findings match these filters",
+          "noneHint": "Change or clear the filters to see the others.",
+          "carried": "Carried",
+          "carriedHint": "Checked in an earlier build and carried over: this page was not rebuilt in this run.",
+          "truncated": "{count} more findings were not stored: the run reached the findings limit. The counts include them; the table doesn't."
+        },
         "log": {
           "label": "Build log of run #{n}",
           "lines": "{count} lines",
+          "counters": "Counters",
+          "files": "{count, plural, one {# file} other {# files}}",
+          "errors": "{count, plural, one {# error} other {# errors}}",
+          "warnings": "{count, plural, one {# warning} other {# warnings}}",
+          "awaiting": "Awaiting events…",
           "following": "Following the newest lines",
           "paused": "Paused — scrolled up",
           "jump": "Jump to the end"
@@ -2128,7 +2217,7 @@
           "incrementalHint": "Rebuilds what changed since the last build of this target.",
           "fullHint": "Rebuilds the whole site; takes a few minutes.",
           "scope": "Pages",
-          "scopeHint": "Leave empty to build everything the mode includes, or pick pages and folders.",
+          "scopeHint": "With a folder or pages, only those pages are rebuilt. Leave both empty to build everything that changed.",
           "scopePlaceholder": "Whole site",
           "pages": "Pages",
           "folders": "Folders",
@@ -2139,21 +2228,67 @@
             "deleted": "Removed",
             "redirects": "Redirects"
           },
-          "more": "… and {count} more",
           "planNote": "What Start would do now. Nothing is built until you start.",
           "cancel": "Cancel",
           "start": "Start build",
-          "notStarted": "Prototype — no build was started."
+          "notStarted": "Prototype — no build was started.",
+          "channels": "Channels",
+          "channelsHint": "At least one channel stays on.",
+          "channel": {
+            "html": "HTML",
+            "rss": "RSS",
+            "markdown": "Markdown"
+          },
+          "comment": "Comment",
+          "commentPlaceholder": "Why this build? Shown in the run list.",
+          "limitedLabel": "Your build settings",
+          "limitedNote": "You can start incremental builds of the default target in this project.",
+          "noTarget": "This project has no target yet.",
+          "createTarget": "Create one in Targets",
+          "validate": "Validate templates",
+          "previewPlan": "Preview plan",
+          "planning": "Planning…",
+          "refresh": "Refresh preview",
+          "planHint": "The plan is not computed automatically. Choose Preview plan (Alt+P) to see what Start would rebuild.",
+          "stale": "The form changed since this preview. Refresh the preview to see the current plan.",
+          "fallback": "An incremental plan is not possible here, so this run falls back to a full build.",
+          "computedAt": "Computed at revision {revision}",
+          "nothing": "Nothing to rebuild. You can still start the run.",
+          "roots": "Rebuilt, by kind",
+          "root": {
+            "page": "Pages",
+            "recordSet": "Record sets",
+            "globalSet": "Global sets",
+            "template": "Templates",
+            "media": "Media"
+          },
+          "via": "Largest groups, by the change they come from",
+          "viaKind": {
+            "template": "Template {name}",
+            "globalSet": "Global set {name}",
+            "page": "Page {name}",
+            "media": "Media {name}"
+          },
+          "viaCount": "{count} files",
+          "showAssets": "Show changed assets ({count})",
+          "assetChange": {
+            "deleted": "deleted in r{revision}",
+            "changed": "changed in r{revision}"
+          },
+          "showRedirects": "Show automatic redirects ({count})",
+          "diagnostics": "Template diagnostics",
+          "validClean": "Templates validate cleanly.",
+          "alreadyRunning": "A build is already running."
         },
         "targets": {
           "new": "New target",
-          "empty": "No targets yet",
+          "empty": "No generation targets yet",
           "default": "Default",
           "actions": "Actions for {name}",
           "edit": "Edit",
           "delete": "Delete…",
-          "deleteTitle": "Delete target “{name}”?",
-          "deleteMessage": "Builds can no longer go there. Files already written stay where they are.",
+          "deleteTitle": "Delete “{name}”?",
+          "deleteMessage": "Past runs published to it can no longer be promoted. Files already written to {path} stay on the server.",
           "deleteConfirm": "Delete target",
           "deleted": "Target “{name}” deleted (prototype — nothing was changed).",
           "newTitle": "New target",
@@ -2163,24 +2298,20 @@
           "create": "Create target",
           "kind": {
             "folder": "Folder",
-            "zip": "ZIP archive",
-            "s3": "S3 bucket"
+            "zip": "ZIP",
+            "s3": "S3"
           },
           "columns": {
             "name": "Name",
             "kind": "Type",
-            "location": "Output",
+            "location": "Output folder",
             "baseUrl": "Base URL",
             "actions": "Actions"
           },
           "form": {
             "name": "Name",
             "kind": "Type",
-            "location": {
-              "folder": "Output folder",
-              "zip": "Archive file",
-              "s3": "Bucket URL"
-            },
+            "location": "Output folder",
             "baseUrl": "Base URL",
             "baseUrlHint": "Public site URL, used for the sitemap and absolute links.",
             "isDefault": "Default target",
@@ -2190,19 +2321,21 @@
               "html": "HTML redirect pages",
               "htaccess": "Apache .htaccess",
               "json": "redirects.json"
-            }
-          }
+            },
+            "locationHint": "Relative to the project’s output root. Leave empty to use target-<id>.",
+            "editHint": "Changing it or the type starts a fresh folder; earlier runs can then no longer be promoted.",
+            "nameUsed": "A target with this name already exists."
+          },
+          "emptyHint": "Create a target to be able to generate and publish this project.",
+          "readonlyHint": "Only project admins can change targets.",
+          "locationPlaceholder": "target-<id>"
         },
         "policy": {
-          "title": "Who may publish",
-          "intro": "What each role may do to put content online. Project admins can always do all of it.",
-          "caption": "Publish permissions by role",
-          "action": "Action",
-          "roles": {
-            "editor": "Editors",
-            "developer": "Developers",
-            "admin": "Project admins"
-          },
+          "title": "Policy",
+          "cardTitle": "Publishing by editors",
+          "cardIntro": "What editors may do to put content online.",
+          "developersNote": "Developers and admins can always do all of this.",
+          "readonly": "Only project admins can change this.",
           "actions": {
             "release": "Release, discard and unpublish",
             "schedule": "Schedule releases and unpublishing",
@@ -2215,14 +2348,29 @@
             "incremental": "Rebuild what changed — or a folder or single pages — to the default target.",
             "full": "Rebuild the whole site and choose the target."
           },
-          "cellLabel": "{role}: {action}",
-          "always": "Always",
           "needs": "Needs “{name}”",
-          "footnote": "Only project admins can change this.",
           "saved": "All changes saved",
           "unsaved": "Unsaved changes",
           "save": "Save",
-          "discard": "Discard"
+          "discard": "Discard",
+          "impact": {
+            "title": "These schedules would fail",
+            "intro": "Editors would lose a permission these scheduled items need. They would fail when their time comes.",
+            "caption": "Schedules that would fail",
+            "columns": {
+              "type": "Type",
+              "item": "Item",
+              "runAt": "Run time",
+              "owner": "Owner",
+              "missing": "Missing permission"
+            },
+            "type": {
+              "release": "Release",
+              "unpublish": "Unpublish"
+            },
+            "cancel": "Cancel",
+            "saveAnyway": "Save anyway"
+          }
         },
         "quality": {
           "title": "Quality checks",
@@ -2247,6 +2395,7 @@
             "error": "Error"
           },
           "levelOf": "Level of “{name}”",
+          "groupLevel": "Set all {category} rules",
           "about": "About “{name}”",
           "capped": "At most a warning: its findings never hold a page back.",
           "findings": "{count} in the last run",
@@ -2254,7 +2403,23 @@
             "content": "Fix in content",
             "template": "Fix in the template",
             "both": "Content or template"
-          }
+          },
+          "saved": "Saved",
+          "unsaved": "Unsaved changes",
+          "discard": "Discard",
+          "save": "Save",
+          "savedToast": "Quality rules saved (prototype — nothing was changed).",
+          "rebuildNote": "The next incremental build runs as a full build because the rules changed.",
+          "fixValues": "Fix the marked values to save.",
+          "readOnly": "Only developers can change the quality rules.",
+          "defaultMarker": "(default)",
+          "reset": "Reset to default",
+          "resetRule": "Reset “{name}” to default",
+          "cappedStored": "Configured as Error, applied as Warning",
+          "errorUnavailable": "Error is not available for this rule",
+          "channels": "Checked in: {channels}. Other channels (Markdown, …) are not checked.",
+          "paramHint": "Default {default}, allowed {min} to {max}",
+          "paramError": "Enter a number from {min} to {max}."
         },
         "redirects": {
           "add": "Add redirect",
@@ -2262,7 +2427,6 @@
           "empty": "No redirects",
           "emptyHint": "Moving or renaming a page adds one automatically.",
           "more": "More redirect actions",
-          "export": "Export as CSV",
           "deleteManual": "Delete all manual redirects…",
           "deleteTitle": "Delete {count} manual redirects?",
           "deleteMessage": "Requests for their old paths will fail with the next build. Type {key} to confirm.",
@@ -2274,7 +2438,9 @@
             "lang": "Language",
             "kind": "Kind",
             "state": "State",
-            "created": "Created"
+            "created": "Created",
+            "channel": "Channel",
+            "actions": "Actions"
           },
           "kind": {
             "auto": "Automatic",
@@ -2291,6 +2457,47 @@
             "shadowed": "A page or file is published at the old path, so the redirect is not written until nothing lives there.",
             "dangling": "The target has no output in this language; the redirect is kept but not written until it is published again.",
             "loop": "It leads back to its own path, so builds leave it out. Point it somewhere else or delete it."
+          },
+          "intro": "States are as of run #{n} on the default target.",
+          "introNoBuild": "Nothing is published on the default target yet, so the states are shown once a build has been published there.",
+          "notBuilt": "Not built",
+          "fromRun": "from run #{n}",
+          "by": "by {name}",
+          "edit": "Edit",
+          "delete": "Delete",
+          "actions": "Actions for {path}",
+          "noLanguage": "No language",
+          "deleteOneTitle": "Delete this redirect?",
+          "deleteOneMessage": "Requests for {path} will fail with the next build.",
+          "deletedOne": "Redirect deleted (prototype — nothing was changed).",
+          "conflict": "The redirects were changed elsewhere in the meantime. Reload to see the current list.",
+          "reload": "Reload",
+          "reloaded": "Redirects reloaded (prototype — nothing was changed).",
+          "dialog": {
+            "newTitle": "Add redirect",
+            "editTitle": "Edit redirect",
+            "from": "Old path",
+            "fromPlaceholder": "/old/page/",
+            "savedAs": "Saved as {path}",
+            "channel": "Channel",
+            "lang": "Language",
+            "to": "Redirect to",
+            "toPage": "A page",
+            "toPath": "A path or URL",
+            "page": "Page",
+            "pagePlaceholder": "Search pages",
+            "pageHint": "The redirect follows the page when it moves again.",
+            "path": "Path or URL",
+            "pathPlaceholder": "/new/page/ or https://example.com/",
+            "pathHint": "The query and fragment of the request are kept.",
+            "cancel": "Cancel",
+            "save": "Save",
+            "errors": {
+              "fromEmpty": "Enter the old path.",
+              "fromQuery": "The old path has no query (?…) or fragment (#…).",
+              "pageEmpty": "Choose a page.",
+              "pathInvalid": "Enter a path starting with / or an absolute http(s) URL."
+            }
           }
         },
         "urls": {
@@ -2299,10 +2506,6 @@
           "emptyHint": "The next build or preview assigns every page and file its URL.",
           "more": "More URL actions",
           "resetAll": "Reset all URLs…",
-          "resetTitle": "Reset all URLs?",
-          "resetMessage": "Deletes all {count} registered URLs — every channel and area. The next build assigns their computed URLs and moves the outputs there. Type {key} to confirm.",
-          "resetConfirm": "Reset all",
-          "resetDone": "All URLs reset (prototype — nothing was changed).",
           "manual": "Overridden",
           "auto": "Automatic",
           "columns": {
@@ -2313,7 +2516,8 @@
             "area": "Area",
             "url": "URL",
             "overridden": "Set by",
-            "assigned": "Assigned"
+            "assigned": "Assigned",
+            "actions": "Actions"
           },
           "type": {
             "page": "Pages",
@@ -2323,7 +2527,39 @@
           "area": {
             "generated": "Generated",
             "preview": "Preview"
-          }
+          },
+          "total": "{count} URLs in total",
+          "deleted": "deleted",
+          "allChannels": "all",
+          "noLanguage": "No language",
+          "override": "Override",
+          "editLabel": "URL of {name}",
+          "editSave": "Save override",
+          "editCancel": "Cancel",
+          "errors": {
+            "format": "Enter a path starting with / without spaces, query or fragment.",
+            "used": "This URL is already used by {target}."
+          },
+          "resetRow": "Reset",
+          "resetRowTitle": "Reset this URL?",
+          "resetRowMessage": "Deletes the registered URL {url}. The next build or preview assigns the computed URL.",
+          "resetAsset": "Reset asset",
+          "resetAssetTooltip": "Reset every URL of this asset",
+          "resetAssetTitle": "Reset all URLs of {name}?",
+          "resetAssetMessage": "Deletes its {count} registered URLs. The next build or preview assigns the computed URLs.",
+          "resetChannel": "Reset channel…",
+          "needChannel": "Filter by a channel first.",
+          "resetChannelTitle": "Reset all URLs of the channel {channel}?",
+          "resetChannelMessage": "Deletes every registered URL of the channel {channel}. The next build or preview assigns the computed URLs.",
+          "resetArea": "Reset area…",
+          "needArea": "Filter by an area first.",
+          "resetAreaTitle": "Reset all URLs of the area {area}?",
+          "resetAreaMessage": "Deletes every registered URL of the area {area}. The next build or preview assigns the computed URLs.",
+          "resetAllTitle": "Reset all URLs?",
+          "resetAllMessage": "Deletes all {count} registered URLs — every channel and area. The next build assigns their computed URLs and moves the outputs there. Type {key} to confirm.",
+          "resetAllConfirm": "Reset all",
+          "resetComplete": "Reset complete - the next build or preview assigns the current computed URLs.",
+          "resetFailed": "The reset failed. Nothing was changed."
         }
       },
       "navigation": {

@@ -13,40 +13,96 @@
   }
 }
 
-.policy__intro,
-.policy__footnote {
-  max-width: 70ch;
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sf-space-3);
+  max-inline-size: 44rem;
+  padding: var(--sf-space-4) var(--sf-space-5);
+  border: 1px solid var(--sf-border);
+  border-radius: var(--sf-radius-md);
+  background: var(--sf-surface);
+}
+
+.card__title {
+  margin: 0;
+  color: var(--sf-text);
+  font-size: var(--sf-fs-14);
+  line-height: var(--sf-lh-14);
+  font-weight: var(--sf-weight-semibold);
+}
+
+.card__intro,
+.card__readonly,
+.card__note {
+  display: flex;
+  align-items: center;
+  gap: var(--sf-space-2);
+  margin: 0;
+  color: var(--sf-text-muted);
+  font-size: var(--sf-fs-13);
+  line-height: var(--sf-lh-13);
+}
+
+.card__intro {
+  display: block;
+}
+
+.card__readonly {
+  color: var(--sf-text);
+}
+
+.rows {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sf-space-1);
+  padding: var(--sf-space-3) 0;
+  border-bottom: 1px solid var(--sf-border);
+
+  &:last-child {
+    border-bottom: none;
+  }
+}
+
+.row__hint,
+.row__needs {
+  padding-inline-start: calc(var(--sf-space-10) + var(--sf-space-2));
+  color: var(--sf-text-muted);
+  font-size: var(--sf-fs-12);
+  line-height: var(--sf-lh-12);
+}
+
+.row__needs {
+  color: var(--sf-warning-text);
+}
+
+.impact__intro {
   margin: 0 0 var(--sf-space-3);
   color: var(--sf-text-muted);
   font-size: var(--sf-fs-13);
   line-height: var(--sf-lh-13);
 }
 
-.policy__footnote {
-  margin: var(--sf-space-3) 0 0;
-}
-
-.policy {
+.impact {
   inline-size: 100%;
-  max-inline-size: 56rem;
-  border: 1px solid var(--sf-border);
-  border-radius: var(--sf-radius-md);
-  border-collapse: separate;
-  border-spacing: 0;
-  background: var(--sf-surface);
+  border-collapse: collapse;
   font-size: var(--sf-fs-13);
   line-height: var(--sf-lh-13);
 
   th,
   td {
-    padding: var(--sf-space-3) var(--sf-space-4);
+    padding: var(--sf-space-2) var(--sf-space-3);
     border-bottom: 1px solid var(--sf-border);
     text-align: start;
     vertical-align: top;
-  }
-
-  tbody tr:last-child > * {
-    border-bottom: none;
   }
 
   thead th {
@@ -56,32 +112,7 @@
   }
 }
 
-.policy__role,
-.policy__cell {
-  inline-size: 9rem;
-}
-
-.policy__action {
-  display: flex;
-  flex-direction: column;
-  gap: var(--sf-space-1);
-  font-weight: var(--sf-weight-regular);
-}
-
-.policy__label {
-  color: var(--sf-text);
-  font-weight: var(--sf-weight-medium);
-}
-
-.policy__hint,
-.policy__note {
-  color: var(--sf-text-muted);
-  font-size: var(--sf-fs-12);
-  line-height: var(--sf-lh-12);
-}
-
-.policy__cell {
-  sf-checkbox {
-    display: block;
-  }
+.impact__time {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }

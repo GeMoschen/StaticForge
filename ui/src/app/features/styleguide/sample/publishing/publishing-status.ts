@@ -2,6 +2,7 @@ import type { SfStatusTone } from '../../../../shared/components/display/sf-stat
 import type { QualityLevel, RedirectState, RunStatus } from './publishing-data';
 
 export const RUN_STATUS_TONES: Readonly<Record<RunStatus, SfStatusTone>> = {
+  queued: 'neutral',
   running: 'info',
   success: 'success',
   partial: 'warning',
@@ -10,6 +11,7 @@ export const RUN_STATUS_TONES: Readonly<Record<RunStatus, SfStatusTone>> = {
 };
 
 export const RUN_STATUS_ICONS: Readonly<Record<RunStatus, string>> = {
+  queued: 'schedule',
   running: 'progress_activity',
   success: 'check_circle',
   partial: 'warning',

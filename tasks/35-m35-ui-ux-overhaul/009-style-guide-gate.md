@@ -733,6 +733,51 @@ Follow-up of M35.23: the app's release dialog now looks like the sample's. Open 
 184. **Three schedule kinds:** the schedule dialog and the Schedules list offer Release / Unpublish / Generation; *Repeat* (Once, Every hour/day/weekday/week, Custom) is a select inside Generation, there is no separate *Recurring generation* kind (user decision 2026-10-07). The Repeat column shows *Once* or the cron in words. Pending sign-off.
 185. **Release dialog languages:** the *Languages* block is always shown (also for one language and for the editor); releasing an item offers all of its changed languages, ticked, and shows unchanged ones disabled (user report 2026-10-07). Pending sign-off.
 
+## Review round 17 (2026-10-09): Publishing completed for M35.24 (signed off 2026-10-09 (user instruction))
+
+The sample's Publishing area (`/styleguide/sample?area=publishing`) now covers what the real app offers and the task needs. **Only the sample changed**; the app waits for sign-off.
+Query parameters: `psec=runs|targets|policy|quality|redirects|urls`; `role=editor` (limited permissions; `role=viewer` for quality); `notargets=1`.
+Runs: `run=r-42..r-49` (r-49 queued, r-48 running, r-47 partial with findings, r-44 failed, r-43 rebuilt nothing, r-42 cancelled/pruned), `rtab=summary|rebuilt|findings|log`, `fsev`, `fcat`, `frule`, `flang`, `fpath`.
+Build now: `build=1`, `bplan=1`, `bfallback=1`, `bempty=1`, `berror=1`, `bvalidate=1`, `bdiag=1`; Alt+Shift+B opens it. Targets: `tdrawer=new|t-live`, `terror=1`. Policy: `pdialog=impact`.
+Quality: `qinvalid=1`, `qcapped=1`, `qsaved=1`. Redirects: `rdialog=new|rd-1|rd-9`, `rerror=1|2`, `rsaving=1`, `rconflict=1`, `nobuild=1`, `rempty=1`. URLs: `uedit=<id>`, `uerror=1|2`, `uempty=1`.
+
+Runs and run detail
+186. **Queued status:** a queued build has its own status (neutral, clock icon), "Waiting" instead of a duration and "Awaiting events…" in its log.
+187. **Runs table:** search plus the Redirects-style filter bar: Status, Mode, Target, Trigger.
+188. **Row menu (⋮ and right click):** Open, Live log (queued/running), Promote (success/partial, developers only; asks "Promote run #N to <target>?"), Cancel (queued/running, danger, always asks first).
+189. **Permissions:** an editor without build permission does not see Build now (note "Builds are started by developers in this project."), cannot Promote and can Cancel only runs they started.
+190. **No target:** Build now stays visible but disabled with the reason as tooltip and a "Go to Targets" button.
+191. **Run tab in the URL (`rtab`)**; Live log opens the Log tab.
+192. **Summary** adds Finished, Channels, Redirects added (only if >0) and a Findings line linking to the Findings tab; a partial run lists its held-back pages with Show findings (opens Findings on errors).
+193. **Findings** keep the grouped-by-code view and gain filters: severity and category facets with counts, rule (multi), language, output-path prefix, removable chips, Clear filters; a "Carried" chip for findings carried over from an earlier build; a warning when the findings limit was reached ("N more findings were not stored…").
+194. **Rebuilt** shows the plan line, the largest changes behind the rebuild, a breakdown by kind and a "Because of" column; four empty states (no plan stored, removed by retention, nothing rebuilt, plan not made yet).
+195. **Log bar** counts lines, files, errors and warnings; stage prefixes are fixed-width and bold.
+
+Build now, targets, policy
+196. **Build now:** one checkbox per enabled channel (the last stays checked and disabled), optional Comment, scope picker with its note.
+197. **Plan preview is explicit:** "Validate templates" checkbox and Preview plan (Alt+P); a quiet hint before the first preview, a stale warning after any change, a fallback warning (incremental to full), counts with "computed at revision N", rebuilt-by-kind, "via" groups, toggles for changed assets and automatic redirects, diagnostics with codes or "Templates validate cleanly.", "Nothing to rebuild. You can still start the run."; the dialog widens with a plan.
+198. **Build now variants:** no target (Start disabled, "Create one in Targets" link); limited permission (read-only "Mode Incremental / Target <default>" and a note); Start spins and a "build already running" answer shows inline. **Alt+Shift+B** opens the dialog.
+199. **Targets:** kinds Folder / ZIP / S3 (no FTP, no connection test); Output folder relative to the project's output root (empty = target-<id>) with hints; editing warns that changing folder or type starts a fresh folder and earlier runs can no longer be promoted; duplicate name shows inline; delete confirm: "Past runs published to it can no longer be promoted. Files already written to <path> stay on the server." (default target deletable); empty state with a primary New target; editors see it read-only.
+200. **Publish policy follows the real model:** one card "Publishing by editors" with four switches (Release; Schedule releases [needs Release]; Incremental builds; Full builds [needs incremental]); switching a base off switches dependents off; Saved/Unsaved changes, Discard, Save; read-only for non-admins. **This replaces the signed-off role × action grid** (the app only governs editors).
+201. **Impact dialog:** saving a change that makes schedules fail first shows "These schedules would fail" (type, run time, owner, missing permission) with Cancel and a danger "Save anyway".
+
+Quality, redirects, URL registry
+202. **Quality rules are saved** with a bar (status, Discard, Save), not applied at once; afterwards "The next incremental build runs as a full build because the rules changed."
+203. **Rule settings:** numeric (min/max/default hint) or checkbox; an out-of-range value marks the field, "Fix the marked values to save." and Save is disabled. "(default)" marks each default level; "Reset to default" when a rule differs.
+204. **Capped rules:** Error disabled with "Error is not available for this rule"; a stored Error shows "Configured as Error, applied as Warning". A rule that checks only some channels says "Other channels (Markdown, …) are not checked." Editors/viewers: read-only, "Only developers can change the quality rules."
+205. **Redirect dialog (Add/Edit):** old path (normalised "Saved as /x/", errors for empty and for ? / #), channel, language (only for channels with languages), "Redirect to" a page or a path / absolute http(s) URL. Every row is editable, automatic ones too.
+206. **Redirect list:** filters Channel, Language, Kind, State as chips plus path search; Created links automatic rows to their run ("from run #N"); row ⋮ Edit / Delete (plain confirm); conflict banner with Reload; "not built" state when nothing is published; intro "States are as of run #N on the default target."
+207. **Redirects: Export removed** (the app has none). **"Delete all manual redirects…" with the typed project key stays but is a NEW capability** (not in the app) — decide whether to keep it.
+208. **URL registry:** per-row Override (inline edit with validation), Reset (overridden rows), Reset asset; toolbar ⋮ with Reset channel / Reset area (disabled with a reason until that filter is set) and Reset all (typed project key, hidden when empty). Other resets use the irreversible danger confirm; toast "Reset complete - the next build or preview assigns the current computed URLs."; "deleted" target badge, channel "all", language "No language"; the table pages (5 rows in the sample) with the total in the section bar.
+
+Round 17 review changes (2026-10-09, user; signed off with the round)
+209. **Filters are one popover (shared `sf-data-table`, so Runs, Redirects, URLs and every other table):** the *Filters* button opens a popover with a group per filter and one toggle tag per option (click on/off, `aria-pressed`); picked values still show as removable chips beside the button; *Clear filters* inside the popover. Replaces the nested dropdown menu.
+210. **A running status turns:** the status pill's `progress_activity` icon spins around its centre (slower under reduced motion), e.g. in the run detail header.
+211. **Quality groups:** each category can be folded (chevron; `qcollapsed=links,seo`) and has its own Off / Warning / Error control that sets all its rules at once (a rule capped at Warning takes Warning for Error; no segment is checked while the rules differ).
+212. **Example data for r-44:** it failed at the upload (bucket credentials) *after* planning and checking, so Rebuilt and Findings show a plan and findings. The "no plan stored" state moved to the new run r-41 (failed before planning).
+
+Sample-only choices to confirm: Promote goes to the default target (or the CDN mirror if already there); the impact dialog shows fixed demo rows; sample runs r-43 (now incremental, 0 pages) and r-47 (217 warnings incl. unstored) changed to show the new states.
+
 ## Notes / hazards
 
 - Sign-off: **signed off by the user on 2026-10-01** — gallery https://claude.ai/artifact/33yY26sd6H17UTP9sPPJid
