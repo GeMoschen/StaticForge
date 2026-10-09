@@ -66,7 +66,9 @@ public class UrlRegistryController {
     }
 
     /**
-     * Lists rows, filtered by channel, area, target type, language ({@code ""} for rows without one), target and a
+     * Lists rows, filtered by channel, area, target type, language ({@code ""} for rows without one;
+     * {@code noLocale=true} says the same and survives clients that drop empty parameters, and wins over
+     * {@code locale}), target and a
      * free-text {@code q} (in the URL, or in the target's display name or uid). Sorted by URL.
      */
     @GetMapping
@@ -77,13 +79,14 @@ public class UrlRegistryController {
             @RequestParam(required = false) String area,
             @RequestParam(required = false) String targetType,
             @RequestParam(required = false) String locale,
+            @RequestParam(defaultValue = "false") boolean noLocale,
             @RequestParam(required = false) UUID targetUuid,
             @RequestParam(required = false) String q,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "50") int size) {
         long projectId = projectId(projectKey);
         UrlRegistryService.Filter filter = new UrlRegistryService.Filter(
-                blankToNull(channelKey), parseArea(area), parseType(targetType), locale, targetUuid, q);
+                blankToNull(channelKey), parseArea(area), parseType(targetType), noLocale ? "" : locale, targetUuid, q);
         Page<UrlRegistryEntry> rows = urlRegistryService.search(
                 projectId, filter, PageRequest.of(Math.max(0, page), Math.min(Math.max(1, size), 500)));
         Map<UUID, UrlRegistryService.TargetInfo> infos = urlRegistryService.describe(

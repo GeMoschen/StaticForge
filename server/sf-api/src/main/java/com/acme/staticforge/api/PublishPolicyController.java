@@ -101,7 +101,11 @@ public class PublishPolicyController {
                             i.action().getNextRunAt(),
                             i.action().getOwnerUserId(),
                             owner == null ? null : owner.getDisplayName(),
-                            i.missing());
+                            i.missing(),
+                            i.description().items().isEmpty()
+                                    ? null
+                                    : i.description().items().get(0).displayName(),
+                            i.description().items().size());
                 })
                 .toList());
     }

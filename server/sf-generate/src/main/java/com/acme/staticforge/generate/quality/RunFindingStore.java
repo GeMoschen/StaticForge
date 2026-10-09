@@ -9,6 +9,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Types;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.EnumMap;
@@ -16,11 +17,13 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.RowCallbackHandler;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -246,34 +249,28 @@ public class RunFindingStore {
             String pathPrefix) {
 
         public static final Filter NONE = new Filter(null, null, null, null, null, null, null);
+
+        Filter withoutSeverity() {
+            return new Filter(null, category, codes, assetUuid, channel, locale, pathPrefix);
+        }
+
+        Filter withoutCategory() {
+            return new Filter(severity, null, codes, assetUuid, channel, locale, pathPrefix);
+        }
+
+        Filter withoutCodes() {
+            return new Filter(severity, category, null, assetUuid, channel, locale, pathPrefix);
+        }
+
+        Filter withoutLocale() {
+            return new Filter(severity, category, codes, assetUuid, channel, null, pathPrefix);
+        }
     }
 
-    /**
-     * One stored finding with the page it is on as it is named now.
-     *
-     * @param uid the asset's current uid; {@code null} when it was deleted since
-     * @param displayName the asset's current display name; {@code null} when it was deleted since
-     */
-    public record StoredFinding(
-            long id,
-            UUID assetUuid,
-            String uid,
-            String displayName,
-            String channel,
-            String locale,
-            Integer pageNumber,
-            String outputPath,
-            String code,
-            QualityCategory category,
-            QualitySeverity severity,
-            String message,
-            String selector,
-            String sectionInstanceId,
-            boolean carried) {}
+    /** A {@code WHERE} clause over {@code generation_run_finding f} and its arguments. */
+    private record Where(String sql, List<Object> args) {}
 
-    /** A page of run {@code runId}'s findings passing {@code filter}, by output path, then code. */
-    @Transactional(readOnly = true)
-    public Page<StoredFinding> page(long projectId, long runId, Filter filter, Pageable pageable) {
+    private static Where where(long runId, Filter filter) {
         StringBuilder where = new StringBuilder(" WHERE f.run_id = ?");
         List<Object> args = new ArrayList<>();
         args.add(runId);
@@ -306,6 +303,147 @@ public class RunFindingStore {
             where.append(" AND f.output_path LIKE ? ESCAPE '!'");
             args.add(filter.pathPrefix().replace("!", "!!").replace("%", "!%").replace("_", "!_") + "%");
         }
+        return new Where(where.toString(), args);
+    }
+
+    /** One rule code and how many findings it has. */
+    public record CodeCount(String code, long count) {}
+
+    /**
+     * Facet counts over the stored findings of a run (M35.24): every facet counts the findings passing <em>all the
+     * other</em> filters (its own is left out), so choosing a value never empties the other values of its own facet and
+     * the other facets react to it.
+     *
+     * @param total findings passing every filter (the size of the filtered list)
+     * @param severity {@code WARNING} and {@code ERROR}, both always present (possibly 0)
+     * @param category {@code LINKS}, {@code SEO} and {@code ACCESSIBILITY}, all always present (possibly 0)
+     * @param codes the rule codes with at least one finding, by code
+     * @param locale the languages with at least one finding, by language; findings of a project without languages
+     *     are in none
+     */
+    public record Facets(
+            long total,
+            Map<QualitySeverity, Long> severity,
+            Map<QualityCategory, Long> category,
+            List<CodeCount> codes,
+            Map<String, Long> locale) {}
+
+    /** The facet counts of run {@code runId}'s findings for {@code filter}. */
+    @Transactional(readOnly = true)
+    public Facets facets(long runId, Filter filter) {
+        Where all = where(runId, filter);
+        Long total = jdbc.queryForObject(
+                "SELECT COUNT(*) FROM generation_run_finding f" + all.sql(), Long.class, all.args().toArray());
+
+        Map<QualitySeverity, Long> severity = new EnumMap<>(QualitySeverity.class);
+        severity.put(QualitySeverity.WARNING, 0L);
+        severity.put(QualitySeverity.ERROR, 0L);
+        Where bySeverity = where(runId, filter.withoutSeverity());
+        jdbc.query("SELECT f.severity, COUNT(*) FROM generation_run_finding f" + bySeverity.sql() + " GROUP BY f.severity",
+                (RowCallbackHandler) rs -> {
+                    QualitySeverity value = QualitySeverity.parse(rs.getString(1));
+                    if (value != null && value != QualitySeverity.OFF) {
+                        severity.put(value, rs.getLong(2));
+                    }
+                },
+                bySeverity.args().toArray());
+
+        Map<QualityCategory, Long> category = new EnumMap<>(QualityCategory.class);
+        for (QualityCategory value : QualityCategory.values()) {
+            category.put(value, 0L);
+        }
+        Where byCategory = where(runId, filter.withoutCategory());
+        jdbc.query("SELECT f.category, COUNT(*) FROM generation_run_finding f" + byCategory.sql() + " GROUP BY f.category",
+                (RowCallbackHandler) rs -> {
+                    QualityCategory value = QualityCategory.parse(rs.getString(1));
+                    if (value != null) {
+                        category.put(value, rs.getLong(2));
+                    }
+                },
+                byCategory.args().toArray());
+
+        Where byCode = where(runId, filter.withoutCodes());
+        List<CodeCount> codes = jdbc.query(
+                "SELECT f.code, COUNT(*) FROM generation_run_finding f" + byCode.sql() + " GROUP BY f.code ORDER BY f.code",
+                (rs, i) -> new CodeCount(rs.getString(1), rs.getLong(2)),
+                byCode.args().toArray());
+
+        Map<String, Long> locale = new TreeMap<>();
+        Where byLocale = where(runId, filter.withoutLocale());
+        jdbc.query("SELECT f.locale, COUNT(*) FROM generation_run_finding f" + byLocale.sql()
+                        + " AND f.locale IS NOT NULL GROUP BY f.locale",
+                (RowCallbackHandler) rs -> {
+                    locale.put(rs.getString(1), rs.getLong(2));
+                },
+                byLocale.args().toArray());
+
+        return new Facets(total == null ? 0 : total, severity, category, codes, locale);
+    }
+
+    /** The findings of run {@code runId} per rule code, over every stored finding. */
+    @Transactional(readOnly = true)
+    public Map<String, Long> countsByCode(long runId) {
+        Map<String, Long> counts = new TreeMap<>();
+        jdbc.query("SELECT code, COUNT(*) FROM generation_run_finding WHERE run_id = ? GROUP BY code",
+                (RowCallbackHandler) rs -> {
+                    counts.put(rs.getString(1), rs.getLong(2));
+                },
+                runId);
+        return counts;
+    }
+
+    /** The current display names of the pages {@code assetUuids} of the project; a deleted page has none. */
+    @Transactional(readOnly = true)
+    public Map<UUID, String> displayNames(long projectId, Collection<UUID> assetUuids) {
+        Map<UUID, String> names = new HashMap<>();
+        List<UUID> ids = List.copyOf(assetUuids);
+        for (int from = 0; from < ids.size(); from += 500) {
+            List<UUID> chunk = ids.subList(from, Math.min(ids.size(), from + 500));
+            List<Object> args = new ArrayList<>();
+            args.add(projectId);
+            args.addAll(chunk);
+            jdbc.query(
+                    "SELECT a.uuid, v.display_name FROM asset a"
+                            + " JOIN asset_version v ON v.asset_id = a.id AND v.valid_to_revision IS NULL AND v.deleted = FALSE"
+                            + " WHERE a.project_id = ? AND a.uuid IN ("
+                            + String.join(", ", Collections.nCopies(chunk.size(), "?")) + ")",
+                    (RowCallbackHandler) rs -> {
+                        names.put(rs.getObject(1, UUID.class), rs.getString(2));
+                    },
+                    args.toArray());
+        }
+        return names;
+    }
+
+    /**
+     * One stored finding with the page it is on as it is named now.
+     *
+     * @param uid the asset's current uid; {@code null} when it was deleted since
+     * @param displayName the asset's current display name; {@code null} when it was deleted since
+     */
+    public record StoredFinding(
+            long id,
+            UUID assetUuid,
+            String uid,
+            String displayName,
+            String channel,
+            String locale,
+            Integer pageNumber,
+            String outputPath,
+            String code,
+            QualityCategory category,
+            QualitySeverity severity,
+            String message,
+            String selector,
+            String sectionInstanceId,
+            boolean carried) {}
+
+    /** A page of run {@code runId}'s findings passing {@code filter}, by output path, then code. */
+    @Transactional(readOnly = true)
+    public Page<StoredFinding> page(long projectId, long runId, Filter filter, Pageable pageable) {
+        Where built = where(runId, filter);
+        String where = built.sql();
+        List<Object> args = built.args();
         Long total = jdbc.queryForObject(
                 "SELECT COUNT(*) FROM generation_run_finding f" + where, Long.class, args.toArray());
 

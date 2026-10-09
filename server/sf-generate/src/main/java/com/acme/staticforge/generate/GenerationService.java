@@ -166,6 +166,7 @@ public class GenerationService {
     private final RunFindingStore findingStore;
     private final RedirectService redirectService;
     private final UrlRegistryService urlRegistryService;
+    private final RunLogStore runLog;
 
     /** A remembered {@code Idempotency-Key}: the run it started and when (M29.2.4). */
     private record IdempotentStart(long runId, Instant at) {}
@@ -193,7 +194,8 @@ public class GenerationService {
             QualityRuleConfigService qualityConfig,
             RunFindingStore findingStore,
             RedirectService redirectService,
-            UrlRegistryService urlRegistryService) {
+            UrlRegistryService urlRegistryService,
+            RunLogStore runLog) {
         this.runs = runs;
         this.targets = targets;
         this.projectService = projectService;
@@ -217,6 +219,7 @@ public class GenerationService {
         this.findingStore = findingStore;
         this.redirectService = redirectService;
         this.urlRegistryService = urlRegistryService;
+        this.runLog = runLog;
     }
 
     /**
@@ -274,6 +277,7 @@ public class GenerationService {
                     null,
                     null);
             run.setComment(request.comment());
+            run.setTrigger(request.trigger());
             run.setExecutorNode(control.nodeId());
             run = runs.saveAndFlush(run);
             final long runId = run.getId();
@@ -312,6 +316,27 @@ public class GenerationService {
 
     public GenerationRun status(String projectKey, long runId) {
         return requireRun(projectKey, runId);
+    }
+
+    /**
+     * The log of run {@code runId} (M35.24): the lines this node holds while it executes the run, else the stored ones.
+     * {@code from} keeps the lines after that number only.
+     *
+     * @throws SfException 404 when the run belongs to another project
+     */
+    public RunLogStore.Log log(String projectKey, long runId, int from) {
+        return runLog.read(requireRun(projectKey, runId)).after(from);
+    }
+
+    /**
+     * The project's newest run that published to its default target ({@code SUCCESS} or {@code PARTIAL}, M35.24); empty
+     * when there is none or the project has no target.
+     */
+    public Optional<GenerationRun> lastFinishedRun(String projectKey) {
+        long projectId = projectService.requireByKey(projectKey).getId();
+        return targets.findByProjectIdAndDefaultTargetTrue(projectId)
+                .or(() -> targets.findByProjectId(projectId).stream().findFirst())
+                .flatMap(target -> runs.findLastFinished(projectId, target.getId()));
     }
 
     public List<GenerationRun> history(String projectKey) {
@@ -430,6 +455,7 @@ public class GenerationService {
         if (request.channels() != null) {
             request.channels().forEach(channels::add);
         }
+        detail.put("trigger", request.trigger().name());
         detail.put("scoped", (request.folderPath() != null && !request.folderPath().isBlank())
                 || (request.assetUuids() != null && !request.assetUuids().isEmpty()));
         if (request.revision() == null) {
@@ -1110,7 +1136,8 @@ public class GenerationService {
                 request.folderPath(),
                 request.assetUuids(),
                 request.comment(),
-                request.idempotencyKey());
+                request.idempotencyKey(),
+                request.trigger());
     }
 
     private static Set<UUID> scopeAssets(GenerationRequest request) {
@@ -1176,9 +1203,54 @@ public class GenerationService {
 
     /** Sends a finished run's final {@code REPORT} event and closes its event streams. */
     private void finished(GenerationRun run) {
-        emit(run.getId(), STAGE_REPORT, run.getStatus().name(), run.getFilesWritten(), run.getErrorCount(),
+        logDiagnostics(run);
+        String level = switch (run.getStatus()) {
+            case FAILED -> RunLogStore.LEVEL_ERROR;
+            case PARTIAL, CANCELLED -> RunLogStore.LEVEL_WARNING;
+            default -> RunLogStore.LEVEL_INFO;
+        };
+        emit(run.getId(), STAGE_REPORT, level, run.getStatus().name(), run.getFilesWritten(), run.getErrorCount(),
                 run.getWarningCount(), run.getDiagnostics());
         completeRun(run.getId());
+    }
+
+    /** The most diagnostic codes of one severity a run's log lists. */
+    private static final int MAX_LOGGED_CODES = 25;
+
+    /**
+     * Adds a log line per diagnostic code of a finished run ({@code SF-GEN-0111 (3x): first message}), errors then
+     * warnings, and one for the pages the quality checks held back.
+     */
+    private void logDiagnostics(GenerationRun run) {
+        JsonNode diagnostics = run.getDiagnostics();
+        if (diagnostics == null) {
+            return;
+        }
+        String stage = STAGE_REPORT;
+        logCodes(run, stage, RunLogStore.LEVEL_ERROR, diagnostics.path("errors"));
+        logCodes(run, stage, RunLogStore.LEVEL_WARNING, diagnostics.path("warnings"));
+        int held = diagnostics.path("heldBack").size();
+        if (held > 0) {
+            runLog.append(run.getId(), stage, RunLogStore.LEVEL_WARNING,
+                    held + (held == 1 ? " page" : " pages") + " held back by quality checks",
+                    run.getFilesWritten(), run.getErrorCount(), run.getWarningCount());
+        }
+    }
+
+    private void logCodes(GenerationRun run, String stage, String level, JsonNode entries) {
+        int logged = 0;
+        for (JsonNode entry : entries) {
+            if (logged++ >= MAX_LOGGED_CODES) {
+                runLog.append(run.getId(), stage, level, "… and " + (entries.size() - MAX_LOGGED_CODES) + " more",
+                        run.getFilesWritten(), run.getErrorCount(), run.getWarningCount());
+                return;
+            }
+            int count = entry.path("count").asInt(1);
+            String message = entry.path("messages").path(0).asText("");
+            runLog.append(run.getId(), stage, level,
+                    entry.path("code").asText() + (count > 1 ? " (" + count + "x)" : "") + (message.isEmpty() ? "" : ": " + message),
+                    run.getFilesWritten(), run.getErrorCount(), run.getWarningCount());
+        }
     }
 
     /** Runs {@code action} once the current transaction committed (now, without one). */
@@ -1380,11 +1452,20 @@ public class GenerationService {
 
     private void emit(long runId, String stage, String message, long filesWritten, int errors, int warnings,
             JsonNode diagnostics) {
+        emit(runId, stage, RunLogStore.LEVEL_INFO, message, filesWritten, errors, warnings, diagnostics);
+    }
+
+    /** Logs the event as a line of the run's log (M35.24), then sends it to the run's event streams. */
+    private void emit(long runId, String stage, String level, String message, long filesWritten, int errors,
+            int warnings, JsonNode diagnostics) {
+        RunLogStore.Line line = runLog.append(runId, stage, level, message, filesWritten, errors, warnings);
         List<SseEmitter> emitters = emittersByRun.get(runId);
         if (emitters == null || emitters.isEmpty()) {
             return;
         }
-        JsonNode data = mapper.valueToTree(new RunEvent(stage, message, filesWritten, errors, warnings, diagnostics));
+        JsonNode data = mapper.valueToTree(line != null
+                ? RunEvent.of(line, diagnostics)
+                : new RunEvent(stage, message, filesWritten, errors, warnings, diagnostics, null, null, null));
         for (SseEmitter emitter : emitters) {
             try {
                 emitter.send(SseEmitter.event().name("progress").data(data));
@@ -1396,6 +1477,7 @@ public class GenerationService {
     }
 
     private void completeRun(long runId) {
+        runLog.finish(runId);
         List<SseEmitter> emitters = emittersByRun.remove(runId);
         if (emitters != null) {
             emitters.forEach(SseEmitter::complete);

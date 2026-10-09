@@ -55,6 +55,20 @@ public class GenerationProperties {
      */
     private Duration idempotencyTtl = Duration.ofHours(24);
 
+    /**
+     * The most lines a run's log keeps (M35.24); later lines are dropped after a "truncated" marker, except the closing
+     * report.
+     */
+    private int logMaxLines = 2000;
+
+    public int getLogMaxLines() {
+        return logMaxLines;
+    }
+
+    public void setLogMaxLines(int logMaxLines) {
+        this.logMaxLines = logMaxLines;
+    }
+
     public int getParallelism() {
         return parallelism;
     }

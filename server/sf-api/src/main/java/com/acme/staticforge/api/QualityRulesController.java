@@ -1,15 +1,19 @@
 package com.acme.staticforge.api;
 
+import com.acme.staticforge.api.dto.QualityLastRunView;
 import com.acme.staticforge.api.dto.QualityRulesRequest;
 import com.acme.staticforge.api.dto.QualityRulesView;
 import com.acme.staticforge.common.Problem;
 import com.acme.staticforge.common.SfException;
+import com.acme.staticforge.generate.GenerationRun;
+import com.acme.staticforge.generate.GenerationService;
 import com.acme.staticforge.generate.quality.EffectiveQualityConfig;
 import com.acme.staticforge.generate.quality.QualityRule;
 import com.acme.staticforge.generate.quality.QualityRuleConfig;
 import com.acme.staticforge.generate.quality.QualityRuleConfigService;
 import com.acme.staticforge.generate.quality.QualityRuleConfigService.InvalidQualityConfigException;
 import com.acme.staticforge.generate.quality.RuleParam;
+import com.acme.staticforge.generate.quality.RunFindingStore;
 import com.acme.staticforge.generate.quality.SiteRule;
 import com.acme.staticforge.project.Project;
 import com.acme.staticforge.project.ProjectService;
@@ -42,18 +46,50 @@ public class QualityRulesController {
     private final QualityRuleConfigService configService;
     private final ProjectService projectService;
     private final SecuritySupport securitySupport;
+    private final GenerationService generationService;
+    private final RunFindingStore findingStore;
 
     public QualityRulesController(
-            QualityRuleConfigService configService, ProjectService projectService, SecuritySupport securitySupport) {
+            QualityRuleConfigService configService,
+            ProjectService projectService,
+            SecuritySupport securitySupport,
+            GenerationService generationService,
+            RunFindingStore findingStore) {
         this.configService = configService;
         this.projectService = projectService;
         this.securitySupport = securitySupport;
+        this.generationService = generationService;
+        this.findingStore = findingStore;
     }
 
     @GetMapping
     @PreAuthorize("@projectAuth.has(#projectKey, " + ProjectRoleExpr.VIEWER + ")")
     public QualityRulesView get(@PathVariable String projectKey) {
         return view(configService.effective(projectKey));
+    }
+
+    /**
+     * The findings per rule in the project's last finished run (M35.24): the newest run that published ({@code SUCCESS}
+     * or {@code PARTIAL}) to the default target, with its finding totals. {@code {"run": null, "counts": null}} while no
+     * run has finished. Every member reads it.
+     */
+    @GetMapping("/last-run")
+    @PreAuthorize("@projectAuth.has(#projectKey, " + ProjectRoleExpr.VIEWER + ")")
+    public QualityLastRunView lastRun(@PathVariable String projectKey) {
+        return generationService.lastFinishedRun(projectKey)
+                .map(run -> new QualityLastRunView(lastRun(run), findingStore.countsByCode(run.getId())))
+                .orElseGet(() -> new QualityLastRunView(null, null));
+    }
+
+    private static QualityLastRunView.LastRun lastRun(GenerationRun run) {
+        return new QualityLastRunView.LastRun(
+                run.getId(),
+                run.getStatus().name(),
+                run.getFinishedAt(),
+                run.getTargetId(),
+                run.getFindingErrors(),
+                run.getFindingWarnings(),
+                run.getFindingTruncated());
     }
 
     /**

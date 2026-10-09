@@ -12,6 +12,11 @@ import com.acme.staticforge.generate.TargetLocations;
 import com.acme.staticforge.generate.TargetType;
 import com.acme.staticforge.project.ProjectService;
 import com.acme.staticforge.security.SecuritySupport;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.JsonNodeFactory;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.util.List;
 import java.util.Locale;
 import org.springframework.http.ResponseEntity;
@@ -33,7 +38,10 @@ import org.springframework.web.bind.annotation.RestController;
  * ({@code 409 SF-DOM-0141}, M26).
  *
  * <p>Writes enforce two per-project invariants the generator relies on: at most one default
- * target, and no two targets whose output directories ({@link TargetLocations}) coincide or nest.
+ * target, and no two targets whose output directories ({@link TargetLocations}) coincide or nest. Target names are
+ * unique per project, ignoring case: a clash is {@code 409 SF-API-0409} with {@code field: "name"}; an output
+ * directory clash is {@code 400 SF-API-0400} (no field). {@code baseUrl} (also {@code config.baseUrl}) must be an
+ * absolute {@code http(s)} URL: {@code 400 SF-API-0400}, {@code field: "baseUrl"}.
  */
 @RestController
 @RequestMapping("/api/v1/projects/{projectKey}/targets")
@@ -69,8 +77,9 @@ public class TargetController {
             @PathVariable String projectKey, @RequestBody GenerationTargetRequest body) {
         long projectId = projectService.requireWritable(projectKey).getId();
         GenerationTarget target = new GenerationTarget(
-                projectId, requireName(body.name()), parseType(body.type()), body.config(), body.isDefault());
+                projectId, requireName(body.name()), parseType(body.type()), effectiveConfig(body), body.isDefault());
         List<GenerationTarget> siblings = targets.findByProjectId(projectId);
+        requireUniqueName(target.getName(), siblings);
         requireDistinctPath(target, siblings);
         requireRedirectFormats(target);
         target = targets.save(target);
@@ -87,13 +96,17 @@ public class TargetController {
             @PathVariable String projectKey, @PathVariable Long id, @RequestBody GenerationTargetRequest body) {
         projectService.requireWritable(projectKey);
         GenerationTarget target = requireTarget(projectKey, id);
+        String previousName = target.getName();
         target.setName(requireName(body.name()));
         target.setType(parseType(body.type()));
-        target.setConfig(body.config());
+        target.setConfig(effectiveConfig(body));
         target.setDefaultTarget(body.isDefault());
         List<GenerationTarget> siblings = targets.findByProjectId(target.getProjectId()).stream()
                 .filter(other -> !other.getId().equals(id))
                 .toList();
+        if (!target.getName().equals(previousName)) {
+            requireUniqueName(target.getName(), siblings);
+        }
         requireDistinctPath(target, siblings);
         requireRedirectFormats(target);
         target = targets.save(target);
@@ -167,6 +180,63 @@ public class TargetController {
         }
     }
 
+    /** {@code 409}: another target of the project already has {@code name} (ignoring case). */
+    private static void requireUniqueName(String name, List<GenerationTarget> siblings) {
+        for (GenerationTarget other : siblings) {
+            if (other.getName().equalsIgnoreCase(name)) {
+                throw new SfException(ProblemFactory.conflict("A target named '" + other.getName() + "' already exists.", "name"));
+            }
+        }
+    }
+
+    /**
+     * The config to store: {@code body.config()} with the request's {@code baseUrl} applied (see
+     * {@link GenerationTargetRequest}), and its {@code baseUrl} validated either way.
+     */
+    private static JsonNode effectiveConfig(GenerationTargetRequest body) {
+        JsonNode config = body.config();
+        if (body.baseUrl() != null) {
+            ObjectNode copy = config != null && config.isObject()
+                    ? ((ObjectNode) config).deepCopy()
+                    : JsonNodeFactory.instance.objectNode();
+            String value = body.baseUrl().trim();
+            if (value.isEmpty()) {
+                copy.remove("baseUrl");
+            } else {
+                copy.put("baseUrl", value);
+            }
+            config = copy;
+        }
+        if (config != null && config.hasNonNull("baseUrl")) {
+            JsonNode value = config.get("baseUrl");
+            if (!value.isTextual()) {
+                throw invalidBaseUrl("baseUrl must be text.");
+            }
+            String text = value.asText();
+            if (!text.isBlank()) {
+                requireHttpUrl(text.trim());
+            }
+        }
+        return config;
+    }
+
+    private static void requireHttpUrl(String text) {
+        try {
+            URI uri = new URI(text);
+            String scheme = uri.getScheme();
+            boolean http = "http".equalsIgnoreCase(scheme) || "https".equalsIgnoreCase(scheme);
+            if (!http || uri.getHost() == null || uri.getRawQuery() != null || uri.getRawFragment() != null) {
+                throw invalidBaseUrl("baseUrl must be an absolute http(s) URL without query or fragment, e.g. https://example.com/.");
+            }
+        } catch (URISyntaxException e) {
+            throw invalidBaseUrl("baseUrl is not a valid URL.");
+        }
+    }
+
+    private static SfException invalidBaseUrl(String detail) {
+        return new SfException(ProblemFactory.badRequest(detail, "baseUrl"));
+    }
+
     private static String requireName(String name) {
         String trimmed = name == null ? "" : name.trim();
         if (trimmed.isEmpty() || trimmed.length() > 120) {
@@ -192,6 +262,14 @@ public class TargetController {
                 target.getConfig(),
                 target.isDefaultTarget(),
                 TargetLocations.outputPath(projectKey, target),
-                RedirectFormat.of(target.getConfig()).stream().sorted().map(Enum::name).toList());
+                RedirectFormat.of(target.getConfig()).stream().sorted().map(Enum::name).toList(),
+                baseUrlOf(target.getConfig()));
+    }
+
+    private static String baseUrlOf(JsonNode config) {
+        if (config == null || !config.path("baseUrl").isTextual() || config.path("baseUrl").asText().isBlank()) {
+            return null;
+        }
+        return config.path("baseUrl").asText().trim();
     }
 }

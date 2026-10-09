@@ -133,8 +133,11 @@ public class ScheduleService {
         return executions.findByActionIdOrderByIdDesc(id, pageable);
     }
 
-    /** A pending action that a proposed publish policy would make fail, and the permission its owner would lose. */
-    public record PolicyImpact(ScheduledAction action, String missing) {}
+    /**
+     * A pending action that a proposed publish policy would make fail, the permission its owner would lose, and what
+     * the action covers (its items' names).
+     */
+    public record PolicyImpact(ScheduledAction action, String missing, ActionDescription description) {}
 
     /**
      * The pending actions whose owner satisfies their requirements now but wouldn't under {@code proposed} (M28.1.1,
@@ -143,14 +146,24 @@ public class ScheduleService {
      */
     @Transactional(readOnly = true)
     public List<PolicyImpact> policyImpact(long projectId, PublishPolicy proposed) {
-        List<PolicyImpact> failing = new ArrayList<>();
+        List<ScheduledAction> failingActions = new ArrayList<>();
+        List<String> missing = new ArrayList<>();
         for (ScheduledAction action : actions.findByProjectIdAndStatusInOrderById(projectId, EnumSet.of(ActionStatus.PENDING))) {
             PublishRequirements needed = requirements(action);
             if (authority.check(projectId, action.getOwnerUserId(), needed).isPresent()) {
                 continue;
             }
             authority.check(projectId, action.getOwnerUserId(), needed, proposed)
-                    .ifPresent(denial -> failing.add(new PolicyImpact(action, denial.missing())));
+                    .ifPresent(denial -> {
+                        failingActions.add(action);
+                        missing.add(denial.missing());
+                    });
+        }
+        Map<Long, ActionDescription> descriptions = describe(failingActions);
+        List<PolicyImpact> failing = new ArrayList<>();
+        for (int i = 0; i < failingActions.size(); i++) {
+            ScheduledAction action = failingActions.get(i);
+            failing.add(new PolicyImpact(action, missing.get(i), descriptions.getOrDefault(action.getId(), ActionDescription.NONE)));
         }
         return failing;
     }
@@ -537,14 +550,20 @@ public class ScheduleService {
                 : needed.and(PublishRequirements.role(ProjectRole.DEVELOPER));
     }
 
-    private List<Summary> summarize(List<ScheduledAction> page) {
-        if (page.isEmpty()) {
-            return List.of();
-        }
+    /** What each of {@code page} covers, by action id: asked of the handler of its type. */
+    private Map<Long, ActionDescription> describe(List<ScheduledAction> page) {
         Map<Long, ActionDescription> descriptions = new LinkedHashMap<>();
         Map<String, List<ActionSpec>> byType = new LinkedHashMap<>();
         page.forEach(a -> byType.computeIfAbsent(a.getType(), t -> new ArrayList<>()).add(ActionSpec.of(a)));
         byType.forEach((type, specs) -> handlers.find(type).ifPresent(h -> descriptions.putAll(h.describe(specs))));
+        return descriptions;
+    }
+
+    private List<Summary> summarize(List<ScheduledAction> page) {
+        if (page.isEmpty()) {
+            return List.of();
+        }
+        Map<Long, ActionDescription> descriptions = describe(page);
         Map<Long, ScheduledActionExecution> last = new LinkedHashMap<>();
         executions.findLatest(page.stream().map(ScheduledAction::getId).toList())
                 .forEach(e -> last.put(e.getActionId(), e));

@@ -77,13 +77,19 @@ public class RedirectService {
     /**
      * Filters of {@link #list}; {@code null} (or blank) means any. {@code q} matches the source and fixed target path.
      * {@code state} keeps the rows with that state against the default target's current build — none while nothing is
-     * published there, since no row has a state then.
+     * published there, since no row has a state then. {@code noLocale} keeps only the rows without a language (locale
+     * key {@code ""}: channels that have none, e.g. files) and wins over {@code locale}.
      */
-    public record Filter(String channel, String locale, RedirectKind kind, String q, RedirectState state) {
+    public record Filter(String channel, String locale, RedirectKind kind, String q, RedirectState state, boolean noLocale) {
 
-        /** The filters without a state. */
+        /** The filters without a state or the no-language selection. */
         public Filter(String channel, String locale, RedirectKind kind, String q) {
-            this(channel, locale, kind, q, null);
+            this(channel, locale, kind, q, null, false);
+        }
+
+        /** The filters without the no-language selection. */
+        public Filter(String channel, String locale, RedirectKind kind, String q, RedirectState state) {
+            this(channel, locale, kind, q, state, false);
         }
     }
 
@@ -156,7 +162,7 @@ public class RedirectService {
         return repository.search(
                 projectId,
                 blankToNull(filter.channel()),
-                filter.locale() == null || filter.locale().isBlank() ? null : filter.locale().trim(),
+                filter.noLocale() ? "" : blankToNull(filter.locale()),
                 filter.kind(),
                 escapeLike(blankToNull(filter.q())),
                 pageable);
@@ -277,6 +283,23 @@ public class RedirectService {
         repository.delete(entry);
         repository.flush();
         record(entry, actorUserId, "REDIRECT_DELETED", detail(entry));
+    }
+
+    /**
+     * Deletes every {@code MANUAL} redirect of the project ("delete all manual redirects"); {@code AUTO} entries are
+     * kept. One audit record ({@code REDIRECTS_MANUAL_DELETED}, target {@code redirects:manual}) carries the count; no
+     * per-row records, no version check — the operation is not about one row's state.
+     *
+     * @return the number of redirects removed
+     */
+    @Transactional
+    public int deleteAllManual(long projectId, long actorUserId) {
+        writeGuard.requireWritable(projectId);
+        int deleted = repository.deleteByProjectIdAndKind(projectId, RedirectKind.MANUAL);
+        ObjectNode detail = JSON.objectNode();
+        detail.put("deleted", deleted);
+        audit.record(projectId, actorUserId, "REDIRECTS_MANUAL_DELETED", "redirects:manual", detail);
+        return deleted;
     }
 
     /**

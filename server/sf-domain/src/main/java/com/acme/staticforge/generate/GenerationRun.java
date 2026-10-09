@@ -116,6 +116,10 @@ public class GenerationRun {
     @Column(name = "finding_counts")
     private JsonNode findingCounts;
 
+    /** What started the run (M35.24), the plain {@link GenerationTrigger} name; runs before then are {@code MANUAL}. */
+    @Column(name = "trigger_kind", nullable = false, length = 20)
+    private String trigger = GenerationTrigger.MANUAL.name();
+
     protected GenerationRun() {}
 
     public GenerationRun(long projectId, Long revisionId, GenerationMode mode, String channels, Long targetId,
@@ -138,6 +142,14 @@ public class GenerationRun {
         this.warningCount = warningCount;
         this.diagnostics = diagnostics;
         this.logBlobSha = logBlobSha;
+    }
+
+    public GenerationTrigger getTrigger() {
+        return GenerationTrigger.valueOf(trigger);
+    }
+
+    public void setTrigger(GenerationTrigger trigger) {
+        this.trigger = (trigger == null ? GenerationTrigger.MANUAL : trigger).name();
     }
 
     public int getFindingErrors() {

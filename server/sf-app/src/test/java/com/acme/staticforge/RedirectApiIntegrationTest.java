@@ -565,6 +565,65 @@ class RedirectApiIntegrationTest {
                 .containsExactly("REDIRECT_CREATED");
     }
 
+    @Test
+    @DisplayName("noLocale keeps only the rows without a language; locale=\"\" is still no filter")
+    void noLocaleFilter() throws Exception {
+        Fixture fx = fixture("rdr-nolang", true);
+        String viewer = member(fx, ProjectRole.VIEWER);
+        UUID page = page(fx, "page");
+        long admin = fx.admin().getId();
+        redirects.create(fx.id(), new RedirectService.Command("html", "de", "de/alt.html", null, null, "de/neu.html"), admin);
+        redirects.upsertAuto(fx.id(), 1L, List.of(
+                new AutoCandidate("files", "", "files/a.pdf", page, 1), new AutoCandidate("html", "de", "de/auto.html", page, 1)));
+
+        perform(get(BASE, fx.key()).param("noLocale", "true"), viewer)
+                .andExpect(jsonPath("$.rows", hasSize(1)))
+                .andExpect(jsonPath("$.rows[0].fromPath").value("files/a.pdf"))
+                .andExpect(jsonPath("$.rows[0].locale").value(""));
+        perform(get(BASE, fx.key()).param("noLocale", "true").param("locale", "de"), viewer)
+                .andExpect(jsonPath("$.rows", hasSize(1)));
+        perform(get(BASE, fx.key()).param("noLocale", "true").param("channel", "html"), viewer)
+                .andExpect(jsonPath("$.rows", hasSize(0)));
+        perform(get(BASE, fx.key()).param("locale", ""), viewer).andExpect(jsonPath("$.rows", hasSize(3)));
+        perform(get(BASE, fx.key()).param("noLocale", "false"), viewer).andExpect(jsonPath("$.rows", hasSize(3)));
+    }
+
+    @Test
+    @DisplayName("DELETE ?kind=MANUAL removes only this project's manual redirects, audited once; admins only")
+    void deleteAllManual() throws Exception {
+        Fixture fx = fixture("rdr-bulk", false);
+        Fixture other = fixture("rdr-bulk2", false);
+        String admin = jwt.issueAccessToken(fx.admin());
+        String developer = member(fx, ProjectRole.DEVELOPER);
+        UUID page = page(fx, "page");
+        UUID otherPage = page(other, "page");
+        redirects.create(fx.id(), new RedirectService.Command("html", "", "a.html", null, null, "x.html"), fx.admin().getId());
+        redirects.create(fx.id(), new RedirectService.Command("html", "", "b.html", null, null, "x.html"), fx.admin().getId());
+        redirects.upsertAuto(fx.id(), 1L, List.of(new AutoCandidate("html", "", "auto.html", page, 1)));
+        redirects.create(other.id(), new RedirectService.Command("html", "", "a.html", null, null, "x.html"), other.admin().getId());
+        redirects.upsertAuto(other.id(), 1L, List.of(new AutoCandidate("html", "", "auto.html", otherPage, 1)));
+
+        perform(delete(BASE, fx.key()).param("kind", "MANUAL"), developer).andExpect(status().isForbidden());
+        perform(delete(BASE, fx.key()), admin).andExpect(status().isBadRequest()).andExpect(jsonPath("$.field").value("kind"));
+        perform(delete(BASE, fx.key()).param("kind", "AUTO"), admin).andExpect(status().isBadRequest());
+        perform(delete(BASE, fx.key()).param("kind", "bogus"), admin).andExpect(status().isBadRequest());
+        assertThat(redirectRepository.findByProjectIdOrderByChannelKeyAscLocaleKeyAscFromPathAsc(fx.id())).hasSize(3);
+
+        perform(delete(BASE, fx.key()).param("kind", "MANUAL"), admin)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.deleted").value(2));
+        assertThat(redirectRepository.findByProjectIdOrderByChannelKeyAscLocaleKeyAscFromPathAsc(fx.id()))
+                .extracting(RedirectEntry::getKind).containsExactly(RedirectKind.AUTO);
+        assertThat(redirectRepository.findByProjectIdOrderByChannelKeyAscLocaleKeyAscFromPathAsc(other.id())).hasSize(2);
+        perform(delete(BASE, fx.key()).param("kind", "MANUAL"), admin).andExpect(jsonPath("$.deleted").value(0));
+
+        List<AuditLog> entries = audit.findRecent(fx.id(), PageRequest.of(0, 100)).stream()
+                .filter(e -> e.getAction().equals("REDIRECTS_MANUAL_DELETED"))
+                .toList();
+        assertThat(entries).hasSize(2);
+        assertThat(entries).extracting(e -> e.getDetail().path("deleted").asInt()).containsExactlyInAnyOrder(2, 0);
+    }
+
     // ------------------------------------------------------------------
     // Fixtures
     // ------------------------------------------------------------------

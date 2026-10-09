@@ -78,6 +78,28 @@ public interface GenerationRunRepository extends JpaRepository<GenerationRun, Lo
     int markRunning(@Param("id") long id, @Param("node") String node, @Param("now") Instant now);
 
     /**
+     * The newest run of a project that published to {@code targetId} ({@code SUCCESS}/{@code PARTIAL}), or none
+     * (M35.24, the Quality page's "last run").
+     */
+    @Query("""
+            SELECT r FROM GenerationRun r
+            WHERE r.projectId = :projectId AND r.targetId = :targetId
+              AND (r.status = 'SUCCESS' OR r.status = 'PARTIAL')
+            ORDER BY r.id DESC
+            LIMIT 1
+            """)
+    Optional<GenerationRun> findLastFinished(@Param("projectId") long projectId, @Param("targetId") long targetId);
+
+    /**
+     * Points a run at its stored log (M35.24): a targeted update in its own transaction, so it never touches the
+     * status columns the executor and cancel write under the row lock.
+     */
+    @Transactional
+    @Modifying
+    @Query("UPDATE GenerationRun r SET r.logBlobSha = :sha WHERE r.id = :id")
+    int updateLogBlobSha(@Param("id") long id, @Param("sha") String sha);
+
+    /**
      * Refreshes a running run's heartbeat (M29.2.1), a targeted update in its own transaction that touches nothing
      * else. 0 when the run is no longer {@code RUNNING}: it was cancelled or recovered, and its executor should stop.
      */

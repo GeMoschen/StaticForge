@@ -136,6 +136,80 @@ class TargetApiTest {
                 .isEqualTo(2);
     }
 
+    /** Names are unique per project, ignoring case (409 on the field); output-directory clashes stay 400. */
+    @Test
+    void duplicateNamesAreRejectedIgnoringCase() throws Exception {
+        Fixture fx = newFixture("tgt_name");
+        long live = body(create(fx, "Live", "live", false).andExpect(status().isCreated())).get("id").asLong();
+        long other = body(create(fx, "Staging", "staging", false)).get("id").asLong();
+
+        create(fx, "live", "other", false)
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("SF-API-0409"))
+                .andExpect(jsonPath("$.field").value("name"));
+        update(fx, other, "LIVE ", "staging", false)
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.field").value("name"));
+        update(fx, live, "LIVE", "live", false).andExpect(status().isOk());
+        update(fx, other, "Staging", "staging", false).andExpect(status().isOk());
+        // Another project may reuse the name.
+        create(newFixture("tgt_name2"), "Live", "live", false).andExpect(status().isCreated());
+        // An output directory clash is a plain 400.
+        create(fx, "Third", "live/sub", false)
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("SF-API-0400"));
+    }
+
+    /** {@code baseUrl}: {@code config.baseUrl} surfaced on the view, settable through the request, validated. */
+    @Test
+    void baseUrlIsSurfacedAndValidated() throws Exception {
+        Fixture fx = newFixture("tgt_url");
+        create(fx, "None", "none", false).andExpect(jsonPath("$.baseUrl").isEmpty());
+
+        // legacy form: only config.baseUrl
+        ObjectNode legacy = (ObjectNode) MAPPER.readTree(request("Legacy", "legacy", false));
+        legacy.withObject("/config").put("baseUrl", "https://www.example.com/blog/");
+        long id = body(send(fx, legacy).andExpect(status().isCreated())
+                .andExpect(jsonPath("$.baseUrl").value("https://www.example.com/blog/"))
+                .andExpect(jsonPath("$.config.baseUrl").value("https://www.example.com/blog/"))).get("id").asLong();
+
+        // the request field wins over config and is written to it; other config keys survive
+        ObjectNode viaField = (ObjectNode) MAPPER.readTree(request("Field", "field", false));
+        viaField.put("baseUrl", " http://localhost:8080 ");
+        send(fx, viaField).andExpect(status().isCreated())
+                .andExpect(jsonPath("$.baseUrl").value("http://localhost:8080"))
+                .andExpect(jsonPath("$.config.baseUrl").value("http://localhost:8080"))
+                .andExpect(jsonPath("$.config.path").value("field"));
+
+        // null keeps, blank removes
+        ObjectNode keep = (ObjectNode) MAPPER.readTree(request("Legacy", "legacy", false));
+        keep.withObject("/config").put("baseUrl", "https://www.example.com/blog/");
+        sendUpdate(fx, id, keep).andExpect(jsonPath("$.baseUrl").value("https://www.example.com/blog/"));
+        keep.put("baseUrl", "");
+        sendUpdate(fx, id, keep).andExpect(status().isOk())
+                .andExpect(jsonPath("$.baseUrl").isEmpty())
+                .andExpect(jsonPath("$.config.baseUrl").doesNotExist());
+
+        for (String bad : List.of("ftp://example.com", "example.com", "/relative", "https://", "https://a.b/?x=1", "not a url")) {
+            ObjectNode body = (ObjectNode) MAPPER.readTree(request("Bad", "bad", false));
+            body.put("baseUrl", bad);
+            send(fx, body).andExpect(status().isBadRequest()).andExpect(jsonPath("$.field").value("baseUrl"));
+            ObjectNode viaConfig = (ObjectNode) MAPPER.readTree(request("Bad", "bad", false));
+            viaConfig.withObject("/config").put("baseUrl", bad);
+            send(fx, viaConfig).andExpect(status().isBadRequest()).andExpect(jsonPath("$.field").value("baseUrl"));
+        }
+    }
+
+    private ResultActions send(Fixture fx, ObjectNode body) throws Exception {
+        return mvc.perform(post(base(fx)).header("Authorization", "Bearer " + fx.token())
+                .contentType(MediaType.APPLICATION_JSON).content(body.toString()));
+    }
+
+    private ResultActions sendUpdate(Fixture fx, long id, ObjectNode body) throws Exception {
+        return mvc.perform(put(base(fx) + "/" + id).header("Authorization", "Bearer " + fx.token())
+                .contentType(MediaType.APPLICATION_JSON).content(body.toString()));
+    }
+
     private ResultActions createWithFormats(Fixture fx, String name, String path, String formats) throws Exception {
         return mvc.perform(post(base(fx))
                 .header("Authorization", "Bearer " + fx.token())

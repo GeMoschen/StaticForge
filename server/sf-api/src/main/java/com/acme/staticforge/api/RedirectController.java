@@ -69,7 +69,7 @@ public class RedirectController {
     /**
      * One page of redirects, sorted by channel, locale and source path, each with its state against the default
      * target's current build. Filters combine: {@code channel}, {@code locale} ({@code ""} is not a filter — every
-     * locale), {@code kind} ({@code AUTO}/{@code MANUAL}), {@code state} ({@code ACTIVE}/{@code SHADOWED}/
+     * locale; {@code noLocale=true} keeps only the rows without a language and wins over {@code locale}), {@code kind} ({@code AUTO}/{@code MANUAL}), {@code state} ({@code ACTIVE}/{@code SHADOWED}/
      * {@code DANGLING}/{@code LOOP}; nothing matches while the default target has no build), {@code q} (part of the
      * source or fixed target path).
      */
@@ -79,6 +79,7 @@ public class RedirectController {
             @PathVariable String projectKey,
             @RequestParam(required = false) String channel,
             @RequestParam(required = false) String locale,
+            @RequestParam(defaultValue = "false") boolean noLocale,
             @RequestParam(required = false) String kind,
             @RequestParam(required = false) String state,
             @RequestParam(required = false) String q,
@@ -89,7 +90,7 @@ public class RedirectController {
         }
         long projectId = projectId(projectKey);
         RedirectService.Listing listing = redirectService.list(
-                projectId, new RedirectService.Filter(channel, locale, kind(kind), q, state(state)), PageRequest.of(page, size));
+                projectId, new RedirectService.Filter(channel, locale, kind(kind), q, state(state), noLocale), PageRequest.of(page, size));
         Map<UUID, String> names = new HashMap<>();
         List<RedirectView> rows = listing.rows().getContent().stream().map(row -> view(projectId, row, names)).toList();
         return new RedirectPageView(
@@ -138,6 +139,21 @@ public class RedirectController {
         Long expected = ifMatch == null || ifMatch.isBlank() ? null : ScheduleController.expectedVersion(ifMatch);
         redirectService.delete(projectId(projectKey), id, expected, userId());
         return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * Deletes every {@code MANUAL} redirect of the project; {@code kind} must be {@code MANUAL} (anything else or
+     * nothing: {@code 400}), so automatic redirects can't be wiped by accident. Returns {@code {"deleted": n}}. Like
+     * the single delete it is audited and needs {@code DEVELOPER}-or-better — here {@code PROJECT_ADMIN}, since it
+     * is irreversible and bulk; there is no {@code If-Match}, as no single row's version is at stake.
+     */
+    @DeleteMapping
+    @PreAuthorize("@projectAuth.has(#projectKey, " + ProjectRoleExpr.ADMIN + ")")
+    public Map<String, Integer> deleteAllManual(@PathVariable String projectKey, @RequestParam(required = false) String kind) {
+        if (kind(kind) != RedirectKind.MANUAL) {
+            throw new SfException(ProblemFactory.badRequest("kind=MANUAL is required: only manual redirects can be deleted in bulk.", "kind"));
+        }
+        return Map.of("deleted", redirectService.deleteAllManual(projectId(projectKey), userId()));
     }
 
     /**

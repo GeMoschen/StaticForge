@@ -19,6 +19,11 @@ public interface RedirectRepository extends JpaRepository<RedirectEntry, Long> {
     Optional<RedirectEntry> findByProjectIdAndChannelKeyAndLocaleKeyAndFromPath(
             long projectId, String channelKey, String localeKey, String fromPath);
 
+    /** Removes the project's redirects of one kind in a single statement; returns how many. */
+    @Modifying
+    @Query("DELETE FROM RedirectEntry r WHERE r.projectId = :projectId AND r.kind = :kind")
+    int deleteByProjectIdAndKind(@Param("projectId") long projectId, @Param("kind") RedirectKind kind);
+
     /** Every redirect of the project, in a stable order (the build and the archive read them all). */
     List<RedirectEntry> findByProjectIdOrderByChannelKeyAscLocaleKeyAscFromPathAsc(long projectId);
 

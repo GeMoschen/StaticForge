@@ -292,7 +292,9 @@ class PublishPolicyApiTest {
         projects.updatePublishPolicy(fx.key(), PublishPolicy.of(PublishPermission.values()), fx.ctx());
         Instant runAt = Instant.now().plus(Duration.ofDays(3)).truncatedTo(ChronoUnit.SECONDS);
         ScheduledAction plain = schedules.oneOff(fx.id(), "RELEASE", mapper.readTree("{\"items\":[]}"), runAt, editor.user().getId());
-        ScheduledAction toSecond = schedules.oneOff(fx.id(), "RELEASE", mapper.readTree("{\"items\":[]}"), runAt, editor.user().getId());
+        UUID home = page(fx, "home");
+        ScheduledAction toSecond = schedules.oneOff(
+                fx.id(), "RELEASE", mapper.readTree("{\"items\":[{\"assetUuid\":\"" + home + "\"}]}"), runAt, editor.user().getId());
         toSecond.setThenGenerate(mapper.readTree("{\"targetId\":" + second.getId() + ",\"channels\":[]}"));
         schedules.save(toSecond);
         schedules.oneOff(fx.id(), "RELEASE", mapper.readTree("{\"items\":[]}"), runAt, developer.user().getId());
@@ -306,12 +308,24 @@ class PublishPolicyApiTest {
         assertThat(failing.path("ownerUserId").asLong()).isEqualTo(editor.user().getId());
         assertThat(failing.path("ownerName").asText()).isEqualTo("Member");
         assertThat(failing.path("missingPermission").asText()).isEqualTo("FULL_BUILD");
+        assertThat(failing.path("itemName").asText()).isEqualTo("home");
+        assertThat(failing.path("itemCount").asInt()).isEqualTo(1);
 
         JsonNode nothing = json(impact(fx, "[]"));
         assertThat(nothing.path("failingSchedules")).extracting(n -> n.path("id").asLong())
                 .containsExactlyInAnyOrder(plain.getId(), toSecond.getId());
         assertThat(nothing.path("failingSchedules")).extracting(n -> n.path("missingPermission").asText())
                 .containsOnly("SCHEDULE_RELEASE");
+        // A schedule without items has no item name.
+        JsonNode itemless = null;
+        for (JsonNode n : nothing.path("failingSchedules")) {
+            if (n.path("id").asLong() == plain.getId()) {
+                itemless = n;
+            }
+        }
+        assertThat(itemless).isNotNull();
+        assertThat(itemless.path("itemName").isNull()).isTrue();
+        assertThat(itemless.path("itemCount").asInt()).isZero();
         assertThat(json(impact(fx, "[\"RELEASE\", \"SCHEDULE_RELEASE\", \"INCREMENTAL_BUILD\", \"FULL_BUILD\"]"))
                 .path("failingSchedules")).isEmpty();
         impact(fx, "[\"FULL_BUILD\"]", fx.adminToken()).andExpect(status().isOk());

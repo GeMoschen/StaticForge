@@ -72,7 +72,7 @@ class GenerationServiceTest {
                 mock(com.acme.staticforge.generate.quality.QualityRuleConfigService.class),
                 mock(com.acme.staticforge.generate.quality.RunFindingStore.class),
                 mock(com.acme.staticforge.redirect.RedirectService.class),
-                mock(com.acme.staticforge.urlregistry.UrlRegistryService.class));
+                mock(com.acme.staticforge.urlregistry.UrlRegistryService.class), mock(RunLogStore.class));
 
         Project project = project(1L);
         lenient().when(projects.requireByKey("p")).thenReturn(project);

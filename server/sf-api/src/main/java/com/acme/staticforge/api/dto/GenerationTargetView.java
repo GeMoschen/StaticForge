@@ -9,7 +9,9 @@ import java.util.UUID;
  * directory relative to the server's output root (e.g. {@code acme/site}); the absolute server path is
  * never exposed. {@code uuid} (M27.8.1) is its stable identity, which export archives and their schedules name.
  * {@code redirectFormats} (M30.5.1) are the redirect outputs its builds write — {@code config.redirectFormats}, or
- * {@code ["HTML_STUB"]} when the config doesn't set it; {@code HTACCESS} works on Apache hosts only.
+ * {@code ["HTML_STUB"]} when the config doesn't set it; {@code HTACCESS} works on Apache hosts only. {@code baseUrl}
+ * is {@code config.baseUrl} (the site's public address: the sitemap and absolute redirect links are built from it),
+ * {@code null} when the target has none.
  */
 public record GenerationTargetView(
         Long id,
@@ -19,4 +21,5 @@ public record GenerationTargetView(
         JsonNode config,
         boolean isDefault,
         String outputPath,
-        List<String> redirectFormats) {}
+        List<String> redirectFormats,
+        String baseUrl) {}

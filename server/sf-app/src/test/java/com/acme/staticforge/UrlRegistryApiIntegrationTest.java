@@ -76,6 +76,36 @@ class UrlRegistryApiIntegrationTest {
     @Autowired UrlRegistryRepository urlRegistryRepository;
 
     @Test
+    void noLocaleSelectsRowsWithoutALanguage() throws Exception {
+        Fixture fx = newFixture();
+        AssetVersionView plain = createPage(fx, "Plain");
+        resolve(fx, plain, UrlArea.GENERATED);
+        projectService.updateLocales(fx.project().getKey(), com.acme.staticforge.project.LocaleConfig.of(
+                java.util.List.of(new com.acme.staticforge.project.ProjectLocale("de", "Deutsch"),
+                        new com.acme.staticforge.project.ProjectLocale("en", "English")),
+                "de", Map.of(), false), true, fx.ctx());
+        AssetVersionView localized = createPage(fx, "Localized");
+        urlRegistryService.resolvePage(localized.uuid(), 1, "html", UrlArea.GENERATED, "en", fx.ctx());
+        String url = "/api/v1/projects/" + fx.project().getKey() + "/url-registry";
+
+        mvc.perform(get(url).header("Authorization", "Bearer " + fx.viewerToken()))
+                .andExpect(jsonPath("$.totalElements").value(2));
+        mvc.perform(get(url).param("noLocale", "true").header("Authorization", "Bearer " + fx.viewerToken()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(1))
+                .andExpect(jsonPath("$.content[0].targetUuid").value(plain.uuid().toString()))
+                .andExpect(jsonPath("$.content[0].locale").value(""));
+        // the empty value says the same and is unchanged behaviour
+        mvc.perform(get(url).param("locale", "").header("Authorization", "Bearer " + fx.viewerToken()))
+                .andExpect(jsonPath("$.totalElements").value(1));
+        mvc.perform(get(url).param("locale", "en").header("Authorization", "Bearer " + fx.viewerToken()))
+                .andExpect(jsonPath("$.totalElements").value(1))
+                .andExpect(jsonPath("$.content[0].targetUuid").value(localized.uuid().toString()));
+        mvc.perform(get(url).param("noLocale", "false").header("Authorization", "Bearer " + fx.viewerToken()))
+                .andExpect(jsonPath("$.totalElements").value(2));
+    }
+
+    @Test
     void listSupportsChannelAreaAndFreeTextFiltersPlusPagination() throws Exception {
         Fixture fx = newFixture();
         AssetVersionView hammer = createPage(fx, "Hammer Drill");

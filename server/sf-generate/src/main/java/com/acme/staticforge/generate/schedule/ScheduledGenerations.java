@@ -9,6 +9,7 @@ import com.acme.staticforge.generate.GenerationRequest;
 import com.acme.staticforge.generate.GenerationRun;
 import com.acme.staticforge.generate.GenerationRunRepository;
 import com.acme.staticforge.generate.GenerationService;
+import com.acme.staticforge.generate.GenerationTrigger;
 import com.acme.staticforge.generate.GenerationTargetRepository;
 import com.acme.staticforge.project.Project;
 import com.acme.staticforge.project.ProjectRepository;
@@ -118,7 +119,8 @@ public class ScheduledGenerations implements ScheduledGenerationStarter {
                         order.folderPath() == null || order.folderPath().isBlank() ? null : order.folderPath(),
                         order.assetUuids().isEmpty() ? null : order.assetUuids(),
                         order.comment(),
-                        order.idempotencyKey()),
+                        order.idempotencyKey(),
+                        GenerationTrigger.SCHEDULE),
                 order.userId(),
                 order.scheduledActionId());
         return new Started(run.getId());

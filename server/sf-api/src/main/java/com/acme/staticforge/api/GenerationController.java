@@ -1,12 +1,14 @@
 package com.acme.staticforge.api;
 
 import com.acme.staticforge.api.dto.FindingCountsView;
+import com.acme.staticforge.api.dto.FindingFacetsView;
 import com.acme.staticforge.api.dto.FindingPageView;
 import com.acme.staticforge.api.dto.FindingView;
 import com.acme.staticforge.api.dto.GenerationPlanView;
 import com.acme.staticforge.api.dto.GenerationRequestDto;
 import com.acme.staticforge.api.dto.GenerationRunView;
 import com.acme.staticforge.api.dto.RecordPageView;
+import com.acme.staticforge.api.dto.RunLogView;
 import com.acme.staticforge.common.ProblemFactory;
 import com.acme.staticforge.common.SfException;
 import com.acme.staticforge.generate.GenerationAuthorization;
@@ -14,8 +16,14 @@ import com.acme.staticforge.generate.GenerationMode;
 import com.acme.staticforge.generate.GenerationRequest;
 import com.acme.staticforge.generate.GenerationRun;
 import com.acme.staticforge.generate.GenerationService;
+import com.acme.staticforge.generate.GenerationTrigger;
+import com.acme.staticforge.generate.RunEvent;
+import com.acme.staticforge.generate.RunLogStore;
 import com.acme.staticforge.generate.insight.PlanEntryRecord;
+import com.acme.staticforge.generate.insight.RunPlanStore;
 import com.acme.staticforge.generate.quality.QualityCategory;
+import com.acme.staticforge.generate.quality.QualityRule;
+import com.acme.staticforge.generate.quality.QualityRuleRegistry;
 import com.acme.staticforge.generate.quality.QualitySeverity;
 import com.acme.staticforge.generate.quality.RunFindingStore;
 import com.acme.staticforge.project.ProjectRole;
@@ -27,12 +35,15 @@ import com.acme.staticforge.security.SecuritySupport;
 import com.acme.staticforge.user.AppUser;
 import com.acme.staticforge.user.UserService;
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.net.URI;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -78,6 +89,7 @@ public class GenerationController {
     private final SecuritySupport securitySupport;
     private final ObjectMapper mapper;
     private final RunFindingStore findingStore;
+    private final QualityRuleRegistry ruleRegistry;
 
     public GenerationController(
             GenerationService generationService,
@@ -87,7 +99,8 @@ public class GenerationController {
             UserService userService,
             SecuritySupport securitySupport,
             ObjectMapper mapper,
-            RunFindingStore findingStore) {
+            RunFindingStore findingStore,
+            QualityRuleRegistry ruleRegistry) {
         this.generationService = generationService;
         this.generationAuthorization = generationAuthorization;
         this.projectAuth = projectAuth;
@@ -96,6 +109,7 @@ public class GenerationController {
         this.securitySupport = securitySupport;
         this.mapper = mapper;
         this.findingStore = findingStore;
+        this.ruleRegistry = ruleRegistry;
     }
 
     @GetMapping
@@ -202,6 +216,50 @@ public class GenerationController {
             throw new SfException(ProblemFactory.badRequest(
                     "page must be >= 0 and size between 1 and " + MAX_FINDINGS_PAGE_SIZE + "."));
         }
+        RunFindingStore.Filter filter =
+                findingFilter(severity, category, code, assetUuid, channel, locale, pathPrefix);
+        Page<RunFindingStore.StoredFinding> found =
+                findingStore.page(run.getProjectId(), runId, filter, PlanViews.pageable(page, size));
+        return new FindingPageView(
+                found.getContent().stream().map(GenerationController::finding).toList(),
+                new RecordPageView.PageMeta(
+                        found.getSize(), found.getNumber(), found.getTotalElements(), found.getTotalPages()));
+    }
+
+    /**
+     * The facet counts of a run's findings (M35.24) for the same filters as the list. Each facet ignores its own filter
+     * and applies the others (see {@link FindingFacetsView}); {@code total} is the size of the filtered list. A run of
+     * another project is {@code 404}; an invalid filter is {@code 400}.
+     */
+    @GetMapping("/{runId}/findings/facets")
+    @PreAuthorize("@projectAuth.has(#projectKey, " + ProjectRoleExpr.VIEWER + ")")
+    public FindingFacetsView findingFacets(
+            @PathVariable String projectKey,
+            @PathVariable long runId,
+            @RequestParam(required = false) String severity,
+            @RequestParam(required = false) String category,
+            @RequestParam(required = false) List<String> code,
+            @RequestParam(required = false) UUID assetUuid,
+            @RequestParam(required = false) String channel,
+            @RequestParam(required = false) String locale,
+            @RequestParam(required = false) String pathPrefix) {
+        GenerationRun run = generationService.status(projectKey, runId);
+        RunFindingStore.Filter filter =
+                findingFilter(severity, category, code, assetUuid, channel, locale, pathPrefix);
+        RunFindingStore.Facets facets = findingStore.facets(run.getId(), filter);
+        Map<String, Long> bySeverity = new LinkedHashMap<>();
+        facets.severity().forEach((key, count) -> bySeverity.put(key.name(), count));
+        Map<String, Long> byCategory = new LinkedHashMap<>();
+        facets.category().forEach((key, count) -> byCategory.put(key.name(), count));
+        List<FindingFacetsView.RuleFacet> byCode = facets.codes().stream()
+                .map(c -> new FindingFacetsView.RuleFacet(
+                        c.code(), ruleRegistry.find(c.code()).map(QualityRule::name).orElse(null), c.count()))
+                .toList();
+        return new FindingFacetsView(facets.total(), bySeverity, byCategory, byCode, facets.locale());
+    }
+
+    private static RunFindingStore.Filter findingFilter(String severity, String category, List<String> code,
+            UUID assetUuid, String channel, String locale, String pathPrefix) {
         QualitySeverity severityFilter = blank(severity) ? null : QualitySeverity.parse(severity);
         if (!blank(severity) && (severityFilter == null || severityFilter == QualitySeverity.OFF)) {
             throw new SfException(ProblemFactory.badRequest("severity must be WARNING or ERROR."));
@@ -210,7 +268,7 @@ public class GenerationController {
         if (!blank(category) && categoryFilter == null) {
             throw new SfException(ProblemFactory.badRequest("category must be LINKS, SEO or ACCESSIBILITY."));
         }
-        RunFindingStore.Filter filter = new RunFindingStore.Filter(
+        return new RunFindingStore.Filter(
                 severityFilter,
                 categoryFilter,
                 code == null ? null : Set.copyOf(code.stream().filter(c -> !blank(c)).map(String::trim).toList()),
@@ -218,12 +276,6 @@ public class GenerationController {
                 blank(channel) ? null : channel.trim(),
                 blank(locale) ? null : locale.trim(),
                 blank(pathPrefix) ? null : pathPrefix);
-        Page<RunFindingStore.StoredFinding> found =
-                findingStore.page(run.getProjectId(), runId, filter, PlanViews.pageable(page, size));
-        return new FindingPageView(
-                found.getContent().stream().map(GenerationController::finding).toList(),
-                new RecordPageView.PageMeta(
-                        found.getSize(), found.getNumber(), found.getTotalElements(), found.getTotalPages()));
     }
 
     private static FindingView finding(RunFindingStore.StoredFinding f) {
@@ -293,6 +345,29 @@ public class GenerationController {
         return toView(generationService.promote(projectKey, runId, securitySupport.currentUserId()));
     }
 
+    /**
+     * The run's log (M35.24): the lines of its {@code progress} events plus one per diagnostic code at the end. {@code
+     * from} keeps the lines after that number ({@code n}) only, so a client polls a running run with the last {@code n}
+     * it has. A run of another project is {@code 404}. A run that ended before logs were kept answers {@code 200} with
+     * no lines and {@code pruned: true}; a log lives as long as its run.
+     */
+    @GetMapping("/{runId}/log")
+    @PreAuthorize("@projectAuth.has(#projectKey, " + ProjectRoleExpr.VIEWER + ")")
+    public RunLogView log(
+            @PathVariable String projectKey,
+            @PathVariable long runId,
+            @RequestParam(defaultValue = "0") int from) {
+        RunLogStore.Log log = generationService.log(projectKey, runId, from);
+        return new RunLogView(
+                log.lines().stream()
+                        .map(l -> new RunLogView.Line(
+                                l.n(), l.time(), l.stage(), l.level(), l.text(), l.files(), l.errors(), l.warnings()))
+                        .toList(),
+                log.complete(),
+                log.truncated(),
+                log.pruned());
+    }
+
     @GetMapping("/{runId}/events")
     @PreAuthorize("@projectAuth.has(#projectKey, " + ProjectRoleExpr.VIEWER + ")")
     public SseEmitter events(@PathVariable String projectKey, @PathVariable long runId) {
@@ -302,6 +377,9 @@ public class GenerationController {
         // emitter through the normal completion path or is seen as terminal below.
         generationService.registerEmitter(runId, emitter);
         GenerationRun run = generationService.status(projectKey, runId);
+        if (!run.getStatus().isTerminal()) {
+            replay(generationService.log(projectKey, runId, 0).lines(), emitter);
+        }
         emitCurrent(run, emitter);
         if (run.getStatus().isTerminal()) {
             // Already finished (fast failures often are): no further events will come, so close the
@@ -310,6 +388,21 @@ public class GenerationController {
             emitter.complete();
         }
         return emitter;
+    }
+
+    /**
+     * Sends the lines a running run has logged so far as {@code progress} events (M35.24), so a late subscriber sees the
+     * whole run. Lines logged meanwhile may arrive twice: the events carry {@code n} to de-duplicate by.
+     */
+    private void replay(List<RunLogStore.Line> lines, SseEmitter emitter) {
+        for (RunLogStore.Line line : lines) {
+            try {
+                emitter.send(SseEmitter.event().name("progress").data(mapper.valueToTree(RunEvent.of(line, null))));
+            } catch (Exception e) {
+                emitter.completeWithError(e);
+                return;
+            }
+        }
     }
 
     /** Sends the current run status immediately upon subscription. */
@@ -336,6 +429,9 @@ public class GenerationController {
     }
 
     private static GenerationRequest toRequest(GenerationRequestDto body, String idempotencyKey) {
+        if (body.trigger() == GenerationTrigger.SCHEDULE) {
+            throw new SfException(ProblemFactory.badRequest("trigger must be MANUAL or RELEASE."));
+        }
         return new GenerationRequest(
                 body.mode() == null ? GenerationMode.FULL : body.mode(),
                 body.revision(),
@@ -344,16 +440,68 @@ public class GenerationController {
                 body.folderPath(),
                 body.assetUuids(),
                 body.comment(),
-                idempotencyKey);
+                idempotencyKey,
+                body.trigger());
     }
 
     private GenerationRunView toView(GenerationRun run) {
-        return toView(run, starters(List.of(run)));
+        return toView(run, starters(List.of(run)), pageNames(List.of(run)));
     }
 
     private List<GenerationRunView> toViews(List<GenerationRun> runs) {
         Map<Long, AppUser> starters = starters(runs);
-        return runs.stream().map(run -> toView(run, starters)).toList();
+        Map<UUID, String> names = pageNames(runs);
+        return runs.stream().map(run -> toView(run, starters, names)).toList();
+    }
+
+    /** The current display names of the pages the runs held back, in one lookup (none without held-back pages). */
+    private Map<UUID, String> pageNames(Collection<GenerationRun> runs) {
+        Set<UUID> pages = new HashSet<>();
+        long projectId = -1;
+        for (GenerationRun run : runs) {
+            for (JsonNode held : heldBackOf(run)) {
+                UUID uuid = uuid(held.path("asset").asText(null));
+                if (uuid != null) {
+                    pages.add(uuid);
+                    projectId = run.getProjectId();
+                }
+            }
+        }
+        return pages.isEmpty() ? Map.of() : findingStore.displayNames(projectId, pages);
+    }
+
+    private static JsonNode heldBackOf(GenerationRun run) {
+        return run.getDiagnostics() == null ? com.fasterxml.jackson.databind.node.MissingNode.getInstance()
+                : run.getDiagnostics().path("heldBack");
+    }
+
+    private static UUID uuid(String text) {
+        try {
+            return text == null ? null : UUID.fromString(text);
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
+    }
+
+    /** The pages held back by the quality checks, as typed data (M35.24). */
+    private static List<GenerationRunView.HeldBackPage> heldBack(GenerationRun run, Map<UUID, String> names) {
+        List<GenerationRunView.HeldBackPage> pages = new ArrayList<>();
+        for (JsonNode held : heldBackOf(run)) {
+            UUID uuid = uuid(held.path("asset").asText(null));
+            String name = uuid != null && names.containsKey(uuid) ? names.get(uuid) : held.path("uid").asText(null);
+            pages.add(new GenerationRunView.HeldBackPage(
+                    uuid, name, held.path("locale").asText(null), held.path("channel").asText(null)));
+        }
+        return pages;
+    }
+
+    /** What the plan endpoint has for the run (M35.24): {@code STORED}, {@code PRUNED}, {@code PENDING} or {@code NONE}. */
+    static String planState(GenerationRun run) {
+        JsonNode summary = run.getPlanSummary();
+        if (summary == null) {
+            return run.getStatus().isTerminal() ? "NONE" : "PENDING";
+        }
+        return RunPlanStore.available(summary) ? "STORED" : "PRUNED";
     }
 
     /** Who started {@code runs}, in one lookup. */
@@ -362,7 +510,7 @@ public class GenerationController {
                 runs.stream().map(GenerationRun::getStartedBy).filter(Objects::nonNull).distinct().toList());
     }
 
-    private GenerationRunView toView(GenerationRun run, Map<Long, AppUser> starters) {
+    private GenerationRunView toView(GenerationRun run, Map<Long, AppUser> starters, Map<UUID, String> pageNames) {
         AppUser starter = run.getStartedBy() == null ? null : starters.get(run.getStartedBy());
         return new GenerationRunView(
                 run.getId(),
@@ -382,7 +530,10 @@ public class GenerationController {
                 PlanViews.summary(run.getPlanSummary()),
                 run.getComment(),
                 starter == null ? null : new GenerationRunView.StartedBy(starter.getId(), starter.getDisplayName()),
-                findingCounts(run));
+                findingCounts(run),
+                run.getTrigger().name(),
+                planState(run),
+                heldBack(run, pageNames));
     }
 
     private List<String> parseChannels(String json) {
